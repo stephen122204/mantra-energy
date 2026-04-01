@@ -1,0 +1,106 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets — NEVER commit
+.alems_token
+.tunnel_state.json
+.env
+config/.env
+
+# Cloudflare credentials — NEVER commit
+.cloudflared/*.json
+.cloudflared/cert.pem
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+
+# Backups and temporary files
+*.bak
+*.bkp
+*.backup
+*.old
+*.corrupt
+*.zip
+*.deb
+*.json.bak
+*.yaml.bak
+
+# Data and database
+data/*.db
+data/*.db-*
+data/*.db-shm
+data/*.db-wal
+data/experiment_*.json
+data/ml_dataset_*.csv
+data/turbostat_raw/
+data/baselines/
+*.csv
+# JSON files - track important ones, ignore generated ones
+# Keep these:
+!config/models.json
+!config/*.example
+!config/*.template
+!config/grid_intensity_2026.json
+
+# Ignore these:
+config/hw_config.json
+config/environment.json
+config/current_session.json
+data/*.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# IDE and system files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temp
+logs/
+tmp/
+*.log
+.DS_Store
+
+# Backups and junk
+*.bkp
+*.zip_bkp
+*_v0.py
+*_v4.py
+data/*.backup*
+data/*.bkup
+experiments.db
+*.db
+*.db-journal
+.env
+config/.env
+config/.env
+.env
+
+# Generated documentation
+docs/generated/
+docs-src/*/build/
+docs-src/*/_build/
+docs-src/*/.cache/
+
+
+.env
+context.txt
+archive/
+core/.env
+config/hw_config.json.*
+reports/output/
+config/queue_state.yaml
