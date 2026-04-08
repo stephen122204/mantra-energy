@@ -1,115 +1,49 @@
-# 🚀 Step 10: Quick Start - First Experiment
+# Developer Setup
 
-Run your first experiment in 5 minutes!
+## Prerequisites
+- Python 3.11+ with venv
+- Node.js 18+
+- Git
 
----
-
-## 🔄 Experiment Lifecycle
-
-Each experiment follows this lifecycle:
-
-![Experiment Lifecycle](../assets/diagrams/experiment-lifecycle.svg)
-
----
-
-## ✅ Prerequisites Check
-
-Before starting, ensure you've completed:
-
-- [x] Hardware detection (`scripts/detect_hardware.py`)
-- [x] Environment detection (`scripts/detect_environment.py`)
-- [x] Database setup (`scripts/setup_fresh_db.py`)
-- [x] Model configuration (API keys in `.env`)
-- [x] LLM verification (`test_llm_setup.py`)
-
----
-
-## ⚡ Quick Start Commands
-
-### 1. List Available Tasks
+## Local setup (SQLite mode)
 
 ```bash
-python -m core.execution.tests.run_experiment --list-tasks
+# 1. Backend
+cd ~/mydrive/alems-platform
+source venv/bin/activate
+pip install fastapi uvicorn pyyaml httpx psycopg2-binary
+GROQ_API_KEY=your_key uvicorn server:app --port 8765 --reload
+
+# 2. Frontend
+cd ~/mydrive/alems-workbench
+npm install
+npm run dev
+
+# 3. Open
+# http://localhost:3000
 ```
 
-### 2. Run a Simple Local Experiment
-
+## PostgreSQL mode (Oracle VM data)
 ```bash
-python -m core.execution.tests.run_experiment \
-    --tasks gsm8k_basic \
-    --repetitions 1 \
-    --providers local \
-    --save-db \
-    --verbose
+ALEMS_DB_URL=postgresql://alems:Ganesh123@129.153.71.47/alems_central \
+uvicorn server:app --port 8765 --reload
 ```
 
-### 3. View Results
+## Adding a new metric (zero code change)
+1. Add entry to `config/metric_registry.yaml`
+2. Add query to `config/query_registry.yaml` (if custom SQL needed)
+3. Restart server — appears in UI automatically
 
-```bash
-# Check the database
-sqlite3 data/experiments.db "SELECT run_id, workflow_type, dynamic_energy_uj/1e6 as energy_j FROM runs LIMIT 5;"
+## Adding a new page
+1. Create `src/app/{page}/page.tsx`
+2. Add to sidebar in `src/components/layout/Sidebar.tsx`
+3. No backend changes needed if using existing endpoints
 
-# Launch the GUI
-streamlit run streamlit_app.py
-```
-
-### 4. Generate a PDF Report
-
-1. Open browser at `http://localhost:8501`
-2. Navigate to **Session Analysis**
-3. Find your experiment
-4. Click **Generate PDF Report**
-
----
-
-## 📊 What You'll See
-
-**Console Output:**
-```
-📊 Progress: 1/1 runs
-  Linear: 1.2043 J
-  Agentic: 2.5945 J
-  Tax: 2.15x
-✅ Pair 1 saved (linear: 1, agentic: 2)
-```
-
-**GUI Dashboard:**
-- Energy comparison charts
-- Orchestration tax analysis
-- Thermal profiles
-- Sustainability metrics
-
----
-
-## 🧪 Try Another Task
-
-```bash
-python -m core.execution.tests.run_experiment \
-    --tasks gsm8k_multi_step \
-    --repetitions 3 \
-    --providers local \
-    --save-db
-```
-
----
-
-## 🔧 Quick Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| `Permission denied` | `sudo ./scripts/fix_permissions.sh` |
-| No results in DB | Did you use `--save-db`? |
-| Blank GUI | Check `streamlit` is installed |
-| No diagrams | Run `python scripts/tools/generate_diagrams.py` |
-
----
-
-## ✅ Next Steps
-
-- [Understanding Metrics](../user-guide/02-understanding-metrics.md)
-- [Running Batch Experiments](../user-guide/03-batch-experiments.md)
-- [Using the GUI](../user-guide/04-gui-usage.md)
-
----
-
-> **Congratulations!** You've successfully run your first A-LEMS experiment! 🎉
+## Environment variables
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8765` | Backend URL |
+| `NEXT_PUBLIC_DEFAULT_THEME` | `dark` | dark or light |
+| `ALEMS_DB_PATH` | `data/experiments.db` | SQLite path |
+| `ALEMS_DB_URL` | — | PostgreSQL URL (overrides SQLite) |
+| `GROQ_API_KEY` | — | For Ask Me page |

@@ -1,0 +1,109 @@
+# config/query_registry.yaml
+# Query container references only. SQL lives in queries/ folder.
+# Add query = add .sql file + one entry here.
+# Zero Python code change ever.
+
+version: "1.0"
+
+queries:
+
+  - id: overview
+    name: "Overview metrics"
+    query_file: overview.sql
+    dialect_aware: false
+    parameters: {}
+    returns: single_row
+    cache_ttl_sec: 30
+
+  - id: tax_by_task
+    name: "Orchestration tax by task and model"
+    query_file: tax_by_task.sql
+    dialect_aware: false
+    parameters: {}
+    returns: rows
+    cache_ttl_sec: 30
+
+  - id: recent_runs
+    name: "Recent runs with experiment metadata"
+    query_file: recent_runs.sql
+    dialect_aware: false
+    parameters:
+      limit: 50
+    returns: rows
+    cache_ttl_sec: 10
+
+  - id: runs_by_experiment
+    name: "All runs for one experiment"
+    query_file: runs_by_experiment.sql
+    dialect_aware: false
+    parameters:
+      exp_id: required
+    returns: rows
+    cache_ttl_sec: 10
+
+  - id: domains
+    name: "Energy by task domain"
+    query_file: domains.sql
+    dialect_aware: false
+    parameters: {}
+    returns: rows
+    cache_ttl_sec: 60
+
+  - id: sessions
+    name: "Session aggregates"
+    query_file: sessions.sql
+    dialect_aware: false
+    parameters: {}
+    returns: rows
+    cache_ttl_sec: 30
+
+  - id: hypotheses
+    name: "Research hypotheses"
+    query_file: hypotheses.sql
+    dialect_aware: false
+    parameters: {}
+    returns: rows
+    cache_ttl_sec: 60
+
+  - id: outliers
+    name: "Statistical outliers"
+    query_file: outliers.sql
+    dialect_aware: false
+    parameters: {}
+    returns: rows
+    cache_ttl_sec: 60
+
+  - id: energy_samples
+    name: "Energy samples for one run"
+    query_file: energy_samples.sql
+    dialect_aware: false
+    parameters:
+      run_id: required
+    returns: rows
+    cache_ttl_sec: 300
+
+  - id: llm_interactions
+    name: "LLM interactions for one run"
+    query_file: llm_interactions.sql
+    dialect_aware: false
+    parameters:
+      run_id: required
+    returns: rows
+    cache_ttl_sec: 300
+
+  - id: orchestration_events
+    name: "Orchestration events for one run"
+    query_file: orchestration_events.sql
+    dialect_aware: false
+    parameters:
+      run_id: required
+    returns: rows
+    cache_ttl_sec: 300
+
+  - id: research_metrics
+    name: "OOI UCR network ratio"
+    query_file: research_metrics.sql
+    dialect_aware: false
+    parameters: {}
+    returns: rows
+    cache_ttl_sec: 30

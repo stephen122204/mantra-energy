@@ -1,0 +1,1963 @@
+INFO:     Will watch for changes in these directories: ['/home/dpani/mydrive/alems-platform']
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+INFO:     Started reloader process [15432] using WatchFiles
+INFO:     Started server process [15435]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:38684 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:38684 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:38700 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40796 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40808 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39976 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56622 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51032 - "GET /runs/1270/samples/energy HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 147, in get_energy_samples
+    rows = exec_named_query("energy_samples", {"run_id": run_id})
+  File "/home/dpani/mydrive/alems-platform/server.py", line 72, in exec_named_query
+    sql = _load_sql(query_id)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 66, in _load_sql
+    raise FileNotFoundError(f"No SQL file for: {query_id}")
+FileNotFoundError: No SQL file for: energy_samples
+INFO:     127.0.0.1:51038 - "GET /runs/1271/samples/energy HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 147, in get_energy_samples
+    rows = exec_named_query("energy_samples", {"run_id": run_id})
+  File "/home/dpani/mydrive/alems-platform/server.py", line 72, in exec_named_query
+    sql = _load_sql(query_id)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 66, in _load_sql
+    raise FileNotFoundError(f"No SQL file for: {query_id}")
+FileNotFoundError: No SQL file for: energy_samples
+INFO:     127.0.0.1:49446 - "GET /metrics/registry HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'metric_engine.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [15435]
+INFO:     Started server process [46531]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'metric_engine.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [46531]
+INFO:     Started server process [49895]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [49895]
+INFO:     Started server process [55591]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [55591]
+INFO:     Started server process [58883]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [58883]
+INFO:     Started server process [58885]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [58885]
+INFO:     Started server process [59092]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59092]
+INFO:     Started server process [59094]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59094]
+INFO:     Started server process [60373]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [60373]
+INFO:     Started server process [60375]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [60375]
+INFO:     Started server process [61976]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [61976]
+INFO:     Started server process [62001]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [62001]
+INFO:     Started server process [63393]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [63393]
+INFO:     Started server process [63395]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:38134 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38134 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42058 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42038 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42036 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42050 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37548 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37548 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37548 - "OPTIONS /query/sharp_overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37562 - "OPTIONS /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37564 - "OPTIONS /query/recent_runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37548 - "POST /query/sharp_overview HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:37562 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:37564 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36838 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36838 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36846 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:36838 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60460 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60450 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60436 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60428 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53024 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53024 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53024 - "POST /query/sharp_overview HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53040 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:53034 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45098 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45098 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45098 - "OPTIONS /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45104 - "OPTIONS /query/recent_runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45098 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:45104 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40698 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40698 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40698 - "OPTIONS /query/sharp_overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40698 - "POST /query/sharp_overview HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:40714 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:40700 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57298 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57298 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57298 - "POST /query/sharp_overview HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57310 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:57308 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50158 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50158 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50158 - "POST /query/sharp_overview HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50176 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:50164 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50164 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50164 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50164 - "POST /query/sharp_overview HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50180 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:50158 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48158 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48158 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48160 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:48158 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "OPTIONS /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43750 - "OPTIONS /query/recent_runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43750 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43734 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:59102 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59102 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59110 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:59102 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "OPTIONS /query/sharp_overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "POST /query/sharp_overview HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49516 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:49508 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41612 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41612 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41624 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:41612 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43384 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43384 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43394 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:43384 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49500 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49514 - "POST /query/recent_runs HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/fastapi/routing.py", line 330, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/dpani/mydrive/alems-platform/venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 112, in run_query_post
+    result = exec_named_query(query_id, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 76, in exec_named_query
+    return q(sql, params)
+  File "/home/dpani/mydrive/alems-platform/server.py", line 50, in q
+    cur.execute(adapted, p)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+sqlite3.ProgrammingError: You did not supply a value for binding parameter :limit.
+INFO:     127.0.0.1:49500 - "POST /query/tax_by_task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53922 - "GET //analytics/overview HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53934 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57408 - "GET /analytics/tax_by_task HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:42546 - "GET /analytics/analytics/recent_runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:35612 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35612 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35130 - "OPTIONS /tools/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35130 - "POST /tools/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43230 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42710 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42710 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34686 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34682 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34672 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34676 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55238 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55216 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55220 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55216 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55216 - "OPTIONS /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "OPTIONS /jobs/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55220 - "OPTIONS /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "OPTIONS /jobs/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55256 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55220 - "GET /jobs/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55240 - "GET /jobs/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55232 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55216 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55220 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48052 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55220 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55220 - "GET /jobs/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:48052 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "GET /jobs/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55240 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "OPTIONS /experiments/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "OPTIONS /experiments/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "GET /experiments/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55232 - "GET /experiments/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:48066 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55220 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48072 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55232 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48084 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39234 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39224 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39224 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39204 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39218 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39204 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39204 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39218 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39218 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:39204 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:39204 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38872 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38866 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38860 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38862 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38886 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38886 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38892 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:38886 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:38886 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51782 - "OPTIONS /experiments/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51786 - "OPTIONS /experiments/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51786 - "GET /experiments/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51782 - "GET /experiments/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51782 - "OPTIONS /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51786 - "OPTIONS /jobs/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "OPTIONS /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51812 - "OPTIONS /jobs/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51820 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51782 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51812 - "GET /jobs/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51782 - "GET /jobs/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51796 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51786 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51812 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51782 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51830 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51812 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51646 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51646 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51652 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51646 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51646 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51652 - "OPTIONS /tools/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51652 - "POST /tools/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37858 - "OPTIONS /observe/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37858 - "POST /observe/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43974 - "OPTIONS /experiments/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43976 - "OPTIONS /experiments/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43974 - "GET /experiments/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43974 - "GET /experiments/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43974 - "OPTIONS /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43976 - "OPTIONS /jobs/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43974 - "OPTIONS /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43976 - "OPTIONS /jobs/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43988 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43974 - "GET /jobs/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43976 - "GET /jobs/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:44002 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43976 - "GET /machines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44016 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43974 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43976 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44002 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55108 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43974 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43976 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56966 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56966 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56966 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56972 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56966 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56972 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56972 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52876 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52876 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52876 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52886 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52886 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60788 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60788 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60788 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60796 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60796 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39780 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39780 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39780 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:39782 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:39782 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39406 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39406 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39406 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39416 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39406 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:39416 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:39416 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57154 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57154 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57154 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57162 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57162 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41556 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41556 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41556 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:41564 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:41564 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54608 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54608 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54608 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54622 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54608 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54622 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54608 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36486 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36486 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36486 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36488 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36486 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:36488 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:36488 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59838 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59814 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59824 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59816 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38498 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38514 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38340 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38352 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38364 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40416 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40416 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40416 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40416 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40424 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:40416 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:40416 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58436 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58436 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58444 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58436 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58436 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53124 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53108 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53090 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53094 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53094 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53094 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53094 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53090 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53090 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53094 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53094 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51222 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "GET /runs?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51234 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60498 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59146 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59146 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59146 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59162 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59146 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43028 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43024 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42996 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43008 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43008 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43008 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43008 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42996 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43008 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:42996 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43008 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57226 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57216 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57204 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57196 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57204 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57204 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57204 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57196 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57204 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57196 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57196 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48472 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48468 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48450 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48466 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48466 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48466 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48466 - "OPTIONS /query/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48450 - "OPTIONS /query/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48450 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:48466 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:48466 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49140 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49138 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48450 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49130 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49150 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49138 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49130 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48450 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48450 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48450 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49130 - "POST /query/runs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:48450 - "POST /query/tax HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:48450 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56066 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56048 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56052 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56098 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56092 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56078 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56078 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42220 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42212 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42200 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42210 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42226 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42240 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42236 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53960 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53946 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53958 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56372 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56362 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56366 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40970 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40958 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40944 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40950 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54376 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54374 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54358 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54364 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49300 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49286 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49256 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49270 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34818 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34802 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34784 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34794 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42024 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42010 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42022 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42030 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42048 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42042 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53092 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53074 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53078 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57914 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57890 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57900 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33498 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33504 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:33514 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33520 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33532 - "GET /runs?limit=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33540 - "GET /api/metric/tax_multiple HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:33548 - "GET /api/metrics HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58118 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58098 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58106 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52516 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52492 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52508 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52508 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32834 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32820 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32824 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39774 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51318 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51314 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51316 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43802 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43818 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43808 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45516 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45504 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45508 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45524 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35862 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35836 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35852 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35872 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52508 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52496 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52490 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52492 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52490 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40158 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40176 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40170 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48522 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35016 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35014 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35010 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43968 - "GET /metrics/batch HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47822 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47798 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47808 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47848 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47844 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47832 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47864 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37448 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37438 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37440 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37462 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33794 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33762 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33778 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33808 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49640 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49622 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49628 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49654 - "GET /metrics/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44634 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44620 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44624 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35778 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41548 - "OPTIONS /experiments/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41556 - "OPTIONS /experiments/queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41556 - "GET /experiments/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:41548 - "GET /experiments/queue HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:41548 - "OPTIONS /jobs/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41548 - "POST /jobs/submit HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43844 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43830 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43852 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41548 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43824 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43852 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41548 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33994 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33988 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33968 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33974 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40304 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40296 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40302 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40314 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44678 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44652 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44664 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44686 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38124 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38108 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38118 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38128 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44968 - "GET /events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51826 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54372 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54382 - "GET /runs?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54384 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48184 - "GET /runs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48160 - "GET /analytics/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48170 - "GET /analytics/tax HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48190 - "GET /events HTTP/1.1" 200 OK

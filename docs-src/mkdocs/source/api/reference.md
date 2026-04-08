@@ -1,114 +1,50 @@
-# API Reference
+# A-LEMS Workbench API
 
-A-LEMS provides a comprehensive Python API for energy measurement and analysis. This section documents the core modules, hardware readers, and analysis tools.
+**File:** `server.py` | **Port:** 8765 | **DB:** SQLite (local) or PostgreSQL (env)
 
----
-
-## 📚 API Overview
-
-The API is organized into three main packages:
-
-| Package | Description | Key Classes |
-|---------|-------------|-------------|
-| **`core`** | Main energy measurement engine | `EnergyEngine`, `RAPLReader`, `MSRReader`, `PerfReader` |
-| **`gui`** | Dashboard components | `SessionAnalysis`, `EnergyPage`, `TaxAnalyzer` |
-| **`scripts.tools`** | Developer utilities | `LLMContext`, `QualityChecker`, `ColumnFlow` |
-
----
-
-## 🔧 Core Modules
-
-### `core.energy_engine.EnergyEngine`
-
-The main orchestrator for energy measurement.
-
-```python
-from core.energy_engine import EnergyEngine
-
-engine = EnergyEngine(config)
-
-with engine.start_measurement():
-    # Your AI workload here
-    result = llm.invoke(prompt)
-
-raw_measurement = engine.stop_measurement()
+## Start
+```bash
+uvicorn server:app --host 0.0.0.0 --port 8765 --reload
+# With PostgreSQL:
+ALEMS_DB_URL=postgresql://alems:pass@localhost/alems_central uvicorn server:app --port 8765
 ```
 
-### `core.readers`
+## Endpoints
 
-Hardware readers for different metrics:
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | DB status + mode |
+| GET | `/machines` | All registered hardware |
+| GET | `/experiments` | All experiments |
+| GET | `/experiments/{id}` | Single experiment |
+| GET | `/runs` | Runs (filter: exp_id, workflow) |
+| GET | `/runs/{id}` | Single run + experiment join |
+| GET | `/runs/{id}/samples/energy` | 100Hz RAPL samples |
+| GET | `/runs/{id}/samples/cpu` | 10Hz CPU samples |
+| GET | `/runs/{id}/events` | Orchestration events |
+| GET | `/runs/{id}/llm` | LLM interactions |
+| GET | `/analytics/overview` | Global KPIs |
+| GET | `/analytics/tax` | Orchestration tax pairs |
+| GET | `/analytics/domains` | Energy by task domain |
+| GET | `/analytics/sessions` | Session aggregates |
+| GET | `/analytics/hypotheses` | Hypothesis tracker |
+| GET | `/analytics/outliers` | Flagged outlier runs |
+| GET | `/jobs/queue` | Job queue |
+| GET | `/events` | SSE stream |
+| GET | `/metrics/registry` | All metrics from metric_registry.yaml |
+| POST | `/metrics/query` | Dynamic metric query |
+| POST | `/tools/query` | SQL console (SELECT only) |
+| POST | `/observe/ask` | Ask Me — LLM + energy meters |
 
-| Reader | Metrics | Frequency |
-|--------|---------|-----------|
-| `RAPLReader` | Package, core, uncore, DRAM energy | 100Hz |
-| `MSRReader` | C-state counters, ring bus frequency | Snapshots |
-| `PerfReader` | Instructions, cycles, cache misses | Process-attached |
-| `TurbostatReader` | CPU frequency, temperature | 10Hz |
-
----
-
-## 📊 Analysis Modules
-
-### `core.analysis.energy_analyzer`
-
-Computes derived metrics from raw measurements:
-
-- **Workload Energy** = Package energy - Idle baseline
-- **Reasoning Energy** = Core energy - Idle core
-- **Orchestration Tax** = Workload - Reasoning
-
-### `core.sustainability.calculator`
-
-Converts energy to environmental impact:
-
-```python
-sustainability = calculator.calculate(energy_j, country_code)
-print(f"Carbon: {sustainability.carbon_g:.6f} g")
-print(f"Water: {sustainability.water_ml:.6f} ml")
+## Dynamic metric query
+```json
+POST /metrics/query
+{"metric_id": "ooi_time", "parameters": {"run_id": 123}}
 ```
+Metric definitions in `config/metric_registry.yaml`. Add metric → appears automatically.
 
----
-
-## 🖥️ GUI Modules
-
-### `gui.pages`
-
-Each page is a Streamlit component:
-
-| Page | Purpose |
-|------|---------|
-| `overview` | Dashboard home |
-| `energy` | Energy visualization |
-| `tax` | Orchestration tax analysis |
-| `sustainability` | Environmental metrics |
-
----
-
-## 🛠️ Developer Tools
-
-The `scripts.tools` directory contains utilities:
-
-| Tool | Purpose |
-|------|---------|
-| `llm_context.py` | Generate context for LLM prompts |
-| `quality_check.py` | Run code quality checks |
-| `column_flow.py` | Trace database column data flow |
-| `issue_tracer.py` | System diagnostics |
-
----
-
-## 📖 Full API Documentation
-
-For complete API details, including all classes, methods, and parameters, see the [Full API Docs](../sphinx/).
-
----
-
-## 🔗 Related Documentation
-
-- [Developer Guide](../developer-guide/01-architecture.md) — System architecture
-- [Adding New Readers](../developer-guide/05-adding-readers.md) — Extend hardware support
-- [Developer Tools](../developer-guide/07-tools-overview.md) — Tool usage guide
-
----
-
-*Last updated: March 2026*
+## NFRs met
+- Zero hardcoded SQL in routes
+- SQLite or PostgreSQL via env var
+- All queries parameterized (no injection)
+- SQL console blocks DROP/DELETE/ALTER

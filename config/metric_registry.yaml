@@ -1,333 +1,273 @@
 # config/metric_registry.yaml
-# Single source of truth for ALL metrics.
-# Add metric here → appears in UI automatically.
-# Zero code change ever.
-version: "1.0"
+# Composable metric engine.
+# Two types:
+#   sql: → executes inline SQL, returns rows with 'value' column
+#   depends_on + formula: → computes from other metrics
+# All metrics visible in UI automatically. Zero code change to add new metric.
+
+version: "2.0"
 
 metrics:
 
-  # ── LAYER 1: SILICON — MEASURED ─────────────────────────────────────
+  # ── MEASURED: Raw silicon energy ──────────────────────────────────────────
 
-  - id: pkg_energy_uj
-    label: "Package energy"
+  - id: pkg_energy_j
+    description: "Total CPU package energy — read directly from RAPL hardware register"
     provenance: MEASURED
     layer: silicon
-    layer_order: 1
-    source: "RAPL /sys/class/powercap/intel-rapl"
-    db_table: runs
-    db_column: pkg_energy_uj
-    unit: µJ
-    display_units: [µJ, mJ, J, Wh]
-    display_scale: {µJ: 1, mJ: 0.001, J: 0.000001, Wh: 0.000000000278}
-    formula: null
-    formula_latex: null
-    tooltip: "Total CPU package energy — read directly from Intel RAPL hardware register"
-    chart_type: timeseries
-    category: energy
-    significance: supporting
-    leaderboard: false
+    unit: J
+    type: aggregate
+    sql: |
+      SELECT AVG(pkg_energy_uj) / 1e6 AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND (:workflow IS NULL OR workflow_type = :workflow)
+        AND pkg_energy_uj > 0
     visible_in: [workbench, showcase]
-    default_visible: true
+    significance: supporting
 
-  - id: core_energy_uj
-    label: "Core energy"
+  - id: core_energy_j
+    description: "CPU core energy — pure compute work, excludes uncore and DRAM"
     provenance: MEASURED
     layer: silicon
-    layer_order: 1
-    source: "RAPL core domain"
-    db_table: runs
-    db_column: core_energy_uj
-    unit: µJ
-    display_units: [µJ, mJ, J]
-    formula: null
-    formula_latex: null
-    tooltip: "CPU core energy — compute work only, excludes uncore and DRAM"
-    chart_type: timeseries
-    category: energy
-    significance: supporting
-    leaderboard: false
+    unit: J
+    type: aggregate
+    sql: |
+      SELECT AVG(core_energy_uj) / 1e6 AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND (:workflow IS NULL OR workflow_type = :workflow)
+        AND core_energy_uj > 0
     visible_in: [workbench, showcase]
-    default_visible: true
+    significance: supporting
 
-  - id: ipc
-    label: "IPC"
+  - id: duration_s
+    description: "Run wall-clock duration in seconds"
     provenance: MEASURED
     layer: silicon
-    layer_order: 1
-    source: "perf_event_open syscall"
-    db_table: runs
-    db_column: ipc
-    unit: "instr/cycle"
-    display_units: ["instr/cycle"]
-    formula: null
-    formula_latex: null
-    tooltip: "Instructions per cycle — hardware performance counter, not estimated"
-    chart_type: bar
-    category: performance
-    significance: supporting
-    leaderboard: false
+    unit: s
+    type: aggregate
+    sql: |
+      SELECT AVG(duration_ns) / 1e9 AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND (:workflow IS NULL OR workflow_type = :workflow)
+        AND duration_ns > 0
     visible_in: [workbench]
-    default_visible: true
+    significance: supporting
 
-  # ── LAYER 2: OS — MEASURED ──────────────────────────────────────────
-
-  - id: interrupt_rate
-    label: "Interrupt rate"
+  - id: total_tokens
+    description: "Total tokens (prompt + completion) — 74% coverage"
     provenance: MEASURED
-    layer: os
-    layer_order: 2
-    source: "/proc/stat irq delta"
-    db_table: runs
-    db_column: interrupt_rate
-    unit: "interrupts/s"
-    display_units: ["interrupts/s"]
-    formula: null
-    formula_latex: null
-    tooltip: "Hardware interrupt frequency sampled at 10Hz from /proc/stat"
-    chart_type: timeseries
-    category: performance
-    significance: supporting
-    leaderboard: false
+    layer: orchestration
+    unit: tokens
+    type: aggregate
+    sql: |
+      SELECT AVG(total_tokens) AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND (:workflow IS NULL OR workflow_type = :workflow)
+        AND total_tokens > 0
     visible_in: [workbench]
-    default_visible: false
+    significance: supporting
 
-  # ── LAYER 3: ORCHESTRATION — CALCULATED ─────────────────────────────
+  - id: llm_calls
+    description: "Number of LLM API calls — agentic only"
+    provenance: MEASURED
+    layer: orchestration
+    unit: calls
+    type: aggregate
+    sql: |
+      SELECT AVG(llm_calls) AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND workflow_type = 'agentic'
+        AND llm_calls > 0
+    visible_in: [workbench]
+    significance: supporting
 
-  - id: dynamic_energy_uj
-    label: "Dynamic energy"
+  - id: avg_ipc
+    description: "Instructions per cycle — hardware performance counter"
+    provenance: MEASURED
+    layer: silicon
+    unit: instr/cycle
+    type: aggregate
+    sql: |
+      SELECT AVG(ipc) AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND ipc > 0
+    visible_in: [workbench, showcase]
+    significance: supporting
+
+  # ── CALCULATED: Derived from measured values ──────────────────────────────
+
+  - id: avg_power_w
+    description: "Real average power = energy / time. Not the stored avg_power_watts which is unreliable."
+    provenance: CALCULATED
+    layer: silicon
+    unit: W
+    type: derived
+    depends_on: [pkg_energy_j, duration_s]
+    formula: pkg_energy_j / duration_s
+    formula_latex: "P = \\frac{E_{pkg}}{t}"
+    visible_in: [workbench, showcase]
+    significance: supporting
+
+  - id: energy_per_token_uj
+    description: "Dynamic energy cost per output token"
     provenance: CALCULATED
     layer: orchestration
-    layer_order: 3
-    source: "EnergyAnalyzer.compute()"
-    db_table: runs
-    db_column: dynamic_energy_uj
-    unit: µJ
-    display_units: [µJ, mJ, J, Wh]
-    formula: "pkg_energy_uj - (baseline_package_power * duration_ns/1e9 * 1e6)"
-    formula_latex: "E_{dynamic} = E_{pkg} - (P_{idle} \\times t)"
-    tooltip: "Workload energy above idle baseline"
-    chart_type: bar
-    category: energy
-    significance: supporting
-    leaderboard: false
-    visible_in: [workbench, showcase]
-    default_visible: true
-
-  - id: orchestration_tax_uj
-    label: "Orchestration tax"
-    provenance: CALCULATED
-    layer: orchestration
-    layer_order: 3
-    source: "orchestration_tax_summary table"
-    db_table: orchestration_tax_summary
-    db_column: orchestration_tax_uj
-    unit: µJ
-    display_units: [µJ, mJ, J]
-    formula: "agentic_dynamic_uj - linear_dynamic_uj"
-    formula_latex: "E_{tax} = E_{agentic} - E_{linear}"
-    tooltip: "Pure overhead cost of agentic orchestration vs equivalent linear run"
-    chart_type: bar
-    category: energy
-    significance: thesis_core
-    leaderboard: true
+    unit: µJ/token
+    type: derived
+    depends_on: [pkg_energy_j, total_tokens]
+    formula: (pkg_energy_j * 1e6) / total_tokens
+    formula_latex: "E_{token} = \\frac{E_{pkg} \\times 10^6}{N_{tokens}}"
     visible_in: [workbench, showcase, commons]
-    default_visible: true
+    significance: thesis_core
+
+  - id: energy_per_llm_call_j
+    description: "Energy cost per LLM API call — agentic orchestration efficiency"
+    provenance: CALCULATED
+    layer: orchestration
+    unit: J/call
+    type: derived
+    depends_on: [pkg_energy_j, llm_calls]
+    formula: pkg_energy_j / llm_calls
+    formula_latex: "E_{call} = \\frac{E_{pkg}}{N_{calls}}"
+    visible_in: [workbench, showcase]
+    significance: thesis_core
+
+  - id: core_share_pct
+    description: "Fraction of package energy used by CPU cores — compute efficiency"
+    provenance: CALCULATED
+    layer: silicon
+    unit: "%"
+    type: aggregate
+    sql: |
+      SELECT AVG(core_energy_uj * 100.0 / NULLIF(pkg_energy_uj, 0)) AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND pkg_energy_uj > 0
+        AND core_energy_uj > 0
+    formula_latex: "S_{core} = \\frac{E_{core}}{E_{pkg}} \\times 100"
+    visible_in: [workbench, showcase]
+    significance: supporting
+
+  - id: tax_multiplier
+    description: "Agentic energy tax — how much more energy agentic uses vs linear for same task"
+    provenance: CALCULATED
+    layer: orchestration
+    unit: "×"
+    type: aggregate
+    sql: |
+      SELECT AVG(agentic_dynamic_uj) / NULLIF(AVG(linear_dynamic_uj), 0) AS value
+      FROM orchestration_tax_summary
+    formula_latex: "\\tau = \\frac{E_{agentic}}{E_{linear}}"
+    visible_in: [workbench, showcase, commons]
+    significance: thesis_core
 
   - id: ooi_time
-    label: "OOI (time)"
+    description: "Orchestration Overhead Index — fraction of wall time on orchestration"
     provenance: CALCULATED
     layer: orchestration
-    layer_order: 3
-    source: "research_metrics_view"
-    db_table: research_metrics_view
-    db_column: ooi_time
     unit: ratio
-    display_units: [ratio, "%"]
-    display_scale: {ratio: 1, "%": 100}
-    formula: "orchestration_cpu_ms / total_time_ms"
+    type: aggregate
+    sql: |
+      SELECT AVG(orchestration_cpu_ms / NULLIF(duration_ns / 1e6, 0)) AS value
+      FROM runs
+      WHERE workflow_type = 'agentic'
+        AND orchestration_cpu_ms > 0
+        AND duration_ns > 0
     formula_latex: "OOI_t = \\frac{T_{orch}}{T_{total}}"
-    tooltip: "Orchestration Overhead Index — fraction of wall time spent on orchestration"
-    chart_type: gauge
-    category: efficiency
-    significance: thesis_core
-    leaderboard: true
     visible_in: [workbench, showcase, commons]
-    default_visible: true
+    significance: thesis_core
 
   - id: ucr
-    label: "UCR"
+    description: "Useful Compute Ratio — fraction of time doing real LLM compute"
     provenance: CALCULATED
     layer: orchestration
-    layer_order: 3
-    source: "research_metrics_view"
-    db_table: research_metrics_view
-    db_column: ucr
     unit: ratio
-    display_units: [ratio, "%"]
-    formula: "total_llm_compute_ms / total_time_ms"
+    type: aggregate
+    sql: |
+      SELECT AVG(compute_time_ms / NULLIF(duration_ns / 1e6, 0)) AS value
+      FROM runs
+      WHERE workflow_type = 'agentic'
+        AND compute_time_ms > 0
+        AND duration_ns > 0
     formula_latex: "UCR = \\frac{T_{compute}}{T_{total}}"
-    tooltip: "Useful Compute Ratio — fraction of time doing real LLM compute"
-    chart_type: gauge
-    category: efficiency
-    significance: thesis_core
-    leaderboard: true
     visible_in: [workbench, showcase, commons]
-    default_visible: true
-
-  - id: energy_per_token
-    label: "Energy per token"
-    provenance: CALCULATED
-    layer: orchestration
-    layer_order: 3
-    source: "runs table"
-    db_table: runs
-    db_column: energy_per_token
-    unit: "µJ/token"
-    display_units: ["µJ/token", "mJ/token", "J/token"]
-    formula: "dynamic_energy_uj / total_tokens"
-    formula_latex: "E_{token} = \\frac{E_{dynamic}}{N_{tokens}}"
-    tooltip: "Dynamic energy cost per output token — primary efficiency metric"
-    chart_type: bar
-    category: efficiency
     significance: thesis_core
-    leaderboard: true
-    visible_in: [workbench, showcase, commons]
-    default_visible: true
 
-  # ── LAYER 4: APPLICATION — INFERRED ─────────────────────────────────
+  # ── INFERRED: From grid intensity and environmental factors ──────────────
 
-  - id: carbon_g
-    label: "Carbon footprint"
+  - id: carbon_g_per_query
+    description: "Carbon footprint per query — inferred from grid intensity × dynamic energy"
     provenance: INFERRED
     layer: application
-    layer_order: 4
-    source: "grid_intensity_2026.json × dynamic_energy_j"
-    db_table: runs
-    db_column: carbon_g
-    unit: gCO2
-    display_units: [gCO2, kgCO2, "searches equivalent", "phone charges"]
-    display_scale:
-      gCO2: 1
-      kgCO2: 0.001
-      "searches equivalent": 3.33
-      "phone charges": 0.00005
-    formula: "dynamic_energy_j * grid_intensity[country_code]"
+    unit: gCO₂
+    type: aggregate
+    sql: |
+      SELECT AVG(carbon_g) AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND carbon_g > 0
     formula_latex: "CO_2 = E_{dynamic} \\times I_{grid}(country)"
-    tooltip: "Estimated carbon — inferred from grid intensity, not directly measured"
-    config_dep: grid_intensity_2026.json
-    chart_type: gauge
-    category: sustainability
-    significance: supporting
-    leaderboard: true
     visible_in: [workbench, showcase, commons]
-    default_visible: true
+    significance: supporting
 
-  - id: water_ml
-    label: "Water usage"
+  - id: water_ml_per_query
+    description: "Water usage per query — inferred from energy × water intensity factor"
     provenance: INFERRED
     layer: application
-    layer_order: 4
-    source: "gwp_values.yaml × dynamic_energy_j"
-    db_table: runs
-    db_column: water_ml
     unit: ml
-    display_units: [ml, L, "bottles (500ml)"]
-    display_scale: {ml: 1, L: 0.001, "bottles (500ml)": 0.002}
-    formula: "dynamic_energy_j * water_factor"
+    type: aggregate
+    sql: |
+      SELECT AVG(water_ml) AS value
+      FROM runs
+      WHERE (:run_id IS NULL OR run_id = :run_id)
+        AND water_ml > 0
     formula_latex: "W = E_{dynamic} \\times F_{water}"
-    tooltip: "Estimated water consumption — inferred from energy and water intensity factor"
-    config_dep: gwp_values.yaml
-    chart_type: gauge
-    category: sustainability
-    significance: supporting
-    leaderboard: false
     visible_in: [workbench, showcase, commons]
-    default_visible: true
+    significance: supporting
 
-  - id: methane_mg
-    label: "Methane equivalent"
+  - id: carbon_per_token_mg
+    description: "Carbon cost per token — inferred from carbon per query / tokens"
     provenance: INFERRED
     layer: application
-    layer_order: 4
-    source: "gwp_values.yaml × dynamic_energy_j"
-    db_table: runs
-    db_column: methane_mg
-    unit: mg
-    display_units: [mg, g]
-    formula: "dynamic_energy_j * methane_factor"
-    formula_latex: "CH_4 = E_{dynamic} \\times F_{methane}"
-    tooltip: "Estimated methane equivalent — inferred from energy and methane intensity factor"
-    config_dep: gwp_values.yaml
-    chart_type: gauge
-    category: sustainability
-    significance: supporting
-    leaderboard: false
+    unit: mgCO₂/token
+    type: derived
+    depends_on: [carbon_g_per_query, total_tokens]
+    formula: (carbon_g_per_query * 1000) / total_tokens
+    formula_latex: "CO_{2,token} = \\frac{CO_2 \\times 10^3}{N_{tokens}}"
     visible_in: [workbench, showcase, commons]
-    default_visible: true
+    significance: supporting
 
-# ── LAYERS DEFINITION ────────────────────────────────────────────────────
+# ── Layer definitions ─────────────────────────────────────────────────────────
 layers:
   - id: silicon
-    label: "Silicon"
+    label: Silicon
     order: 1
     color: "#1D9E75"
-    description: "Directly read from hardware registers (RAPL, MSR, perf)"
-    badge: MEASURED
-
-  - id: os
-    label: "OS / System"
-    order: 2
-    color: "#534AB7"
-    description: "Kernel-level signals from /proc, scheduler, thermal"
     badge: MEASURED
 
   - id: orchestration
-    label: "Orchestration"
+    label: Orchestration
     order: 3
     color: "#BA7517"
-    description: "Derived from agentic workflow timing and energy delta"
     badge: CALCULATED
 
   - id: application
-    label: "Application"
+    label: Application
     order: 4
     color: "#185FA5"
-    description: "Inferred from LLM responses, tokens, grid intensity"
     badge: INFERRED
 
-# ── SIGNIFICANCE ─────────────────────────────────────────────────────────
+# ── Significance ──────────────────────────────────────────────────────────────
 significance:
   - id: thesis_core
-    label: "Thesis core"
+    label: Thesis core
     color: "#E24B4A"
-    description: "Central to PhD research question"
-
   - id: supporting
-    label: "Supporting"
+    label: Supporting
     color: "#888780"
-    description: "Supports analysis but not central claim"
-
-# ── DISPLAY UNITS ────────────────────────────────────────────────────────
-# Researcher adds new unit here → appears in UI dropdown automatically
-unit_conversions:
-  energy:
-    base: µJ
-    units:
-      µJ: 1
-      mJ: 0.001
-      J: 0.000001
-      Wh: 0.000000000278
-      kWh: 0.000000000000278
-  carbon:
-    base: gCO2
-    units:
-      gCO2: 1
-      kgCO2: 0.001
-      tCO2: 0.000001
-  time:
-    base: ns
-    units:
-      ns: 1
-      µs: 0.001
-      ms: 0.000001
-      s: 0.000000001

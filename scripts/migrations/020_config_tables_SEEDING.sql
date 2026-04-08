@@ -1,0 +1,68 @@
+-- =============================================================
+-- SEED: standardization_registry
+-- =============================================================
+INSERT OR IGNORE INTO standardization_registry
+  (standard_id, category, value, unit, source, valid_from)
+VALUES
+  ('carbon_intensity_uk_2024','carbon',0.233,
+   'kg_co2_per_kwh','National Grid ESO 2024','2024-01-01'),
+  ('datacenter_wue_avg','water',1.5,
+   'l_per_kwh','Industry average WUE','2024-01-01'),
+  ('tdp_oracle_vm_vcpu','hardware',15,
+   'watts','Oracle VM vCPU TDP estimate','2024-01-01'),
+  ('tdp_i7_1165g7','hardware',28,
+   'watts','Intel i7-1165G7 TDP','2024-01-01');
+ 
+-- =============================================================
+-- SEED: query_registry — computed metrics
+-- tax_multiple and ooi_time computed server-side
+-- UI receives final value, never computes
+-- =============================================================
+INSERT OR IGNORE INTO query_registry
+  (id, name, metric_type, depends_on, formula,
+   endpoint_path, group_name, enrich_metrics, active)
+VALUES
+  ('tax_multiple','Orchestration Tax Multiple',
+   'computed',
+   '["avg_agentic_j","avg_linear_j"]',
+   'avg_agentic_j / avg_linear_j',
+   NULL,'analytics',0,1),
+ 
+  ('energy_per_token_uj','Energy per Token µJ',
+   'computed',
+   '["total_energy_j","avg_tokens","total_runs"]',
+   '(total_energy_j * 1000000) / (avg_tokens * total_runs)',
+   NULL,'analytics',0,1),
+ 
+  ('ooi_time','OOI Time',
+   'computed',
+   '["avg_planning_ms","avg_execution_ms","avg_synthesis_ms"]',
+   'avg_planning_ms / (avg_planning_ms + avg_execution_ms + avg_synthesis_ms)',
+   NULL,'research',0,1);
+ 
+-- Set overview to enrich with computed metrics
+-- (run after inserting overview row from migration script)
+-- UPDATE query_registry SET enrich_metrics=1 WHERE id='overview';
+ 
+-- =============================================================
+-- SEED: component_registry
+-- =============================================================
+INSERT OR IGNORE INTO component_registry VALUES
+  ('HeroBanner','layout','Animated headline + live indicator','{}','none',NULL,0,0,0,'["workbench","showcase"]',1),
+  ('KPIStrip','data','6 KPI tiles with count-up','{"columns":{"type":"number","default":6}}','flat_row',NULL,0,1,1,'["workbench","showcase"]',1),
+  ('EChartsBar','chart_2d','ECharts bar chart','{"x_key":{"type":"string"},"y_key":{"type":"string"}}','array',NULL,0,1,1,'["workbench","showcase"]',1),
+  ('EChartsScatter','chart_2d','ECharts scatter','{}','array',NULL,0,1,1,'["workbench"]',1),
+  ('EChartsDualTrace','chart_2d','ECharts dual-axis','{}','array',NULL,0,1,1,'["workbench"]',1),
+  ('PhaseBreakdown','data','Stacked phase bar + list','{}','flat_row',NULL,0,1,0,'["workbench","showcase"]',1),
+  ('DataHealthBar','data','Data quality flag strip','{}','flat_row',NULL,0,0,0,'["workbench"]',1),
+  ('RunsTable','data','Recent runs table','{"limit":{"type":"number","default":10}}','array',NULL,0,0,1,'["workbench"]',1),
+  ('TaxChart','chart_2d','Orchestration tax by task','{}','array',NULL,0,1,1,'["workbench","showcase"]',1),
+  ('SustainabilityRow','data','Carbon + water row','{}','flat_row',NULL,0,0,0,'["workbench","showcase"]',1),
+  ('AttributionExplorer','chart_2d','5-layer energy attribution','{}','array',NULL,0,1,0,'["workbench"]',1),
+  ('LensExplorer','chart_2d','Multi-dim parallel coords','{}','array',NULL,0,0,0,'["workbench"]',1),
+  ('AgentFlowGraph','chart_3d','ReactFlow decision tree','{}','array',NULL,0,1,0,'["workbench"]',1),
+  ('SiliconJourney','chart_3d','Particle attribution journey','{}','none',NULL,0,0,0,'["workbench","showcase"]',1),
+  ('FormulaTooltip','ui','KaTeX formula on hover','{}','none',NULL,0,0,0,'["workbench","showcase","commons"]',1),
+  ('ProvenanceBadge','ui','MEASURED/CALCULATED/INFERRED badge','{}','none',NULL,0,0,0,'["workbench","showcase","commons"]',1),
+  ('GlassCard','ui','Glass morphism card','{}','none',NULL,0,0,0,'["workbench","showcase","commons"]',1),
+  ('GhostPlaceholder','utility','Coming soon placeholder','{}','none',NULL,0,0,0,'["workbench"]',1);
