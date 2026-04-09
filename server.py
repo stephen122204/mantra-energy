@@ -19,6 +19,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+
 BASE    = Path(__file__).parent
 DB_PATH = Path(os.environ.get("ALEMS_DB_PATH", str(BASE / "data" / "experiments.db")))
 DB_URL  = os.environ.get("ALEMS_DB_URL", "")
@@ -85,7 +86,10 @@ def _metric_reg():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Register dynamic endpoints from query_registry on startup."""
+    """Startup: sync metadata from central then register endpoints."""
+    from sync import sync_metadata_down
+    summary = await sync_metadata_down()
+    if summary: logger.info(f"Metadata synced: {summary}")
     count = register_all_from_db(app, _conn)
     logger.info(f"✓ {count} endpoints auto-registered from query_registry")
     yield
@@ -134,7 +138,11 @@ def run_query_get(query_id: str):
     return {"query_id":query_id,"row":result}
 
 @app.get("/analytics/overview")
-def get_overview(): return exec_named_query("overview", {})
+def get_overview():
+    from auto_router import _compute_derived_from_db
+    base = exec_named_query("overview", {})  # runs SQL, gets 34 fields
+    computed = _compute_derived_from_db(base, _conn) # adds tax_multiple etc.
+    return {**base, **computed} # merged response
 
 @app.get("/analytics/tax")
 def get_tax(): return exec_named_query("tax_by_task", {})
