@@ -1,0 +1,42 @@
+digraph {
+  rankdir=TB;
+  compound=True;
+  splines=ortho;
+  nodesep=0.5;
+  ranksep=0.8;
+  "wb.universe" [label="Universe Landing
+(page.tsx)", shape="box", color="#e8f5e9"];
+  "wb.dynamic" [label="Dynamic Pages
+([pageId]/page.tsx)", shape="box", color="#e8f5e9"];
+  "wb.sidebar" [label="Sidebar
+(DB-driven nav)", shape="box", color="#e8f5e9"];
+  "wb.topbar" [label="TopBar
+(theme, music, glass)", shape="box", color="#e8f5e9"];
+  "wb.renderer" [label="PageRenderer
+(REGISTRY)", shape="box", color="#fff9c4"];
+  "wb.workbench" [label="Workbench
+(:3000)", shape="box", color="#fff9c4"];
+  "wb.showcase" [label="Showcase
+(:3001)", shape="box", color="#fff9c4"];
+  "wb.commons" [label="Commons
+(:3002)", shape="box", color="#fff9c4"];
+  "wb.apidb" [label="/api/db
+(Next.js route)", shape="box", color="#fff9c4"];
+  "wb.fastapi" [label="FastAPI
+(:8765)", shape="box", color="#ffe0b2"];
+  "wb.sqlite" [label="SQLite
+(experiments.db)", shape="cylinder", color="lightcoral"];
+  "wb.pg" [label="PostgreSQL
+(Oracle VM)", shape="cylinder", color="lightcoral"];
+  "wb.workbench" -> "wb.universe" [style=dashed, color=black, arrowhead=normal, label="serves /"];
+  "wb.workbench" -> "wb.dynamic" [style=dashed, color=black, arrowhead=normal, label="serves /[pageId]"];
+  "wb.dynamic" -> "wb.renderer" [style=dashed, color=black, arrowhead=normal, label="uses"];
+  "wb.renderer" -> "wb.fastapi" [style=solid, color=blue, arrowhead=normal, label="PATH1 GET"];
+  "wb.apidb" -> "wb.fastapi" [style=solid, color=blue, arrowhead=normal, label="POST /api/db"];
+  "wb.fastapi" -> "wb.sqlite" [style=solid, color=blue, arrowhead=normal, label="queries"];
+  "wb.universe" -> "wb.fastapi" [style=solid, color=blue, arrowhead=normal, label="GET /pages"];
+  "wb.sidebar" -> "wb.fastapi" [style=solid, color=blue, arrowhead=normal, label="GET /pages"];
+  "wb.workbench" -> "wb.showcase" [style=dashed, color=black, arrowhead=normal, label="same codebase"];
+  "wb.workbench" -> "wb.commons" [style=dashed, color=black, arrowhead=normal, label="same codebase"];
+  "wb.sqlite" -> "wb.pg" [style=solid, color=blue, arrowhead=normal, label="sync up"];
+}

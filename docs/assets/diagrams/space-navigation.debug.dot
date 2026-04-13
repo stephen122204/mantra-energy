@@ -1,0 +1,29 @@
+digraph {
+  rankdir=TB;
+  nodesep=0.5;
+  ranksep=0.6;
+  "sn.landing" [label="Universe Landing
+(3D Solar System)", shape="box", color="#1a237e"];
+  "sn.click" [label="Click Planet
+or Bottom Strip", shape="diamond", color="#fff9c4"];
+  "sn.focus" [label="setFocusIdx(i)
+Camera lerps to planet", shape="box", color="#e3f2fd"];
+  "sn.ticket" [label="SpaceTicket
+(Boarding Pass)", shape="box", color="#1a237e"];
+  "sn.launch" [label="Click LAUNCH
+or Enter key", shape="diamond", color="#fff9c4"];
+  "sn.wormhole" [label="WormholeTunnel
+(~2s animation)", shape="box", color="#4a148c"];
+  "sn.page" [label="Target Page
+(router.push)", shape="box", color="#e8f5e9"];
+  "sn.sun" [label="Click Sun
+(Overview)", shape="diamond", color="#fff9c4"];
+  "sn.landing" -> "sn.click" [style=solid, color=black, label="scroll/click"];
+  "sn.click" -> "sn.sun" [style=solid, color=black, label="idx=0"];
+  "sn.sun" -> "sn.ticket" [style=solid, color=black, label="shows ticket"];
+  "sn.click" -> "sn.focus" [style=solid, color=black, label="idx>0"];
+  "sn.focus" -> "sn.ticket" [style=solid, color=black, label="SpaceTicket appears"];
+  "sn.ticket" -> "sn.launch" [style=solid, color=black, label="5s countdown"];
+  "sn.launch" -> "sn.wormhole" [style=solid, color=black, label="setWarping(true)"];
+  "sn.wormhole" -> "sn.page" [style=solid, color=black, label="onComplete"];
+}

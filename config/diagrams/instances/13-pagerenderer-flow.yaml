@@ -1,0 +1,103 @@
+# PageRenderer Flow — DB to Component Render
+version: 1.0
+name: pagerenderer-flow
+title: "PageRenderer — Config to Component Flow"
+template: dataflow
+
+nodes:
+  - id: pr.db
+    label: "SQLite\npage_sections"
+    shape: cylinder
+    color: lightcoral
+    layer: data
+    description: "Source of truth for page layout"
+
+  - id: pr.api
+    label: "GET /pages/id\nFastAPI"
+    shape: box
+    color: lightyellow
+    layer: api
+    description: "Returns page config + sections"
+
+  - id: pr.dynamic
+    label: "pageId/page.tsx\nDynamicPage"
+    shape: box
+    color: lightblue
+    layer: nextjs
+    description: "Fetches page config and query data"
+
+  - id: pr.renderer
+    label: "PageRenderer\nuniversal"
+    shape: box
+    color: "#c8e6c9"
+    layer: nextjs
+    description: "Groups sections into rows, renders components"
+
+  - id: pr.registry
+    label: "Component Registry\n46 components"
+    shape: box
+    color: "#fff9c4"
+    layer: nextjs
+    description: "Component name to React.FC map"
+
+  - id: pr.sectioncard
+    label: "SectionCard\nCard3D wrapper"
+    shape: box
+    color: "#fff9c4"
+    layer: nextjs
+    description: "Adds 3D hover, provenance border"
+
+  - id: pr.comp
+    label: "Component\nKPIStrip data"
+    shape: box
+    color: "#e8f5e9"
+    layer: browser
+    description: "Receives data, props, theme, onDrill"
+
+  - id: pr.querydata
+    label: "Query Data\noverview, sessions"
+    shape: box
+    color: lightyellow
+    layer: api
+    description: "Pre-fetched via TanStack Query"
+
+edges:
+  - from: pr.db
+    to: pr.api
+    type: data
+    label: "sections"
+
+  - from: pr.api
+    to: pr.dynamic
+    type: data
+    label: "pageConfig"
+
+  - from: pr.dynamic
+    to: pr.renderer
+    type: control
+    label: "passes sections"
+
+  - from: pr.querydata
+    to: pr.renderer
+    type: data
+    label: "queryData"
+
+  - from: pr.renderer
+    to: pr.registry
+    type: control
+    label: "lookup Comp"
+
+  - from: pr.registry
+    to: pr.sectioncard
+    type: control
+    label: "Comp found"
+
+  - from: pr.sectioncard
+    to: pr.comp
+    type: control
+    label: "renders"
+
+  - from: pr.querydata
+    to: pr.comp
+    type: data
+    label: "data prop"

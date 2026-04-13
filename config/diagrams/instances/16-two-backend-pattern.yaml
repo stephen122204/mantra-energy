@@ -1,0 +1,119 @@
+# Two Backend Pattern — PATH1 vs PATH2
+version: 1.0
+name: two-backend-pattern
+title: "Two-Backend Pattern — Display vs Research"
+template: layered
+
+boundaries:
+  - "Frontend (React)"
+  - "Next.js API"
+  - "FastAPI Backend"
+  - "Database"
+
+nodes:
+  # PATH1
+  - id: p1.comp
+    label: "Dashboard Components\n(KPIStrip, Charts)"
+    shape: box
+    color: "#c8e6c9"
+    layer: frontend
+    description: "Display components — use pre-aggregated data"
+
+  - id: p1.hook
+    label: "useOverview()\nuseQuery hooks"
+    shape: box
+    color: "#c8e6c9"
+    layer: frontend
+    description: "TanStack Query hooks"
+
+  - id: p1.fastapi
+    label: "GET /analytics/*\nFastAPI endpoints"
+    shape: box
+    color: "#fff9c4"
+    layer: fastapi
+    description: "Auto-registered from query_registry"
+
+  - id: p1.sql
+    label: "Pre-aggregated SQL\n(query_registry)"
+    shape: record
+    color: lightyellow
+    layer: fastapi
+    description: "AVG, COUNT, GROUP BY"
+
+  # PATH2
+  - id: p2.comp
+    label: "Research Instruments\n(LensExplorer, AgentFlow)"
+    shape: box
+    color: "#e3f2fd"
+    layer: frontend
+    description: "Research tools — need raw rows"
+
+  - id: p2.hook
+    label: "useResearchQuery(sql)\nPOST /api/db"
+    shape: box
+    color: "#e3f2fd"
+    layer: frontend
+    description: "Raw SQL via Next.js API route"
+
+  - id: p2.route
+    label: "Next.js /api/db\n(route.ts)"
+    shape: box
+    color: "#fff9c4"
+    layer: nextjs
+    description: "Proxies SQL to FastAPI"
+
+  - id: p2.fastapi
+    label: "POST /api/db\nFastAPI"
+    shape: box
+    color: "#fff9c4"
+    layer: fastapi
+    description: "Executes raw SQL with params"
+
+  # Shared
+  - id: shared.db
+    label: "SQLite\nexperiments.db"
+    shape: cylinder
+    color: lightcoral
+    layer: database
+    description: "Single source of truth"
+
+edges:
+  - from: p1.comp
+    to: p1.hook
+    type: control
+    label: "PATH1"
+
+  - from: p1.hook
+    to: p1.fastapi
+    type: data
+    label: "GET request"
+
+  - from: p1.fastapi
+    to: p1.sql
+    type: control
+    label: "runs"
+
+  - from: p1.sql
+    to: shared.db
+    type: data
+    label: "query"
+
+  - from: p2.comp
+    to: p2.hook
+    type: control
+    label: "PATH2"
+
+  - from: p2.hook
+    to: p2.route
+    type: data
+    label: "POST {sql, params}"
+
+  - from: p2.route
+    to: p2.fastapi
+    type: data
+    label: "proxy"
+
+  - from: p2.fastapi
+    to: shared.db
+    type: data
+    label: "raw query\nLIMIT 2000"

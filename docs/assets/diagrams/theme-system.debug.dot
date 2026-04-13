@@ -1,0 +1,29 @@
+digraph {
+  rankdir=LR;
+  splines=curved;
+  nodesep=0.6;
+  "ts.topbar" [label="TopBar
+(theme switcher)", shape="box", color="lightyellow"];
+  "ts.zustand" [label="useThemeStore
+(Zustand)", shape="box", color="#c8e6c9"];
+  "ts.themes" [label="theme.ts
+7 themes", shape="record", color="#fff9c4"];
+  "ts.t" [label="Theme object (t)
+t.bg, t.text, t.accent...", shape="record", color="#e8f5e9"];
+  "ts.prov" [label="t.provenance
+MEASURED/CALCULATED/INFERRED", shape="box", color="#e3f2fd"];
+  "ts.glass" [label="glassColor(t, alpha)
+CSS var --glass-alpha", shape="box", color="#fff9c4"];
+  "ts.comp" [label="All Components
+receive t as prop", shape="box", color="#e8f5e9"];
+  "ts.card3d" [label="Card3D
+borderLeft = provenance color", shape="box", color="#e8f5e9"];
+  "ts.topbar" -> "ts.zustand" [label="setTheme(key)"];
+  "ts.themes" -> "ts.zustand" [style=solid, color=blue, label="theme lookup"];
+  "ts.zustand" -> "ts.t" [style=solid, color=blue, label="t = themes[key]"];
+  "ts.t" -> "ts.prov" [style=solid, color=blue, label="t.provenance.*"];
+  "ts.t" -> "ts.glass" [style=solid, color=blue, label="t.bg.*"];
+  "ts.t" -> "ts.comp" [style=solid, color=blue, label="prop drilling"];
+  "ts.prov" -> "ts.card3d" [style=solid, color=blue, label="accent color"];
+  "ts.glass" -> "ts.comp" [style=solid, color=blue, label="background"];
+}

@@ -1,0 +1,103 @@
+# Theme System Flow
+version: 1.0
+name: theme-system
+title: "Theme System — Token Flow to Components"
+template: dataflow
+
+nodes:
+  - id: ts.topbar
+    label: "TopBar\n(theme switcher)"
+    shape: box
+    color: lightyellow
+    layer: ui
+    description: "User selects theme"
+
+  - id: ts.zustand
+    label: "useThemeStore\n(Zustand)"
+    shape: box
+    color: "#c8e6c9"
+    layer: state
+    description: "Persists theme key + t object"
+
+  - id: ts.themes
+    label: "theme.ts\n7 themes"
+    shape: record
+    color: "#fff9c4"
+    layer: config
+    description: "dark, light, ocean, forest, ember, mono, neon"
+
+  - id: ts.t
+    label: "Theme object (t)\nt.bg, t.text, t.accent..."
+    shape: record
+    color: "#e8f5e9"
+    layer: config
+    description: "All design tokens"
+
+  - id: ts.prov
+    label: "t.provenance\nMEASURED/CALCULATED/INFERRED"
+    shape: box
+    color: "#e3f2fd"
+    layer: config
+    description: "Scientific meaning colors"
+
+  - id: ts.glass
+    label: "glassColor(t, alpha)\nCSS var --glass-alpha"
+    shape: box
+    color: "#fff9c4"
+    layer: config
+    description: "Computed backdrop color"
+
+  - id: ts.comp
+    label: "All Components\nreceive t as prop"
+    shape: box
+    color: "#e8f5e9"
+    layer: ui
+    description: "Never hardcode colors"
+
+  - id: ts.card3d
+    label: "Card3D\nborderLeft = provenance color"
+    shape: box
+    color: "#e8f5e9"
+    layer: ui
+    description: "Left border = scientific meaning"
+
+edges:
+  - from: ts.topbar
+    to: ts.zustand
+    type: control
+    label: "setTheme(key)"
+
+  - from: ts.themes
+    to: ts.zustand
+    type: data
+    label: "theme lookup"
+
+  - from: ts.zustand
+    to: ts.t
+    type: data
+    label: "t = themes[key]"
+
+  - from: ts.t
+    to: ts.prov
+    type: data
+    label: "t.provenance.*"
+
+  - from: ts.t
+    to: ts.glass
+    type: data
+    label: "t.bg.*"
+
+  - from: ts.t
+    to: ts.comp
+    type: data
+    label: "prop drilling"
+
+  - from: ts.prov
+    to: ts.card3d
+    type: data
+    label: "accent color"
+
+  - from: ts.glass
+    to: ts.comp
+    type: data
+    label: "background"

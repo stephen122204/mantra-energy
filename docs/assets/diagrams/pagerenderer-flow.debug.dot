@@ -1,0 +1,29 @@
+digraph {
+  rankdir=LR;
+  splines=curved;
+  nodesep=0.6;
+  "pr.db" [label="SQLite
+page_sections", shape="cylinder", color="lightcoral"];
+  "pr.api" [label="GET /pages/id
+FastAPI", shape="box", color="lightyellow"];
+  "pr.dynamic" [label="pageId/page.tsx
+DynamicPage", shape="box", color="lightblue"];
+  "pr.renderer" [label="PageRenderer
+universal", shape="box", color="#c8e6c9"];
+  "pr.registry" [label="Component Registry
+46 components", shape="box", color="#fff9c4"];
+  "pr.sectioncard" [label="SectionCard
+Card3D wrapper", shape="box", color="#fff9c4"];
+  "pr.comp" [label="Component
+KPIStrip data", shape="box", color="#e8f5e9"];
+  "pr.querydata" [label="Query Data
+overview, sessions", shape="box", color="lightyellow"];
+  "pr.db" -> "pr.api" [style=solid, color=blue, label="sections"];
+  "pr.api" -> "pr.dynamic" [style=solid, color=blue, label="pageConfig"];
+  "pr.dynamic" -> "pr.renderer" [label="passes sections"];
+  "pr.querydata" -> "pr.renderer" [style=solid, color=blue, label="queryData"];
+  "pr.renderer" -> "pr.registry" [label="lookup Comp"];
+  "pr.registry" -> "pr.sectioncard" [label="Comp found"];
+  "pr.sectioncard" -> "pr.comp" [label="renders"];
+  "pr.querydata" -> "pr.comp" [style=solid, color=blue, label="data prop"];
+}

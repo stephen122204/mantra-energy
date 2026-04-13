@@ -1,0 +1,34 @@
+digraph {
+  rankdir=TB;
+  compound=True;
+  splines=ortho;
+  nodesep=0.5;
+  ranksep=0.8;
+  "p1.comp" [label="Dashboard Components
+(KPIStrip, Charts)", shape="box", color="#c8e6c9"];
+  "p1.hook" [label="useOverview()
+useQuery hooks", shape="box", color="#c8e6c9"];
+  "p1.fastapi" [label="GET /analytics/*
+FastAPI endpoints", shape="box", color="#fff9c4"];
+  "p1.sql" [label="Pre-aggregated SQL
+(query_registry)", shape="record", color="lightyellow"];
+  "p2.comp" [label="Research Instruments
+(LensExplorer, AgentFlow)", shape="box", color="#e3f2fd"];
+  "p2.hook" [label="useResearchQuery(sql)
+POST /api/db", shape="box", color="#e3f2fd"];
+  "p2.route" [label="Next.js /api/db
+(route.ts)", shape="box", color="#fff9c4"];
+  "p2.fastapi" [label="POST /api/db
+FastAPI", shape="box", color="#fff9c4"];
+  "shared.db" [label="SQLite
+experiments.db", shape="cylinder", color="lightcoral"];
+  "p1.comp" -> "p1.hook" [style=dashed, color=black, arrowhead=normal, label="PATH1"];
+  "p1.hook" -> "p1.fastapi" [style=solid, color=blue, arrowhead=normal, label="GET request"];
+  "p1.fastapi" -> "p1.sql" [style=dashed, color=black, arrowhead=normal, label="runs"];
+  "p1.sql" -> "shared.db" [style=solid, color=blue, arrowhead=normal, label="query"];
+  "p2.comp" -> "p2.hook" [style=dashed, color=black, arrowhead=normal, label="PATH2"];
+  "p2.hook" -> "p2.route" [style=solid, color=blue, arrowhead=normal, label="POST {sql, params}"];
+  "p2.route" -> "p2.fastapi" [style=solid, color=blue, arrowhead=normal, label="proxy"];
+  "p2.fastapi" -> "shared.db" [style=solid, color=blue, arrowhead=normal, label="raw query
+LIMIT 2000"];
+}

@@ -1,0 +1,77 @@
+# Music State Machine
+version: 1.0
+name: music-state
+title: "Global Music State — TopBar ↔ musicStore ↔ Sidebar"
+template: dataflow
+
+nodes:
+  - id: ms.topbar
+    label: "TopBar\n(music toggle)"
+    shape: box
+    color: lightyellow
+    layer: ui
+    description: "Creates Audio, calls musicStore"
+
+  - id: ms.store
+    label: "musicStore\n(singleton)"
+    shape: box
+    color: "#c8e6c9"
+    layer: state
+    description: "Global audio state — no circular imports"
+
+  - id: ms.sidebar
+    label: "Sidebar\n(stop button)"
+    shape: box
+    color: lightyellow
+    layer: ui
+    description: "Subscribes to musicStore"
+
+  - id: ms.audio
+    label: "HTMLAudioElement\n(/audio/page.mp3)"
+    shape: box
+    color: lightblue
+    layer: browser
+    description: "Page-specific audio"
+
+  - id: ms.indicator
+    label: "VolumeX button\n(visible when playing)"
+    shape: box
+    color: lightblue
+    layer: ui
+    description: "Always accessible stop"
+
+edges:
+  - from: ms.topbar
+    to: ms.audio
+    type: control
+    label: "new Audio()"
+
+  - from: ms.topbar
+    to: ms.store
+    type: data
+    label: "setAudio()\nnotify(true/false)"
+
+  - from: ms.store
+    to: ms.sidebar
+    type: data
+    label: "subscribe()\nsetMusicPlaying"
+
+  - from: ms.sidebar
+    to: ms.indicator
+    type: control
+    label: "shows when playing"
+
+  - from: ms.indicator
+    to: ms.store
+    type: control
+    label: "musicStore.stop()"
+
+  - from: ms.store
+    to: ms.audio
+    type: control
+    label: "pause() + src=''"
+
+  - from: ms.topbar
+    to: ms.store
+    type: control
+    label: "stop() on\npage change"

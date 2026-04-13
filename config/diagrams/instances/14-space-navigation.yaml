@@ -1,0 +1,103 @@
+# Space Navigation Flow
+version: 1.0
+name: space-navigation
+title: "Universe Navigation Flow"
+template: lifecycle
+
+nodes:
+  - id: sn.landing
+    label: "Universe Landing\n(3D Solar System)"
+    shape: box
+    color: "#1a237e"
+    layer: ui
+    description: "Default 3D view, planets orbiting"
+
+  - id: sn.click
+    label: "Click Planet\nor Bottom Strip"
+    shape: diamond
+    color: "#fff9c4"
+    layer: ui
+    description: "User interaction"
+
+  - id: sn.focus
+    label: "setFocusIdx(i)\nCamera lerps to planet"
+    shape: box
+    color: "#e3f2fd"
+    layer: ui
+    description: "3D camera smoothly moves"
+
+  - id: sn.ticket
+    label: "SpaceTicket\n(Boarding Pass)"
+    shape: box
+    color: "#1a237e"
+    layer: ui
+    description: "Shows destination, countdown, launch"
+
+  - id: sn.launch
+    label: "Click LAUNCH\nor Enter key"
+    shape: diamond
+    color: "#fff9c4"
+    layer: ui
+    description: "User confirms navigation"
+
+  - id: sn.wormhole
+    label: "WormholeTunnel\n(~2s animation)"
+    shape: box
+    color: "#4a148c"
+    layer: ui
+    description: "Canvas warp streaks"
+
+  - id: sn.page
+    label: "Target Page\n(router.push)"
+    shape: box
+    color: "#e8f5e9"
+    layer: ui
+    description: "Next.js navigation"
+
+  - id: sn.sun
+    label: "Click Sun\n(Overview)"
+    shape: diamond
+    color: "#fff9c4"
+    layer: ui
+    description: "Special case — sun = overview"
+
+edges:
+  - from: sn.landing
+    to: sn.click
+    type: flow
+    label: "scroll/click"
+
+  - from: sn.click
+    to: sn.sun
+    type: flow
+    label: "idx=0"
+
+  - from: sn.sun
+    to: sn.ticket
+    type: flow
+    label: "shows ticket"
+
+  - from: sn.click
+    to: sn.focus
+    type: flow
+    label: "idx>0"
+
+  - from: sn.focus
+    to: sn.ticket
+    type: flow
+    label: "SpaceTicket appears"
+
+  - from: sn.ticket
+    to: sn.launch
+    type: flow
+    label: "5s countdown"
+
+  - from: sn.launch
+    to: sn.wormhole
+    type: flow
+    label: "setWarping(true)"
+
+  - from: sn.wormhole
+    to: sn.page
+    type: flow
+    label: "onComplete"

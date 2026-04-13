@@ -1,0 +1,156 @@
+# Workbench Architecture — Next.js 3-Product System
+version: 1.0
+name: workbench-architecture
+title: "A-LEMS Workbench Architecture"
+template: layered
+
+boundaries:
+  - "Browser Layer"
+  - "Next.js Layer"
+  - "API Layer"
+  - "Data Layer"
+
+nodes:
+  # Browser Layer
+  - id: wb.universe
+    label: "Universe Landing\n(page.tsx)"
+    shape: box
+    color: "#e8f5e9"
+    layer: browser
+    description: "3D solar system landing page"
+
+  - id: wb.dynamic
+    label: "Dynamic Pages\n([pageId]/page.tsx)"
+    shape: box
+    color: "#e8f5e9"
+    layer: browser
+    description: "DB-driven pages via PageRenderer"
+
+  - id: wb.sidebar
+    label: "Sidebar\n(DB-driven nav)"
+    shape: box
+    color: "#e8f5e9"
+    layer: browser
+    description: "Navigation from page_configs"
+
+  - id: wb.topbar
+    label: "TopBar\n(theme, music, glass)"
+    shape: box
+    color: "#e8f5e9"
+    layer: browser
+    description: "Global controls"
+
+  # Next.js Layer
+  - id: wb.renderer
+    label: "PageRenderer\n(REGISTRY)"
+    shape: box
+    color: "#fff9c4"
+    layer: nextjs
+    description: "Maps sections to components"
+
+  - id: wb.workbench
+    label: "Workbench\n(:3000)"
+    shape: box
+    color: "#fff9c4"
+    layer: nextjs
+    description: "Researcher tool"
+
+  - id: wb.showcase
+    label: "Showcase\n(:3001)"
+    shape: box
+    color: "#fff9c4"
+    layer: nextjs
+    description: "Public demo"
+
+  - id: wb.commons
+    label: "Commons\n(:3002)"
+    shape: box
+    color: "#fff9c4"
+    layer: nextjs
+    description: "Community leaderboard"
+
+  - id: wb.apidb
+    label: "/api/db\n(Next.js route)"
+    shape: box
+    color: "#fff9c4"
+    layer: nextjs
+    description: "Raw SQL proxy (PATH2)"
+
+  # API Layer
+  - id: wb.fastapi
+    label: "FastAPI\n(:8765)"
+    shape: box
+    color: "#ffe0b2"
+    layer: api
+    description: "Pre-aggregated display data (PATH1)"
+
+  # Data Layer
+  - id: wb.sqlite
+    label: "SQLite\n(experiments.db)"
+    shape: cylinder
+    color: lightcoral
+    layer: data
+    description: "Source of truth — data + config"
+
+  - id: wb.pg
+    label: "PostgreSQL\n(Oracle VM)"
+    shape: cylinder
+    color: lightcoral
+    layer: data
+    description: "Aggregated central store"
+
+edges:
+  - from: wb.workbench
+    to: wb.universe
+    type: control
+    label: "serves /"
+
+  - from: wb.workbench
+    to: wb.dynamic
+    type: control
+    label: "serves /[pageId]"
+
+  - from: wb.dynamic
+    to: wb.renderer
+    type: control
+    label: "uses"
+
+  - from: wb.renderer
+    to: wb.fastapi
+    type: data
+    label: "PATH1 GET"
+
+  - from: wb.apidb
+    to: wb.fastapi
+    type: data
+    label: "POST /api/db"
+
+  - from: wb.fastapi
+    to: wb.sqlite
+    type: data
+    label: "queries"
+
+  - from: wb.universe
+    to: wb.fastapi
+    type: data
+    label: "GET /pages"
+
+  - from: wb.sidebar
+    to: wb.fastapi
+    type: data
+    label: "GET /pages"
+
+  - from: wb.workbench
+    to: wb.showcase
+    type: control
+    label: "same codebase"
+
+  - from: wb.workbench
+    to: wb.commons
+    type: control
+    label: "same codebase"
+
+  - from: wb.sqlite
+    to: wb.pg
+    type: data
+    label: "sync up"

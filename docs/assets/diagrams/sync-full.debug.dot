@@ -1,0 +1,31 @@
+digraph {
+  rankdir=TB;
+  compound=True;
+  splines=ortho;
+  nodesep=0.5;
+  ranksep=0.8;
+  "sync.directus" [label="Directus CMS
+(:8055)", shape="box", color="#e8f5e9"];
+  "sync.pg" [label="PostgreSQL
+(alems_central)", shape="cylinder", color="lightcoral"];
+  "sync.oracleapi" [label="FastAPI
+(:8765 Oracle)", shape="box", color="#fff9c4"];
+  "sync.webhook" [label="Webhook
+POST /internal/reload", shape="box", color="#fff9c4"];
+  "sync.localapi" [label="FastAPI
+(:8765 Local)", shape="box", color="#fff9c4"];
+  "sync.sqlite" [label="SQLite
+(experiments.db)", shape="cylinder", color="lightcoral"];
+  "sync.metadown" [label="sync_metadata_down()
+On startup", shape="box", color="#e3f2fd"];
+  "sync.dataup" [label="sync data up
+Runs, measurements", shape="box", color="#e3f2fd"];
+  "sync.directus" -> "sync.pg" [style=solid, color=blue, arrowhead=normal, label="reads/writes config"];
+  "sync.directus" -> "sync.webhook" [style=dashed, color=black, arrowhead=normal, label="on config change"];
+  "sync.webhook" -> "sync.localapi" [style=dashed, color=black, arrowhead=normal, label="POST /internal/reload"];
+  "sync.localapi" -> "sync.metadown" [style=dashed, color=black, arrowhead=normal, label="triggers"];
+  "sync.oracleapi" -> "sync.metadown" [style=solid, color=blue, arrowhead=normal, label="metadata"];
+  "sync.metadown" -> "sync.sqlite" [style=solid, color=blue, arrowhead=normal, label="updates config tables"];
+  "sync.sqlite" -> "sync.dataup" [style=solid, color=blue, arrowhead=normal, label="completed runs"];
+  "sync.dataup" -> "sync.pg" [style=solid, color=blue, arrowhead=normal, label="push measurements"];
+}

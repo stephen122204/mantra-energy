@@ -1,0 +1,109 @@
+# Full Sync Architecture
+version: 1.0
+name: sync-full
+title: "Sync Architecture — Metadata Down, Data Up, Directus"
+template: layered
+
+boundaries:
+  - "Oracle VM (Central)"
+  - "Local Node"
+
+nodes:
+  # Oracle VM
+  - id: sync.directus
+    label: "Directus CMS\n(:8055)"
+    shape: box
+    color: "#e8f5e9"
+    layer: oracle
+    description: "Config management UI"
+
+  - id: sync.pg
+    label: "PostgreSQL\n(alems_central)"
+    shape: cylinder
+    color: lightcoral
+    layer: oracle
+    description: "Aggregated data from all nodes"
+
+  - id: sync.oracleapi
+    label: "FastAPI\n(:8765 Oracle)"
+    shape: box
+    color: "#fff9c4"
+    layer: oracle
+    description: "Central API"
+
+  - id: sync.webhook
+    label: "Webhook\nPOST /internal/reload"
+    shape: box
+    color: "#fff9c4"
+    layer: oracle
+    description: "Directus triggers on config change"
+
+  # Local Node
+  - id: sync.localapi
+    label: "FastAPI\n(:8765 Local)"
+    shape: box
+    color: "#fff9c4"
+    layer: local
+    description: "Node API"
+
+  - id: sync.sqlite
+    label: "SQLite\n(experiments.db)"
+    shape: cylinder
+    color: lightcoral
+    layer: local
+    description: "Local source of truth"
+
+  - id: sync.metadown
+    label: "sync_metadata_down()\nOn startup"
+    shape: box
+    color: "#e3f2fd"
+    layer: local
+    description: "Pulls page_configs, query_registry"
+
+  - id: sync.dataup
+    label: "sync data up\nRuns, measurements"
+    shape: box
+    color: "#e3f2fd"
+    layer: local
+    description: "Pushes completed runs to central"
+
+edges:
+  - from: sync.directus
+    to: sync.pg
+    type: data
+    label: "reads/writes config"
+
+  - from: sync.directus
+    to: sync.webhook
+    type: control
+    label: "on config change"
+
+  - from: sync.webhook
+    to: sync.localapi
+    type: control
+    label: "POST /internal/reload"
+
+  - from: sync.localapi
+    to: sync.metadown
+    type: control
+    label: "triggers"
+
+  - from: sync.oracleapi
+    to: sync.metadown
+    type: data
+    label: "metadata"
+
+  - from: sync.metadown
+    to: sync.sqlite
+    type: data
+    label: "updates config tables"
+
+  - from: sync.sqlite
+    to: sync.dataup
+    type: data
+    label: "completed runs"
+
+  - from: sync.dataup
+    to: sync.pg
+    type: data
+    label: "push measurements"

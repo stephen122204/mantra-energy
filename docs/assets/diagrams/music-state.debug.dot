@@ -1,0 +1,25 @@
+digraph {
+  rankdir=LR;
+  splines=curved;
+  nodesep=0.6;
+  "ms.topbar" [label="TopBar
+(music toggle)", shape="box", color="lightyellow"];
+  "ms.store" [label="musicStore
+(singleton)", shape="box", color="#c8e6c9"];
+  "ms.sidebar" [label="Sidebar
+(stop button)", shape="box", color="lightyellow"];
+  "ms.audio" [label="HTMLAudioElement
+(/audio/page.mp3)", shape="box", color="lightblue"];
+  "ms.indicator" [label="VolumeX button
+(visible when playing)", shape="box", color="lightblue"];
+  "ms.topbar" -> "ms.audio" [label="new Audio()"];
+  "ms.topbar" -> "ms.store" [style=solid, color=blue, label="setAudio()
+notify(true/false)"];
+  "ms.store" -> "ms.sidebar" [style=solid, color=blue, label="subscribe()
+setMusicPlaying"];
+  "ms.sidebar" -> "ms.indicator" [label="shows when playing"];
+  "ms.indicator" -> "ms.store" [label="musicStore.stop()"];
+  "ms.store" -> "ms.audio" [label="pause() + src=''"];
+  "ms.topbar" -> "ms.store" [label="stop() on
+page change"];
+}
