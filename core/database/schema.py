@@ -299,13 +299,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tax_pair ON orchestration_tax_summary(line
 # ========================================================================
 CREATE_ENERGY_SAMPLES = """
 CREATE TABLE IF NOT EXISTS energy_samples (
-    sample_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL,
-    timestamp_ns INTEGER NOT NULL,
-    pkg_energy_uj INTEGER,
-    core_energy_uj INTEGER,
+    sample_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id           INTEGER NOT NULL,
+    timestamp_ns     INTEGER NOT NULL,
+    -- Old delta columns — kept for backward compatibility
+    pkg_energy_uj    INTEGER,
+    core_energy_uj   INTEGER,
     uncore_energy_uj INTEGER,
-    dram_energy_uj INTEGER,
+    dram_energy_uj   INTEGER,
+    -- Chunk 2: Raw start/end counter values per domain
+    pkg_start_uj     INTEGER,   -- RAPL package counter at sample start
+    pkg_end_uj       INTEGER,   -- RAPL package counter at sample end
+    core_start_uj    INTEGER,   -- RAPL core counter at sample start
+    core_end_uj      INTEGER,   -- RAPL core counter at sample end
+    dram_start_uj    INTEGER,   -- RAPL DRAM counter at sample start
+    dram_end_uj      INTEGER,   -- RAPL DRAM counter at sample end
+    uncore_start_uj  INTEGER,   -- RAPL uncore counter at sample start
+    uncore_end_uj    INTEGER,   -- RAPL uncore counter at sample end
+    sample_start_ns  INTEGER,   -- epoch ns at sample start (explicit)
+    sample_end_ns    INTEGER,   -- epoch ns at sample end (= timestamp_ns)
+    interval_ns      INTEGER,   -- exact elapsed ns between start and end reads
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_energy_run_time ON energy_samples(run_id, timestamp_ns);
@@ -314,84 +327,46 @@ CREATE INDEX IF NOT EXISTS idx_energy_run_time ON energy_samples(run_id, timesta
 # ========================================================================
 # Table 8: cpu_samples
 # ========================================================================
+# ========================================================================
+# Table 8: cpu_samples
+# ========================================================================
 CREATE_CPU_SAMPLES = """
--- ========================================================================
--- ========================================================================
--- Table: cpu_samples
--- Purpose: High-frequency CPU telemetry from turbostat
--- 
--- This table stores ALL canonical metrics from turbostat_override.yaml
--- ========================================================================
 CREATE TABLE IF NOT EXISTS cpu_samples (
-    sample_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL,
-    timestamp_ns INTEGER NOT NULL,
-    
-    -- --------------------------------------------------------------------
-    -- CPU Activity (Core metrics)
-    -- --------------------------------------------------------------------
+    sample_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id           INTEGER NOT NULL,
+    timestamp_ns     INTEGER NOT NULL,
+    -- CPU Activity
     cpu_util_percent REAL,
-    cpu_busy_mhz REAL,
-    cpu_avg_mhz REAL,
-    
-    -- --------------------------------------------------------------------
+    cpu_busy_mhz     REAL,
+    cpu_avg_mhz      REAL,
     -- Core C-States
-    -- --------------------------------------------------------------------
-    c1_residency REAL,
-    c2_residency REAL,
-    c3_residency REAL,
-    c6_residency REAL,
-    c7_residency REAL,
-    
-    -- --------------------------------------------------------------------
-    -- Package C-States (Deep sleep)
-    -- --------------------------------------------------------------------
-    pkg_c8_residency REAL,
-    pkg_c9_residency REAL,
+    c1_residency     REAL,
+    c2_residency     REAL,
+    c3_residency     REAL,
+    c6_residency     REAL,
+    c7_residency     REAL,
+    -- Package C-States (deep sleep)
+    pkg_c8_residency  REAL,
+    pkg_c9_residency  REAL,
     pkg_c10_residency REAL,
-    
-    -- --------------------------------------------------------------------
-    -- Power Metrics
-    -- --------------------------------------------------------------------
-    package_power REAL,
-    dram_power REAL,
-    
-    -- --------------------------------------------------------------------
-    -- GPU Metrics
-    -- --------------------------------------------------------------------
-    gpu_rc6 REAL,
-    
-    -- --------------------------------------------------------------------
-    -- Temperature & Efficiency
-    -- --------------------------------------------------------------------
-    package_temp REAL,
-    ipc REAL,
-    
-    -- --------------------------------------------------------------------
-    -- JSON for any additional columns
-    -- --------------------------------------------------------------------
+    -- Power
+    package_power    REAL,
+    dram_power       REAL,
+    -- GPU
+    gpu_rc6          REAL,
+    -- Temperature & efficiency
+    package_temp     REAL,
+    ipc              REAL,
+    -- JSON overflow for additional turbostat columns
     extra_metrics_json TEXT,
-    
+    -- Chunk 2: Interval tracking
+    sample_start_ns  INTEGER,          -- epoch ns at sample start (explicit)
+    sample_end_ns    INTEGER,          -- epoch ns at sample end (= timestamp_ns)
+    interval_ns      INTEGER,          -- elapsed ns for this turbostat sample
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
-
--- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cpu_samples_run_id ON cpu_samples(run_id);
 CREATE INDEX IF NOT EXISTS idx_cpu_samples_timestamp ON cpu_samples(run_id, timestamp_ns);
-
--- ========================================================================
--- Indexes for performance
--- ========================================================================
-
--- Index for filtering by run_id (essential for JOINs)
-CREATE INDEX IF NOT EXISTS idx_cpu_samples_run_id ON cpu_samples(run_id);
-
--- Composite index for time-series queries (most common access pattern)
--- This speeds up queries like: SELECT * FROM cpu_samples WHERE run_id = ? ORDER BY timestamp_ns
-CREATE INDEX IF NOT EXISTS idx_cpu_samples_timestamp ON cpu_samples(run_id, timestamp_ns);
-
--- Optional: If you frequently query by timestamp range without run_id
--- CREATE INDEX IF NOT EXISTS idx_cpu_samples_time ON cpu_samples(timestamp_ns);
 """
 
 # ========================================================================
@@ -399,10 +374,20 @@ CREATE INDEX IF NOT EXISTS idx_cpu_samples_timestamp ON cpu_samples(run_id, time
 # ========================================================================
 CREATE_INTERRUPT_SAMPLES = """
 CREATE TABLE IF NOT EXISTS interrupt_samples (
-    sample_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL,
-    timestamp_ns INTEGER NOT NULL,
-    interrupts_per_sec REAL,
+    sample_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id               INTEGER NOT NULL,
+    timestamp_ns         INTEGER NOT NULL,
+    -- Old rate column — kept for backward compatibility
+    interrupts_per_sec   REAL,
+    -- Chunk 2: Raw values + CPU ticks (Option B — same /proc/stat read)
+    interrupts_raw       INTEGER,   -- raw interrupt count delta
+    user_ticks_start     INTEGER,   -- /proc/stat user ticks at interval start
+    user_ticks_end       INTEGER,   -- /proc/stat user ticks at interval end
+    system_ticks_start   INTEGER,   -- /proc/stat system ticks at interval start
+    system_ticks_end     INTEGER,   -- /proc/stat system ticks at interval end
+    sample_start_ns      INTEGER,   -- epoch ns at sample start (explicit)
+    sample_end_ns        INTEGER,   -- epoch ns at sample end (= timestamp_ns)
+    interval_ns          INTEGER,   -- exact elapsed ns for this sample
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_interrupt_run_time ON interrupt_samples(run_id, timestamp_ns);
@@ -414,16 +399,20 @@ CREATE INDEX IF NOT EXISTS idx_interrupt_run_time ON interrupt_samples(run_id, t
 # ========================================================================
 THERMAL_SAMPLES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS thermal_samples (
-    sample_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL,
-    timestamp_ns INTEGER NOT NULL,
-    sample_time_s REAL,
-    cpu_temp REAL,
-    system_temp REAL,
-    wifi_temp REAL,
+    sample_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id         INTEGER NOT NULL,
+    timestamp_ns   INTEGER NOT NULL,
+    sample_time_s  REAL,
+    cpu_temp       REAL,
+    system_temp    REAL,
+    wifi_temp      REAL,
     throttle_event INTEGER DEFAULT 0,
     all_zones_json TEXT,
-    sensor_count INTEGER,
+    sensor_count   INTEGER,
+    -- Chunk 2: Interval tracking
+    sample_start_ns      INTEGER,   -- epoch ns at sample start (explicit)
+    sample_end_ns        INTEGER,   -- epoch ns at sample end (= timestamp_ns)
+    interval_ns    INTEGER,            -- elapsed ns for this thermal sample
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_thermal_run_time ON thermal_samples(run_id, timestamp_ns);
@@ -913,3 +902,247 @@ LEFT JOIN energy_samples e2 ON e1.run_id = e2.run_id
 WHERE e2.timestamp_ns IS NOT NULL
 ORDER BY e1.run_id, e1.timestamp_ns;
 """
+
+# ============================================================
+# METHODOLOGY & PROVENANCE TABLES
+# ============================================================
+
+CREATE_MEASUREMENT_METHOD_REGISTRY = """
+CREATE TABLE IF NOT EXISTS measurement_method_registry (
+    id                    TEXT        PRIMARY KEY,
+    name                  TEXT        NOT NULL,
+    version               TEXT        DEFAULT '1.0',
+    description           TEXT        NOT NULL,
+    formula_latex         TEXT,
+    code_snapshot         TEXT,
+    code_language         TEXT        DEFAULT 'python',
+    code_version          TEXT,
+    parameters            TEXT,
+    output_metric         TEXT,
+    output_unit           TEXT,
+    provenance            TEXT        DEFAULT 'MEASURED',
+    layer                 TEXT,
+    applicable_on         TEXT        DEFAULT '["any"]',
+    fallback_method_id    TEXT,
+    validated             INTEGER     DEFAULT 0,
+    validated_by          TEXT,
+    validated_date        TEXT,
+    active                INTEGER     DEFAULT 1,
+    deprecated_reason     TEXT,
+    created_at            REAL        DEFAULT (unixepoch()),
+    updated_at            REAL        DEFAULT (unixepoch())
+);
+"""
+
+CREATE_METHOD_REFERENCES = """
+CREATE TABLE IF NOT EXISTS method_references (
+    id              INTEGER     PRIMARY KEY AUTOINCREMENT,
+    method_id       TEXT        NOT NULL,
+    ref_type        TEXT        NOT NULL,
+    title           TEXT        NOT NULL,
+    authors         TEXT,
+    year            INTEGER,
+    venue           TEXT,
+    doi             TEXT,
+    url             TEXT,
+    relevance       TEXT,
+    cited_text      TEXT,
+    page_or_section TEXT,
+    created_at      TEXT        DEFAULT (datetime('now'))
+);
+"""
+
+CREATE_MEASUREMENT_METHODOLOGY = """
+CREATE TABLE IF NOT EXISTS measurement_methodology (
+    id                    INTEGER     PRIMARY KEY AUTOINCREMENT,
+    run_id                INTEGER     NOT NULL,
+    metric_id             TEXT        NOT NULL,
+    method_id             TEXT,
+    parameters_used       TEXT,
+    value_raw             REAL,
+    value_unit            TEXT,
+    provenance            TEXT        NOT NULL,
+    hw_available          INTEGER,
+    confidence            REAL,
+    primary_method_failed INTEGER     DEFAULT 0,
+    failure_reason        TEXT,
+    standard_ids          TEXT,
+    captured_at           REAL        DEFAULT (unixepoch())
+);
+"""
+
+CREATE_METRIC_DISPLAY_REGISTRY = """
+CREATE TABLE IF NOT EXISTS metric_display_registry (
+    id                    TEXT        PRIMARY KEY,
+    label                 TEXT        NOT NULL,
+    description           TEXT,
+    category              TEXT,
+    layer                 TEXT,
+    layer_order           INTEGER,
+    method_id             TEXT,
+    unit_default          TEXT,
+    unit_options          TEXT,
+    unit_scales           TEXT,
+    chart_type            TEXT        DEFAULT 'kpi',
+    color_token           TEXT        DEFAULT 'accent.silicon',
+    significance          TEXT        DEFAULT 'supporting',
+    direction             TEXT        DEFAULT 'lower_is_better',
+    display_precision     INTEGER     DEFAULT 2,
+    warn_threshold        REAL,
+    severe_threshold      REAL,
+    threshold_unit        TEXT,
+    visible_in            TEXT        DEFAULT '["workbench"]',
+    default_visible       INTEGER     DEFAULT 1,
+    leaderboard           INTEGER     DEFAULT 0,
+    provenance_expected   TEXT        DEFAULT 'MEASURED',
+    source_yaml           TEXT,
+    goal_id               TEXT,
+    active                INTEGER     DEFAULT 1,
+    sort_order            INTEGER     DEFAULT 0,
+    created_at            REAL        DEFAULT (unixepoch()),
+    updated_at            REAL        DEFAULT (unixepoch())
+);
+"""
+
+CREATE_QUERY_REGISTRY = """
+CREATE TABLE IF NOT EXISTS query_registry (
+    id                    TEXT        PRIMARY KEY,
+    name                  TEXT        NOT NULL,
+    description           TEXT,
+    metric_type           TEXT        NOT NULL,
+    sql_text              TEXT,
+    sql_file              TEXT,
+    dialect_aware         INTEGER     DEFAULT 0,
+    returns               TEXT        DEFAULT 'rows',
+    depends_on            TEXT,
+    formula               TEXT,
+    endpoint_path         TEXT,
+    group_name            TEXT        DEFAULT 'analytics',
+    parameters            TEXT        DEFAULT '{}',
+    enrich_metrics        INTEGER     DEFAULT 0,
+    cache_ttl_sec         INTEGER     DEFAULT 30,
+    active                INTEGER     DEFAULT 1,
+    created_at            TEXT        DEFAULT (datetime('now')),
+    updated_at            TEXT        DEFAULT (datetime('now'))
+);
+"""
+
+CREATE_STANDARDIZATION_REGISTRY = """
+CREATE TABLE IF NOT EXISTS standardization_registry (
+    id                    INTEGER     PRIMARY KEY AUTOINCREMENT,
+    standard_id           TEXT        NOT NULL UNIQUE,
+    category              TEXT,
+    value                 REAL        NOT NULL,
+    unit                  TEXT,
+    source                TEXT,
+    source_url            TEXT,
+    valid_from            TEXT,
+    valid_until           TEXT,
+    version               INTEGER     DEFAULT 1,
+    notes                 TEXT,
+    created_at            TEXT        DEFAULT (datetime('now'))
+);
+"""
+
+CREATE_EVAL_CRITERIA = """
+CREATE TABLE IF NOT EXISTS eval_criteria (
+    id                    INTEGER     PRIMARY KEY AUTOINCREMENT,
+    goal_id               TEXT        NOT NULL UNIQUE,
+    stat_test             TEXT,
+    alpha                 REAL        DEFAULT 0.05,
+    effect_size           TEXT,
+    min_runs_per_group    INTEGER     DEFAULT 5,
+    report_ci             INTEGER     DEFAULT 1,
+    ci_level              REAL        DEFAULT 0.95,
+    comparison_mode       TEXT        DEFAULT 'relative',
+    created_at            TEXT        DEFAULT (datetime('now'))
+);
+"""
+
+CREATE_COMPONENT_REGISTRY = """
+CREATE TABLE IF NOT EXISTS component_registry (
+    name                  TEXT        PRIMARY KEY,
+    group_name            TEXT,
+    description           TEXT,
+    props_schema          TEXT,
+    data_shape            TEXT        DEFAULT 'flat_row',
+    has_3d_twin           TEXT,
+    export_pdf            INTEGER     DEFAULT 0,
+    export_png            INTEGER     DEFAULT 0,
+    export_csv            INTEGER     DEFAULT 0,
+    available_in          TEXT        DEFAULT '["workbench"]',
+    active                INTEGER     DEFAULT 1
+);
+"""
+
+CREATE_PAGE_CONFIGS = """
+CREATE TABLE IF NOT EXISTS page_configs (
+    id                    TEXT        PRIMARY KEY,
+    title                 TEXT        NOT NULL,
+    slug                  TEXT,
+    icon                  TEXT,
+    description           TEXT,
+    audience              TEXT        DEFAULT '["workbench"]',
+    published             INTEGER     DEFAULT 0,
+    sort_order            INTEGER     DEFAULT 0,
+    created_at            TEXT        DEFAULT (datetime('now')),
+    updated_at            TEXT        DEFAULT (datetime('now'))
+);
+"""
+
+CREATE_PAGE_SECTIONS = """
+CREATE TABLE IF NOT EXISTS page_sections (
+    id                    INTEGER     PRIMARY KEY AUTOINCREMENT,
+    page_id               TEXT        NOT NULL,
+    position              INTEGER     NOT NULL,
+    component             TEXT        NOT NULL,
+    title                 TEXT,
+    cols                  INTEGER     DEFAULT 1,
+    query_id              TEXT,
+    props                 TEXT        DEFAULT '{}',
+    visible_in            TEXT        DEFAULT '["workbench"]',
+    active                INTEGER     DEFAULT 1
+);
+"""
+
+CREATE_PAGE_METRIC_CONFIGS = """
+CREATE TABLE IF NOT EXISTS page_metric_configs (
+    id                    INTEGER     PRIMARY KEY AUTOINCREMENT,
+    section_id            INTEGER     NOT NULL,
+    metric_id             TEXT        NOT NULL,
+    position              INTEGER     NOT NULL,
+    label_override        TEXT,
+    color_override        TEXT,
+    unit_override         TEXT,
+    thesis                INTEGER     DEFAULT 0,
+    decimals              INTEGER     DEFAULT 2,
+    active                INTEGER     DEFAULT 1
+);
+"""
+
+CREATE_AUDIT_LOG = """
+CREATE TABLE IF NOT EXISTS audit_log (
+    id                    INTEGER     PRIMARY KEY AUTOINCREMENT,
+    run_id                INTEGER,
+    event_type            TEXT,
+    event_detail          TEXT,
+    metric_id             TEXT,
+    value_before          TEXT,
+    value_after           TEXT,
+    hw_context            TEXT,
+    logged_at             TEXT        DEFAULT (datetime('now'))
+);
+"""
+
+
+CREATE_PAGE_TEMPLATES = """
+CREATE TABLE IF NOT EXISTS page_templates (
+    id                    TEXT        PRIMARY KEY,
+    name                  TEXT        NOT NULL,
+    description           TEXT,
+    config                TEXT,
+    created_at            TEXT        DEFAULT (datetime('now')),
+    updated_at            TEXT        DEFAULT (datetime('now'))
+);
+"""
+

@@ -541,7 +541,30 @@ class PerfReader:
                 return int(f.read().strip())
         except Exception:
             return None
+# --- CPUReaderABC compatibility (Chunk 1) ---
+    def get_name(self) -> str:
+        """Return reader name for factory logging."""
+        return "PerfReader"
 
+    def is_available(self) -> bool:
+        """Return True if perf is usable on this system."""
+        return self.perf_available
+
+    def read_instructions(self) -> int:
+        """CPUReaderABC interface — return 0 (use stop_process_measurement for real data)."""
+        return 0
+
+    def read_cycles(self) -> int:
+        """CPUReaderABC interface — return 0 (use stop_process_measurement for real data)."""
+        return 0
+
+    def read_ipc(self) -> float:
+        """CPUReaderABC interface — return 0.0."""
+        return 0.0
+
+    def read_frequency_mhz(self) -> float:
+        """CPUReaderABC interface — return 0.0."""
+        return 0.0
     def __str__(self) -> str:
         """String representation of perf reader state."""
         status = "available" if self.perf_available else "unavailable"

@@ -38,6 +38,8 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+from core.readers.factory import ReaderFactory
+from core.utils.platform import get_platform_capabilities
 
 import requests
 
@@ -138,12 +140,46 @@ class EnergyEngine:
         # --------------------------------------------------------------------
         # Initialize all hardware readers
         # --------------------------------------------------------------------
-        self.rapl = RAPLReader(config)
-        self.perf = PerfReader(config)
-        self.turbostat = TurbostatReader(config)
-        self.sensor = SensorReader(config)
-        self.msr = MSRReader(config)
-        self.scheduler = SchedulerMonitor(config)
+        # ------------------------------------------------------------------
+        # Chunk 1: Platform-aware reader initialisation via ReaderFactory.
+        # The factory reads platform.json (written by PlatformDetector) and
+        # returns the correct concrete reader for this machine:
+        #   MEASURED → RAPLReader / IOKitPowerReader
+        #   INFERRED → EnergyEstimator (stub; ML model in Chunk 7)
+        #   LIMITED  → DummyEnergyReader (zeros + warning)
+        # ------------------------------------------------------------------
+ 
+        # Detect platform once and cache for the process lifetime
+        self._platform_caps = get_platform_capabilities()
+ 
+        # Energy reader — primary measurement source
+        self.energy_reader = ReaderFactory.get_energy_reader(config, self._platform_caps)
+ 
+        # CPU reader — instruction/cycle counters (PerfReader on Linux)
+        self.cpu_reader    = ReaderFactory.get_cpu_reader(config, self._platform_caps)
+ 
+        # Thermal reader — temperature sensors (SensorReader on Linux)
+        self.thermal_reader = ReaderFactory.get_thermal_reader(config, self._platform_caps)
+ 
+        # ------------------------------------------------------------------
+        # Keep existing readers that are not yet factorised (Chunks 2-7)
+        # These are still directly instantiated until their chunk arrives.
+        # ------------------------------------------------------------------
+        self.rapl      = self.energy_reader          # alias: existing code uses self.rapl
+        self.perf      = self.cpu_reader             # alias: existing code uses self.perf
+        self.sensor    = self.thermal_reader         # alias: existing code uses self.sensor
+        self.turbostat = TurbostatReader(config)     # not yet factorised (Chunk 7)
+        self.msr       = MSRReader(config)           # not yet factorised (Chunk 7)
+        self.scheduler = SchedulerMonitor(config)    # always available via /proc
+ 
+        # Log which readers were selected (visible in --verbose mode)
+        logger.info(
+            "EnergyEngine readers: energy=%s cpu=%s thermal=%s mode=%s",
+            self.energy_reader.get_name(),
+            self.cpu_reader.get_name(),
+            self.thermal_reader.get_name(),
+            self._platform_caps.measurement_mode,
+        )
 
         self.sensor.initialize()
         # --------------------------------------------------------------------
@@ -240,27 +276,51 @@ class EnergyEngine:
         self.thermal_sampling_thread.start()
 
     def _thermal_sampling_loop(self):
-        """Thermal sampling thread (1Hz default)"""
-        interval = 1.0 / self.thermal_rate_hz
+        """
+        Thermal sampling thread (1Hz default).
+ 
+        Chunk 2 final:
+            - Stores sample_start_ns + sample_end_ns explicitly
+            - timestamp_ns = sample_end_ns (backward compat)
+            - interval_ns stored for verification
+            - 4-tuple in queue: (now, readings, throttle_detected,
+              sample_start_ns, sample_end_ns, interval_ns)
+        """
+        interval    = 1.0 / self.thermal_rate_hz
         next_sample = time.time()
-
+ 
         while self.thermal_sampling_active:
             now = time.time()
             if now >= next_sample:
+                # Capture start timestamp before sensor read
+                sample_start_ns = time.time_ns()
+ 
                 # Read all thermal sensors
-                readings = self.sensor.read_all_thermal()
+                readings          = self.sensor.read_all_thermal()
                 throttle_detected = False
-
-                # Check for throttling conditions
+ 
+                # Check throttling against per-sensor thresholds
                 for role, temp in readings.items():
                     if temp and hasattr(self.sensor, "throttle_thresholds"):
                         threshold = self.sensor.throttle_thresholds.get(role)
                         if threshold and temp > threshold:
                             throttle_detected = True
-
-                self.thermal_queue.put((now, readings, throttle_detected))
-                print(f"🔍 THERMAL DEBUG - Sample at {now}: {readings}")
-                next_sample = now + interval  # Prevent drift
+ 
+                # Capture end timestamp + compute interval
+                sample_end_ns = time.time_ns()
+                interval_ns   = sample_end_ns - sample_start_ns
+ 
+                # Store 6-tuple: consumer unpacks all fields
+                self.thermal_queue.put((
+                    now,
+                    readings,
+                    throttle_detected,
+                    sample_start_ns,
+                    sample_end_ns,
+                    interval_ns,
+                ))
+ 
+                next_sample = now + interval    # prevent drift
             else:
                 time.sleep(min(0.1, next_sample - now))
 
@@ -345,66 +405,113 @@ class EnergyEngine:
     # ------------------------------------------------------------------------
     def _sampling_loop(self) -> None:
         """
-        Background thread that samples RAPL at the configured rate.
-        Samples are put into a queue for later retrieval.
+        Background thread: sample RAPL energy at configured rate (default 100Hz).
+ 
+        Chunk 2 final:
+            - Stores sample_start_ns + sample_end_ns explicitly (raw layer)
+            - timestamp_ns = sample_end_ns for backward compatibility
+            - interval_ns stored for verification (= end - start)
+            - Uses self.energy_reader (Chunk 1 factory reader)
+            - Fixes duplicate sample_counter increment bug
+            - Keeps old delta fields (pkg_energy_uj etc) for backward compat
         """
-        interval = 1.0 / self.sampling_rate_hz
-        next_sample = time.time()
+        interval       = 1.0 / self.sampling_rate_hz   # seconds between samples
+        next_sample    = time.time()
         sample_counter = 0
-
+ 
         while self._sampling_active:
             try:
-                # Take a sample
-                timestamp = time.time()
-                energy = self.rapl.read_energy_safe()
-
-                # Put in queue (non-blocking)
+                # --------------------------------------------------------
+                # Read START — raw cumulative RAPL counters + timestamp
+                # --------------------------------------------------------
+                sample_start_ns = time.time_ns()
+                start_readings  = self.energy_reader.read_energy_uj()
+ 
+                # Sleep until next scheduled sample time
+                next_sample += interval
+                sleep_time   = next_sample - time.time()
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+ 
+                # --------------------------------------------------------
+                # Read END — raw cumulative RAPL counters + timestamp
+                # --------------------------------------------------------
+                sample_end_ns = time.time_ns()
+                end_readings  = self.energy_reader.read_energy_uj()
+                interval_ns   = sample_end_ns - sample_start_ns
+ 
+                # --------------------------------------------------------
+                # Extract per-domain values
+                # Domain names from hw_config: 'package-0', 'core', 'uncore'
+                # --------------------------------------------------------
+                pkg_start    = start_readings.get("package-0", 0)
+                pkg_end      = end_readings.get("package-0",   0)
+                core_start   = start_readings.get("core",      0)
+                core_end     = end_readings.get("core",        0)
+                dram_start   = start_readings.get("dram",      0)
+                dram_end     = end_readings.get("dram",        0)
+                uncore_start = start_readings.get("uncore",    0)
+                uncore_end   = end_readings.get("uncore",      0)
+ 
+                # --------------------------------------------------------
+                # Build sample dict
+                # timestamp_ns = sample_end_ns (backward compat alias)
+                # --------------------------------------------------------
+                sample = {
+                    # Backward compat — timestamp_ns = end time
+                    "timestamp_ns":    sample_end_ns,
+                    # Explicit start/end (Option 2 — raw layer)
+                    "sample_start_ns": sample_start_ns,
+                    "sample_end_ns":   sample_end_ns,
+                    "interval_ns":     interval_ns,
+                    # Raw RAPL counter values per domain
+                    "pkg_start_uj":    pkg_start,
+                    "pkg_end_uj":      pkg_end,
+                    "core_start_uj":   core_start,
+                    "core_end_uj":     core_end,
+                    "dram_start_uj":   dram_start,
+                    "dram_end_uj":     dram_end,
+                    "uncore_start_uj": uncore_start,
+                    "uncore_end_uj":   uncore_end,
+                    # Old delta fields — backward compatibility
+                    "pkg_energy_uj":    max(0, pkg_end    - pkg_start),
+                    "core_energy_uj":   max(0, core_end   - core_start),
+                    "dram_energy_uj":   max(0, dram_end   - dram_start),
+                    "uncore_energy_uj": max(0, uncore_end - uncore_start),
+                }
+ 
+                # --------------------------------------------------------
+                # Put into queue — drop oldest if full (non-blocking)
+                # --------------------------------------------------------
                 try:
-                    self._sampling_queue.put_nowait((timestamp, energy))
+                    self._sampling_queue.put_nowait(sample)
                 except queue.Full:
-                    # Queue full – remove oldest and add new
                     try:
-                        self._sampling_queue.get_nowait()
-                        self._sampling_queue.put_nowait((timestamp, energy))
+                        self._sampling_queue.get_nowait()   # drop oldest
+                        self._sampling_queue.put_nowait(sample)
                     except queue.Empty:
                         pass
-
-                # 🔴 NEW DEBUG LINE 1: Print every time counter is a multiple of 10
-                if sample_counter % 10 == 0:
-                    print(
-                        f"🔍 DEBUG: counter={sample_counter}, will check interrupt condition"
-                    )
-
-                # Sample interrupts every 10th iteration (10 Hz)
-                if self.collect_interrupt_samples and sample_counter % 10 == 0:
-                    print(
-                        f"🔍 DEBUG: ACTUALLY triggering interrupt at counter={sample_counter}"
-                    )
-                    self.scheduler.sample_interrupts()
+ 
+                # --------------------------------------------------------
+                # Sample interrupts every 10th iteration (10Hz)
+                # Single increment — fixes old double-increment bug
+                # --------------------------------------------------------
                 sample_counter += 1
-
-                # Sample interrupts every 10th iteration (10 Hz)
+ 
                 if self.collect_interrupt_samples and sample_counter % 10 == 0:
-                    print(
-                        f"🔍 DEBUG: ACTUALLY triggering interrupt at counter={sample_counter}"
-                    )
                     self.scheduler.sample_interrupts()
-                sample_counter += 1
-
-                # ========== ADD WEB UI CODE HERE ==========
-                # Send to all active Web UI servers (non-blocking)
+ 
+                # --------------------------------------------------------
+                # Web UI telemetry — best-effort, never crashes loop
+                # --------------------------------------------------------
                 if self.webui_enabled and self.current_run_id and self.webui_servers:
-                    print(f"🔍 WEBUI: Sending data for run {self.current_run_id}")
                     for server in self.webui_servers:
-                        print(f"   To server: {server['url']}")
                         try:
-                            # Get latest CPU data if available
                             cpu_data = {}
                             if hasattr(self, "turbostat") and self.turbostat:
                                 if hasattr(self.turbostat, "get_latest_sample"):
                                     cpu_data = self.turbostat.get_latest_sample() or {}
-
-                            # Get interrupt rate
+ 
                             irq_rate = 0
                             if hasattr(self, "scheduler") and self.scheduler:
                                 irq_rate = getattr(
@@ -412,43 +519,12 @@ class EnergyEngine:
                                     "get_current_interrupt_rate",
                                     lambda: 0,
                                 )()
-
-                            # Push raw sample to this server
-                            requests.post(
-                                server["url"],
-                                json={
-                                    "run_id": self.current_run_id,
-                                    "server": server["name"],
-                                    "timestamp": time.time(),
-                                    "cpu_busy_mhz": cpu_data.get("Bzy_MHz", 0),
-                                    "cpu_avg_mhz": cpu_data.get("Avg_MHz", 0),
-                                    "package_temp": cpu_data.get("PkgTmp", 0),
-                                    "pkg_power": energy.get("package-0", 0) / 1_000_000,
-                                    "interrupt_rate": irq_rate,
-                                },
-                                timeout=server["timeout"],
-                                headers={"Connection": "close"},
-                            )
                         except Exception:
-                            pass  # Silent fail per server
-                # ========== END WEB UI CODE ==========
-
-                # Schedule next sample
-                next_sample += interval
-                sleep_time = max(0, next_sample - time.time())
-
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-                else:
-                    # Running behind – warn and continue
-                    logger.warning(
-                        "Sampling loop falling behind; increase interval or reduce load"
-                    )
-                    next_sample = time.time()
-
+                            pass    # web UI errors never crash sampling loop
+ 
             except Exception as e:
-                logger.error(f"Sampling error: {e}")
-                time.sleep(0.01)
+                logger.error("Sampling loop error: %s", e)
+                time.sleep(0.01)    # brief pause to avoid tight error loop
 
     def _start_sampling(self) -> None:
         """Start the high‑frequency sampling thread."""
@@ -609,10 +685,12 @@ class EnergyEngine:
         # If we need to categorize, we need to know the tuple structure
         # For example, if samples are (timestamp, type, value) tuples
         for sample in samples:
-            if len(sample) >= 2:
-                # This is a guess - adjust based on actual tuple structure
-                if isinstance(sample[1], (int, float)):  # If second element is a number
-                    self.last_energy_samples.append(sample)
+            # Chunk 2: samples are now dicts (not tuples)
+            if isinstance(sample, dict):
+                self.last_energy_samples.append(sample)
+            elif isinstance(sample, (tuple, list)) and len(sample) >= 2:
+                # backward compat — old tuple format (timestamp, energy_dict)
+                self.last_energy_samples.append(sample)
                 # Add more logic based on actual formatif hasattr(self.energy_engine, 'samples'):
         # Stop perf and get accumulated counters
 

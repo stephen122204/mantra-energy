@@ -372,6 +372,23 @@ class RAPLReader:
                 return path
         return None
 
+# --- EnergyReaderABC compatibility (Chunk 1) ---
+
+    def get_name(self) -> str:
+        """Return reader name for factory logging and platform summary."""
+        return "RAPLReader"
+
+    def is_available(self) -> bool:
+        """Return True if at least one RAPL domain is accessible."""
+        return len(self.available_paths) > 0
+
+    def get_domains(self) -> list:
+        """Return list of accessible RAPL domain names."""
+        return list(self.available_paths.keys())
+
+    def read_energy_uj(self) -> dict:
+        """EnergyReaderABC interface — delegates to read_energy_safe()."""
+        return self.read_energy_safe()
     def __str__(self) -> str:
         """
         String representation of RAPL reader state.

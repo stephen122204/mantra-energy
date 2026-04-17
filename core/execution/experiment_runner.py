@@ -610,17 +610,19 @@ class ExperimentRunner:
             if "energy_samples" in linear_result:
                 converted = []
                 for sample in linear_result["energy_samples"]:
-                    if len(sample) == 2 and isinstance(sample[1], dict):
+                    if isinstance(sample, dict):
+                        # Chunk 2: new dict format — use directly
+                        converted.append(sample)
+                    elif len(sample) == 2 and isinstance(sample[1], dict):
+                        # backward compat — old tuple format (timestamp, energy_dict)
                         timestamp, energy_dict = sample
-                        converted.append(
-                            {
-                                "timestamp_ns": int(timestamp * 1_000_000_000),
-                                "pkg_energy_uj": energy_dict.get("package-0", 0),
-                                "core_energy_uj": energy_dict.get("core", 0),
-                                "uncore_energy_uj": energy_dict.get("uncore", 0),
-                                "dram_energy_uj": 0,
-                            }
-                        )
+                        converted.append({
+                            "timestamp_ns":    int(timestamp * 1_000_000_000),
+                            "pkg_energy_uj":   energy_dict.get("package-0", 0),
+                            "core_energy_uj":  energy_dict.get("core", 0),
+                            "uncore_energy_uj": energy_dict.get("uncore", 0),
+                            "dram_energy_uj":  0,
+                        })
                 if converted:
                     db.insert_energy_samples(linear_id, converted)
 
@@ -656,17 +658,19 @@ class ExperimentRunner:
             if "energy_samples" in agentic_result:
                 converted = []
                 for sample in agentic_result["energy_samples"]:
-                    if len(sample) == 2 and isinstance(sample[1], dict):
+                    if isinstance(sample, dict):
+                        # Chunk 2: new dict format — use directly
+                        converted.append(sample)
+                    elif len(sample) == 2 and isinstance(sample[1], dict):
+                        # backward compat — old tuple format (timestamp, energy_dict)
                         timestamp, energy_dict = sample
-                        converted.append(
-                            {
-                                "timestamp_ns": int(timestamp * 1_000_000_000),
-                                "pkg_energy_uj": energy_dict.get("package-0", 0),
-                                "core_energy_uj": energy_dict.get("core", 0),
-                                "uncore_energy_uj": energy_dict.get("uncore", 0),
-                                "dram_energy_uj": 0,
-                            }
-                        )
+                        converted.append({
+                            "timestamp_ns":    int(timestamp * 1_000_000_000),
+                            "pkg_energy_uj":   energy_dict.get("package-0", 0),
+                            "core_energy_uj":  energy_dict.get("core", 0),
+                            "uncore_energy_uj": energy_dict.get("uncore", 0),
+                            "dram_energy_uj":  0,
+                        })
                 if converted:
                     db.insert_energy_samples(agentic_id, converted)
 

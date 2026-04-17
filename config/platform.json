@@ -1,0 +1,24 @@
+{
+  "os": "Linux",
+  "arch": "x86_64",
+  "measurement_mode": "MEASURED",
+  "has_rapl": true,
+  "has_msr": true,
+  "has_perf": true,
+  "has_turbostat": true,
+  "has_thermal": true,
+  "has_iokit": false,
+  "rapl_domains": [
+    "core",
+    "package-0",
+    "uncore"
+  ],
+  "virtualization": null,
+  "hostname": "UBUNTU2505",
+  "torch_available": false,
+  "in_container": false,
+  "container_runtime": null,
+  "python_version": "3.13.7",
+  "env_hash": "a355f881f3454d8e",
+  "kernel_version": "6.17.0-22-generic"
+}

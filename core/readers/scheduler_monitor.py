@@ -268,6 +268,7 @@ class SchedulerMonitor:
         self._start_monotonic_ns = start_mono
         self._start_epoch_ns = start_epoch
         self._last_sample_time_ns = start_mono
+        self._last_ticks = self._read_cpu_ticks()
 
         logger.debug(
             f"Interrupt sampling started - epoch: {start_epoch}, mono: {start_mono}"
@@ -283,6 +284,36 @@ class SchedulerMonitor:
         except Exception:
             pass
         return 0
+    
+    def _read_cpu_ticks(self) -> dict:
+        """
+        Read raw CPU tick counters from /proc/stat aggregate line.
+ 
+        Called in same pass as _read_total_interrupts() so both values
+        come from a single consistent /proc/stat snapshot (Option B).
+ 
+        /proc/stat cpu line format:
+            cpu  user nice system idle iowait irq softirq steal guest guest_nice
+ 
+        Returns:
+            dict: {'user': int, 'system': int, 'idle': int, 'total': int}
+                  All zeros on read failure — never raises.
+        """
+        try:
+            with open("/proc/stat", "r") as f:
+                for line in f:
+                    if line.startswith("cpu "):      # aggregate line (space after cpu)
+                        fields = line.split()
+                        return {
+                            "user":   int(fields[1]),
+                            "system": int(fields[3]),
+                            "idle":   int(fields[4]),
+                            "total":  sum(int(x) for x in fields[1:]),
+                        }
+        except Exception as e:
+            logger.debug("Failed to read CPU ticks from /proc/stat: %s", e)
+ 
+        return {"user": 0, "system": 0, "idle": 0, "total": 0}
 
     def reset_interrupt_samples(self):
         """Clear interrupt samples buffer for new run."""
@@ -296,46 +327,99 @@ class SchedulerMonitor:
         logger.debug("Interrupt samples reset for new run (start times preserved)")
 
     def sample_interrupts(self):
-        """Take one interrupt sample (called from energy_engine sampling loop)."""
+        """
+        Take one interrupt + CPU tick sample from /proc/stat.
+ 
+        Chunk 2 final:
+            - Reads CPU ticks in same /proc/stat call (Option B)
+            - Stores sample_start_ns + sample_end_ns explicitly
+            - timestamp_ns = sample_end_ns (backward compat)
+            - interval_ns stored for verification
+            - interrupts_raw (count delta) + interrupts_per_sec (rate, compat)
+ 
+        Called from energy_engine._sampling_loop every 10th iteration (10Hz).
+        """
         if not self._interrupt_sampling_active:
             return
-
-        monotonic_now = time.monotonic_ns()
-        current_counts = self._read_total_interrupts()
-
-        # Convert monotonic to epoch time
+ 
+        # --------------------------------------------------------
+        # Capture start timestamp before /proc/stat read
+        # --------------------------------------------------------
+        sample_start_ns = time.monotonic_ns()
+ 
+        # Read interrupt count + CPU ticks in one /proc/stat pass
+        current_interrupts = self._read_total_interrupts()
+        current_ticks      = self._read_cpu_ticks()
+ 
+        # Capture end timestamp after read
+        sample_end_ns = time.monotonic_ns()
+        interval_ns   = sample_end_ns - sample_start_ns
+ 
+        # --------------------------------------------------------
+        # Convert monotonic → epoch for DB timestamp alignment
+        # --------------------------------------------------------
         if self._start_epoch_ns is not None and self._start_monotonic_ns is not None:
-            epoch_ns = int(
-                self._start_epoch_ns + (monotonic_now - self._start_monotonic_ns)
+            epoch_start_ns = int(
+                self._start_epoch_ns + (sample_start_ns - self._start_monotonic_ns)
+            )
+            epoch_end_ns = int(
+                self._start_epoch_ns + (sample_end_ns - self._start_monotonic_ns)
             )
         else:
-            # Fallback if start times not set (should not happen)
-            epoch_ns = monotonic_now
+            epoch_start_ns = sample_start_ns
+            epoch_end_ns   = sample_end_ns
             logger.warning("Start times not set for interrupt sampling")
-
+ 
         logger.debug(
-            f"🔍 INTERRUPT DEBUG: counts={current_counts}, last={self._last_interrupt_counts}"
+            "INTERRUPT DEBUG: counts=%d last=%d",
+            current_interrupts,
+            self._last_interrupt_counts or 0,
         )
-
+ 
         if (
             self._last_interrupt_counts is not None
             and self._last_sample_time_ns is not None
         ):
-            time_delta_s = (monotonic_now - self._last_sample_time_ns) / 1e9
+            # --------------------------------------------------------
+            # Compute deltas against last sample
+            # --------------------------------------------------------
+            time_delta_s   = (sample_start_ns - self._last_sample_time_ns) / 1e9
+ 
             if time_delta_s > 0:
-                count_delta = current_counts - self._last_interrupt_counts
-                rate = count_delta / time_delta_s
-                logger.debug(f"🔍 INTERRUPT RATE: {rate:.2f} IRQ/s")
-
-                self._interrupt_samples.append(
-                    {
-                        "timestamp_ns": epoch_ns,  # Now in epoch time!
-                        "interrupts_per_sec": rate,
-                    }
-                )
-
-        self._last_interrupt_counts = current_counts
-        self._last_sample_time_ns = monotonic_now
+                interrupts_raw = current_interrupts - self._last_interrupt_counts
+                rate           = interrupts_raw / time_delta_s
+ 
+                # CPU tick deltas — start = last sample snapshot, end = now
+                user_start   = self._last_ticks.get("user",   0)
+                user_end     = current_ticks.get("user",      0)
+                system_start = self._last_ticks.get("system", 0)
+                system_end   = current_ticks.get("system",    0)
+ 
+                logger.debug("INTERRUPT RATE: %.2f IRQ/s", rate)
+ 
+                self._interrupt_samples.append({
+                    # Backward compat — timestamp_ns = end time
+                    "timestamp_ns":       epoch_end_ns,
+                    # Explicit start/end (Option 2 — raw layer)
+                    "sample_start_ns":    epoch_start_ns,
+                    "sample_end_ns":      epoch_end_ns,
+                    "interval_ns":        interval_ns,
+                    # Interrupt values
+                    "interrupts_per_sec": rate,         # old rate — backward compat
+                    "interrupts_raw":     interrupts_raw,
+                    # CPU tick values
+                    "user_ticks_start":   user_start,
+                    "user_ticks_end":     user_end,
+                    "system_ticks_start": system_start,
+                    "system_ticks_end":   system_end,
+                })
+ 
+        # --------------------------------------------------------
+        # Update last-seen values for next delta calculation
+        # --------------------------------------------------------
+        self._last_interrupt_counts = current_interrupts
+        self._last_sample_time_ns   = sample_start_ns   # use start for consistency
+        self._last_ticks            = current_ticks
 
     def stop_interrupt_sampling(self) -> list:
         """Stop and return interrupt samples."""

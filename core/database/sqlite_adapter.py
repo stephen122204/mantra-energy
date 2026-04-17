@@ -41,7 +41,21 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,
                      CREATE_ORCHESTRATION_EVENTS, CREATE_RUNS,
                      CREATE_RUNS_INDEXES, CREATE_TAX_INDEXES,
                      CREATE_TAX_SUMMARY, TASK_CATEGORIES_SCHEMA,
-                     THERMAL_SAMPLES_SCHEMA, CREATE_RESEARCH_METRICS_VIEW, ENERGY_SAMPLES_WITH_POWER_VIEW)
+                     THERMAL_SAMPLES_SCHEMA, CREATE_RESEARCH_METRICS_VIEW, ENERGY_SAMPLES_WITH_POWER_VIEW,
+                     CREATE_MEASUREMENT_METHOD_REGISTRY,
+                     CREATE_METHOD_REFERENCES,
+                     CREATE_MEASUREMENT_METHODOLOGY,
+                     CREATE_METRIC_DISPLAY_REGISTRY,
+                     CREATE_QUERY_REGISTRY,
+                     CREATE_STANDARDIZATION_REGISTRY,
+                     CREATE_EVAL_CRITERIA,
+                     CREATE_COMPONENT_REGISTRY,
+                     CREATE_PAGE_CONFIGS,
+                     CREATE_PAGE_SECTIONS,
+                     CREATE_PAGE_METRIC_CONFIGS,
+                     CREATE_AUDIT_LOG,
+                     CREATE_PAGE_TEMPLATES,
+                     )
 
 
 class SQLiteAdapter(DatabaseInterface):
@@ -251,6 +265,19 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_LLM_INTERACTIONS)
         self.conn.execute(CREATE_RESEARCH_METRICS_VIEW)
         self.conn.executescript(ENERGY_SAMPLES_WITH_POWER_VIEW)
+        self.conn.executescript(CREATE_MEASUREMENT_METHOD_REGISTRY)
+        self.conn.executescript(CREATE_METHOD_REFERENCES)
+        self.conn.executescript(CREATE_MEASUREMENT_METHODOLOGY)
+        self.conn.executescript(CREATE_METRIC_DISPLAY_REGISTRY)
+        self.conn.executescript(CREATE_QUERY_REGISTRY)
+        self.conn.executescript(CREATE_STANDARDIZATION_REGISTRY)
+        self.conn.executescript(CREATE_EVAL_CRITERIA)
+        self.conn.executescript(CREATE_COMPONENT_REGISTRY)
+        self.conn.executescript(CREATE_PAGE_CONFIGS)
+        self.conn.executescript(CREATE_PAGE_SECTIONS)
+        self.conn.executescript(CREATE_PAGE_METRIC_CONFIGS)
+        self.conn.executescript(CREATE_AUDIT_LOG)
+        self.conn.executescript(CREATE_PAGE_TEMPLATES)
 
         # Commit explicitly (DDL should be committed)
         self.conn.commit()

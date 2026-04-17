@@ -385,6 +385,15 @@ class SensorReader:
 
         return is_throttling
 
+# --- ThermalReaderABC compatibility (Chunk 1) ---
+    def get_name(self) -> str:
+        """Return reader name for factory logging."""
+        return "SensorReader"
+
+    def is_available(self) -> bool:
+        """Return True if any thermal sensors are accessible."""
+        return len(self.available_sensors) > 0
+    
     def __str__(self) -> str:
         """String representation."""
         return f"SensorReader(sensors={len(self.available_sensors)})"
