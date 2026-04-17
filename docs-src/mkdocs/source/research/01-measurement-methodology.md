@@ -241,3 +241,66 @@ Acceptable: < 2%
 1. Intel Corporation. (2012). "Intel® 64 and IA-32 Architectures Software Developer's Manual"
 2. Hähnel, M., et al. (2012). "Measuring Energy Consumption for Short Code Paths Using RAPL"
 3. Khan, K. N., et al. (2018). "Energy Profiling Using RAPL"
+---
+
+## ⚙️ Measurement Modes (Added: Chunk 1)
+
+A-LEMS supports three measurement modes depending on available hardware.
+The mode is determined automatically at startup by `PlatformDetector`
+and affects how energy values in the database should be interpreted.
+
+### Mode Definitions
+
+**`MEASURED`** — Energy from real hardware sensor.
+
+All energy values in microjoules come directly from a hardware counter
+with no estimation or modelling involved. The counter may be:
+
+- RAPL sysfs register (Linux x86_64) — cumulative µJ, read directly
+- IOKit power sensor (macOS) — instantaneous watts, integrated to µJ by the reader
+
+Both are `MEASURED` because the underlying measurement is hardware.
+The reader may do arithmetic (W×s→µJ) but does not estimate.
+
+**`INFERRED`** — Energy predicted by ML model.
+
+No hardware energy counter is accessible (ARM VM, blocked container).
+`EnergyEstimator` uses CPU performance counters (utilisation, frequency,
+instruction count, task type) as features to predict package energy.
+
+!!! warning
+    `INFERRED` values are estimates. They are stored in the database
+    with `measurement_mode = 'INFERRED'` so they can be filtered out
+    of accuracy-sensitive analyses. Do not mix MEASURED and INFERRED
+    runs in the same comparison without flagging the difference.
+
+**`LIMITED`** — No measurement possible.
+
+Platform has no supported energy interface. All energy values are zero.
+Runs are stored with `measurement_mode = 'LIMITED'` and should be
+excluded from energy analysis. Useful for functional testing only.
+
+### Mode × Data Quality Matrix
+
+| Mode | Energy Values | Use in Research | Use for Functional Test |
+|------|--------------|-----------------|------------------------|
+| MEASURED | Real hardware µJ | ✅ Yes | ✅ Yes |
+| INFERRED | ML prediction | ⚠️ With caveat | ✅ Yes |
+| LIMITED | Zeros | ❌ No | ✅ Yes |
+
+### How Mode is Stored
+
+Every row in the `runs` table includes:
+
+```sql
+measurement_mode  TEXT    -- 'MEASURED' / 'INFERRED' / 'LIMITED'
+env_hash          TEXT    -- links to environment.json fingerprint
+```
+
+Filter for research-grade runs:
+
+```sql
+SELECT * FROM runs
+WHERE measurement_mode = 'MEASURED'
+  AND experiment_valid = 1;
+```

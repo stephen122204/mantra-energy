@@ -101,13 +101,23 @@ def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list
             for idx, row in df.iterrows():
                 # Calculate timestamp using monotonic clock
                 if start_ns is not None:
-                    timestamp_ns = start_ns + (idx + 1) * interval_ns
+                    # Each turbostat sample ends at start + (idx+1) * interval
+                    sample_end_ns   = start_ns + (idx + 1) * interval_ns
+                    sample_start_ns = start_ns + idx * interval_ns
+                    timestamp_ns    = sample_end_ns   # backward compat
                 else:
                     # Fallback to old method
-                    timestamp_ns = int((raw_energy.start_time + idx * 0.1) * 1e9)
+                    sample_end_ns   = int((raw_energy.start_time + (idx + 1) * 0.1) * 1e9)
+                    sample_start_ns = int((raw_energy.start_time + idx * 0.1) * 1e9)
+                    timestamp_ns    = sample_end_ns
 
-                # Start with timestamp
-                sample = {"timestamp_ns": timestamp_ns}
+                # Start with timestamp fields — explicit start/end + backward compat
+                sample = {
+                    "timestamp_ns":    timestamp_ns,
+                    "sample_start_ns": sample_start_ns,
+                    "sample_end_ns":   sample_end_ns,
+                    "interval_ns":     interval_ns,
+                }
 
                 # Extract canonical metrics
                 for our_name, turbostat_col in canonical_metrics.items():

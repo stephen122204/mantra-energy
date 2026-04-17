@@ -337,18 +337,30 @@ class ExperimentHarness:
         start_time_ns = int(run_start_dt.timestamp() * 1e9)
 
         if hasattr(raw_energy, "thermal_samples") and raw_energy.thermal_samples:
-            for ts, readings, throttled in raw_energy.thermal_samples:
+            for thermal_tuple in raw_energy.thermal_samples:
+                # Chunk 2 final: unpack 6-tuple
+                # (now, readings, throttled, sample_start_ns, sample_end_ns, interval_ns)
+                ts               = thermal_tuple[0]
+                readings         = thermal_tuple[1]
+                throttled        = thermal_tuple[2]
+                sample_start_ns  = thermal_tuple[3] if len(thermal_tuple) > 3 else None
+                sample_end_ns    = thermal_tuple[4] if len(thermal_tuple) > 4 else None
+                interval_ns      = thermal_tuple[5] if len(thermal_tuple) > 5 else None
+ 
                 time_since_start = (ts * 1e9 - start_time_ns) / 1e9
-                thermal_samples.append(
-                    {
-                        "timestamp_ns": int(ts * 1e9),
-                        "sample_time_s": time_since_start,
-                        "cpu_temp": readings.get("cpu_temp"),
-                        "system_temp": readings.get("system_temp"),
-                        "wifi_temp": readings.get("wifi_temp"),
-                        "throttle_event": 1 if throttled else 0,
-                        "all_zones": readings,
-                    }
+ 
+                thermal_samples.append({
+                    "timestamp_ns":    int(ts * 1e9),   # backward compat = end time
+                    "sample_start_ns": sample_start_ns,
+                    "sample_end_ns":   sample_end_ns,
+                    "interval_ns":     interval_ns,
+                    "sample_time_s":   time_since_start,
+                    "cpu_temp":        readings.get("cpu_temp"),
+                    "system_temp":     readings.get("system_temp"),
+                    "wifi_temp":       readings.get("wifi_temp"),
+                    "throttle_event":  1 if throttled else 0,
+                    "all_zones":       readings,         # serialised to JSON in insert
+                }
                 )
                 if readings.get("cpu_temp"):
                     temps.append(readings["cpu_temp"])
@@ -751,18 +763,30 @@ class ExperimentHarness:
         start_time_ns = int(run_start_dt.timestamp() * 1e9)
 
         if hasattr(raw_energy, "thermal_samples") and raw_energy.thermal_samples:
-            for ts, readings, throttled in raw_energy.thermal_samples:
+            for thermal_tuple in raw_energy.thermal_samples:
+                # Chunk 2 final: unpack 6-tuple
+                # (now, readings, throttled, sample_start_ns, sample_end_ns, interval_ns)
+                ts               = thermal_tuple[0]
+                readings         = thermal_tuple[1]
+                throttled        = thermal_tuple[2]
+                sample_start_ns  = thermal_tuple[3] if len(thermal_tuple) > 3 else None
+                sample_end_ns    = thermal_tuple[4] if len(thermal_tuple) > 4 else None
+                interval_ns      = thermal_tuple[5] if len(thermal_tuple) > 5 else None
+ 
                 time_since_start = (ts * 1e9 - start_time_ns) / 1e9
-                thermal_samples.append(
-                    {
-                        "timestamp_ns": int(ts * 1e9),
-                        "sample_time_s": time_since_start,
-                        "cpu_temp": readings.get("cpu_temp"),
-                        "system_temp": readings.get("system_temp"),
-                        "wifi_temp": readings.get("wifi_temp"),
-                        "throttle_event": 1 if throttled else 0,
-                        "all_zones": readings,
-                    }
+ 
+                thermal_samples.append({
+                    "timestamp_ns":    int(ts * 1e9),   # backward compat = end time
+                    "sample_start_ns": sample_start_ns,
+                    "sample_end_ns":   sample_end_ns,
+                    "interval_ns":     interval_ns,
+                    "sample_time_s":   time_since_start,
+                    "cpu_temp":        readings.get("cpu_temp"),
+                    "system_temp":     readings.get("system_temp"),
+                    "wifi_temp":       readings.get("wifi_temp"),
+                    "throttle_event":  1 if throttled else 0,
+                    "all_zones":       readings,         # serialised to JSON in insert
+                }
                 )
                 if readings.get("cpu_temp"):
                     temps.append(readings["cpu_temp"])
