@@ -98,6 +98,10 @@ class PerfReader:
         "branch-misses",  # Mispredicted branches
         "cpu-clock",  # CPU time used
         "task-clock",  # Task elapsed time
+        "L1-dcache-load-misses",   # Chunk 12: L1d cache misses
+        "l2_rqsts.miss",           # Chunk 12: L2 cache misses
+        "LLC-loads",               # Chunk 12: L3 cache hits
+        "LLC-load-misses",         # Chunk 12: L3 cache misses        
     ]
 
     # Regex patterns for parsing perf output
@@ -484,10 +488,19 @@ class PerfReader:
         # Cache references (Req 1.6)
         elif "cache-references" in event_name:
             counters.cache_references = value
-
-        # Cache misses (Req 1.6)
+            counters.l3_cache_hits    = value   # LLC refs = L3 hits on this arch
         elif "cache-misses" in event_name:
-            counters.cache_misses = value
+            counters.cache_misses     = value
+            counters.l3_cache_misses  = value   # LLC misses = L3 misses
+
+        elif "L1-dcache-load-misses" in event_name:
+            counters.l1d_cache_misses = value
+        elif "l2_rqsts.miss" in event_name:
+            counters.l2_cache_misses = value
+        elif "LLC-loads" in event_name:
+            counters.l3_cache_hits = value
+        elif "LLC-load-misses" in event_name:
+            counters.l3_cache_misses = value            
 
         # Context switches (Req 1.12)
         # perf combines both voluntary and involuntary

@@ -312,7 +312,12 @@ class RunsRepository:
                 carbon_g, water_ml, methane_mg,
                 energy_per_instruction, energy_per_cycle, energy_per_token,
                 instructions_per_token, interrupts_per_second,bytes_sent, bytes_recv, tcp_retransmits,
-                run_state_hash
+                run_state_hash,pid, cpu_fraction, attributed_energy_uj, energy_measurement_mode,
+                planning_energy_uj, execution_energy_uj, synthesis_energy_uj,
+                l1d_cache_misses_total, l2_cache_misses_total,l3_cache_hits_total,
+                l3_cache_misses_total, disk_read_bytes_total, disk_write_bytes_total,
+                voltage_vcore_avg
+
             ) VALUES (
                 ?, ?, ?, ?, ?,
                 ?, ?, ?,
@@ -340,7 +345,9 @@ class RunsRepository:
                 ?, ?, ?, 
                 ?, ?, ?, 
                 ?, ?, ?, ?, ?,
-                ? , ?
+                ? , ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?
             )
         """
 
@@ -442,6 +449,20 @@ class RunsRepository:
             ml.get("bytes_recv", 0),
             ml.get("tcp_retransmits", 0),
             run_state_hash,
+            ml.get("pid"),                                    # SYSTEM — PID of workload process
+            ml.get("cpu_fraction"),                           # CALCULATED — workload/total ticks
+            ml.get("attributed_energy_uj"),                   # CALCULATED — cpu_fraction × dynamic_energy_uj
+            ml.get("reader_mode"),
+            None,  # planning_energy_uj — ETL populated
+            None,  # execution_energy_uj — ETL populated
+            None,  # synthesis_energy_uj — ETL populated
+            None,  # l1d_cache_misses_total — ETL populated
+            None,  # l2_cache_misses_total — ETL populated
+            None,  # l3_cache_hits_total — ETL populated
+            None,  # l3_cache_misses_total — ETL populated
+            None,  # disk_read_bytes_total — ETL populated
+            None,  # disk_write_bytes_total — ETL populated
+            None,  # voltage_vcore_avg — ETL populated            
         )
 
         try:

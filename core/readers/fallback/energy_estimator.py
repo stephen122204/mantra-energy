@@ -27,6 +27,7 @@ Author: Deepak Panigrahy
 
 import logging
 from typing import Dict, List
+from core.utils.formula import formula
 
 from core.readers.interfaces import EnergyReaderABC
 
@@ -55,7 +56,16 @@ class EnergyEstimator(EnergyReaderABC):
     # Synthetic domain names — mirrors what RAPLReader would return
     # so downstream consumers don't need special-casing for ARM
     STUB_DOMAINS = ["package-0", "core"]
-
+    # ------------------------------------------------------------------
+    # Methodology attributes — read by scripts/seed_methodology.py
+    # ------------------------------------------------------------------
+    METHOD_ID          = "ml_energy_estimator"
+    METHOD_NAME        = "ML-Based Energy Estimator (ARM / No-RAPL)"
+    METHOD_LAYER       = "silicon"
+    METHOD_CONFIDENCE  = 0.0
+    METHOD_PROVENANCE  = "INFERRED"
+    METHOD_PARAMS      = {"model": "xgboost", "features": ["cpu_util", "freq_mhz"], "stub": True}
+    FALLBACK_METHOD_ID = None
     def __init__(self, config: dict = None):
         """
         Initialise the energy estimator.
@@ -79,6 +89,14 @@ class EnergyEstimator(EnergyReaderABC):
     # EnergyReaderABC implementation
     # ------------------------------------------------------------------
 
+
+    @formula(
+        latex=r"\hat{E}_{pkg} = f_{\theta}(\text{cpu\_util}, \text{freq\_mhz}, \text{instructions})",
+        variables={
+            "hat_E_pkg": "Predicted package energy µJ",
+            "f_theta":   "Trained XGBoost model (stub returns 0)",
+        }
+    )
     def read_energy_uj(self) -> Dict[str, int]:
         """
         Return estimated energy in microjoules for each domain.

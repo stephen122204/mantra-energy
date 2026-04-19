@@ -1,0 +1,13 @@
+method_id: disk_io_stats
+references:
+  - title: "Documentation/admin-guide/iostats.rst — Linux Kernel"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Defines /proc/diskstats field layout. read_sectors * 512 = read_bytes."
+
+  - title: "A-LEMS: Attribution-Layer Energy Measurement System"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: "Section 4.1 — I/O Attribution. Delta method for disk byte counting."

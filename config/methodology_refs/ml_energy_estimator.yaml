@@ -1,0 +1,16 @@
+# config/methodology_refs/ml_energy_estimator.yaml
+# =============================================================================
+# References for: ML-Based Energy Estimator (ARM / No-RAPL)
+# method_id: ml_energy_estimator
+# =============================================================================
+
+- ref_type: paper
+  title: "Data-Driven Energy Estimation for Virtual Servers"
+  authors: "Sangha, A. et al."
+  year: 2025
+  venue: "arXiv:2509.09991"
+  doi: "10.48550/arXiv.2509.09991"
+  url: "https://arxiv.org/abs/2509.09991"
+  relevance: "Section 4 describes ML estimation for ARM VMs without RAPL access"
+  cited_text: "XGBoost model trained on CPU utilisation and frequency features"
+  page_or_section: "Section 4"

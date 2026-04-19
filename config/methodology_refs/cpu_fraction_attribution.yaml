@@ -1,0 +1,24 @@
+method_id: cpu_fraction_attribution
+references:
+  - title: "proc(5) — Linux Programmer's Manual"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: >
+      Defines /proc/[pid]/stat fields 14 (utime) and 15 (stime) used
+      to read per-process CPU ticks for fraction computation.
+  - title: "proc_stat(5) — Linux Programmer's Manual"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: >
+      Defines /proc/stat aggregate CPU line fields (user, nice, system,
+      idle) used to compute total active system ticks as denominator.
+  - title: "A-LEMS: Attribution-Layer Energy Measurement System"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: >
+      Section 3.3 — CPU Fraction Attribution. Justifies tick-based
+      process isolation over cgroup or perf alternatives for
+      portability across bare-metal and KVM targets.

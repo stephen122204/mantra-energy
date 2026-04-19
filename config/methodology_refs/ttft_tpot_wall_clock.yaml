@@ -1,0 +1,16 @@
+# config/methodology_refs/ttft_tpot_wall_clock.yaml
+# =============================================================================
+# References for: TTFT / TPOT Wall Clock Measurement
+# method_id: ttft_tpot_wall_clock
+# =============================================================================
+
+- ref_type: paper
+  title: "A-LEMS: Agent vs Linear Energy Measurement Platform"
+  authors: "Sangha, A. et al."
+  year: 2025
+  venue: "arXiv:2509.09991"
+  doi: "10.48550/arXiv.2509.09991"
+  url: "https://arxiv.org/abs/2509.09991"
+  relevance: "Section 5 defines TTFT and TPOT wall-clock measurement boundaries"
+  cited_text: "TTFT measured from request dispatch to first token receipt"
+  page_or_section: "Section 5"

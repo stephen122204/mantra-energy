@@ -1,0 +1,16 @@
+# config/methodology_refs/iokit_power_reader.yaml
+# =============================================================================
+# References for: IOKit Power Reader (macOS)
+# method_id: iokit_power_reader
+# =============================================================================
+
+- ref_type: manual
+  title: "Apple IOKit Power Management Programming Guide"
+  authors: "Apple Inc."
+  year: 2022
+  venue: "Apple Developer Documentation"
+  doi: null
+  url: "https://developer.apple.com/documentation/iokit"
+  relevance: "IOKit HID interface for reading hardware power sensors on macOS"
+  cited_text: null
+  page_or_section: null

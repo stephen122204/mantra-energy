@@ -334,7 +334,24 @@ class SensorReader:
                 logger.debug(f"Error reading hwmon {hwmon}: {e}")
 
         return voltages
-
+    
+    def read_fan_rpm(self) -> int:
+        """
+        Read fan RPM from hwmon sysfs interface.
+        Returns 0 if no fan sensor found — graceful on fanless systems.
+        """
+        import glob
+        for hwmon in glob.glob("/sys/class/hwmon/hwmon*"):
+            for i in range(5):
+                fan_path = f"{hwmon}/fan{i+1}_input"
+                if os.path.exists(fan_path):
+                    try:
+                        with open(fan_path) as f:
+                            return int(f.read().strip())
+                    except Exception:
+                        pass
+        return 0
+    
     def read_throttle_events(self) -> int:
         """
         Read thermal throttle events from MSR or sysfs.

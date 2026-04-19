@@ -24,6 +24,7 @@ Author: Deepak Panigrahy
 
 import logging
 from typing import Dict, List
+from core.utils.formula import formula
 
 from core.readers.interfaces import EnergyReaderABC
 
@@ -46,7 +47,16 @@ class DummyEnergyReader(EnergyReaderABC):
 
     # Minimal domain list — same names as RAPL for schema consistency
     STUB_DOMAINS = ["package-0", "core"]
-
+    # ------------------------------------------------------------------
+    # Methodology attributes — read by scripts/seed_methodology.py
+    # ------------------------------------------------------------------
+    METHOD_ID          = "dummy_energy_reader"
+    METHOD_NAME        = "Dummy Energy Reader (LIMITED Mode)"
+    METHOD_LAYER       = "silicon"
+    METHOD_CONFIDENCE  = 0.0
+    METHOD_PROVENANCE  = "LIMITED"
+    METHOD_PARAMS      = {"returns": "zeros", "reason": "unsupported platform"}
+    FALLBACK_METHOD_ID = None
     def __init__(self, config: dict = None):
         """
         Initialise the dummy reader and log a platform warning.
@@ -69,7 +79,10 @@ class DummyEnergyReader(EnergyReaderABC):
     # ------------------------------------------------------------------
     # EnergyReaderABC implementation
     # ------------------------------------------------------------------
-
+    @formula(
+        latex=r"E_{pkg} = 0 \quad \text{(platform not supported)}",
+        variables={"E_pkg": "Package energy µJ — always zero on unsupported platform"}
+    )
     def read_energy_uj(self) -> Dict[str, int]:
         """
         Return zero energy for all domains.

@@ -356,6 +356,13 @@ class AgenticExecutor:
 
         exec_end = time.time()
         execution_time_ms = (exec_end - exec_start) * 1000
+        self._emit_event(
+            phase="execution",
+            event_type="execution",
+            start_time=exec_start,
+            end_time=exec_end,
+            metadata={"steps": len(steps), "tools_used": len(tools_used)},
+        )        
 
         print(f"🔍 DEBUG - accumulated tokens: {tokens}")
         print(f"🔍 DEBUG - tokens keys: {tokens.keys()}")

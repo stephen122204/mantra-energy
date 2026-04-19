@@ -304,3 +304,96 @@ SELECT * FROM runs
 WHERE measurement_mode = 'MEASURED'
   AND experiment_valid = 1;
 ```
+
+## 🔧 OS Scheduler Measurement
+
+### What Is Measured
+
+The Linux kernel exposes per-process scheduler statistics via `/proc/[pid]/status`
+and system-wide statistics via `/proc/stat`. A-LEMS reads these at experiment
+start and end to capture the scheduling overhead imposed by the workload.
+
+Metrics captured:
+- `voluntary_ctxt_switches` — process yielded CPU willingly (e.g. waiting for I/O)
+- `nonvoluntary_ctxt_switches` — process preempted by scheduler
+- `run_queue_length` — number of processes waiting for CPU
+- `kernel_time_ms` — time spent in kernel mode
+- `user_time_ms` — time spent in user mode
+- `wakeup_latency_us` — time from wake request to actual CPU acquisition
+
+### Why This Matters
+
+High involuntary context switches indicate CPU contention — other processes
+are competing for the same cores. This inflates wall-clock duration without
+adding computational work, artificially increasing energy measurements.
+A-LEMS records these to allow filtering of high-contention runs.
+
+### Implementation
+
+```python
+# Reads via psutil — wraps /proc/[pid]/status
+proc = psutil.Process(pid)
+ctx = proc.num_ctx_switches()
+voluntary   = ctx.voluntary
+involuntary = ctx.involuntary
+```
+
+### Provenance
+
+| Column | Provenance | Confidence |
+|--------|-----------|------------|
+| `context_switches_voluntary` | MEASURED | 1.0 |
+| `context_switches_involuntary` | MEASURED | 1.0 |
+| `total_context_switches` | CALCULATED | 1.0 |
+| `kernel_time_ms` | MEASURED | 1.0 |
+| `user_time_ms` | MEASURED | 1.0 |
+| `run_queue_length` | MEASURED | 1.0 |
+| `wakeup_latency_us` | MEASURED | 1.0 |
+
+---
+
+## 💾 OS Memory Measurement
+
+### What Is Measured
+
+Memory consumption is captured at experiment boundaries using the Linux
+`/proc/[pid]/status` virtual memory statistics and system-wide swap
+statistics from `/proc/swaps`.
+
+Metrics captured:
+- `rss_memory_mb` — Resident Set Size: physical RAM actually used
+- `vms_memory_mb` — Virtual Memory Size: total virtual address space
+- `swap_*_mb` — Swap usage at start/end of experiment
+
+### Why Memory Matters for Energy
+
+DRAM access is a significant energy consumer. High RSS indicates active
+memory pressure. Swap activity (if any) dramatically increases energy
+consumption due to disk I/O. A-LEMS records memory state to allow
+correlation between memory pressure and energy measurement quality.
+
+### Formula
+
+$$M_{RSS} = \frac{\text{VmRSS from /proc/[pid]/status}}{1024} \text{ MB}$$
+
+### Implementation
+
+```python
+# Via psutil — wraps /proc/[pid]/status
+proc = psutil.Process(pid)
+mem  = proc.memory_info()
+rss_mb = mem.rss / (1024 * 1024)
+vms_mb = mem.vms / (1024 * 1024)
+```
+
+### Provenance
+
+| Column | Provenance | Confidence |
+|--------|-----------|------------|
+| `rss_memory_mb` | MEASURED | 1.0 |
+| `vms_memory_mb` | MEASURED | 1.0 |
+| `swap_total_mb` | MEASURED | 1.0 |
+| `swap_end_free_mb` | MEASURED | 1.0 |
+| `swap_start_used_mb` | CALCULATED | 1.0 |
+| `swap_end_used_mb` | CALCULATED | 1.0 |
+| `swap_end_percent` | MEASURED | 1.0 |

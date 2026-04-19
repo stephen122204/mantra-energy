@@ -224,6 +224,20 @@ CREATE TABLE IF NOT EXISTS runs (
 
     -- Cryptographic run state hash
     run_state_hash TEXT,
+    pid                     INTEGER,          -- PID of workload process
+    cpu_fraction            REAL,             -- workload_ticks / total_ticks
+    attributed_energy_uj    INTEGER,           -- cpu_fraction × dynamic_energy_uj 
+    energy_measurement_mode TEXT,               -- MEASURED / INFERRED / LIMITED 
+    planning_energy_uj      INTEGER,            -- Chunk 5: attributed phase energy
+    execution_energy_uj     INTEGER,
+    synthesis_energy_uj     INTEGER,  
+    l1d_cache_misses_total  BIGINT,  -- Chunk 12: SUM from cpu_samples
+    l2_cache_misses_total   BIGINT,
+    l3_cache_hits_total     BIGINT,
+    l3_cache_misses_total   BIGINT,
+    disk_read_bytes_total   BIGINT,  -- Chunk 12: SUM from io_samples
+    disk_write_bytes_total  BIGINT,
+    voltage_vcore_avg       REAL,     -- Chunk 12: AVG from thermal_samples
 
     FOREIGN KEY(exp_id) REFERENCES experiments(exp_id),
     FOREIGN KEY(hw_id) REFERENCES hardware_config(hw_id),
@@ -262,6 +276,17 @@ CREATE TABLE IF NOT EXISTS orchestration_events (
     event_energy_uj INTEGER,
     tax_contribution_uj INTEGER,
     tax_percent REAL,
+    global_run_id TEXT,
+    raw_energy_uj           INTEGER,            -- Chunk 5: MAX(pkg_end)-MIN(pkg_start)
+    cpu_fraction_per_phase            REAL,               -- proc_ticks_delta / total_ticks_delta
+    attributed_energy_uj    INTEGER,            -- cpu_fraction x raw_energy_uj
+    attribution_method      TEXT,               -- cpu_counter_delta | fallback_run_level
+    quality_score           REAL,               -- 0.0-1.0 based on sample count
+    proc_ticks_min          INTEGER,
+    proc_ticks_max          INTEGER,
+    total_ticks_min         INTEGER,
+    total_ticks_max         INTEGER,    
+
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
 """
@@ -357,6 +382,10 @@ CREATE TABLE IF NOT EXISTS cpu_samples (
     -- Temperature & efficiency
     package_temp     REAL,
     ipc              REAL,
+    l1d_cache_misses     BIGINT,     -- Chunk 12: L1d cache misses from perf
+    l2_cache_misses      BIGINT,     -- Chunk 12: L2 cache misses from perf
+    l3_cache_hits        BIGINT,     -- Chunk 12: L3 cache hits from perf
+    l3_cache_misses      BIGINT,      -- Chunk 12: L3 cache misses from perf    
     -- JSON overflow for additional turbostat columns
     extra_metrics_json TEXT,
     -- Chunk 2: Interval tracking
@@ -385,6 +414,10 @@ CREATE TABLE IF NOT EXISTS interrupt_samples (
     user_ticks_end       INTEGER,   -- /proc/stat user ticks at interval end
     system_ticks_start   INTEGER,   -- /proc/stat system ticks at interval start
     system_ticks_end     INTEGER,   -- /proc/stat system ticks at interval end
+    total_ticks_start    INTEGER,   -- /proc/stat sum(all fields) at interval
+    total_ticks_end      INTEGER,   -- /proc/stat sum(all fields) at interval end
+    proc_ticks_start     INTEGER,   -- /proc/[pid]/stat utime+stime at interval start
+    proc_ticks_end       INTEGER    -- /proc/[pid]/stat utime+stime at interval end
     sample_start_ns      INTEGER,   -- epoch ns at sample start (explicit)
     sample_end_ns        INTEGER,   -- epoch ns at sample end (= timestamp_ns)
     interval_ns          INTEGER,   -- exact elapsed ns for this sample
@@ -407,6 +440,8 @@ CREATE TABLE IF NOT EXISTS thermal_samples (
     system_temp    REAL,
     wifi_temp      REAL,
     throttle_event INTEGER DEFAULT 0,
+    voltage_vcore  REAL,             -- Chunk 12: Vcore voltage from hwmon sysfs
+    fan_rpm        INTEGER,           -- Chunk 12: Fan RPM from hwmon sysfs    
     all_zones_json TEXT,
     sensor_count   INTEGER,
     -- Chunk 2: Interval tracking
@@ -838,6 +873,27 @@ CREATE TABLE IF NOT EXISTS llm_interactions (
 CREATE INDEX IF NOT EXISTS idx_llm_run ON llm_interactions(run_id);
 CREATE INDEX IF NOT EXISTS idx_llm_workflow ON llm_interactions(workflow_type);
 """
+# ========================================================================
+# Table: IO_SAMPLES 
+# ========================================================================
+CREATE_IO_SAMPLES = """
+CREATE TABLE IF NOT EXISTS io_samples (
+    sample_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id           INTEGER NOT NULL,
+    sample_start_ns  INTEGER NOT NULL,
+    sample_end_ns    INTEGER NOT NULL,
+    interval_ns      INTEGER NOT NULL,
+    device           TEXT,
+    disk_read_bytes  BIGINT,
+    disk_write_bytes BIGINT,
+    io_block_time_ms REAL,
+    disk_latency_ms  REAL,
+    minor_page_faults INTEGER,
+    major_page_faults INTEGER,
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+"""
+
 # ========================================================================
 # View : ml_view - analytical view that flattens runs and llm_interactions for ML modeling
 # ========================================================================

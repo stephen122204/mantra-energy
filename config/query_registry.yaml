@@ -107,3 +107,14 @@ queries:
     parameters: {}
     returns: rows
     cache_ttl_sec: 30
+  - id: methodology_for_run
+    name: "Full methodology audit for one run"
+    query_file: methodology_for_run.sql
+    dialect_aware: false
+    parameters:
+      run_id:
+        type: integer
+        required: true
+    returns: rows
+    cache_ttl_sec: 60
+    group_name: methodology

@@ -23,6 +23,8 @@ import json
 import argparse
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from core.utils.provenance import COLUMN_PROVENANCE, _unit
 
 BASE    = Path(__file__).parent.parent
 CFG_DIR = BASE / "config"
@@ -506,7 +508,214 @@ def seed_page_configs(db, dry_run: bool = False) -> int:
         db.commit()
     print(f"  → {len(pages)} pages seeded with overview sections")
     return len(pages)
-
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 7: Link metric_display_registry → measurement_method_registry
+#         Source of truth: COLUMN_PROVENANCE map in provenance.py
+#         Reads actual runs table columns — zero hardcoding
+# ─────────────────────────────────────────────────────────────────────────────
+def seed_methodology_links(db, dry_run: bool = False) -> int:
+    """
+    Two operations:
+        1. INSERT missing core metrics into metric_display_registry
+           using runs table columns as source of truth.
+        2. UPDATE method_id + provenance_expected on all rows
+           using COLUMN_PROVENANCE as authoritative map.
+ 
+    Preserves manually curated fields (label, color_token, chart_type)
+    on conflict — only syncs methodology-related columns.
+ 
+    Args:
+        db:      Open SQLite connection.
+        dry_run: Log only — no writes.
+ 
+    Returns:
+        Number of rows inserted or updated.
+    """
+    from core.utils.provenance import COLUMN_PROVENANCE, METHOD_CONFIDENCE, _unit
+ 
+    # ── Helper functions ──────────────────────────────────────────────────────
+ 
+    LABEL_OVERRIDES = {
+        "ipc":             "Instructions Per Cycle",
+        "pkg_energy_uj":   "Package Energy",
+        "core_energy_uj":  "Core Energy",
+        "uncore_energy_uj":"Uncore Energy",
+        "dram_energy_uj":  "DRAM Energy",
+        "rss_memory_mb":   "RSS Memory",
+        "vms_memory_mb":   "Virtual Memory",
+        "api_latency_ms":  "API Latency",
+        "dns_latency_ms":  "DNS Latency",
+        "tcp_retransmits": "TCP Retransmits",
+        "cpu_busy_mhz":    "CPU Busy Frequency",
+        "cpu_avg_mhz":     "Avg CPU Frequency",
+        "ring_bus_freq_mhz":"Ring Bus Frequency",
+        "wakeup_latency_us":"Wakeup Latency",
+    }
+ 
+    STRIP_SUFFIXES = [
+        "_uj", "_j", "_watts", "_ms", "_ns", "_mb", "_mhz",
+        "_celsius", "_pct", "_percent", "_us", "_hz", "_seconds",
+        "_rate", "_c", "_g", "_ml", "_mg",
+    ]
+ 
+    CATEGORY_MAP = {
+        "rapl_msr_pkg_energy":          "energy",
+        "perf_counters":                "performance",
+        "thermal_sensor":               "thermal",
+        "msr_reader":                   "cstate",
+        "turbostat_reader":             "performance",
+        "os_memory_reader":             "memory",
+        "os_scheduler_reader":          "scheduler",
+        "network_measurement":          "network",
+        "system_clock":                 "timing",
+        "ttft_tpot_wall_clock":         "llm",
+        "dynamic_energy_calculation":   "energy",
+        "ipc_calculation":              "performance",
+        "cache_miss_calculation":       "performance",
+        "efficiency_metrics_calculation":"efficiency",
+        "orchestration_tax_calculation":"orchestration",
+        "complexity_score_calculation": "orchestration",
+        "carbon_calculation":           "sustainability",
+        "water_calculation":            "sustainability",
+        "methane_calculation":          "sustainability",
+        "idle_baseline_cpu_pinning_2sigma": "energy",
+        "iokit_power_reader":           "energy",
+        "ml_energy_estimator":          "energy",
+        "dummy_energy_reader":          "energy",
+    }
+ 
+    COLOR_MAP = {
+        "energy":        "accent.silicon",
+        "performance":   "accent.os",
+        "thermal":       "accent.warning",
+        "memory":        "accent.warning",
+        "network":       "accent.info",
+        "llm":           "accent.thesis",
+        "orchestration": "accent.orchestration",
+        "sustainability":"accent.success",
+        "scheduler":     "accent.os",
+        "cstate":        "accent.silicon",
+        "timing":        "accent.info",
+        "efficiency":    "accent.success",
+    }
+ 
+    DIRECTION_MAP = {
+        "energy": "lower_is_better", "sustainability": "lower_is_better",
+        "thermal": "lower_is_better", "memory": "lower_is_better",
+        "network": "lower_is_better", "llm": "lower_is_better",
+        "orchestration": "lower_is_better", "scheduler": "lower_is_better",
+        "performance": "higher_is_better", "efficiency": "higher_is_better",
+    }
+ 
+    PRECISION_MAP = {
+        "_uj": 0, "_j": 6, "_watts": 3, "_ms": 2, "_ns": 0,
+        "_mb": 1, "_mhz": 1, "_celsius": 1, "_c": 1,
+        "_g": 4, "_ml": 3, "_mg": 6, "_pct": 2, "_percent": 2,
+        "_us": 3, "_rate": 3,
+    }
+ 
+    PRECISION_OVERRIDES = {"ipc": 3, "complexity_score": 4, "carbon_g": 6}
+ 
+    def _label(metric_id):
+        if metric_id in LABEL_OVERRIDES:
+            return LABEL_OVERRIDES[metric_id]
+        name = metric_id
+        for sfx in STRIP_SUFFIXES:
+            if name.endswith(sfx):
+                name = name[:-len(sfx)]
+                break
+        return name.replace("_", " ").title()
+ 
+    def _category(method_id):
+        return CATEGORY_MAP.get(method_id, "system")
+ 
+    def _color(category):
+        return COLOR_MAP.get(category, "accent.silicon")
+ 
+    def _direction(category):
+        return DIRECTION_MAP.get(category, "lower_is_better")
+ 
+    def _precision(metric_id):
+        if metric_id in PRECISION_OVERRIDES:
+            return PRECISION_OVERRIDES[metric_id]
+        for sfx, p in PRECISION_MAP.items():
+            if metric_id.endswith(sfx):
+                return p
+        return 2
+ 
+    # ── Read actual runs table columns ────────────────────────────────────────
+    cols = db.execute("PRAGMA table_info(runs)").fetchall()
+    count = 0
+ 
+    for col in cols:
+        metric_id = col[1]
+        entry     = COLUMN_PROVENANCE.get(metric_id)
+ 
+        # Skip unmapped and SYSTEM columns
+        if not entry:
+            continue
+        method_id, provenance = entry
+        if provenance == "SYSTEM":
+            continue
+ 
+        category  = _category(method_id)
+        color     = _color(category)
+        direction = _direction(category)
+        precision = _precision(metric_id)
+        unit      = _unit(metric_id)
+        label     = _label(metric_id)
+ 
+        if dry_run:
+            print(f"  [DRY] {metric_id:<40} method={method_id}  prov={provenance}")
+            count += 1
+            continue
+ 
+        # Upsert — preserve manually curated label/color/chart_type on conflict
+        db.execute("""
+            INSERT INTO metric_display_registry (
+                id, label, category, layer,
+                unit_default, method_id,
+                color_token, chart_type,
+                provenance_expected, significance,
+                direction, display_precision,
+                active, default_visible
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,1)
+            ON CONFLICT (id) DO UPDATE SET
+                method_id           = excluded.method_id,
+                provenance_expected = excluded.provenance_expected,
+                unit_default        = CASE WHEN unit_default IS NULL
+                                      THEN excluded.unit_default
+                                      ELSE unit_default END
+        """, (
+            metric_id, label, category,
+            method_id.split("_")[0] if method_id else "silicon",
+            unit, method_id, color, "kpi",
+            provenance,
+            "primary" if metric_id in (
+                "pkg_energy_uj", "dynamic_energy_uj", "ipc",
+                "carbon_g", "api_latency_ms", "orchestration_cpu_ms",
+                "water_ml", "cache_miss_rate", "complexity_score"
+            ) else "supporting",
+            direction, precision,
+        ))
+        count += 1
+ 
+    if not dry_run:
+        # Pull formula_latex from method registry — single source of truth
+        db.execute("""
+            UPDATE metric_display_registry
+            SET formula_latex = (
+                SELECT formula_latex
+                FROM measurement_method_registry mm
+                WHERE mm.id = metric_display_registry.method_id
+            )
+            WHERE (formula_latex IS NULL OR formula_latex = '')
+              AND method_id IS NOT NULL
+        """)
+        db.commit()
+ 
+    print(f"  → {count} core metrics linked to methodology registry")
+    return count
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
@@ -560,7 +769,9 @@ def main():
 
     print("\nSTEP 6: Seeding page configs...")
     total += seed_page_configs(db, args.dry_run)
-
+    print("\nSTEP 7: Linking methodology to display registry...")
+    total += seed_methodology_links(db, args.dry_run) 
+    
     db.close()
 
     print(f"\n{'='*60}")

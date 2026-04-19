@@ -1,0 +1,775 @@
+#!/usr/bin/env python3
+"""
+================================================================================
+SEED METHODOLOGY — Populate measurement_method_registry + method_references
+================================================================================
+
+Fills ALL columns of measurement_method_registry and method_references.
+Three source types:
+
+    READERS         — hardware reader classes (RAPLReader etc.)
+    DERIVED_METHODS — computed metrics (CALCULATED/INFERRED, have fn)
+    MEASURED_METHODS— non-reader measured methods (no fn, no latexify)
+
+Re-run whenever: code changes, doc updated, new method added.
+
+Usage:
+    python scripts/seed_methodology.py
+    python scripts/seed_methodology.py --dry-run
+
+Author: Deepak Panigrahy
+================================================================================
+"""
+
+import argparse
+import inspect
+import json
+import logging
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import yaml
+
+BASE     = Path(__file__).resolve().parent.parent
+REFS_DIR = BASE / "config" / "methodology_refs"
+sys.path.insert(0, str(BASE))
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# READERS — hardware reader classes
+# =============================================================================
+
+def _load_readers() -> List[Any]:
+    """Import and return all reader classes to seed."""
+    from core.readers.rapl_reader                  import RAPLReader
+    from core.readers.darwin.iokit_power_reader    import IOKitPowerReader
+    from core.readers.fallback.energy_estimator    import EnergyEstimator
+    from core.readers.fallback.dummy_energy_reader import DummyEnergyReader
+    return [RAPLReader, IOKitPowerReader, EnergyEstimator, DummyEnergyReader]
+
+
+# =============================================================================
+# MEASURED METHODS — direct hardware/OS reads, no compute fn
+# No latexify attempted — formula is architectural description
+# =============================================================================
+
+def _load_measured_methods() -> List[Dict]:
+    """Static measured methods — sensors, clocks, OS readers."""
+    return [
+        {
+            "id":           "perf_counters",
+            "name":         "Linux perf Hardware Counters",
+            "provenance":   "MEASURED",
+            "layer":        "silicon",
+            "output_metric":"instructions",
+            "output_unit":  "count",
+            "applicable_on":["linux_x86_64"],
+            "formula_latex": r"N_{inst} = \text{perf\_event\_open}(\text{PERF\_COUNT\_HW\_INSTRUCTIONS})",
+            "parameters":   {"interface": "perf_event_open", "syscall": 298},
+            "doc":          "01-measurement-methodology.md",
+            "section":      "Performance Counter Methodology",
+        },
+        {
+            "id":           "thermal_sensor",
+            "name":         "Linux sysfs Thermal Sensor",
+            "provenance":   "MEASURED",
+            "layer":        "silicon",
+            "output_metric":"package_temp_celsius",
+            "output_unit":  "°C",
+            "applicable_on":["linux_x86_64"],
+            "formula_latex": r"T = \frac{\text{sysfs\_millicelsius}}{1000}",
+            "parameters":   {"path": "/sys/class/thermal/thermal_zoneN/temp"},
+            "doc":          "01-measurement-methodology.md",
+            "section":      "Thermal Measurement",
+        },
+        {
+            "id":           "ttft_tpot_wall_clock",
+            "name":         "TTFT / TPOT Wall Clock Measurement",
+            "provenance":   "MEASURED",
+            "layer":        "application",
+            "output_metric":"api_latency_ms",
+            "output_unit":  "ms",
+            "applicable_on":["any"],
+            "formula_latex": r"T_{api} = t_{response} - t_{request}",
+            "parameters":   {"precision": "perf_counter", "unit": "ms"},
+            "doc":          "05-llm-measurement-methodology.md",
+            "section":      "Measurement Model",
+        },
+        {
+            "id":           "system_clock",
+            "name":         "System Wall Clock",
+            "provenance":   "MEASURED",
+            "layer":        "application",
+            "output_metric":"duration_ns",
+            "output_unit":  "ns",
+            "applicable_on":["any"],
+            "formula_latex": r"\Delta t = t_{end} - t_{start}",
+            "parameters":   {"source": "time.time_ns()", "precision_ns": 1},
+            "doc":          "01-measurement-methodology.md",
+            "section":      "Timestamp Precision",
+        },
+        {
+            "id":           "os_memory_reader",
+            "name":         "OS Memory Statistics Reader",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "output_metric":"rss_memory_mb",
+            "output_unit":  "MB",
+            "applicable_on":["any"],
+            "formula_latex": r"M_{RSS} = \frac{\text{VmRSS}}{1024}",
+            "parameters":   {"source": "psutil.Process().memory_info()"},
+            "doc":          "01-measurement-methodology.md",
+            "section":      "Measurement Modes",
+        },
+        {
+            "id":           "network_measurement",
+            "name":         "Network I/O Measurement",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "output_metric":"bytes_sent",
+            "output_unit":  "bytes",
+            "applicable_on":["any"],
+            "formula_latex": r"\Delta B = B_{end} - B_{start}",
+            "parameters":   {"source": "psutil.net_io_counters()"},
+            "doc":          "05-llm-measurement-methodology.md",
+            "section":      "Network Metrics",
+        },
+        {
+            "id":           "turbostat_reader",
+            "name":         "Intel Turbostat CPU Frequency Reader",
+            "provenance":   "MEASURED",
+            "layer":        "silicon",
+            "output_metric":"frequency_mhz",
+            "output_unit":  "MHz",
+            "applicable_on":["linux_x86_64"],
+            "formula_latex": r"f = \text{turbostat Avg\_MHz}",
+            "parameters":   {"tool": "turbostat", "interval_ms": 100},
+            "doc":          "01-measurement-methodology.md",
+            "section":      "Performance Counter Methodology",
+        },
+        {
+            "id":           "os_scheduler_reader",
+            "name":         "OS Scheduler Statistics Reader",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "output_metric":"context_switches_voluntary",
+            "output_unit":  "count",
+            "applicable_on":["linux_x86_64"],
+            "formula_latex": r"CS = \text{/proc/[pid]/status voluntary\_ctxt\_switches}",
+            "parameters":   {"source": "/proc/[pid]/status"},
+            "doc":          "01-measurement-methodology.md",
+            "section":      "Measurement Modes",
+        },
+        {
+            "id":           "msr_reader",
+            "name":         "MSR C-State Register Reader",
+            "provenance":   "MEASURED",
+            "layer":        "silicon",
+            "output_metric":"c2_time_seconds",
+            "output_unit":  "s",
+            "applicable_on":["linux_x86_64"],
+            "formula_latex": r"C_x = \frac{\Delta MSR_{C_x}}{TSC_{freq}}",
+            "parameters":   {
+                "c2_msr": "0x60D",
+                "c3_msr": "0x3FC",
+                "c6_msr": "0x3FD",
+                "c7_msr": "0x3FE",
+            },
+            "doc":          "01-measurement-methodology.md",
+            "section":      "C-State Measurement",
+        },
+        {
+            "id":           "perf_cache_counters",
+            "name":         "Perf Cache Counters",
+            "provenance":   "MEASURED",
+            "layer":        "silicon",
+            "confidence":   1.0,
+            "description":  "L1d/L2/L3 cache hit and miss counters from Linux perf_events via perf stat. Events: L1-dcache-load-misses, l2_rqsts.miss, LLC-loads, LLC-load-misses.",
+            "formula_latex": r"\text{perf\_stat}(L1\text{-}dcache\text{-}load\text{-}misses,\ l2\_rqsts.miss,\ LLC\text{-}loads,\ LLC\text{-}load\text{-}misses)",
+            "parameters":   "parameters": {"sampling": "once per run", "source": "perf_event_open", "unit": "event_count", "cache_line_bytes": 64},
+            "doc":          "09-derived-metrics-methodology.md",
+            "section":      "Hardware Telemetry Metrics (Chunk 12)",
+        },
+        {
+            "id":           "disk_io_stats",
+            "name":         "Disk I/O Statistics",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "confidence":   1.0,
+            "description":  "Disk read/write bytes and latency from /proc/diskstats. Delta between run start and end snapshots. Sector count * 512 = bytes.",
+            "formula_latex": r"\Delta bytes = (\text{sectors}_{end} - \text{sectors}_{start}) \times 512",
+            "parameters":   {"source": "/proc/diskstats", "sector_size": 512},
+            "doc":          "09-derived-metrics-methodology.md",
+            "section":      "Hardware Telemetry Metrics (Chunk 12)",
+        },
+        {
+            "id":           "disk_io_stats",
+            "name":         "Disk I/O Statistics",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "confidence":   1.0,
+            "description":  "Disk read/write bytes and latency from /proc/diskstats. Delta between run start and end snapshots. Sector count * 512 = bytes.",
+            "formula_latex": r"\Delta bytes = (\text{sectors}_{end} - \text{sectors}_{start}) \times 512",
+            "parameters":   {"source": "/proc/diskstats", "sector_size": 512},
+            "doc":          "09-derived-metrics-methodology.md",
+            "section":      "Hardware Telemetry Metrics (Chunk 12)",
+        },
+
+    ]
+
+
+# =============================================================================
+# DERIVED METHODS — CALCULATED/INFERRED, have specific compute fn
+# fn points to SPECIFIC function — not a 200-line general compute()
+# =============================================================================
+
+def _load_derived_methods() -> List[Dict]:
+    """Derived method definitions with specific compute functions."""
+    from core.analysis.energy_analyzer  import EnergyAnalyzer
+    from core.sustainability.calculator import SustainabilityCalculator
+    from core.execution.agentic         import AgenticExecutor
+
+    return [
+        {
+            "id":           "dynamic_energy_calculation",
+            "name":         "Dynamic Energy Calculation",
+            "provenance":   "CALCULATED",
+            "layer":        "silicon",
+            "output_metric":"dynamic_energy_uj",
+            "output_unit":  "µJ",
+            "applicable_on":["any"],
+            "formula_latex": r"E_{dyn} = \max(0, E_{pkg} - E_{idle})",
+            "parameters":   {"method": "min_baseline_2sigma", "percentile": 2},
+            "doc":          "02-mathematical-derivations.md",
+            "section":      "Workload Isolation",
+            "fn":           EnergyAnalyzer.compute,
+        },
+        {
+            "id":           "ipc_calculation",
+            "name":         "Instructions Per Cycle (IPC)",
+            "provenance":   "CALCULATED",
+            "layer":        "silicon",
+            "output_metric":"ipc",
+            "output_unit":  "ratio",
+            "applicable_on":["linux_x86_64"],
+            "formula_latex": r"IPC = \frac{N_{instructions}}{N_{cycles}}",
+            "parameters":   {"counter": "perf_event_open"},
+            "doc":          "02-mathematical-derivations.md",
+            "section":      "Efficiency Metrics",
+            "fn":           None,   # no specific sub-method — formula is self-contained
+        },
+        {
+            "id":           "cache_miss_calculation",
+            "name":         "LLC Cache Miss Rate",
+            "provenance":   "CALCULATED",
+            "layer":        "silicon",
+            "output_metric":"cache_miss_rate",
+            "output_unit":  "%",
+            "applicable_on":["linux_x86_64"],
+            "formula_latex": r"\%_{miss} = \frac{N_{LLC\_miss}}{N_{LLC\_ref}} \times 100",
+            "parameters":   {"counter": "LLC-load-misses"},
+            "doc":          "02-mathematical-derivations.md",
+            "section":      "Efficiency Metrics",
+            "fn":           None,   # formula is self-contained
+        },
+        {
+            "id":           "orchestration_tax_calculation",
+            "name":         "Orchestration Tax Calculation",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "output_metric":"orchestration_tax_uj",
+            "output_unit":  "µJ",
+            "applicable_on":["any"],
+            "formula_latex": r"\tau = E_{agentic} - E_{linear}",
+            "parameters":   {},
+            "doc":          "03-orchestration-tax.md",
+            "section":      "Orchestration Tax",
+            "fn":           EnergyAnalyzer.compute,
+        },
+        {
+            "id":           "efficiency_metrics_calculation",
+            "name":         "Energy Efficiency Metrics",
+            "provenance":   "CALCULATED",
+            "layer":        "application",
+            "output_metric":"energy_per_token",
+            "output_unit":  "µJ/unit",
+            "applicable_on":["any"],
+            "formula_latex": r"\epsilon = \frac{E_{pkg}}{N_{units}} \quad \text{where } N_{units} \in \{tokens, instructions, cycles\}",
+            "parameters":   {},
+            "doc":          "02-mathematical-derivations.md",
+            "section":      "Efficiency Metrics",
+            "fn":           None,   # self-contained ratio formula
+        },
+        {
+            "id":           "carbon_calculation",
+            "name":         "Carbon Emission Calculation",
+            "provenance":   "INFERRED",
+            "layer":        "application",
+            "output_metric":"carbon_g",
+            "output_unit":  "g",
+            "applicable_on":["any"],
+            "formula_latex": r"C = E_{pkg} \cdot I_{carbon} \cdot 10^3",
+            "parameters":   {"source": "Ember 2026", "unit": "g CO2/kWh"},
+            "doc":          "02-mathematical-derivations.md",
+            "section":      "Efficiency Metrics",
+            "fn":           SustainabilityCalculator.calculate_from_raw,
+        },
+        {
+            "id":           "water_calculation",
+            "name":         "Water Consumption Calculation",
+            "provenance":   "INFERRED",
+            "layer":        "application",
+            "output_metric":"water_ml",
+            "output_unit":  "ml",
+            "applicable_on":["any"],
+            "formula_latex": r"W = E_{pkg} \cdot WUE \cdot 10^3",
+            "parameters":   {"source": "UN-Water 2025", "unit": "L/kWh"},
+            "doc":          "02-mathematical-derivations.md",
+            "section":      "Efficiency Metrics",
+            "fn":           SustainabilityCalculator.calculate_from_raw,
+        },
+        {
+            "id":           "methane_calculation",
+            "name":         "Methane Emission Calculation",
+            "provenance":   "INFERRED",
+            "layer":        "application",
+            "output_metric":"methane_mg",
+            "output_unit":  "mg",
+            "applicable_on":["any"],
+            "formula_latex": r"CH_4 = E_{pkg} \cdot I_{methane} \cdot 10^3",
+            "parameters":   {"source": "IEA 2026", "gwp_20yr": 86, "gwp_100yr": 34},
+            "doc":          "02-mathematical-derivations.md",
+            "section":      "Efficiency Metrics",
+            "fn":           SustainabilityCalculator.calculate_from_raw,
+        },
+
+                {
+            "id":           "idle_baseline_cpu_pinning_2sigma",
+            "name":         "Idle Baseline with CPU Pinning and 2-Sigma",
+            "provenance":   "MEASURED",
+            "layer":        "silicon",
+            "output_metric":"baseline_energy_uj",
+            "output_unit":  "µJ",
+            "applicable_on":["linux_x86_64"],
+            "formula_latex": r"E_{idle} = \max(0, \bar{P} - 2\sigma) \times t_{duration}",
+            "parameters":   {
+                "pinned_cores":    [0, 1],
+                "duration_seconds": 10,
+                "num_samples":      10,
+                "sigma_threshold":  2.0,
+                "method":          "min_2sigma_baseline",
+            },
+            "doc":          "07-energy-readers-methodology.md",
+            "section":      "RAPL Energy Measurement",
+            "fn":           None,
+        },
+        {
+            "id":            "cpu_fraction_attribution",
+            "name":          "CPU Fraction-Based Energy Attribution",
+            "provenance":    "CALCULATED",
+            "layer":         "os",
+            "confidence":    0.95,
+            "description":   (
+                "Attributes dynamic energy to the workload process by multiplying "
+                "system-wide dynamic energy by the fraction of CPU ticks consumed "
+                "by the workload PID. Tick counts are read from /proc/stat (total) "
+                "and /proc/[pid]/stat (workload) at experiment start and end. "
+                "Isolates workload energy from background processes (cron, sshd, systemd)."
+            ),
+            "formula_latex": (
+                r"E_{attr} = \frac{\Delta ticks_{pid}}{\Delta ticks_{total}} \times E_{dyn}"
+            ),
+            "parameters":    {
+                "tick_source_total":    "/proc/stat fields: user+nice+system",
+                "tick_source_process":  "/proc/[pid]/stat fields: utime+stime",
+                "energy_source":        "dynamic_energy_uj (pkg minus idle baseline)",
+            },
+            "fn":            "proc_reader.compute_cpu_fraction",
+            "doc":           "09-derived-metrics-methodology.md",
+            "section":       "CPU Fraction Attribution",
+        },        
+
+        {
+            "id":           "complexity_score_calculation",
+            "name":         "Orchestration Complexity Score",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "output_metric":"complexity_score",
+            "output_unit":  "ratio",
+            "applicable_on":["any"],
+            "formula_latex": r"S = \alpha \cdot \hat{L} + \beta \cdot \hat{T} + \gamma \cdot \hat{N}",
+            "parameters":   {
+                "alpha": 0.4, "beta": 0.3, "gamma": 0.3,
+                "max_llm_calls": 10, "max_tool_calls": 10,
+                "token_threshold": 1000,
+            },
+            "doc":          "03-orchestration-tax.md",
+            "section":      "Orchestration Tax",
+            "fn":           AgenticExecutor._calculate_complexity_score,
+        },
+        {
+            "id":           "phase_attribution_cpu_v1",
+            "name":         "Phase Attribution (CPU-only, Normalized Signal Weighting)",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "confidence":   0.95,
+            "description":  (
+                "Per-phase energy attribution using normalized CPU signal weighting. "
+                "Guarantees: planning + execution + synthesis == attributed_energy_uj. "
+                "Step 1: score_i = cpu_fraction_i x raw_energy_i. "
+                "Step 2: weight_i = score_i / sum(scores). "
+                "Step 3: E_phase_i = weight_i x attributed_energy_uj. "
+                "CPU fraction from /proc/[pid]/stat and /proc/stat counter deltas (MAX-MIN). "
+                "Raw energy from RAPL energy_samples MAX(pkg_end_uj) - MIN(pkg_start_uj)."
+            ),
+            "formula_latex": (
+                r"S_i = f_i \times E_{raw,i},\quad"
+                r"w_i = \frac{S_i}{\sum_j S_j},\quad"
+                r"E_{phase,i} = w_i \times E_{attributed}"
+            ),
+            "parameters": {
+                "energy_sample_rate_hz":  100,
+                "cpu_sample_rate_hz":     10,
+                "counter_delta_method":   "max_min",
+                "normalization":          "signal_weighted",
+                "clamp_range":            [0, 1],
+                "fallback":               "run_level_cpu_fraction",
+                "residual_policy":        "add_to_largest_phase",
+            },
+            "fn":      "phase_attribution_etl.compute_phase_attribution",
+            "doc":     "09-derived-metrics-methodology.md",
+            "section": "Phase Energy Attribution",
+        },
+
+    ]
+
+
+# =============================================================================
+# LOADERS
+# =============================================================================
+
+def _load_doc_map() -> Dict[str, Dict]:
+    """Load config/methodology_docs.yaml."""
+    yaml_path = BASE / "config" / "methodology_docs.yaml"
+    if not yaml_path.exists():
+        logger.warning("methodology_docs.yaml not found")
+        return {}
+    raw     = yaml.safe_load(yaml_path.read_text())
+    methods = raw.get("methods", {})
+    base    = BASE / raw.get("docs_base", "docs-src/mkdocs/source/research")
+    for entry in methods.values():
+        entry["_base"] = base
+    return methods
+
+
+def _load_references(method_id: str) -> List[Dict]:
+    """Load citation rows from config/methodology_refs/{method_id}.yaml."""
+    ref_file = REFS_DIR / f"{method_id}.yaml"
+    if not ref_file.exists():
+        return []
+    data = yaml.safe_load(ref_file.read_text())
+    return data if isinstance(data, list) else data.get("references", [])
+
+
+def _extract_section(doc_path: Path, keyword: str) -> str:
+    """Extract section from markdown by heading keyword."""
+    if not doc_path.exists():
+        return f"[Documentation not found: {doc_path.name}]"
+    content = doc_path.read_text(encoding="utf-8")
+    lines   = content.split("\n")
+    start   = next(
+        (i for i, ln in enumerate(lines)
+         if ln.startswith("#") and keyword.lower() in ln.lower()),
+        None,
+    )
+    if start is None:
+        return content
+    level = len(lines[start]) - len(lines[start].lstrip("#"))
+    end   = next(
+        (i for i, ln in enumerate(lines[start + 1:], start + 1)
+         if ln.startswith("#" * level + " ")),
+        len(lines),
+    )
+    return "\n".join(lines[start:end]).strip()
+
+
+def _get_code_version() -> str:
+    """Get git commit hash or fallback."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, cwd=BASE,
+        )
+        return result.stdout.strip() or "1.0"
+    except Exception:
+        return "1.0"
+
+
+def _try_latexify(fn) -> Optional[str]:
+    """Try auto formula extraction. Returns None on any failure."""
+    if fn is None:
+        return None
+    try:
+        import latexify
+        return latexify.function(fn)._repr_latex_()
+    except Exception:
+        return None
+
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+
+def _validate_row(row: Dict) -> List[str]:
+    """Return list of validation errors. Empty = valid."""
+    errors = []
+    if not row.get("formula_latex"):
+        errors.append(f"{row['id']}: missing formula_latex")
+    if not row.get("description"):
+        errors.append(f"{row['id']}: missing description")
+    if row.get("provenance") in ("CALCULATED", "INFERRED"):
+        if not row.get("code_snapshot") and not row.get("formula_latex"):
+            errors.append(f"{row['id']}: missing both code_snapshot AND formula_latex")
+    return errors
+
+
+# =============================================================================
+# INSERT HELPERS
+# =============================================================================
+
+def _insert_registry(conn, row: Dict, dry_run: bool) -> None:
+    """Validate then insert/replace one registry row."""
+    # Validate before insert — fail loud, not silent
+    errors = _validate_row(row)
+    for err in errors:
+        logger.warning("VALIDATION: %s", err)
+
+    if dry_run:
+        logger.info(
+            "[DRY-RUN] %-42s  %-12s  %-12s  formula=%s  code=%s  desc=%d  warns=%d",
+            row["id"], row["layer"], row["provenance"],
+            "✓" if row.get("formula_latex") else "✗",
+            "✓" if row.get("code_snapshot") else "✗",
+            len(row.get("description", "")),
+            len(errors),
+        )
+        return
+
+    conn.execute("""
+        INSERT OR REPLACE INTO measurement_method_registry (
+            id, name, version, description, formula_latex,
+            code_snapshot, code_language, code_version,
+            parameters, output_metric, output_unit,
+            provenance, layer, applicable_on, fallback_method_id,
+            validated, active, updated_at
+        ) VALUES (
+            :id, :name, :version, :description, :formula_latex,
+            :code_snapshot, :code_language, :code_version,
+            :parameters, :output_metric, :output_unit,
+            :provenance, :layer, :applicable_on, :fallback_method_id,
+            0, 1, unixepoch()
+        )
+    """, row)
+
+
+def _insert_references(conn, method_id: str, refs: List, dry_run: bool) -> None:
+    """Delete stale then insert fresh references."""
+    if dry_run or not refs:
+        return
+    conn.execute("DELETE FROM method_references WHERE method_id = ?", (method_id,))
+    for ref in refs:
+        conn.execute("""
+            INSERT INTO method_references (
+                method_id, ref_type, title, authors, year,
+                venue, doi, url, relevance, cited_text, page_or_section
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            method_id,
+            ref.get("ref_type", "paper"), ref.get("title", ""),
+            ref.get("authors"), ref.get("year"), ref.get("venue"),
+            ref.get("doi"), ref.get("url"), ref.get("relevance"),
+            ref.get("cited_text"), ref.get("page_or_section"),
+        ))
+
+
+# =============================================================================
+# SEED FUNCTIONS
+# =============================================================================
+
+def _build_row_from_entry(entry: Dict, doc_map: Dict, code_version: str) -> Dict:
+    """Build complete registry row from a method entry dict."""
+    method_id = entry["id"]
+    fn        = entry.get("fn")
+
+    # Formula: manual wins → latexify fallback (Bug 1 fix — explicit logic)
+    formula_latex = entry.get("formula_latex")
+    if not formula_latex:
+        formula_latex = _try_latexify(fn)
+
+    # Code snapshot: specific fn only (Bug 2 fix — no giant compute() for all)
+    code_snapshot = ""
+    if fn:
+        try:
+            code_snapshot = inspect.getsource(fn)
+        except Exception:
+            pass
+
+    # Description from doc map (entry overrides map)
+    doc_entry   = doc_map.get(method_id, {})
+    base        = doc_entry.get("_base") or (BASE / "docs-src/mkdocs/source/research")
+    doc_file    = doc_entry.get("doc") or entry.get("doc", "")
+    section     = doc_entry.get("section") or entry.get("section", "")
+    description = _extract_section(base / doc_file, section) if doc_file else ""
+
+    return {
+        "id":                method_id,
+        "name":              entry["name"],
+        "version":           entry.get("version", "1.0"),
+        "description":       description,
+        "formula_latex":     formula_latex or "",
+        "code_snapshot":     code_snapshot,
+        "code_language":     "python",
+        "code_version":      code_version,
+        "parameters":        json.dumps(entry.get("parameters", {})),
+        "output_metric":     entry.get("output_metric", ""),
+        "output_unit":       entry.get("output_unit", ""),
+        "provenance":        entry["provenance"],
+        "layer":             entry["layer"],
+        "applicable_on":     json.dumps(entry.get("applicable_on", ["any"])),
+        "fallback_method_id": entry.get("fallback_method_id"),
+    }
+
+
+def seed_reader(cls, conn, doc_map: Dict, code_version: str, dry_run: bool) -> None:
+    """Seed one hardware reader class."""
+    method_id = cls.METHOD_ID
+
+    # Formula from @formula decorator
+    formula_latex = ""
+    for fn_name in ("get_energy_delta", "read_energy_uj"):
+        fn = getattr(cls, fn_name, None)
+        if fn and hasattr(fn, "_formula_latex"):
+            formula_latex = fn._formula_latex
+            break
+
+    # Full file as code_snapshot for readers
+    try:
+        code_snapshot = Path(inspect.getfile(cls)).read_text(encoding="utf-8")
+    except Exception:
+        code_snapshot = ""
+
+    doc_entry   = doc_map.get(method_id, {})
+    base        = doc_entry.get("_base", BASE / "docs-src/mkdocs/source/research")
+    description = _extract_section(
+        base / doc_entry.get("doc", ""),
+        doc_entry.get("section", ""),
+    ) if doc_entry.get("doc") else ""
+
+    # Bug 4 fix: read APPLICABLE_ON from class if available
+    applicable_on = json.dumps(
+        getattr(cls, "APPLICABLE_ON",
+                ["linux_x86_64"] if "RAPL" in cls.METHOD_NAME else ["any"])
+    )
+
+    row = {
+        "id":                method_id,
+        "name":              cls.METHOD_NAME,
+        "version":           "1.0",
+        "description":       description,
+        "formula_latex":     formula_latex,
+        "code_snapshot":     code_snapshot,
+        "code_language":     "python",
+        "code_version":      code_version,
+        "parameters":        json.dumps(cls.METHOD_PARAMS),
+        "output_metric":     "pkg_energy_uj",
+        "output_unit":       "µJ",
+        "provenance":        cls.METHOD_PROVENANCE,
+        "layer":             cls.METHOD_LAYER,
+        "applicable_on":     applicable_on,
+        "fallback_method_id": cls.FALLBACK_METHOD_ID,
+    }
+
+    _insert_registry(conn, row, dry_run)
+    if not dry_run:
+        refs = _load_references(method_id)   # Bug 3 fix: load once
+        _insert_references(conn, method_id, refs, dry_run)
+        logger.info("  ✓ %-42s  refs=%d", method_id, len(refs))
+
+
+def seed_entry(entry: Dict, conn, doc_map: Dict, code_version: str, dry_run: bool) -> None:
+    """Seed one measured or derived method entry."""
+    row  = _build_row_from_entry(entry, doc_map, code_version)
+    _insert_registry(conn, row, dry_run)
+    if not dry_run:
+        refs = _load_references(entry["id"])  # Bug 3 fix: load once
+        _insert_references(conn, entry["id"], refs, dry_run)
+        logger.info("  ✓ %-42s  refs=%d", entry["id"], len(refs))
+
+
+# =============================================================================
+# ENTRY POINT
+# =============================================================================
+
+def main() -> None:
+    """Seed all readers, measured methods, and derived methods."""
+    parser = argparse.ArgumentParser(description="Seed measurement_method_registry")
+    parser.add_argument("--db",      default="data/experiments.db")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    db_path      = BASE / args.db
+    readers      = _load_readers()
+    measured     = _load_measured_methods()
+    derived      = _load_derived_methods()
+    doc_map      = _load_doc_map()
+    code_version = _get_code_version()
+
+    total = len(readers) + len(measured) + len(derived)
+    logger.info("Readers : %d  Measured: %d  Derived: %d  Total: %d",
+                len(readers), len(measured), len(derived), total)
+
+    if args.dry_run:
+        logger.info("DRY-RUN — no DB writes")
+        for cls in readers:
+            seed_reader(cls, None, doc_map, code_version, dry_run=True)
+        for entry in measured + derived:
+            seed_entry(entry, None, doc_map, code_version, dry_run=True)
+        return
+
+    if not db_path.exists():
+        logger.error("DB not found: %s", db_path)
+        sys.exit(1)
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    try:
+        with conn:
+            for cls in readers:
+                seed_reader(cls, conn, doc_map, code_version, dry_run=False)
+            for entry in measured + derived:
+                seed_entry(entry, conn, doc_map, code_version, dry_run=False)
+
+        logger.info(
+            "Done — %d methods seeded. Verify:\n"
+            "  sqlite3 %s \"SELECT id, provenance, "
+            "length(formula_latex), length(code_snapshot) "
+            "FROM measurement_method_registry;\"",
+            total, db_path,
+        )
+    except Exception as exc:
+        logger.error("Seed failed: %s", exc)
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    main()

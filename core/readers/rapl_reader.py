@@ -31,6 +31,7 @@ import os
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from core.utils.formula import formula
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -62,6 +63,18 @@ class RAPLReader:
 
     # Standard domain names expected from the kernel
     # These are used for mapping, but we'll use whatever the system provides
+        # ------------------------------------------------------------------
+    # Methodology attributes — read by scripts/seed_methodology.py
+    # Formula lives on get_energy_delta() via @formula decorator
+    # ------------------------------------------------------------------
+    METHOD_ID          = "rapl_msr_pkg_energy"
+    METHOD_NAME        = "RAPL MSR Direct Package Energy"
+    METHOD_LAYER       = "silicon"
+    METHOD_CONFIDENCE  = 1.0
+    METHOD_PARAMS      = {"msr": "0x611", "domain": "package", "rate_hz": 100}
+    FALLBACK_METHOD_ID = "ml_energy_estimator"
+    METHOD_PROVENANCE  = "MEASURED"
+
     STANDARD_DOMAINS = {
         "package-0": "package",  # Primary package domain
         "package-1": "package",  # Second socket (if present)
@@ -281,6 +294,15 @@ class RAPLReader:
 
         return {}  # Should never reach here, but just in case
 
+
+    @formula(
+        latex=r"E_{d} = \begin{cases} R_{end} - R_{start} & \text{if } R_{end} \geq R_{start} \\ (2^{32}-1 - R_{start}) + R_{end} & \text{(wrap-around)} \end{cases}",
+        variables={
+            "E_d":     "Energy delta for domain d in µJ",
+            "R_end":   "RAPL sysfs counter at interval end",
+            "R_start": "RAPL sysfs counter at interval start",
+        }
+    )
     def get_energy_delta(
         self, start_readings: Dict[str, int], end_readings: Dict[str, int]
     ) -> Dict[str, int]:

@@ -403,7 +403,31 @@ class EnergyAnalyzer:
             thermal_now_active=thermal_now_active,
             thermal_since_boot=thermal_since_boot,
         )
-
+    def compute_attributed_energy(
+        self,
+        dynamic_energy_uj: int,
+        cpu_fraction: float,
+    ) -> int:
+        """
+        Attribute dynamic energy to the workload process only.
+ 
+        Multiplies whole-system dynamic energy by the fraction of CPU
+        ticks consumed by the workload PID, isolating it from cron,
+        sshd, systemd, and other background noise.
+ 
+        Formula:
+            E_attr = cpu_fraction × E_dyn
+ 
+        Args:
+            dynamic_energy_uj: pkg_energy_uj minus idle baseline (µJ)
+            cpu_fraction:      workload_ticks / total_ticks in [0, 1]
+ 
+        Returns:
+            int: attributed energy in µJ (always ≤ dynamic_energy_uj)
+        """
+        if dynamic_energy_uj <= 0 or cpu_fraction <= 0.0:
+            return 0                              # guard: no energy to attribute
+        return int(cpu_fraction * dynamic_energy_uj)
     @staticmethod
     def compute_batch(raw_list, baseline=None):
         """Compute for multiple measurements."""

@@ -73,6 +73,7 @@ from core.readers.perf_reader import PerfReader
 # ============================================================================
 from core.readers.rapl_reader import RAPLReader
 from core.readers.scheduler_monitor import SchedulerMonitor
+from core.readers.factory import ReaderFactory as _ReaderFactory
 from core.readers.sensor_reader import SensorReader
 from core.readers.turbostat_reader import TurbostatReader
 from core.utils.core_pinner import CorePinner
@@ -130,6 +131,7 @@ class EnergyEngine:
 
         # interrupt initializations
         self.collect_interrupt_samples = True
+        self._workload_pid = 0
         self._interrupt_sample_counter = 0
         self.last_interrupt_samples = []
 
@@ -171,6 +173,8 @@ class EnergyEngine:
         self.turbostat = TurbostatReader(config)     # not yet factorised (Chunk 7)
         self.msr       = MSRReader(config)           # not yet factorised (Chunk 7)
         self.scheduler = SchedulerMonitor(config)    # always available via /proc
+        self.disk_reader = _ReaderFactory.get_disk_reader(config)         # pid set later via set_workload_pid
+        self._io_samples: list = []
  
         # Log which readers were selected (visible in --verbose mode)
         logger.info(
@@ -500,6 +504,10 @@ class EnergyEngine:
  
                 if self.collect_interrupt_samples and sample_counter % 10 == 0:
                     self.scheduler.sample_interrupts()
+                    # Chunk 12: disk I/O sample at same 10Hz cadence
+                    io_s = self.disk_reader.sample()
+                    if io_s:
+                        self._io_samples.append(io_s)
  
                 # --------------------------------------------------------
                 # Web UI telemetry — best-effort, never crashes loop
@@ -556,6 +564,11 @@ class EnergyEngine:
 
         dprint(f"Stopped sampling, collected {len(samples)} samples")
         return samples
+
+    def set_workload_pid(self, pid: int) -> None:
+        """Set PID for per-process tick tracking in interrupt sampler."""
+        self._workload_pid = pid
+        self.disk_reader.pid = pid
 
     # ------------------------------------------------------------------------
     # Measurement session management
@@ -633,8 +646,11 @@ class EnergyEngine:
 
         # NEW: Start interrupt sampling
         if self.collect_interrupt_samples:
-            self.scheduler.start_interrupt_sampling()
-
+            self.scheduler.start_interrupt_sampling(pid=self._workload_pid)
+        
+        self._io_samples = []
+        self.disk_reader._last = None          # reset delta baseline
+        self.disk_reader.device = self.disk_reader._detect_device()
         dprint(f"Started measurement {self.measurement_id}")
         return self.measurement_id
 
@@ -671,11 +687,15 @@ class EnergyEngine:
         ):
             interrupt_samples = self.scheduler.stop_interrupt_sampling()
             logger.debug(f"Collected {len(interrupt_samples)} interrupt samples")
+            io_samples        = list(self._io_samples)
+            self._io_samples  = []
+
 
         # ====================================================================
         # Store samples in instance for later access by harness
         # ====================================================================
         self.last_interrupt_samples = interrupt_samples
+        self.last_io_samples        = io_samples if 'io_samples' in locals() else []
         self.last_samples = samples
         # Optional: separate by type if samples have type field
         self.last_energy_samples = []
@@ -922,6 +942,7 @@ class EnergyEngine:
             scheduler_metrics=scheduler_delta,
             # High-frequency samples
             samples=samples,
+            io_samples=self.last_io_samples,
             # Actual sampling rate
             sampling_rate_hz=actual_sampling_rate,
             # MSR metrics

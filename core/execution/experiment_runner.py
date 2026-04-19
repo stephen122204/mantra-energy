@@ -37,6 +37,9 @@ if str(project_root) not in sys.path:
 from core.config_loader import ConfigLoader
 from core.database.manager import DatabaseManager
 from core.models.baseline_measurement import BaselineMeasurement
+from core.utils.provenance import record_run_provenance
+from scripts.etl.phase_attribution_etl import process_run_async
+from scripts.etl.aggregate_hardware_metrics import aggregate_async
 
 
 class ExperimentRunner:
@@ -605,6 +608,8 @@ class ExperimentRunner:
         with db.transaction():
             # Insert linear run
             linear_id = db.insert_run(exp_id, hw_id, linear_result)
+            record_run_provenance(db, linear_id, linear_result,
+                      reader_mode=linear_result.get("reader_mode"))
 
             # Linear energy samples
             if "energy_samples" in linear_result:
@@ -635,6 +640,8 @@ class ExperimentRunner:
                 db.insert_interrupt_samples(
                     linear_id, linear_result["interrupt_samples"]
                 )
+            if "io_samples" in linear_result:
+                db.insert_io_samples(linear_id, linear_result["io_samples"])    
 
             # Save thermal samples
             if "thermal_samples" in linear_result:
@@ -653,6 +660,8 @@ class ExperimentRunner:
 
             # Insert agentic run
             agentic_id = db.insert_run(exp_id, hw_id, agentic_result)
+            record_run_provenance(db, agentic_id, agentic_result,
+                      reader_mode=agentic_result.get("reader_mode"))
 
             # Agentic energy samples
             if "energy_samples" in agentic_result:
@@ -683,6 +692,8 @@ class ExperimentRunner:
                 db.insert_interrupt_samples(
                     agentic_id, agentic_result["interrupt_samples"]
                 )
+            if "io_samples" in agentic_result:
+                db.insert_io_samples(agentic_id, agentic_result["io_samples"])    
 
             if "thermal_samples" in agentic_result:
                 db.insert_thermal_samples(agentic_id, agentic_result["thermal_samples"])
@@ -780,4 +791,8 @@ class ExperimentRunner:
         print(
             f"   ✅ Pair {rep_num} saved (linear: {linear_id}, agentic: {agentic_id})"
         )
+
+        process_run_async(agentic_id) # Chunk 5: async phase attribution ETL
+        aggregate_async(agentic_id)     # Chunk 12: async hardware metrics aggregation
+        aggregate_async(linear_id)      # Chunk 12: aggregate linear run too
         return linear_id, agentic_id

@@ -1,0 +1,13 @@
+method_id: sensors_voltage
+references:
+  - title: "Linux Hardware Monitoring (hwmon) sysfs interface"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Defines /sys/class/hwmon/hwmon*/in*_input millivolt format. Value / 1000 = Volts."
+
+  - title: "lm-sensors documentation"
+    authors: "lm-sensors project"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Hardware sensor naming conventions and hwmon driver mapping."

@@ -71,8 +71,10 @@ def process_energy_samples(energy_engine) -> tuple:
         logger.debug(
             f"📊 Processed {len(energy_samples)} energy samples, {len(interrupt_samples)} interrupt samples"
         )
-
-    return energy_samples, interrupt_samples
+    io_samples = []
+    if hasattr(energy_engine, "last_io_samples"):
+        io_samples = energy_engine.last_io_samples
+    return energy_samples, interrupt_samples, io_samples
 
 
 def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list:
@@ -160,7 +162,20 @@ def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list
                     sample["extra_metrics_json"] = json.dumps(extra) if extra else "{}"
 
                 cpu_samples.append(sample)
-
+        # Chunk 12: inject perf cache counters into each sample
+        # perf gives run-total counts — divide evenly across samples
+        if cpu_samples and hasattr(raw_energy, "perf") and raw_energy.perf:
+            n = len(cpu_samples)
+            perf = raw_energy.perf
+            l1d = getattr(perf, "l1d_cache_misses", 0) // n
+            l2  = getattr(perf, "l2_cache_misses",  0) // n
+            l3h = getattr(perf, "l3_cache_hits",    0) // n
+            l3m = getattr(perf, "l3_cache_misses",  0) // n
+            for s in cpu_samples:
+                s["l1d_cache_misses"] = l1d
+                s["l2_cache_misses"]  = l2
+                s["l3_cache_hits"]    = l3h
+                s["l3_cache_misses"]  = l3m 
             logger.debug(
                 f"📊 Extracted {len(cpu_samples)} CPU samples with {len(canonical_metrics)} canonical metrics"
             )

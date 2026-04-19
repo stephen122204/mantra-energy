@@ -156,8 +156,10 @@ class SamplesRepository:
                     package_power, dram_power,
                     gpu_rc6,
                     package_temp, ipc,
-                    extra_metrics_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    extra_metrics_json,
+                    l1d_cache_misses, l2_cache_misses,l3_cache_hits, l3_cache_misses
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ? )
                 """,
                 (
                     run_id,
@@ -182,8 +184,41 @@ class SamplesRepository:
                     s.get("package_temp"),
                     s.get("ipc"),
                     s.get("extra_metrics_json"),
+                    s.get("l1d_cache_misses"),
+                    s.get("l2_cache_misses"),
+                    s.get("l3_cache_hits"),
+                    s.get("l3_cache_misses"),                    
                 ),
             )
+    # =========================================================================
+    # IO SAMPLES — /proc/stat interrupts + CPU ticks
+    # =========================================================================
+    def insert_io_samples(self, run_id: int, samples: list) -> None:
+        """Insert disk I/O samples from DiskReader."""
+        if not samples:
+            return
+        query = """
+            INSERT INTO io_samples (
+                run_id, sample_start_ns, sample_end_ns, interval_ns,
+                device, disk_read_bytes, disk_write_bytes,
+                io_block_time_ms, disk_latency_ms,
+                minor_page_faults, major_page_faults
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        for s in samples:
+            self.db.conn.execute(query, (
+                run_id,
+                s.get("sample_start_ns"),
+                s.get("sample_end_ns"),
+                s.get("interval_ns"),
+                s.get("device"),
+                s.get("disk_read_bytes"),
+                s.get("disk_write_bytes"),
+                s.get("io_block_time_ms"),
+                s.get("disk_latency_ms"),
+                s.get("minor_page_faults"),
+                s.get("major_page_faults"),
+            ))
 
     # =========================================================================
     # INTERRUPT SAMPLES — /proc/stat interrupts + CPU ticks
@@ -227,8 +262,10 @@ class SamplesRepository:
                 interrupts_per_sec,
                 interrupts_raw,
                 user_ticks_start,   user_ticks_end,
-                system_ticks_start, system_ticks_end
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                system_ticks_start, system_ticks_end,
+                total_ticks_start,  total_ticks_end,
+                proc_ticks_start,   proc_ticks_end
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         for s in samples:
@@ -246,6 +283,10 @@ class SamplesRepository:
                     s.get("user_ticks_end"),
                     s.get("system_ticks_start"),
                     s.get("system_ticks_end"),
+                    s.get("total_ticks_start"),
+                    s.get("total_ticks_start"),
+                    s.get("proc_ticks_start"),
+                    s.get("proc_ticks_end"),
                 ),
             )
 

@@ -56,6 +56,9 @@ nav:
     - Table Details: developer-guide/14-database-tables.md
     - Auto-Registration & PageRenderer: developer-guide/15-auto-registration.md
 
+    - Compliance:
+      - Developer Compliance Guide: compliance/COMPLIANCE.md
+
     
   - Research:
     - Measurement Methodology: research/01-measurement-methodology.md
@@ -63,6 +66,11 @@ nav:
     - Orchestration Tax: research/03-orchestration-tax.md
     - Publications: research/04-publications.md
     - LLM Measurement Methodology: research/05-llm-measurement-methodology.md
+    - Energy Reader Methodology: research/07-energy-readers-methodology.md
+    - System Measurement Methodology: research/08-system-measurement-methodology.md
+    - Derived Metrics Methodology: research/09-derived-metrics-methodology.md
+    - Provenance & Research Value: research/10-provenance-research-value.md
+    - Phase Attribution: research/11-phase-attribution-developer-guide.md
   
   - API Reference: 
     - Overview: api/reference.md

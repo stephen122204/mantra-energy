@@ -1,0 +1,27 @@
+# config/methodology_refs/idle_baseline_cpu_pinning_2sigma.yaml
+# =============================================================================
+# References for: Idle Baseline with CPU Pinning and 2-Sigma
+# method_id: idle_baseline_cpu_pinning_2sigma
+# =============================================================================
+
+- ref_type: paper
+  title: "A-LEMS: Agent vs Linear Energy Measurement Platform"
+  authors: "Sangha, A. et al."
+  year: 2025
+  venue: "arXiv:2509.09991"
+  doi: "10.48550/arXiv.2509.09991"
+  url: "https://arxiv.org/abs/2509.09991"
+  relevance: "Section 3.2 describes 2-sigma idle baseline with CPU pinning"
+  cited_text: "Minimum baseline = max(0, mean - 2*std) over 30s idle period"
+  page_or_section: "Section 3.2"
+
+- ref_type: standard
+  title: "SPEC Power Measurement Methodology"
+  authors: "Standard Performance Evaluation Corporation"
+  year: 2022
+  venue: "SPEC"
+  doi: null
+  url: "https://www.spec.org/power_ssj2008/docs/SPECpower_ssj2008-User_Guide.pdf"
+  relevance: "Idle baseline measurement protocol — industry standard reference"
+  cited_text: null
+  page_or_section: "Section 3"

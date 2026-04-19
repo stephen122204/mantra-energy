@@ -166,7 +166,37 @@ class ReaderFactory:
 
         # macOS / Windows / ARM without thermal zones — stub
         return cls._make_dummy_thermal(config)
-
+    
+    @classmethod
+    def get_disk_reader(
+        cls,
+        config: dict = None,
+        caps: Optional[PlatformCapabilities] = None,
+    ):
+        """
+        Return correct disk I/O reader for current platform.
+ 
+        Linux  → DiskReader (/proc/diskstats)
+        macOS  → IOKitDiskReader (stub until Chunk 1.1)
+        Other  → FallbackDiskReader (returns None)
+ 
+        Args:
+            config: hw_config dict — used for disk_device override.
+            caps:   PlatformCapabilities override for testing.
+        """
+        caps   = caps or get_platform_capabilities()
+        config = config or {}
+ 
+        if caps.os == "Linux":
+            from core.readers.disk_reader import DiskReader
+            return DiskReader(config=config, pid=0)
+ 
+        if caps.os == "Darwin":
+            from core.readers.darwin.disk_reader import IOKitDiskReader
+            return IOKitDiskReader(config=config, pid=0)
+ 
+        from core.readers.fallback.disk_reader import FallbackDiskReader
+        return FallbackDiskReader(config=config, pid=0)
     # ------------------------------------------------------------------
     # PRIVATE FACTORY HELPERS — one per concrete reader type
     # Each helper isolates the import so unneeded readers are never

@@ -79,13 +79,20 @@ class RawEnergyMeasurement:
     )
     # Sampling data
     samples: List[tuple] = field(default_factory=list)
+    io_samples:        list        = field(default_factory=list)  # Chunk 12
     sampling_rate_hz: float = 0.0
 
     # Thermal samples (1Hz)
     thermal_samples: List[Tuple[float, Dict, bool]] = field(default_factory=list)
 
     # Additional context
+    # Additional context
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # Chunk 9: provenance buffer — staged capture entries before run_id known.
+    # Flushed to DB by experiment_runner after insert_run() returns real run_id.
+    # Never serialised — runtime only, not stored in to_dict() or to_json().
+    _provenance_buffer: List[Dict] = field(default_factory=list, repr=False)
 
     def __post_init__(self):
         """Validate raw data (but NEVER modify it)."""

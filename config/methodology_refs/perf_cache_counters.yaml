@@ -1,0 +1,13 @@
+method_id: perf_cache_counters
+references:
+  - title: "perf_event_open(2) — Linux Programmer's Manual"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Defines hardware PMU events for L1d, L2, L3 cache miss counters via perf_event_open syscall."
+
+  - title: "Intel 64 and IA-32 Architectures Software Developer's Manual Vol 3B"
+    authors: "Intel Corporation"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Section 18 — Performance Monitoring. Defines cache event semantics and availability per microarchitecture."

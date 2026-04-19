@@ -26,7 +26,8 @@ from typing import Any, Dict, List, Optional
 
 from .base import DatabaseInterface
 from .factory import DatabaseFactory
-from .repositories import (EventsRepository, RunsRepository, SamplesRepository,
+from .repositories import (EventsRepository, MethodologyRepository,
+                           RunsRepository, SamplesRepository,
                            TaxRepository, ThermalRepository)
 
 
@@ -73,6 +74,7 @@ class DatabaseManager:
         self.samples = SamplesRepository(self.db)
         self.tax = TaxRepository(self.db)
         self.thermal = ThermalRepository(self.db)
+        self.methodology = MethodologyRepository(self.db)
 
     def _connect(self) -> None:
         """Create database adapter and establish connection."""
@@ -165,6 +167,10 @@ class DatabaseManager:
         """Insert interrupt samples."""
         self.samples.insert_interrupt_samples(run_id, samples)
 
+    def insert_io_samples(self, run_id, samples):
+        """Delegate io_samples insert to SamplesRepository."""
+        self.samples.insert_io_samples(run_id, samples)
+        
     def create_tax_summaries(self, exp_id: int) -> None:
         """Create tax summaries for an experiment."""
         self.tax.create_tax_summaries(exp_id)

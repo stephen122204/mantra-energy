@@ -1,0 +1,31 @@
+# config/methodology_refs/rapl_msr_pkg_energy.yaml
+# =============================================================================
+# References for: RAPL MSR Direct Package Energy
+# method_id: rapl_msr_pkg_energy
+# =============================================================================
+# Human written. One file per method_id.
+# Seed script reads this → inserts into method_references table.
+# Edit when: new paper published, new standard cited, citation corrected.
+# =============================================================================
+
+- ref_type: datasheet
+  title: "Intel 64 and IA-32 Architectures Software Developer Manual"
+  authors: "Intel Corporation"
+  year: 2023
+  venue: "Intel"
+  doi: null
+  url: "https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html"
+  relevance: "Volume 3B Section 14.9 — RAPL MSR registers and energy units"
+  cited_text: "MSR_PKG_ENERGY_STATUS (0x611) accumulates energy in 15.3 µJ units"
+  page_or_section: "Vol 3B 14-39"
+
+- ref_type: paper
+  title: "A-LEMS: Agent vs Linear Energy Measurement Platform"
+  authors: "Sangha, A. et al."
+  year: 2025
+  venue: "arXiv:2509.09991"
+  doi: "10.48550/arXiv.2509.09991"
+  url: "https://arxiv.org/abs/2509.09991"
+  relevance: "Section 3.2 describes RAPL direct measurement at 100 Hz"
+  cited_text: "Package energy sampled at 100 Hz via MSR 0x611"
+  page_or_section: "Section 3.2"

@@ -29,6 +29,7 @@ Author: Deepak Panigrahy
 import logging
 import time
 from typing import Dict, List
+from core.utils.formula import formula
 
 from core.readers.interfaces import EnergyReaderABC
 
@@ -53,7 +54,16 @@ class IOKitPowerReader(EnergyReaderABC):
         _cumulative_uj  (dict):  accumulated energy per domain since init
         _warned         (bool):  throttle flag for stub warning log
     """
-
+    # ------------------------------------------------------------------
+    # Methodology attributes — read by scripts/seed_methodology.py
+    # ------------------------------------------------------------------
+    METHOD_ID          = "iokit_power_reader"
+    METHOD_NAME        = "IOKit Power Reader (macOS)"
+    METHOD_LAYER       = "silicon"
+    METHOD_CONFIDENCE  = 0.5
+    METHOD_PROVENANCE  = "MEASURED"
+    METHOD_PARAMS      = {"source": "IOKit HID", "conversion": "W_to_uJ", "stub": True}
+    FALLBACK_METHOD_ID = "ml_energy_estimator"
     # Domain names to match the energy model expected by the rest of the system
     DOMAINS = ["package-0", "core"]
 
@@ -78,7 +88,14 @@ class IOKitPowerReader(EnergyReaderABC):
     # ------------------------------------------------------------------
     # EnergyReaderABC implementation
     # ------------------------------------------------------------------
-
+    @formula(
+        latex=r"E_{pkg} = \sum_{i} P_i \cdot \Delta t_i \times 10^6",
+        variables={
+            "E_pkg":    "Cumulative package energy µJ",
+            "P_i":      "Instantaneous power in watts from IOKit",
+            "Delta_t_i":"Elapsed seconds since last read",
+        }
+    )
     def read_energy_uj(self) -> Dict[str, int]:
         """
         Return cumulative energy in microjoules since initialisation.

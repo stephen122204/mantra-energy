@@ -75,6 +75,12 @@ from core.execution.sample_processor import (calculate_thermal_metrics,
 from core.sustainability.calculator import SustainabilityCalculator
 from core.utils.baseline_manager import BaselineManager
 from core.utils.debug import dprint
+import os
+from core.utils.proc_reader import (
+read_total_cpu_ticks,
+read_process_cpu_ticks,
+compute_cpu_fraction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +257,10 @@ class ExperimentHarness:
         run_start_dt = datetime.now()  # Human-readable start time
         run_start_perf = time.perf_counter()  # High-precision for duration
         self.energy_engine.start_measurement()
+        _pid               = os.getpid()
+        _total_ticks_start = read_total_cpu_ticks()
+        _pid_ticks_start   = read_process_cpu_ticks(_pid)
+        self.energy_engine.set_workload_pid(_pid)  # Chunk 5: pass PID to interrupt sampler        
         exec_result = executor.execute(prompt)
         raw_energy = (
             self.energy_engine.stop_measurement()
@@ -328,7 +338,7 @@ class ExperimentHarness:
         # ====================================================================
         # Get samples from energy engine
         # ====================================================================
-        energy_samples, interrupt_samples = process_energy_samples(self.energy_engine)
+        energy_samples, interrupt_samples, io_samples = process_energy_samples(self.energy_engine)
         cpu_samples = process_cpu_samples(raw_energy, canonical_metrics, store_extra)
         # Process thermal samples
         thermal_samples = []
@@ -495,6 +505,12 @@ class ExperimentHarness:
                     derived.dram_energy_uj if hasattr(derived, "dram_energy_uj") else 0
                 ),
                 "idle_energy_uj": derived.idle_energy_uj,
+                "dynamic_energy_uj":     derived.workload_energy_uj,
+                "pid":                   _pid,
+                "cpu_fraction":          compute_cpu_fraction(read_process_cpu_ticks(_pid) - _pid_ticks_start, read_total_cpu_ticks() - _total_ticks_start),
+                "attributed_energy_uj":  int(compute_cpu_fraction(read_process_cpu_ticks(_pid) - _pid_ticks_start, read_total_cpu_ticks() - _total_ticks_start) * max(derived.workload_energy_uj, 0)),                
+                "baseline_energy_uj":    derived.idle_energy_uj,
+                "avg_power_watts":       derived.workload_energy_uj / max(1, derived.duration_seconds) / 1_000_000,
                 "orchestration_tax_uj": derived.orchestration_tax_uj,
                 "cycles": derived.cycles,
                 "ipc": derived.ipc,
@@ -599,6 +615,7 @@ class ExperimentHarness:
                 "task_id": task_id,
                 "country_code": country_code,
                 "workflow_type": "linear",
+                "reader_mode": self.energy_engine.energy_reader.METHOD_PROVENANCE,
                 # ====================================================================
                 # TARGETS (what we want to predict)
                 # ====================================================================
@@ -609,6 +626,7 @@ class ExperimentHarness:
             "energy_samples": energy_samples,
             "cpu_samples": cpu_samples,
             "interrupt_samples": interrupt_samples,
+            "io_samples":        io_samples,
             "thermal_samples": thermal_samples,
             "harness_timestamp": datetime.now().isoformat(),
             "scientific_notes": {
@@ -700,6 +718,10 @@ class ExperimentHarness:
         run_start_dt = datetime.now()  # Human-readable start time
         run_start_perf = time.perf_counter()  # High-precision for duration
         self.energy_engine.start_measurement()
+        _pid               = os.getpid()
+        _total_ticks_start = read_total_cpu_ticks()
+        _pid_ticks_start   = read_process_cpu_ticks(_pid)
+        self.energy_engine.set_workload_pid(_pid)  # Chunk 5: pass PID to interrupt sampler        
         exec_result = executor.execute_comparison(task)
         raw_energy = (
             self.energy_engine.stop_measurement()
@@ -753,7 +775,7 @@ class ExperimentHarness:
             except Exception as e:
                 dprint(f"⚠️ Failed to load override file: {e}")
 
-        energy_samples, interrupt_samples = process_energy_samples(self.energy_engine)
+        energy_samples, interrupt_samples, io_samples = process_energy_samples(self.energy_engine)
         cpu_samples = process_cpu_samples(raw_energy, canonical_metrics, store_extra)
 
         # Process thermal samples
@@ -949,6 +971,12 @@ class ExperimentHarness:
                     derived.dram_energy_uj if hasattr(derived, "dram_energy_uj") else 0
                 ),
                 "idle_energy_uj": derived.idle_energy_uj,
+                "dynamic_energy_uj":     derived.workload_energy_uj,
+                "pid":                   _pid,
+                "cpu_fraction":          compute_cpu_fraction(read_process_cpu_ticks(_pid) - _pid_ticks_start, read_total_cpu_ticks() - _total_ticks_start),
+                "attributed_energy_uj":  int(compute_cpu_fraction(read_process_cpu_ticks(_pid) - _pid_ticks_start, read_total_cpu_ticks() - _total_ticks_start) * max(derived.workload_energy_uj, 0)),                
+                "baseline_energy_uj":    derived.idle_energy_uj,
+                "avg_power_watts":       derived.workload_energy_uj / max(1, derived.duration_seconds) / 1_000_000,
                 "orchestration_tax_uj": derived.orchestration_tax_uj,
                 "cycles": derived.cycles,
                 "ipc": derived.ipc,
@@ -1092,6 +1120,7 @@ class ExperimentHarness:
                 "task_id": task_id,
                 "country_code": country_code,
                 "workflow_type": "agentic",
+                "reader_mode": self.energy_engine.energy_reader.METHOD_PROVENANCE,
                 # ====================================================================
                 # TARGETS
                 # ====================================================================
@@ -1103,6 +1132,7 @@ class ExperimentHarness:
             "energy_samples": energy_samples,
             "cpu_samples": cpu_samples,
             "interrupt_samples": interrupt_samples,
+            "io_samples":        io_samples,
             "thermal_samples": thermal_samples,
             "harness_timestamp": datetime.now().isoformat(),
             "scientific_notes": {

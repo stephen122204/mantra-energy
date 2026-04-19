@@ -1,0 +1,118 @@
+# config/methodology_docs.yaml
+# =============================================================================
+# METHODOLOGY DOCS MAP — Single source of truth
+# =============================================================================
+# Maps method_id → (doc_file, section_keyword)
+#
+# IMPORTANT: Section headings in docs MUST match section keyword here.
+# Use dedicated methodology docs (07-09) — NOT general research docs (01-05).
+# Dedicated docs have stable headings. General docs change frequently.
+# =============================================================================
+
+docs_base: "docs-src/mkdocs/source/research"
+
+methods:
+
+  # ── Energy Readers ──────────────────────────────────────────────────────────
+
+  rapl_msr_pkg_energy:
+    doc: "07-energy-readers-methodology.md"
+    section: "RAPL Energy Measurement"
+
+  iokit_power_reader:
+    doc: "07-energy-readers-methodology.md"
+    section: "IOKit Power Reader"
+
+  ml_energy_estimator:
+    doc: "07-energy-readers-methodology.md"
+    section: "Estimator"
+
+  dummy_energy_reader:
+    doc: "07-energy-readers-methodology.md"
+    section: "Dummy Energy Reader"
+
+  # ── System Measurement ──────────────────────────────────────────────────────
+
+  perf_counters:
+    doc: "08-system-measurement-methodology.md"
+    section: "Performance Counter Methodology"
+
+  thermal_sensor:
+    doc: "08-system-measurement-methodology.md"
+    section: "Thermal Measurement"
+
+  msr_reader:
+    doc: "08-system-measurement-methodology.md"
+    section: "C-State Measurement"
+
+  turbostat_reader:
+    doc: "08-system-measurement-methodology.md"
+    section: "Turbostat CPU Frequency Reader"
+
+  os_scheduler_reader:
+    doc: "08-system-measurement-methodology.md"
+    section: "OS Scheduler Measurement"
+
+  os_memory_reader:
+    doc: "08-system-measurement-methodology.md"
+    section: "OS Memory Measurement"
+
+  network_measurement:
+    doc: "08-system-measurement-methodology.md"
+    section: "Network Measurement"
+
+  system_clock:
+    doc: "08-system-measurement-methodology.md"
+    section: "System Wall Clock"
+
+  # ── Derived Metrics ─────────────────────────────────────────────────────────
+
+  ttft_tpot_wall_clock:
+    doc: "09-derived-metrics-methodology.md"
+    section: "LLM Timing Measurement"
+
+  dynamic_energy_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Dynamic Energy Calculation"
+
+  ipc_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "IPC Calculation"
+
+  cache_miss_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Cache Miss Rate Calculation"
+
+  efficiency_metrics_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Energy Efficiency Metrics"
+
+  orchestration_tax_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Orchestration Tax Calculation"
+
+  complexity_score_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Orchestration Complexity Score"
+
+  carbon_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Carbon Emission Calculation"
+
+  water_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Water Consumption Calculation"
+
+  methane_calculation:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Methane Emission Calculation"
+
+  # ── Baseline ────────────────────────────────────────────────────────────────
+
+  idle_baseline_cpu_pinning_2sigma:
+    doc: "01-measurement-methodology.md"
+    section: "Idle Baseline Methodology"
+
+  cpu_fraction_attribution:
+    doc: "09-derived-metrics-methodology.md"
+    section: "Dynamic Energy Calculation"

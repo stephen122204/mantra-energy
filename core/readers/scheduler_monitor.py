@@ -255,7 +255,7 @@ class SchedulerMonitor:
 
         return swap_metrics
 
-    def start_interrupt_sampling(self):
+    def start_interrupt_sampling(self, pid: int = 0):
         """Start collecting interrupt samples."""
         self._interrupt_sampling_active = True
         self._interrupt_samples = []
@@ -268,7 +268,9 @@ class SchedulerMonitor:
         self._start_monotonic_ns = start_mono
         self._start_epoch_ns = start_epoch
         self._last_sample_time_ns = start_mono
+        self._pid = pid
         self._last_ticks = self._read_cpu_ticks()
+        self._last_proc_ticks = self._read_proc_ticks(pid) if pid else 0
 
         logger.debug(
             f"Interrupt sampling started - epoch: {start_epoch}, mono: {start_mono}"
@@ -315,6 +317,17 @@ class SchedulerMonitor:
  
         return {"user": 0, "system": 0, "idle": 0, "total": 0}
 
+    def _read_proc_ticks(self, pid: int) -> int:
+        """Read utime+stime from /proc/[pid]/stat. Returns 0 on failure."""
+        if not pid:
+            return 0
+        try:
+            with open(f"/proc/{pid}/stat") as f:
+                parts = f.read().split()
+            return int(parts[13]) + int(parts[14])  # utime + stime
+        except Exception:
+            return 0
+        
     def reset_interrupt_samples(self):
         """Clear interrupt samples buffer for new run."""
         self._interrupt_samples = []
@@ -384,7 +397,8 @@ class SchedulerMonitor:
             # Compute deltas against last sample
             # --------------------------------------------------------
             time_delta_s   = (sample_start_ns - self._last_sample_time_ns) / 1e9
- 
+
+            current_proc_ticks = self._read_proc_ticks(self._pid) if self._pid else 0
             if time_delta_s > 0:
                 interrupts_raw = current_interrupts - self._last_interrupt_counts
                 rate           = interrupts_raw / time_delta_s
@@ -394,6 +408,7 @@ class SchedulerMonitor:
                 user_end     = current_ticks.get("user",      0)
                 system_start = self._last_ticks.get("system", 0)
                 system_end   = current_ticks.get("system",    0)
+                
  
                 logger.debug("INTERRUPT RATE: %.2f IRQ/s", rate)
  
@@ -412,6 +427,10 @@ class SchedulerMonitor:
                     "user_ticks_end":     user_end,
                     "system_ticks_start": system_start,
                     "system_ticks_end":   system_end,
+                    "total_ticks_start":  self._last_ticks.get("total", 0),
+                    "total_ticks_end":    current_ticks.get("total", 0),
+                    "proc_ticks_start":   self._last_proc_ticks,
+                    "proc_ticks_end":     current_proc_ticks,
                 })
  
         # --------------------------------------------------------
@@ -420,6 +439,7 @@ class SchedulerMonitor:
         self._last_interrupt_counts = current_interrupts
         self._last_sample_time_ns   = sample_start_ns   # use start for consistency
         self._last_ticks            = current_ticks
+        self._last_proc_ticks       = current_proc_ticks
 
     def stop_interrupt_sampling(self) -> list:
         """Stop and return interrupt samples."""

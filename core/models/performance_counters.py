@@ -51,6 +51,18 @@ class PerformanceCounters:
 
     cache_misses: int = 0
     """Number of cache misses (LLC misses)."""
+    
+    l1d_cache_misses: int = 0
+    """L1 data cache load misses from perf L1-dcache-load-misses."""
+
+    l2_cache_misses: int = 0
+    """L2 cache misses from perf l2_rqsts.miss."""
+
+    l3_cache_hits: int = 0
+    """L3 cache hits from perf LLC-loads."""
+
+    l3_cache_misses: int = 0
+    """L3 cache misses from perf LLC-load-misses."""    
 
     # ===== Req 1.10: Memory pressure =====
     major_page_faults: int = 0
