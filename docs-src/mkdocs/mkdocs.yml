@@ -55,6 +55,8 @@ nav:
     - Sync & Backload Operations: developer-guide/13-sync-operations.md
     - Table Details: developer-guide/14-database-tables.md
     - Auto-Registration & PageRenderer: developer-guide/15-auto-registration.md
+    - Platform detection: developer-guide/18-platform-detection.md
+    - Energy Attribution and Normalization: developer-guide/19-attribution-developer-guide.md
 
     - Compliance:
       - Developer Compliance Guide: compliance/COMPLIANCE.md

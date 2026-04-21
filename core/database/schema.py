@@ -238,6 +238,29 @@ CREATE TABLE IF NOT EXISTS runs (
     disk_read_bytes_total   BIGINT,  -- Chunk 12: SUM from io_samples
     disk_write_bytes_total  BIGINT,
     voltage_vcore_avg       REAL,     -- Chunk 12: AVG from thermal_samples
+    -- ── v9: Measurement Boundary (Duration Fix) ──────────────────────────────
+    -- Separates task execution time from A-LEMS instrumentation overhead.
+    -- Core principle: "A-LEMS measures execution energy, not instrumentation energy"
+    --
+    -- task_duration_ns: t1-t0 — executor time only — canonical energy denominator
+    task_duration_ns              INTEGER,
+    -- framework_overhead_ns: t2-t1 — stop_measurement + post-processing cost
+    framework_overhead_ns         INTEGER,
+    -- total_run_duration_ns: t2-t0 — full wall clock (= legacy duration_ns)
+    total_run_duration_ns         INTEGER,
+    -- duration_includes_overhead: 1=historical run, 0=corrected new run
+    duration_includes_overhead    INTEGER DEFAULT 1,
+    -- energy_sample_coverage_pct: sample_span/task_duration × 100
+    -- gold ≥95%, acceptable 80-95%, poor <80%
+    energy_sample_coverage_pct    REAL,
+    -- avg_task_power_watts: pkg_energy / task_duration (correct power denominator)
+    avg_task_power_watts          REAL,
+    -- pre_task_energy_uj: RAPL delta during pre-task context reads (diagnostic only)
+    -- NULL on non-RAPL platforms (macOS, ARM VM) — PAC compliant
+    -- NOT part of attribution model — A-LEMS instrumentation overhead
+    pre_task_energy_uj            INTEGER,
+    -- pre_task_duration_ns: wall time from first pre-task read to run_start_perf
+    pre_task_duration_ns          INTEGER,    
 
     FOREIGN KEY(exp_id) REFERENCES experiments(exp_id),
     FOREIGN KEY(hw_id) REFERENCES hardware_config(hw_id),
@@ -893,6 +916,159 @@ CREATE TABLE IF NOT EXISTS io_samples (
     FOREIGN KEY (run_id) REFERENCES runs(run_id)
 );
 """
+CREATE_ENERGY_ATTRIBUTION = """
+CREATE TABLE IF NOT EXISTS energy_attribution (
+    run_id                          INTEGER PRIMARY KEY,
+    pkg_energy_uj                   BIGINT,
+    core_energy_uj                  BIGINT,
+    dram_energy_uj                  BIGINT,
+    uncore_energy_uj                BIGINT,
+    background_energy_uj            BIGINT,
+    interrupt_energy_uj             BIGINT,
+    scheduler_energy_uj             BIGINT,
+    network_wait_energy_uj          BIGINT,
+    io_wait_energy_uj               BIGINT,
+    disk_energy_uj                  BIGINT,
+    memory_pressure_energy_uj       BIGINT,
+    cache_dram_energy_uj            BIGINT,
+    orchestration_energy_uj         BIGINT,
+    planning_energy_uj              BIGINT,
+    execution_energy_uj             BIGINT,
+    synthesis_energy_uj             BIGINT,
+    tool_energy_uj                  BIGINT,
+    retry_energy_uj                 BIGINT,
+    failed_tool_energy_uj           BIGINT,
+    rejected_generation_energy_uj   BIGINT,
+    llm_compute_energy_uj           BIGINT,
+    prefill_energy_uj               BIGINT,
+    decode_energy_uj                BIGINT,
+    energy_per_completion_token_uj  REAL,
+    energy_per_successful_step_uj   REAL,
+    energy_per_accepted_answer_uj   REAL,
+    energy_per_solved_task_uj       REAL,
+    thermal_penalty_energy_uj       BIGINT,
+    thermal_penalty_time_ms         REAL,
+    unattributed_energy_uj          BIGINT,
+    attribution_coverage_pct        REAL,
+    attribution_model_version       TEXT DEFAULT 'v1',
+    llm_wait_energy_uj              BIGINT DEFAULT 0,
+    attribution_method              TEXT DEFAULT 'cpu_fraction_v1',
+    ml_model_version                TEXT DEFAULT NULL,
+    created_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_energy_attribution_run
+    ON energy_attribution(run_id);
+"""
+ 
+# =============================================================================
+# Chunk 6: Normalization Factors Table
+# =============================================================================
+ 
+CREATE_NORMALIZATION_FACTORS = """
+CREATE TABLE IF NOT EXISTS normalization_factors (
+    run_id                  INTEGER PRIMARY KEY,
+    difficulty_score        REAL,
+    difficulty_bucket       TEXT,
+    task_category           TEXT,
+    workload_type           TEXT,
+    max_step_depth          INTEGER,
+    branching_factor        REAL,
+    input_tokens            INTEGER,
+    output_tokens           INTEGER,
+    context_window_size     INTEGER,
+    total_work_units        REAL,
+    successful_goals        INTEGER,
+    attempted_goals         INTEGER,
+    failed_attempts         INTEGER,
+    retry_depth             INTEGER,
+    total_retries           INTEGER,
+    total_failures          INTEGER,
+    total_tool_calls        INTEGER,
+    failed_tool_calls       INTEGER,
+    hallucination_count     INTEGER,
+    hallucination_rate      REAL,
+    rss_memory_gb           REAL,
+    cache_miss_rate         REAL,
+    io_wait_ratio           REAL,
+    stall_time_ms           REAL,
+    sla_violations          INTEGER,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_normalization_factors_run
+    ON normalization_factors(run_id);
+CREATE INDEX IF NOT EXISTS idx_normalization_factors_difficulty
+    ON normalization_factors(difficulty_bucket, task_category);
+"""
+ 
+# =============================================================================
+# Chunk 6: Normalisation Views
+# =============================================================================
+ 
+CREATE_NORMALIZATION_VIEWS = """
+CREATE VIEW IF NOT EXISTS v_energy_normalized AS
+SELECT
+    a.run_id,
+    r.workflow_type,
+    r.complexity_level,
+    a.pkg_energy_uj  / 1e6 AS total_energy_j,
+    a.core_energy_uj / 1e6 AS compute_energy_j,
+    a.dram_energy_uj / 1e6 AS memory_energy_j,
+    (a.pkg_energy_uj - COALESCE(a.background_energy_uj, 0)) / 1e6 AS foreground_energy_j,
+    a.pkg_energy_uj / NULLIF(l.total_tokens, 0) AS energy_per_token_uj,
+    a.pkg_energy_uj / 1e6 / NULLIF(CAST(r.duration_ns AS REAL) / 1e9, 0) AS avg_power_watts,
+    a.orchestration_energy_uj / NULLIF(CAST(a.pkg_energy_uj AS REAL), 0) AS orchestration_ratio,
+    a.llm_compute_energy_uj / NULLIF(CAST(a.orchestration_energy_uj AS REAL), 0) AS compute_vs_overhead_ratio,
+    a.unattributed_energy_uj / NULLIF(CAST(a.pkg_energy_uj AS REAL), 0) AS unattributed_ratio,
+    a.attribution_coverage_pct,
+    a.energy_per_completion_token_uj,
+    a.energy_per_successful_step_uj,
+    a.energy_per_accepted_answer_uj,
+    a.energy_per_solved_task_uj,
+    a.thermal_penalty_energy_uj / 1e6 AS thermal_penalty_j,
+    a.thermal_penalty_time_ms,
+    r.duration_ns / 1e6 AS duration_ms,
+    l.total_tokens,
+    l.completion_tokens
+FROM energy_attribution a
+JOIN runs r ON a.run_id = r.run_id
+LEFT JOIN (
+    SELECT run_id, SUM(total_tokens) AS total_tokens,
+           SUM(completion_tokens) AS completion_tokens
+    FROM llm_interactions GROUP BY run_id
+) l ON a.run_id = l.run_id;
+ 
+CREATE VIEW IF NOT EXISTS v_attribution_summary AS
+SELECT
+    a.run_id,
+    r.workflow_type,
+    a.pkg_energy_uj          / 1e6  AS total_j,
+    a.core_energy_uj         / 1e6  AS compute_j,
+    a.dram_energy_uj         / 1e6  AS memory_j,
+    a.background_energy_uj   / 1e6  AS background_j,
+    a.network_wait_energy_uj / 1e6  AS network_j,
+    a.io_wait_energy_uj      / 1e6  AS io_j,
+    a.orchestration_energy_uj/ 1e6  AS orchestration_j,
+    a.planning_energy_uj     / 1e6  AS planning_j,
+    a.execution_energy_uj    / 1e6  AS execution_j,
+    a.synthesis_energy_uj    / 1e6  AS synthesis_j,
+    a.llm_compute_energy_uj  / 1e6  AS llm_compute_j,
+    a.thermal_penalty_energy_uj / 1e6 AS thermal_penalty_j,
+    a.unattributed_energy_uj / 1e6  AS unattributed_j,
+    ROUND(a.core_energy_uj          * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS compute_pct,
+    ROUND(a.dram_energy_uj          * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS memory_pct,
+    ROUND(a.background_energy_uj    * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS background_pct,
+    ROUND(a.orchestration_energy_uj * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS orchestration_pct,
+    ROUND(a.llm_compute_energy_uj   * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS application_pct,
+    ROUND(a.unattributed_energy_uj  * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS unattributed_pct,
+    a.attribution_coverage_pct,
+    a.attribution_model_version
+FROM energy_attribution a
+JOIN runs r ON a.run_id = r.run_id;
+"""
+
 
 # ========================================================================
 # View : ml_view - analytical view that flattens runs and llm_interactions for ML modeling
@@ -981,6 +1157,7 @@ CREATE TABLE IF NOT EXISTS measurement_method_registry (
     applicable_on         TEXT        DEFAULT '["any"]',
     fallback_method_id    TEXT,
     validated             INTEGER     DEFAULT 0,
+    confidence            REAL        DEFAULT 1.0,  -- confidence score 0.0-1.0
     validated_by          TEXT,
     validated_date        TEXT,
     active                INTEGER     DEFAULT 1,

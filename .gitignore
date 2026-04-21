@@ -104,3 +104,8 @@ core/.env
 config/hw_config.json.*
 reports/output/
 config/queue_state.yaml
+
+# Research paper drafts (local only)
+paper/
+*.tex
+*.pdf

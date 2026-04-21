@@ -1,0 +1,37 @@
+method_id: energy_attribution_v1
+references:
+  - title: "RAPL (Running Average Power Limit) Energy Reporting"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: "L0 hardware layer — RAPL MSR counters provide pkg/core/dram/uncore domain energy"
+
+  - title: "Linux /proc/stat and /proc/[pid]/stat Interface"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: "UCR computation — compute_time_ms vs duration_ms for application vs orchestration split"
+
+  - title: "Characterizing the Energy Consumption of LLM Inference"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: "Section 3 — Multi-layer attribution model design and validation"
+
+  - title: "Energy Proportional Computing"
+    authors: "Barroso, L.A., Hölzle, U."
+    year: 2007
+    ref_type: "paper"
+    relevance: "Background energy subtraction methodology — idle baseline isolation"
+
+  - title: "Power Management in Linux Kernel"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Thermal throttling detection — thermal_samples interval-weighted penalty model"
+
+  - title: "A-LEMS Orchestration Tax Methodology"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: "L3 workflow decomposition — orchestration vs application energy split"

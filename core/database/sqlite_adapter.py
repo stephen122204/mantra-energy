@@ -56,6 +56,9 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,
                      CREATE_AUDIT_LOG,
                      CREATE_PAGE_TEMPLATES,
                      CREATE_IO_SAMPLES,
+                     CREATE_ENERGY_ATTRIBUTION,
+                     CREATE_NORMALIZATION_FACTORS,
+                     CREATE_NORMALIZATION_VIEWS,
                      )
 
 
@@ -280,6 +283,9 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_AUDIT_LOG)
         self.conn.executescript(CREATE_PAGE_TEMPLATES)
         self.conn.executescript(CREATE_IO_SAMPLES)
+        self.conn.executescript(CREATE_ENERGY_ATTRIBUTION)
+        self.conn.executescript(CREATE_NORMALIZATION_FACTORS)
+        self.conn.executescript(CREATE_NORMALIZATION_VIEWS)        
 
         # Commit explicitly (DDL should be committed)
         self.conn.commit()

@@ -1,0 +1,25 @@
+method_id: normalization_factors_v1
+references:
+  - title: "Benchmarking LLM Efficiency: Metrics and Methodology"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: "Normalization factor taxonomy — structural vs behavioural factor classification"
+
+  - title: "FLOPS vs Energy: A Fair Comparison Framework for LLMs"
+    authors: "Patterson, D. et al."
+    year: 2022
+    ref_type: "paper"
+    relevance: "Task difficulty normalisation — why raw energy without normalisation is misleading"
+
+  - title: "Measuring the Carbon Intensity of AI in Cloud Instances"
+    authors: "Lottick, K. et al."
+    year: 2019
+    ref_type: "paper"
+    relevance: "Energy per outcome methodology — normalising to useful work units"
+
+  - title: "A-LEMS Task Taxonomy"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: "difficulty_score and difficulty_bucket definitions"

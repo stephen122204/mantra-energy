@@ -254,6 +254,19 @@ class RunsRepository:
         start_time_ns = ml.get("start_time_ns")
         end_time_ns = ml.get("end_time_ns")
         duration_ns = int(fields["duration_ms"] * 1_000_000)
+        # v9: task/framework duration in nanoseconds (harness provides seconds)
+        _task_dur_sec  = ml.get("task_duration_sec") or fields.get("task_duration_sec")
+        _fw_dur_sec    = ml.get("framework_overhead_sec") or fields.get("framework_overhead_sec")
+        _total_dur_sec = ml.get("total_run_duration_sec") or fields.get("total_run_duration_sec")
+        _pre_dur_sec   = ml.get("pre_task_duration_sec") or fields.get("pre_task_duration_sec")
+        task_duration_ns      = int(_task_dur_sec  * 1e9) if _task_dur_sec  else None
+        framework_overhead_ns = int(_fw_dur_sec    * 1e9) if _fw_dur_sec    else None
+        total_run_duration_ns = int(_total_dur_sec * 1e9) if _total_dur_sec else None
+        pre_task_duration_ns  = int(_pre_dur_sec   * 1e9) if _pre_dur_sec   else None
+        duration_includes_overhead = int(ml.get("duration_includes_overhead",
+                                         fields.get("duration_includes_overhead", 1)))
+        pre_task_energy_uj    = ml.get("pre_task_energy_uj")
+        # Fallback to old method if per-run timestamps missing
 
         # Fallback to old method if per-run timestamps missing
         if start_time_ns is None or end_time_ns is None:
@@ -316,7 +329,9 @@ class RunsRepository:
                 planning_energy_uj, execution_energy_uj, synthesis_energy_uj,
                 l1d_cache_misses_total, l2_cache_misses_total,l3_cache_hits_total,
                 l3_cache_misses_total, disk_read_bytes_total, disk_write_bytes_total,
-                voltage_vcore_avg
+                voltage_vcore_avg,
+                task_duration_ns, framework_overhead_ns, total_run_duration_ns,
+                duration_includes_overhead, pre_task_energy_uj, pre_task_duration_ns
 
             ) VALUES (
                 ?, ?, ?, ?, ?,
@@ -347,7 +362,8 @@ class RunsRepository:
                 ?, ?, ?, ?, ?,
                 ? , ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?,
+                ? , ?, ?, ?, ?, ?
             )
         """
 
@@ -462,7 +478,14 @@ class RunsRepository:
             None,  # l3_cache_misses_total — ETL populated
             None,  # disk_read_bytes_total — ETL populated
             None,  # disk_write_bytes_total — ETL populated
-            None,  # voltage_vcore_avg — ETL populated            
+            None,  # voltage_vcore_avg — ETL populated 
+            # v9: task/framework duration separation
+            task_duration_ns,               # task only — canonical denominator
+            framework_overhead_ns,          # A-LEMS post-processing cost
+            total_run_duration_ns,          # full wall clock (legacy compat)
+            duration_includes_overhead,     # 0=corrected, 1=historical
+            pre_task_energy_uj,             # diagnostic — NOT in attribution
+            pre_task_duration_ns,           # pre-task context reads time                   
         )
 
         try:

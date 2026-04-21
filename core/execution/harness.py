@@ -242,6 +242,12 @@ class ExperimentHarness:
         # ====================================================================
         # Capture system state BEFORE run (M3-1 through M3-6)
         # ====================================================================
+        # Capture RAPL and timestamp BEFORE pre-task instrumentation reads.
+        # This opens the diagnostic pre-task energy window.
+        # rapl.read_energy() returns None on non-RAPL platforms (PAC safe).
+        _rapl_before_pretask = self.energy_engine.rapl.read_energy()
+        _pre_task_start_perf = time.perf_counter()
+
         intr_before = _read_interrupts()
         temp_start = _read_temperature()
         governor = get_governor()
@@ -262,18 +268,22 @@ class ExperimentHarness:
         _pid_ticks_start   = read_process_cpu_ticks(_pid)
         self.energy_engine.set_workload_pid(_pid)  # Chunk 5: pass PID to interrupt sampler        
         exec_result = executor.execute(prompt)
+        # t1: task boundary — executor has returned, task is complete.
+        # Captured BEFORE stop_measurement() to exclude its cleanup overhead.
+        task_end_perf = time.perf_counter()
         raw_energy = (
             self.energy_engine.stop_measurement()
         )  # RawEnergyMeasurement (Layer 1)
-        if hasattr(raw_energy, 'perf'):
-            dprint(f"🔍 PERF DEBUG - raw_energy.perf: {raw_energy.perf}")
-            dprint(f"🔍 PERF DEBUG - minor_page_faults: {raw_energy.perf.minor_page_faults}")
-            dprint(f"🔍 PERF DEBUG - major_page_faults: {raw_energy.perf.major_page_faults}")
-        else:
-            dprint(f"🔍 PERF DEBUG - raw_energy has no 'perf' attribute")
-        run_end_dt = datetime.now()  # Human-readable end time
+        run_end_dt = datetime.now()   # t2: human-readable (post-framework)
         run_end_perf = time.perf_counter()
-        run_duration_sec = run_end_perf - run_start_perf
+        # task_duration = executor time only — canonical energy denominator
+        task_duration_sec = task_end_perf - run_start_perf
+        # framework_overhead = stop_measurement + post-processing cost
+        framework_overhead_sec = run_end_perf - task_end_perf
+        # pre_task_duration = time spent on context reads before measurement
+        pre_task_duration_sec = run_start_perf - _pre_task_start_perf
+        # legacy field kept for backward compat
+        run_duration_sec = task_duration_sec
 
         dprint(
             f"🔍 DEBUG EXECUTION TIME - Linear compute: {exec_result.get('execution_time_ms', 0)} ms"
@@ -495,8 +505,14 @@ class ExperimentHarness:
                 "end_time_ns": int(run_end_dt.timestamp() * 1_000_000_000),
                 "start_time_iso": run_start_dt.isoformat(),
                 "end_time_iso": run_end_dt.isoformat(),
-                "duration_sec": run_duration_sec,
-                "duration_ms": run_duration_sec * 1000,
+                "duration_sec": task_duration_sec,           # task only (corrected)
+                "duration_ms": task_duration_sec * 1000,
+                "task_duration_sec": task_duration_sec,
+                "framework_overhead_sec": framework_overhead_sec,
+                "total_run_duration_sec": run_end_perf - run_start_perf,
+                "pre_task_duration_sec": pre_task_duration_sec,
+                "rapl_before_pretask": _rapl_before_pretask,  # Dict or None
+                "duration_includes_overhead": 0,              # corrected run
                 "instructions": derived.instructions,
                 "pkg_energy_uj": derived.package_energy_uj,
                 "core_energy_uj": derived.core_energy_uj,
@@ -704,6 +720,11 @@ class ExperimentHarness:
         # ====================================================================
         # Capture system state BEFORE run (M3-1 through M3-6)
         # ====================================================================
+        # Capture RAPL and timestamp BEFORE pre-task instrumentation reads.
+        # This opens the diagnostic pre-task energy window.
+        # rapl.read_energy() returns None on non-RAPL platforms (PAC safe).
+        _rapl_before_pretask = self.energy_engine.rapl.read_energy()
+        _pre_task_start_perf = time.perf_counter()        
         intr_before = _read_interrupts()
         temp_start = _read_temperature()
         governor = get_governor()
@@ -723,19 +744,23 @@ class ExperimentHarness:
         _pid_ticks_start   = read_process_cpu_ticks(_pid)
         self.energy_engine.set_workload_pid(_pid)  # Chunk 5: pass PID to interrupt sampler        
         exec_result = executor.execute_comparison(task)
+        # t1: task boundary — agentic executor has returned, all phases complete.
+        # Captured BEFORE stop_measurement() to exclude its cleanup overhead.
+        task_end_perf = time.perf_counter()
         raw_energy = (
             self.energy_engine.stop_measurement()
         )  # RawEnergyMeasurement (Layer 1)
-        if hasattr(raw_energy, 'perf'):
-            dprint(f"🔍 PERF DEBUG - raw_energy.perf: {raw_energy.perf}")
-            dprint(f"🔍 PERF DEBUG - minor_page_faults: {raw_energy.perf.minor_page_faults}")
-            dprint(f"🔍 PERF DEBUG - major_page_faults: {raw_energy.perf.major_page_faults}")
-        else:
-            print(f"🔍 PERF DEBUG - raw_energy has no 'perf' attribute")
-
-        run_end_dt = datetime.now()  # Human-readable end time
+        run_end_dt = datetime.now()   # t2: human-readable (post-framework)
         run_end_perf = time.perf_counter()
-        run_duration_sec = run_end_perf - run_start_perf
+        # task_duration = executor time only — canonical energy denominator
+        task_duration_sec = task_end_perf - run_start_perf
+        # framework_overhead = stop_measurement + post-processing cost
+        framework_overhead_sec = run_end_perf - task_end_perf
+        # pre_task_duration = time spent on context reads before measurement
+        pre_task_duration_sec = run_start_perf - _pre_task_start_perf
+        # legacy field kept for backward compat
+        run_duration_sec = task_duration_sec
+ 
         # ====================================================================
         # DEBUG: Check what's available in energy_engine
         # ====================================================================
@@ -961,8 +986,14 @@ class ExperimentHarness:
                 "end_time_ns": int(run_end_dt.timestamp() * 1_000_000_000),
                 "start_time_iso": run_start_dt.isoformat(),
                 "end_time_iso": run_end_dt.isoformat(),
-                "duration_sec": run_duration_sec,
-                "duration_ms": run_duration_sec * 1000,
+                "duration_sec": task_duration_sec,           # task only (corrected)
+                "duration_ms": task_duration_sec * 1000,
+                "task_duration_sec": task_duration_sec,
+                "framework_overhead_sec": framework_overhead_sec,
+                "total_run_duration_sec": run_end_perf - run_start_perf,
+                "pre_task_duration_sec": pre_task_duration_sec,
+                "rapl_before_pretask": _rapl_before_pretask,  # Dict or None
+                "duration_includes_overhead": 0,              # corrected run
                 "instructions": derived.instructions,
                 "pkg_energy_uj": derived.package_energy_uj,
                 "core_energy_uj": derived.core_energy_uj,

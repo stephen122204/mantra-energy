@@ -154,6 +154,50 @@ echo ""
 echo "--- Display registry ---"
 MDR_COUNT=$(sqlite3 "$DB" "SELECT COUNT(*) FROM metric_display_registry;")
 check "Display registry rows (expect ≥90)" "$MDR_COUNT" "ge" 90
+# ── T9: Chunk 6 — Energy Attribution ─────────────────────────────────────────
+echo ""
+echo "--- Energy Attribution (Chunk 6) ---"
+ 
+ATTR_TABLE=$(sqlite3 "$DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='energy_attribution';")
+check "energy_attribution table exists (expect 1)" "$ATTR_TABLE" "eq" 1
+ 
+ATTR_ROWS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM energy_attribution;" 2>/dev/null || echo "0")
+check "energy_attribution rows (expect >0)" "$ATTR_ROWS" "gt" 0
+ 
+ATTR_COVERAGE=$(sqlite3 "$DB" "SELECT COUNT(*) FROM energy_attribution WHERE attribution_coverage_pct IS NOT NULL;" 2>/dev/null || echo "0")
+check "attribution_coverage_pct populated (expect >0)" "$ATTR_COVERAGE" "gt" 0
+ 
+NORM_TABLE=$(sqlite3 "$DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='normalization_factors';")
+check "normalization_factors table exists (expect 1)" "$NORM_TABLE" "eq" 1
+ 
+V_NORM=$(sqlite3 "$DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='v_energy_normalized';")
+check "v_energy_normalized view exists (expect 1)" "$V_NORM" "eq" 1
+ 
+V_ATTR=$(sqlite3 "$DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='v_attribution_summary';")
+check "v_attribution_summary view exists (expect 1)" "$V_ATTR" "eq" 1
+# ── T10: v9 Duration Fix ──────────────────────────────────────────────────────
+echo ""
+echo "--- Duration Fix (v9) ---"
+ 
+TASK_DUR=$(sqlite3 "$DB" "SELECT COUNT(*) FROM runs WHERE task_duration_ns IS NOT NULL;" 2>/dev/null || echo "0")
+check "task_duration_ns populated (expect >0)" "$TASK_DUR" "gt" 0
+ 
+FW_COL=$(sqlite3 "$DB" "SELECT COUNT(*) FROM pragma_table_info('runs') WHERE name='framework_overhead_ns';")
+check "framework_overhead_ns column exists (expect 1)" "$FW_COL" "eq" 1
+ 
+COV_COL=$(sqlite3 "$DB" "SELECT COUNT(*) FROM pragma_table_info('runs') WHERE name='energy_sample_coverage_pct';")
+check "energy_sample_coverage_pct column exists (expect 1)" "$COV_COL" "eq" 1
+ 
+POWER_COL=$(sqlite3 "$DB" "SELECT COUNT(*) FROM pragma_table_info('runs') WHERE name='avg_task_power_watts';")
+check "avg_task_power_watts column exists (expect 1)" "$POWER_COL" "eq" 1
+ 
+# Verify coverage values are populated and reasonable (between 0 and 100)
+COV_VALID=$(sqlite3 "$DB" "SELECT COUNT(*) FROM runs WHERE energy_sample_coverage_pct BETWEEN 0 AND 100;" 2>/dev/null || echo "0")
+check "coverage_pct values in valid range (expect >0)" "$COV_VALID" "gt" 0
+ 
+# Verify avg_task_power_watts is populated
+POWER_POP=$(sqlite3 "$DB" "SELECT COUNT(*) FROM runs WHERE avg_task_power_watts IS NOT NULL AND avg_task_power_watts > 0;" 2>/dev/null || echo "0")
+check "avg_task_power_watts populated (expect >0)" "$POWER_POP" "gt" 0
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""

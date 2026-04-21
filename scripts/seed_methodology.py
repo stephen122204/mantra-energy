@@ -192,7 +192,7 @@ def _load_measured_methods() -> List[Dict]:
             "confidence":   1.0,
             "description":  "L1d/L2/L3 cache hit and miss counters from Linux perf_events via perf stat. Events: L1-dcache-load-misses, l2_rqsts.miss, LLC-loads, LLC-load-misses.",
             "formula_latex": r"\text{perf\_stat}(L1\text{-}dcache\text{-}load\text{-}misses,\ l2\_rqsts.miss,\ LLC\text{-}loads,\ LLC\text{-}load\text{-}misses)",
-            "parameters":   "parameters": {"sampling": "once per run", "source": "perf_event_open", "unit": "event_count", "cache_line_bytes": 64},
+            "parameters":   {"sampling": "once per run", "source": "perf_event_open", "unit": "event_count", "cache_line_bytes": 64},
             "doc":          "09-derived-metrics-methodology.md",
             "section":      "Hardware Telemetry Metrics (Chunk 12)",
         },
@@ -445,6 +445,241 @@ def _load_derived_methods() -> List[Dict]:
             "fn":      "phase_attribution_etl.compute_phase_attribution",
             "doc":     "09-derived-metrics-methodology.md",
             "section": "Phase Energy Attribution",
+        },
+        # ── Chunk 6: Energy Attribution ───────────────────────────────────────────
+        {
+            "id":            "energy_attribution_v1",
+            "name":          "Multi-Layer Energy Attribution v1",
+            "provenance":    "CALCULATED",
+            "layer":         "os",
+            "confidence":    0.95,
+            "description":   (
+                "Decomposes total pkg energy into five attribution layers: "
+                "L0 hardware (RAPL domains), L1 system overhead (background, "
+                "interrupts, scheduler), L2 resource contention (network wait, "
+                "I/O wait, memory pressure, cache-DRAM), L3 workflow "
+                "(orchestration, planning, execution, synthesis, tools, retries), "
+                "L4 model compute (LLM application fraction via UCR), and L5 "
+                "outcome normalisation (energy per token/step/answer/task). "
+                "UCR (utilisation compute ratio) = compute_time_ms / duration_ms. "
+                "Application energy = attributed × UCR. "
+                "Orchestration energy = attributed − application. "
+                "Unattributed residual = pkg − Σ all layers."
+            ),
+            "formula_latex": (
+                r"E_{total} = E_{core} + E_{dram} + E_{uncore} + E_{background}"
+                r" + E_{network} + E_{io} + E_{orchestration} + E_{application}"
+                r" + E_{thermal} + E_{unattributed}"
+            ),
+            "parameters":    {
+                "ucr_formula":          "compute_time_ms / duration_ms",
+                "application_formula":  "attributed_energy × ucr",
+                "background_formula":   "max(0, pkg - core - dram - orchestration - application - network - io)",
+                "unattributed_formula": "max(0, pkg - Σ_all_layers)",
+                "model_version":        "v1",
+            },
+            "doc":           "12-energy-attribution-methodology.md",
+            "section":       "Attribution Model v1",
+        },
+    
+        # ── Chunk 6: Thermal Penalty ──────────────────────────────────────────────
+        {
+            "id":            "thermal_penalty_weighted",
+            "name":          "Time-Weighted Thermal Penalty",
+            "provenance":    "INFERRED",
+            "layer":         "silicon",
+            "confidence":    0.85,
+            "description":   (
+                "Estimates energy wasted due to CPU thermal throttling. "
+                "Only time intervals where cpu_temp > 85°C contribute. "
+                "throttle_ratio = Σ(interval_ns | temp>85) / Σ(all interval_ns). "
+                "penalty = pkg_energy × throttle_ratio × 0.20. "
+                "The 0.20 (20%) factor is an empirical estimate of frequency "
+                "reduction at thermal throttle on Intel x86. "
+                "Source: thermal_samples table, cpu_temp and interval columns."
+            ),
+            "formula_latex": (
+                r"E_{thermal} = E_{pkg} \times"
+                r" \frac{\sum_{i: T_i > 85} \Delta t_i}{\sum_i \Delta t_i}"
+                r" \times 0.20"
+            ),
+            "parameters":    {
+                "threshold_c":          85.0,
+                "penalty_fraction":     0.20,
+                "interval_source":      "thermal_samples.sample_end_ns - sample_start_ns",
+                "temp_source":          "thermal_samples.cpu_temp",
+            },
+            "doc":           "12-energy-attribution-methodology.md",
+            "section":       "Thermal Penalty Model",
+        },
+    
+        # ── Chunk 6: Normalization Factors ────────────────────────────────────────
+        {
+            "id":            "normalization_factors_v1",
+            "name":          "Run Normalisation Factor Computation",
+            "provenance":    "CALCULATED",
+            "layer":         "application",
+            "confidence":    0.90,
+            "description":   (
+                "Computes structural and behavioural normalisation factors for "
+                "each run, enabling apples-to-apples energy comparison across "
+                "tasks of different difficulty, depth, and retry behaviour. "
+                "Structural factors (difficulty_score, max_step_depth, "
+                "branching_factor, total_work_units) are derived from task config "
+                "and orchestration_events. "
+                "Behavioural factors (successful_goals, attempted_goals, "
+                "total_retries, hallucination_rate) require Chunk 8 tables "
+                "(query_execution, query_attempt, hallucination_events). "
+                "total_work_units = input_tokens × max_step_depth × branching_factor."
+            ),
+            "formula_latex": (
+                r"W_{total} = T_{input} \times D_{max} \times B_{avg}"
+            ),
+            "parameters":    {
+                "total_work_units_formula": "input_tokens × max_step_depth × branching_factor",
+                "difficulty_bucket_thresholds": {
+                    "easy":      "score < 0.25",
+                    "medium":    "0.25 ≤ score < 0.50",
+                    "hard":      "0.50 ≤ score < 0.75",
+                    "very_hard": "score ≥ 0.75",
+                },
+                "chunk8_dependency": "successful_goals, attempted_goals, retries, hallucinations",
+            },
+            "doc":           "13-normalization-factors-methodology.md",
+            "section":       "Normalisation Factor Taxonomy",
+        },
+        # ── v9: Measurement Boundary ──────────────────────────────────────────────
+        {
+            "id":            "measurement_boundary_v1",
+            "name":          "Task vs Framework Duration Boundary",
+            "provenance":    "MEASURED",
+            "layer":         "os",
+            "confidence":    1.0,
+            "description":   (
+                "Separates the run wall-clock into three explicit windows using "
+                "the t0/t1/t2 timestamp model. "
+                "t0 = run_start_perf (before start_measurement, after pre-task reads). "
+                "t1 = task_end_perf (immediately after executor.execute returns). "
+                "t2 = run_end_perf (after all post-processing). "
+                "task_duration_ns = t1-t0: executor time only — canonical denominator "
+                "for all energy-per-time calculations. "
+                "framework_overhead_ns = t2-t1: A-LEMS instrumentation cost "
+                "(stop_measurement cleanup, sample processing, metric aggregation). "
+                "An additional pre-task window is captured for diagnostic purposes: "
+                "pre_task_energy_uj = RAPL delta during interrupt/temperature/governor "
+                "reads that precede start_measurement(). This is NOT part of the "
+                "attribution model — it is instrumentation overhead. "
+                "Core paper claim: A-LEMS measures execution energy, not "
+                "instrumentation energy. "
+                "Prior benchmarking tools that capture t_end after monitoring teardown "
+                "inflate duration by up to 50%% for agentic workloads. "
+                "Uses time.perf_counter() — platform agnostic, monotonic, "
+                "nanosecond resolution. PAC compliant: works on Linux x86, "
+                "Linux ARM, macOS, Windows."
+            ),
+            "formula_latex": (
+                r"t_{task} = t_1 - t_0, \quad"
+                r"t_{framework} = t_2 - t_1, \quad"
+                r"\bar{P}_{task} = \frac{E_{pkg}}{t_{task}}, \quad"
+                r"\tau_{framework} = \frac{t_{framework}}{t_{task}}"
+            ),
+            "parameters":    {
+                "t0": "run_start_perf (before start_measurement)",
+                "t1": "task_end_perf (after executor.execute returns)",
+                "t2": "run_end_perf (after all post-processing)",
+                "t_pre": "before _read_interrupts() (opens pre-task window)",
+                "timer": "time.perf_counter() — monotonic, all platforms",
+                "rapl_domain": "package-0 for pre_task_energy_uj",
+                "platform_note": "pre_task_energy_uj=NULL on non-RAPL platforms",
+                "historical_runs": "task_duration estimated from energy_samples span",
+            },
+            "doc":           "14-measurement-boundary-methodology.md",
+            "section":       "Task Duration Model",
+        },
+    
+        # ── v9: Measurement Coverage ──────────────────────────────────────────────
+        {
+            "id":            "measurement_coverage_v1",
+            "name":          "Energy Sample Coverage Metric",
+            "provenance":    "CALCULATED",
+            "layer":         "os",
+            "confidence":    1.0,
+            "description":   (
+                "Quantifies what fraction of task execution time is covered by "
+                "energy_samples. At 100Hz sampling, a 5-second run should have "
+                "~500 samples spanning the full task duration. "
+                "coverage_pct = (MAX(sample_end_ns) - MIN(sample_start_ns)) "
+                "/ task_duration_ns × 100. "
+                "Thresholds: gold ≥95%%, acceptable 80-95%%, poor <80%%. "
+                "Runs with poor coverage are excluded from research views by default. "
+                "Historical pre-v9 runs: expected ~48-50%% coverage due to measurement "
+                "boundary bug (energy sampler stopped at executor return but "
+                "duration_ns included post-processing time). "
+                "Post-v9 new runs: expected >95%% coverage."
+            ),
+            "formula_latex": (
+                r"C = \frac{t_{last\_sample} - t_{first\_sample}}{t_{task}} \times 100"
+            ),
+            "parameters":    {
+                "gold_threshold":       ">=95%",
+                "acceptable_threshold": "80-95%",
+                "poor_threshold":       "<80%",
+                "exclusion_policy":     "research views WHERE energy_sample_coverage_pct >= 80",
+                "historical_coverage":  "~48-50% (pre-v9 runs)",
+                "expected_new":         ">95% (post-v9 runs)",
+            },
+            "doc":           "14-measurement-boundary-methodology.md",
+            "section":       "Measurement Coverage Validation",
+        },
+
+# ── v10: LLM Wait Energy Attribution ─────────────────────────────────────
+        {
+            "id":            "llm_wait_attribution_v1",
+            "name":          "LLM API Wait Energy Attribution",
+            "provenance":    "CALCULATED",
+            "layer":         "application",
+            "confidence":    0.85,
+            "description":   (
+                "Energy consumed during LLM API blocking wait. "
+                "Computed as attributed_energy × (api_latency_ms / task_duration_ms). "
+                "Novel metric: prior tools miss this energy since process is not CPU-active. "
+                "During API wait, process power ~12.9W (sub-active), above idle (3-5W) "
+                "but below active compute (33W). Empirically ~48% of agentic run time."
+            ),
+            "formula_latex": (
+                r"E_{llm\_wait} = E_{attr} \times \frac{t_{api}}{t_{task}}"
+            ),
+            "parameters":    {
+                "source_column":    "llm_interactions.api_latency_ms",
+                "base_energy":      "attributed_energy_uj",
+                "confidence_note":  "INFERRED time-fraction; power assumed constant during wait",
+                "typical_fraction": "~48% agentic, ~49% linear",
+            },
+            "doc":           "15-llm-wait-energy-finding.md",
+            "section":       "LLM Wait Energy Attribution Formula",
+        },
+        # ── v10: ML Energy Estimator Provision ───────────────────────────────────
+        {
+            "id":            "ml_energy_estimator_v1",
+            "name":          "ML Model Energy Estimator (Provision)",
+            "provenance":    "INFERRED",
+            "layer":         "application",
+            "confidence":    0.0,
+            "description":   (
+                "Placeholder for Chunk 1.2 ARM ML-based energy estimator. "
+                "Will replace cpu_fraction_v1 on ARM platforms where RAPL is unavailable. "
+                "Uses performance counters as features to estimate energy consumption."
+            ),
+            "formula_latex": (
+                r"E_{est} = f_{ml}(\text{perf\_counters})"
+            ),
+            "parameters":    {
+                "status":       "not_implemented",
+                "target_chunk": "1.2",
+                "platform":     "aarch64",
+            },
+            "doc":           "15-llm-wait-energy-finding.md",
+            "section":       "Future Work",
         },
 
     ]

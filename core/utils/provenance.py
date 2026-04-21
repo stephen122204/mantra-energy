@@ -157,7 +157,96 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "l3_cache_misses_total":     ("perf_cache_counters",      "MEASURED"),
     "disk_read_bytes_total":     ("disk_io_stats",            "MEASURED"),
     "disk_write_bytes_total":    ("disk_io_stats",            "MEASURED"),
-    "voltage_vcore_avg":         ("sensors_voltage",          "MEASURED"),         
+    "voltage_vcore_avg":         ("sensors_voltage",          "MEASURED"),
+    # ── energy_attribution TABLE ──────────────────────────────────────────────
+    # Every column in energy_attribution gets full provenance — same rigour as
+    # runs table. This table is the primary research output of A-LEMS.
+    # method_id "energy_attribution_v1" covers all CALCULATED columns below.
+    # L0: Hardware — mirrored from runs RAPL reads
+    "ea.pkg_energy_uj":                  ("rapl_msr_pkg_energy",        "MEASURED"),
+    "ea.core_energy_uj":                 ("rapl_msr_pkg_energy",        "MEASURED"),
+    "ea.dram_energy_uj":                 ("rapl_msr_pkg_energy",        "MEASURED"),
+    "ea.uncore_energy_uj":               ("rapl_msr_pkg_energy",        "MEASURED"),
+    # L1: System
+    "ea.background_energy_uj":           ("energy_attribution_v1",      "CALCULATED"),
+    "ea.interrupt_energy_uj":            ("energy_attribution_v1",      "INFERRED"),
+    "ea.scheduler_energy_uj":            ("energy_attribution_v1",      "INFERRED"),
+    # L2: Resource contention
+    "ea.network_wait_energy_uj":         ("energy_attribution_v1",      "INFERRED"),
+    "ea.io_wait_energy_uj":              ("energy_attribution_v1",      "INFERRED"),
+    "ea.disk_energy_uj":                 ("energy_attribution_v1",      "INFERRED"),
+    "ea.memory_pressure_energy_uj":      ("energy_attribution_v1",      "INFERRED"),
+    "ea.cache_dram_energy_uj":           ("energy_attribution_v1",      "INFERRED"),
+    # L3: Workflow
+    "ea.orchestration_energy_uj":        ("energy_attribution_v1",      "CALCULATED"),
+    "ea.planning_energy_uj":             ("phase_attribution_cpu_v1",   "CALCULATED"),
+    "ea.execution_energy_uj":            ("phase_attribution_cpu_v1",   "CALCULATED"),
+    "ea.synthesis_energy_uj":            ("phase_attribution_cpu_v1",   "CALCULATED"),
+    "ea.tool_energy_uj":                 ("energy_attribution_v1",      "INFERRED"),
+    "ea.retry_energy_uj":                ("energy_attribution_v1",      "CALCULATED"),
+    "ea.failed_tool_energy_uj":          ("energy_attribution_v1",      "CALCULATED"),
+    "ea.rejected_generation_energy_uj":  ("energy_attribution_v1",      "CALCULATED"),
+    # L4: Model compute
+    "ea.llm_compute_energy_uj":          ("energy_attribution_v1",      "CALCULATED"),
+    "ea.llm_compute_energy_uj":          ("energy_attribution_v1",      "CALCULATED"),
+    "ea.attribution_method":             ("energy_attribution_v1",      "SYSTEM"),
+    "ea.ml_model_version":               ("ml_energy_estimator_v1",     "SYSTEM"),
+    "ea.prefill_energy_uj":              ("energy_attribution_v1",      "INFERRED"),
+    "ea.decode_energy_uj":               ("energy_attribution_v1",      "INFERRED"),
+    # L5: Outcome normalisation
+    "ea.energy_per_completion_token_uj": ("energy_attribution_v1",      "CALCULATED"),
+    "ea.energy_per_successful_step_uj":  ("energy_attribution_v1",      "CALCULATED"),
+    "ea.energy_per_accepted_answer_uj":  ("energy_attribution_v1",      "CALCULATED"),
+    "ea.energy_per_solved_task_uj":      ("energy_attribution_v1",      "CALCULATED"),
+    # Thermal + residual
+    "ea.thermal_penalty_energy_uj":      ("thermal_penalty_weighted",   "INFERRED"),
+    "ea.thermal_penalty_time_ms":        ("thermal_penalty_weighted",   "MEASURED"),
+    "ea.unattributed_energy_uj":         ("energy_attribution_v1",      "CALCULATED"),
+    "ea.attribution_coverage_pct":       ("energy_attribution_v1",      "CALCULATED"),
+ 
+    # ── normalization_factors TABLE ───────────────────────────────────────────
+    # Structural factors (from task config + orchestration_events)
+    "nf.difficulty_score":               ("normalization_factors_v1",   "CALCULATED"),
+    "nf.difficulty_bucket":              ("normalization_factors_v1",   "CALCULATED"),
+    "nf.task_category":                  (None,                         "SYSTEM"),
+    "nf.workload_type":                  (None,                         "SYSTEM"),
+    "nf.max_step_depth":                 ("normalization_factors_v1",   "MEASURED"),
+    "nf.branching_factor":               ("normalization_factors_v1",   "CALCULATED"),
+    "nf.input_tokens":                   ("ttft_tpot_wall_clock",       "MEASURED"),
+    "nf.output_tokens":                  ("ttft_tpot_wall_clock",       "MEASURED"),
+    "nf.context_window_size":            (None,                         "SYSTEM"),
+    "nf.total_work_units":               ("normalization_factors_v1",   "CALCULATED"),
+    # Behavioural factors (Chunk 8 — NULL until populated)
+    "nf.successful_goals":               ("normalization_factors_v1",   "MEASURED"),
+    "nf.attempted_goals":                ("normalization_factors_v1",   "MEASURED"),
+    "nf.failed_attempts":                ("normalization_factors_v1",   "MEASURED"),
+    "nf.retry_depth":                    ("normalization_factors_v1",   "MEASURED"),
+    "nf.total_retries":                  ("normalization_factors_v1",   "MEASURED"),
+    "nf.total_failures":                 ("normalization_factors_v1",   "MEASURED"),
+    "nf.total_tool_calls":               ("normalization_factors_v1",   "MEASURED"),
+    "nf.failed_tool_calls":              ("normalization_factors_v1",   "MEASURED"),
+    "nf.hallucination_count":            ("normalization_factors_v1",   "MEASURED"),
+    "nf.hallucination_rate":             ("normalization_factors_v1",   "CALCULATED"),
+    # Resource factors
+    "nf.rss_memory_gb":                  ("os_memory_reader",           "MEASURED"),
+    "nf.cache_miss_rate":                ("perf_cache_counters",        "CALCULATED"),
+    "nf.io_wait_ratio":                  ("disk_io_stats",              "CALCULATED"),
+    "nf.stall_time_ms":                  ("normalization_factors_v1",   "INFERRED"),
+    "nf.sla_violations":                 ("normalization_factors_v1",   "MEASURED"), 
+    # ── v9: Measurement Boundary (Duration Fix) ───────────────────────────────
+    # Separates task execution time from A-LEMS instrumentation overhead.
+    # See: docs-src/mkdocs/source/research/14-measurement-boundary-methodology.md
+    # Paper claim: "A-LEMS measures execution energy, not instrumentation energy"
+    "task_duration_ns":           ("measurement_boundary_v1",  "MEASURED"),
+    "framework_overhead_ns":      ("measurement_boundary_v1",  "MEASURED"),
+    "total_run_duration_ns":      ("measurement_boundary_v1",  "MEASURED"),
+    "duration_includes_overhead": (None,                        "SYSTEM"),
+    "energy_sample_coverage_pct": ("measurement_coverage_v1",  "CALCULATED"),
+    "avg_task_power_watts":       ("measurement_boundary_v1",  "CALCULATED"),
+    # Pre-task instrumentation window (diagnostic, not in attribution model)
+    # NULL on non-RAPL platforms (macOS, ARM VM) — PAC compliant
+    "pre_task_energy_uj":         ("measurement_boundary_v1",  "MEASURED"),
+    "pre_task_duration_ns":       ("measurement_boundary_v1",  "MEASURED"),                
     # ── INFERRED ─────────────────────────────────────────────────────────────
     "carbon_g":                     ("carbon_calculation",             "INFERRED"),
     "water_ml":                     ("water_calculation",              "INFERRED"),
@@ -217,7 +306,15 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "phase_attribution_cpu_v1":      0.95,
     "perf_cache_counters":           1.0,
     "disk_io_stats":                 1.0,
-    "sensors_voltage":               1.0,    
+    "sensors_voltage":               1.0,
+    "energy_attribution_v1":         0.95,   # multi-layer model, residual ~5%
+    "thermal_penalty_weighted":      0.85,   # time-weighted thermal penalty
+    "normalization_factors_v1":      0.90,   # structural factors high confidence 
+    # v9: Measurement Boundary
+    "measurement_boundary_v1":       1.0,    # perf_counter — monotonic, all platforms
+    "measurement_coverage_v1":       1.0,    # derived from sample timestamps 
+    "llm_wait_attribution_v1":  0.85,
+    "ml_energy_estimator_v1":   0.0,    # placeholder until Chunk 1.2          
 }
 
 

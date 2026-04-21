@@ -1,0 +1,24 @@
+method_id: llm_wait_attribution_v1
+references:
+  - title: "Measuring the Carbon Intensity of AI in Cloud Instances"
+    authors: "Luccioni, A., Viguier, S., Ligozat, A."
+    year: 2022
+    ref_type: paper
+    relevance: "Establishes energy measurement boundary problem for cloud LLM inference"
+
+  - title: "Power Management in Intel Platforms (RAPL Interface)"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: manual
+    relevance: "RAPL captures package energy including idle-adjacent states during API wait"
+
+  - title: "A-LEMS Internal: LLM Wait Energy Finding"
+    authors: "A-LEMS Research Team"
+    year: 2026
+    ref_type: internal
+    relevance: >
+      Empirical finding: LLM agentic runs spend ~48% of wall-clock time blocked
+      on API responses. During this time process power is ~12.9W (sub-active),
+      well above idle (3-5W) but below active compute (33W). This energy is
+      invisible to CPU-utilisation-based tools (perf, powerstat) but fully
+      captured by RAPL and attributable via api_latency_ms time-fraction.

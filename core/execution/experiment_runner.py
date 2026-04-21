@@ -40,6 +40,8 @@ from core.models.baseline_measurement import BaselineMeasurement
 from core.utils.provenance import record_run_provenance
 from scripts.etl.phase_attribution_etl import process_run_async
 from scripts.etl.aggregate_hardware_metrics import aggregate_async
+from scripts.etl.energy_attribution_etl import attribution_async 
+from scripts.etl.duration_fix_etl import duration_fix_async        # v9 duration fix
 
 
 class ExperimentRunner:
@@ -795,4 +797,18 @@ class ExperimentRunner:
         process_run_async(agentic_id) # Chunk 5: async phase attribution ETL
         aggregate_async(agentic_id)     # Chunk 12: async hardware metrics aggregation
         aggregate_async(linear_id)      # Chunk 12: aggregate linear run too
+        attribution_async(agentic_id)   # Chunk 6: multi-layer energy attribution
+        attribution_async(linear_id)    # Chunk 6: attribute linear run too  
+        # v9: duration fix — pass rapl_before_pretask from result dict
+        duration_fix_async(
+            agentic_id,
+            rapl_before_pretask=agentic_result.get("rapl_before_pretask"),
+            pre_task_duration_sec=agentic_result.get("pre_task_duration_sec", 0.0),
+        )
+        duration_fix_async(
+            linear_id,
+            rapl_before_pretask=linear_result.get("rapl_before_pretask"),
+            pre_task_duration_sec=linear_result.get("pre_task_duration_sec", 0.0),
+        )        
+
         return linear_id, agentic_id
