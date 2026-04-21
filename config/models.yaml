@@ -1,0 +1,420 @@
+# =============================================================================
+# A-LEMS Model Registry — models.yaml
+# Human-editable source. Loader expands defaults at runtime.
+# =============================================================================
+#
+# HOW DEFAULTS WORK:
+#   _defaults          → applies to ALL models everywhere
+#   provider.defaults  → applies to all models in that provider
+#   model fields       → override anything above
+#
+# FIELD REFERENCE:
+#   is_local            true = runs on THIS host (UBUNTU2505)
+#   access_method       api_http | direct_file | local_process
+#   network_type        none | loopback | internet
+#   captures_network_io true = HTTP bytes_sent/recv meaningful
+#   energy_side         full | client_only | remote_measured
+#   execution_site      host | remote_vm | vendor_api
+#                         host       = inference runs on THIS machine (UBUNTU2505)
+#                         remote_vm  = controlled remote VM (Oracle VM)
+#                         vendor_api = third-party hosted API
+#   transport           inprocess | loopback_http | remote_http
+#                         inprocess    = same process, no socket (llama_cpp direct_file)
+#                         loopback_http= localhost HTTP (ollama_local)
+#                         remote_http  = network HTTP (ollama_remote, groq, openai etc)
+#   energy_visibility   host_only | host_plus_remote
+#                         host_only        = only UBUNTU2505 energy measured
+#                         host_plus_remote = both client + remote VM measured (future)
+#   openai_compat       true = speaks /chat/completions format
+#   cost_class          free | paid | metered
+#   priority            int, lower = preferred when auto-routing
+#   rate_limit_tpm      tokens/min or null
+#   tasks               text-generation | text-to-speech | voice-cloning | speech-to-text
+#   modes               linear | agentic
+#   tools_supported     supports function/tool calling
+#   available           false to disable without deleting
+# =============================================================================
+
+_defaults:
+  temperature: 0.7
+  max_tokens: 2048
+  modes: [linear, agentic]
+  tasks: [text-generation]
+  available: true
+  tools_supported: false
+
+# =============================================================================
+# BACKWARD COMPAT — get_model_config("cloud","linear") still works
+# Maps old flat keys to new provider entries
+# =============================================================================
+# Maps old get_model_config("cloud","linear") calls to proper provider+model_id
+# get_backward_compat() resolves through get_model() — full proper path, no duplication
+_legacy_map:
+  cloud:
+    linear:  {provider: groq,      model_id: llama-3.3-70b-versatile, max_tokens: 1024,  tools_supported: false}
+    agentic: {provider: groq,      model_id: llama-3.3-70b-versatile, max_tokens: 2048,  tools_supported: true}
+  local:
+    linear:  {provider: llama_cpp, model_id: tinyllama-1b-gguf,       max_tokens: 1024,  tools_supported: false}
+    agentic: {provider: llama_cpp, model_id: tinyllama-1b-gguf,       max_tokens: 2048,  tools_supported: true}
+
+# =============================================================================
+# PROVIDERS
+# =============================================================================
+
+providers:
+
+  # ---------------------------------------------------------------------------
+  ollama_local:
+    is_local: true
+    access_method: api_http
+    network_type: loopback
+    captures_network_io: true
+    energy_side: full
+    openai_compat: true
+    base_url: http://localhost:11434
+    api_key_env: null
+    cost_class: free
+    priority: 1
+    rate_limit_tpm: null
+    defaults:
+      max_tokens: 1024
+    models:
+      - id: tinyllama-1b
+        name: TinyLlama 1B
+    execution_site: host
+    transport: loopback_http
+    remote_energy_available: false      
+
+  # ---------------------------------------------------------------------------
+  ollama_remote:
+    is_local: false
+    access_method: api_http
+    network_type: internet
+    captures_network_io: true
+    energy_side: client_only  # Oracle VM — server RAPL unmeasured until remote energy chunk
+    openai_compat: true
+    base_url: http://129.153.71.47:11434
+    api_key_env: null
+    cost_class: free
+    priority: 2
+    rate_limit_tpm: null
+    execution_site: remote_vm
+    transport: remote_http
+    remote_energy_available: false  
+    models:
+      - id: phi4:latest
+        name: Phi4 14B
+      - id: qwen2.5-coder:14b
+        name: Qwen2.5 Coder 14B
+        max_tokens: 4096
+      - id: deepseek-r1:14b
+        name: DeepSeek R1 14B
+        max_tokens: 4096
+      - id: llama3.2:3b
+        name: Llama 3.2 3B
+      - id: mistral:7b
+        name: Mistral 7B
+      - id: codellama:7b
+        name: Code Llama 7B
+      - id: mashriram/sarvam-m-tools:latest
+        name: Sarvam M Tools Indic
+        tools_supported: true
+        # note: 25GB ZRAM model — expect 30-60min response time
+
+  # ---------------------------------------------------------------------------
+  groq:
+    is_local: false
+    access_method: api_http
+    network_type: internet
+    captures_network_io: true
+    energy_side: client_only
+    openai_compat: true
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+    cost_class: free
+    priority: 3
+    rate_limit_tpm: 6000
+    execution_site: vendor_api
+    transport: remote_http
+    remote_energy_available: false    
+    models:
+      - id: llama-3.3-70b-versatile
+        name: Llama 3.3 70B
+        tools_supported: true
+      - id: llama-3.1-8b-instant
+        name: Llama 3.1 8B Instant
+        tools_supported: true
+      - id: mixtral-8x7b-32768
+        name: Mixtral 8x7B
+        max_tokens: 4096
+        tools_supported: true
+      - id: gemma2-9b-it
+        name: Gemma2 9B
+
+  # ---------------------------------------------------------------------------
+  openai:
+    is_local: false
+    access_method: api_http
+    network_type: internet
+    captures_network_io: true
+    energy_side: client_only
+    openai_compat: true
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    cost_class: paid
+    priority: 4
+    rate_limit_tpm: null
+    execution_site: vendor_api
+    transport: remote_http
+    remote_energy_available: false    
+    models:
+      - id: gpt-4o
+        name: GPT-4o
+        max_tokens: 4096
+        tools_supported: true
+      - id: gpt-4o-mini
+        name: GPT-4o Mini
+        max_tokens: 4096
+        tools_supported: true
+
+  # ---------------------------------------------------------------------------
+  anthropic:
+    is_local: false
+    access_method: api_http
+    network_type: internet
+    captures_network_io: true
+    energy_side: client_only
+    openai_compat: false
+    base_url: https://api.anthropic.com
+    api_key_env: ANTHROPIC_API_KEY
+    cost_class: paid
+    priority: 5
+    rate_limit_tpm: null
+    execution_site: vendor_api
+    transport: remote_http
+    remote_energy_available: false    
+    models:
+      - id: claude-sonnet-4-5
+        name: Claude Sonnet
+        max_tokens: 4096
+        tools_supported: true
+
+  # ---------------------------------------------------------------------------
+  gemini:
+    is_local: false
+    access_method: api_http
+    network_type: internet
+    captures_network_io: true
+    energy_side: client_only
+    openai_compat: false
+    base_url: https://generativelanguage.googleapis.com
+    api_key_env: GEMINI_API_KEY
+    cost_class: metered
+    priority: 6
+    rate_limit_tpm: null
+    execution_site: vendor_api
+    transport: remote_http
+    remote_energy_available: false    
+    models:
+      - id: gemini-2.0-flash
+        name: Gemini 2.0 Flash
+        max_tokens: 4096
+        tools_supported: true
+      - id: gemini-1.5-pro
+        name: Gemini 1.5 Pro
+        max_tokens: 8192
+        tools_supported: true
+
+  # ---------------------------------------------------------------------------
+  deepseek_cloud:
+    is_local: false
+    access_method: api_http
+    network_type: internet
+    captures_network_io: true
+    energy_side: client_only
+    openai_compat: true
+    base_url: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    cost_class: metered
+    priority: 7
+    rate_limit_tpm: null
+    execution_site: vendor_api
+    transport: remote_http
+    remote_energy_available: false    
+    models:
+      - id: deepseek-chat
+        name: DeepSeek Chat
+        max_tokens: 4096
+        tools_supported: true
+
+  # ---------------------------------------------------------------------------
+  llama_cpp:
+    is_local: true
+    access_method: direct_file
+    network_type: none
+    captures_network_io: false
+    energy_side: full
+    openai_compat: false
+    cost_class: free
+    priority: 1
+    rate_limit_tpm: null
+    defaults:
+      max_tokens: 1024
+      modes: [linear, agentic]
+    execution_site: host
+    transport: inprocess
+    remote_energy_available: false      
+    models:
+      - id: tinyllama-1b-gguf
+        name: TinyLlama 1B GGUF
+        file_params:
+          model_path: /home/dpani/mydrive/models/tinyllama.gguf
+      - id: phi-2-gguf
+        name: Phi-2 GGUF
+        file_params:
+          model_path: /home/dpani/mydrive/models/phi-2.gguf
+      - id: llama-3.2-3b-gguf
+        name: Llama 3.2 3B GGUF
+        max_tokens: 2048
+        file_params:
+          model_path: /home/dpani/mydrive/models/llama-3.2-3b.gguf
+
+# ---------------------------------------------------------------------------
+  nvidia_nim:
+    is_local: false
+    access_method: api_http
+    network_type: internet
+    captures_network_io: true
+    energy_side: client_only
+    execution_site: vendor_api
+    transport: remote_http
+    remote_energy_available: false
+    openai_compat: true
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key_env: NVIDIA_API_KEY
+    cost_class: metered
+    priority: 9
+    rate_limit_tpm: null
+    models:
+      # Reasoning — compare energy vs quality tradeoff
+      - id: moonshotai/kimi-k2.5
+        name: Kimi K2.5 Reasoning
+        max_tokens: 16384
+        tools_supported: true
+      - id: deepseek-ai/deepseek-r1
+        name: DeepSeek R1 671B
+        max_tokens: 8192
+        tools_supported: false
+      - id: nvidia/llama-3.3-nemotron-super-49b-v1
+        name: Nemotron Super 49B
+        max_tokens: 4096
+        tools_supported: true
+      # Size comparison — energy vs model size
+      - id: meta/llama-3.3-70b-instruct
+        name: Llama 3.3 70B
+        max_tokens: 4096
+        tools_supported: true
+      - id: meta/llama-3.2-3b-instruct
+        name: Llama 3.2 3B
+        max_tokens: 2048
+        tools_supported: false
+      # Multilingual — fits Indic research scope
+      - id: google/gemma-3-27b-it
+        name: Gemma 3 27B
+        max_tokens: 4096
+        tools_supported: true
+      - id: mistralai/mistral-7b-instruct-v0.3
+        name: Mistral 7B
+        max_tokens: 2048
+        tools_supported: false
+  # ---------------------------------------------------------------------------
+  kokoro:
+    is_local: true
+    access_method: local_process
+    network_type: none
+    captures_network_io: false
+    energy_side: full
+    openai_compat: false
+    env_path: /opt/ai-stack/envs/kokoro-env
+    cost_class: free
+    priority: 1
+    rate_limit_tpm: null
+    defaults:
+      tasks: [text-to-speech]
+      modes: [linear]
+    models:
+      - id: kokoro-82m
+        name: Kokoro TTS English
+        media_params:
+          voice: af_heart
+          sample_rate: 24000
+
+  # ---------------------------------------------------------------------------
+  indic_parler:
+    is_local: true
+    access_method: local_process
+    network_type: none
+    captures_network_io: false
+    energy_side: full
+    openai_compat: false
+    env_path: /opt/ai-stack/envs/indic-tts-env
+    cost_class: free
+    priority: 1
+    rate_limit_tpm: null
+    defaults:
+      tasks: [text-to-speech]
+      modes: [linear]
+    models:
+      - id: indic-parler-tts
+        name: Indic Parler TTS
+        media_params:
+          sample_rate: 24000
+          languages: [hi, ta, te, bn, mr, gu, kn, ml, pa, or, as, ur, si]
+
+  # ---------------------------------------------------------------------------
+  indic_f5:
+    is_local: true
+    access_method: local_process
+    network_type: none
+    captures_network_io: false
+    energy_side: full
+    openai_compat: false
+    env_path: /opt/ai-stack/envs/indicf5-env
+    cost_class: free
+    priority: 1
+    rate_limit_tpm: null
+    defaults:
+      tasks: [voice-cloning]
+      modes: [linear]
+    models:
+      - id: indicf5
+        name: IndicF5 Voice Clone
+
+  # ---------------------------------------------------------------------------
+  faster_whisper:
+    is_local: true
+    access_method: local_process
+    network_type: none
+    captures_network_io: false
+    energy_side: full
+    openai_compat: false
+    env_path: /opt/ai-stack/envs/whisper-env
+    cost_class: free
+    priority: 1
+    rate_limit_tpm: null
+    defaults:
+      tasks: [speech-to-text]
+      modes: [linear]
+    models:
+      - id: faster-whisper-small
+        name: Faster Whisper Small
+        runtime_params:
+          model_size: small
+          compute_type: int8
+          beam_size: 5
+      - id: faster-whisper-base
+        name: Faster Whisper Base
+        runtime_params:
+          model_size: base
+          compute_type: int8
+          beam_size: 5

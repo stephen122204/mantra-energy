@@ -1,16 +1,25 @@
 # config/methodology_refs/ttft_tpot_wall_clock.yaml
-# =============================================================================
-# References for: TTFT / TPOT Wall Clock Measurement
-# method_id: ttft_tpot_wall_clock
-# =============================================================================
+# Chunk 4: Methodology reference for TTFT/TPOT wall-clock timing (MPC-3)
 
-- ref_type: paper
-  title: "A-LEMS: Agent vs Linear Energy Measurement Platform"
-  authors: "Sangha, A. et al."
-  year: 2025
-  venue: "arXiv:2509.09991"
-  doi: "10.48550/arXiv.2509.09991"
-  url: "https://arxiv.org/abs/2509.09991"
-  relevance: "Section 5 defines TTFT and TPOT wall-clock measurement boundaries"
-  cited_text: "TTFT measured from request dispatch to first token receipt"
-  page_or_section: "Section 5"
+method_id: ttft_tpot_wall_clock
+name: TTFT/TPOT Wall Clock Timing
+provenance: MEASURED
+layer: llm
+formula_latex: |
+  TTFT = t_{first\_token} - t_{request\_start}
+  TPOT = \frac{t_{last\_token} - t_{first\_token}}{\max(1, N_{tokens} - 1)}
+description: |
+  Time to First Token (TTFT) measures the latency from request start until
+  the first output token arrives from the LLM. Captured via streaming API.
+  Time Per Output Token (TPOT) measures decode smoothness — average time
+  between successive output tokens after the first. Uses completion_tokens
+  from the API usage object when available; falls back to chunk count.
+  Non-streaming adapters inherit a fallback that sets ttft_ms = total_time_ms
+  and tpot_ms = 0, with streaming_enabled = 0.
+references:
+  - title: "A-LEMS LLM Measurement Methodology"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: internal
+    relevance: "Section 4 — TTFT/TPOT capture for Groq vs NVIDIA comparison"
+confidence: 0.99

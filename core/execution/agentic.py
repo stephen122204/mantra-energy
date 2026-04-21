@@ -38,6 +38,7 @@ import psutil
 import requests
 
 from core.utils.debug import dprint
+from core.execution.model_factory import ModelFactory
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +105,15 @@ class AgenticExecutor:
         self.call_counter = 0
         self.pending_interactions = []
 
-        if self.provider not in ["ollama", "local"] and not self.api_key:
+        if not self.config.get("is_local", False) and self.config.get("api_key_env") and not self.api_key:
             logger.warning(f"API key missing: {self.config.get('api_key_env')}")
+        # Chunk 7: resolve adapter once — factory owns all provider dispatch
+        # inject resolved api_key into config so adapter finds it
+        _cfg = dict(self.config)
+        _cfg['_resolved_api_key'] = self.api_key
+        self._adapter = ModelFactory.get_adapter(self.provider, _cfg)
         logger.info(
-            f"AgenticExecutor initialized: {self.config.get('model_id')} ({self.provider})"
+            f"AgenticExecutor initialized: {self.config.get('model_id')} ({self.provider}) via {self._adapter.get_name()}"
         )
 
     def _calculate_complexity_score(
@@ -813,372 +819,141 @@ You can use tools like calculator or web search if needed.
         if not hasattr(self, "_call_count"):
             self._call_count = 0
             self._api_latencies = []
-            self._llm = None
             self._cpu_samples = []
-
+            self._effective_kbps_list = []
+ 
         self._call_count += 1
         temp = temperature if temperature is not None else self.temperature
-
+ 
         dprint(f"\n{'='*50}")
         dprint(f"📨 LLM #{self._call_count} (temp={temp}, {len(prompt)} chars)")
         dprint(f"{'='*50}")
-
-        if self.provider not in ["ollama", "local"] and not self.api_key:
+ 
+        if not self.config.get("is_local", False) and self.config.get("api_key_env") and not self.api_key:
             logger.error("No API key available")
             return {"content": "Error: No API key", "tokens": {}}
-
-        
-        #dprint(f"🔍 NET_BEFORE CAPTURED: {net_before}")
-
+ 
         try:
-            # ====================================================================
-            # Phase 1: PRE-PROCESSING (Local CPU work)
-            # ====================================================================
-            t_pre_start = time.time()
-
-            request_data = {
-                "model": self.config["model_id"],
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": self.max_tokens,
-                "temperature": temp,
-            }
-
-            json_payload = json.dumps(request_data)
-            prompt_bytes = len(json_payload)
-
-            t_pre_end = time.time()
-            preprocess_ms = (t_pre_end - t_pre_start) * 1000
-
-            # ====================================================================
-            # Phase 2: WAIT + INFERENCE (Provider-dependent)
-            # ====================================================================
-            content = ""
-            tokens = {}
-            response_bytes = 0
-            non_local_ms = 0
-            local_compute_ms = 0
-            cpu_during_phase = 0
-
-            # --------------------------------------------------------------------
-            # Provider: OLLAMA (Local API, local inference)
-            # --------------------------------------------------------------------
-            if self.provider == "ollama":
-                t_start = time.time()
-                response = requests.post(
-                    self.config["api_endpoint"],
-                    json=request_data,
-                    timeout=30,
-                )
-                response.raise_for_status()
-                data = response.json()
-                t_end = time.time()
-
-                content = data["message"]["content"]
-                local_compute_ms = (t_end - t_start) * 1000
-                non_local_ms = 0
-
-                tokens = {
-                    "prompt": len(prompt.split()),
-                    "completion": len(content.split()),
-                    "total": len(prompt.split()) + len(content.split()),
-                }
-
-            # --------------------------------------------------------------------
-            # Provider: LOCAL (GGUF via llama-cpp-python) - ACTIVE COMPUTE
-            # --------------------------------------------------------------------
-            elif self.provider == "local":
-                bytes_sent_approx = 0
-                bytes_recv_approx = 0
-                tcp_retransmits = 0
-
-                if self._llm is None:
-                    from llama_cpp import Llama
-                    self._llm = Llama(model_path=self.model_path)
-
-                t_start = time.time()
-                response = self._llm(
-                    prompt,
-                    max_tokens=self.max_tokens,
-                    temperature=temp,
-                    echo=False
-                )
-                t_end = time.time()
-
-                content = response["choices"][0]["text"].strip()
-                local_compute_ms = (t_end - t_start) * 1000
-                non_local_ms = 0
-
-                tokens = {
-                    "prompt": response["usage"]["prompt_tokens"],
-                    "completion": response["usage"]["completion_tokens"],
-                    "total": response["usage"]["total_tokens"],
-                }
-                response_bytes = len(content.encode('utf-8'))
-                postprocess_ms = 0  # No postprocessing time for local provider since it's all compute
-                # Calculate total_time_ms (preprocess and postprocess are already set)
-                total_time_ms = preprocess_ms + local_compute_ms + postprocess_ms
-                # Calculate throughput for local
-                total_bytes = prompt_bytes + response_bytes
-                if total_time_ms > 0:
-                    app_throughput_kbps = (total_bytes * 8) / (total_time_ms / 1000) / 1000
-                else:
-                    app_throughput_kbps = 0
-
-
-            # --------------------------------------------------------------------
-            # Provider: CLOUD (Groq, OpenRouter) - IDLE WAIT
-            # --------------------------------------------------------------------
-            else:
-                headers = {
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                }
-
-                net_before = self._get_network_metrics()
-
-                t_start = time.time()
-                response = requests.post(
-                    self.config["api_endpoint"],
-                    headers=headers,
-                    json=request_data,
-                    timeout=30,
-                )
-                response.raise_for_status()
-                data = response.json()
-                t_end = time.time()
-
-                non_local_ms = (t_end - t_start) * 1000
-                local_compute_ms = 0
-                cpu_during_phase = psutil.cpu_percent(interval=0.1)
-
-                if "choices" in data:
-                    content = data["choices"][0]["message"]["content"]
-                    usage = data.get("usage", {})
-                    tokens = {
-                        "prompt": usage.get("prompt_tokens", 0),
-                        "completion": usage.get("completion_tokens", 0),
-                        "total": usage.get("total_tokens", 0),
-                    }
-                    if tokens["total"] == 0:
-                        tokens = {
-                            "prompt": len(prompt.split()),
-                            "completion": len(content.split()),
-                            "total": len(prompt.split()) + len(content.split()),
-                        }
-                else:
-                    content = str(data)
-                    tokens = {}
-                    logger.warning(f"Unexpected API response format")
-
-            # ====================================================================
-            # Phase 3: POST-PROCESSING (Local CPU work)
-            # ====================================================================
-            t_post_start = time.time()
-            response_bytes = len(content.encode("utf-8"))
-            t_post_end = time.time()
-            postprocess_ms = (t_post_end - t_post_start) * 1000
-
-            # ====================================================================
-            # Total API latency
-            # ====================================================================
-            total_time_ms = preprocess_ms + non_local_ms + local_compute_ms + postprocess_ms
-
-            # ====================================================================
-            # Throughput Calculation
-            # ====================================================================
-            total_bytes = prompt_bytes + response_bytes
-            if non_local_ms > 0:
-                app_throughput_kbps = (total_bytes * 8) / (non_local_ms / 1000) / 1000
-
-            # ====================================================================
-            # Network Metrics
-            # ====================================================================
-            dprint(f"🔍 PROVIDER FOR NETWORK: {self.provider}")
-            if self.provider in ["local", "ollama"]:
-                bytes_sent_approx = 0
-                bytes_recv_approx = 0
-                tcp_retransmits = 0
-            else:
-                net_after = self._get_network_metrics()
-                bytes_sent_approx = net_after["bytes_sent"] - net_before["bytes_sent"]
-                bytes_recv_approx = net_after["bytes_recv"] - net_before["bytes_recv"]
-                tcp_retransmits = net_after["tcp_retransmits"] - net_before["tcp_retransmits"]
-
-                dprint(f"🔍 NET_BEFORE IN CLOUD: {net_before}")
-                dprint(f"🔍 NET_AFTER IN CLOUD: {net_after}")
-
-                dprint(f"🔍 NETWORK DEBUG - bytes_sent: {bytes_sent_approx}, bytes_recv: {bytes_recv_approx}, tcp_retrans: {tcp_retransmits}")
-
-            # ====================================================================
-            # Store latency and throughput
-            # ====================================================================
+            result              = self._adapter.call(prompt, temp)
+            content             = result["content"]
+            tokens              = result["tokens"]
+            total_time_ms       = result["total_time_ms"]
+            phase_metrics       = result["phase_metrics"]
+            preprocess_ms       = phase_metrics["preprocess_ms"]
+            non_local_ms        = phase_metrics["non_local_ms"]
+            local_compute_ms    = phase_metrics["local_compute_ms"]
+            postprocess_ms      = phase_metrics["postprocess_ms"]
+            app_throughput_kbps = phase_metrics["app_throughput_kbps"]
+            cpu_percent_during_wait = phase_metrics["cpu_percent_during_wait"]
+            bytes_sent          = result.get("bytes_sent", 0)
+            bytes_recv          = result.get("bytes_recv", 0)
+            tcp_retransmits     = result.get("tcp_retransmits", 0)
+ 
             self._api_latencies.append(total_time_ms)
-
-            if not hasattr(self, "_effective_kbps_list"):
-                self._effective_kbps_list = []
             self._effective_kbps_list.append(app_throughput_kbps)
-
-            if self.provider not in ["local", "ollama"]:
-                dprint(
-                    f"📬 Response: {content[:100]}... "
-                    f"(Pre: {preprocess_ms:.1f}ms, "
-                    f"Non-local: {non_local_ms:.1f}ms, "
-                    f"Local Compute: {local_compute_ms:.1f}ms, "
-                    f"Post: {postprocess_ms:.1f}ms, "
-                    f"Throughput: {app_throughput_kbps:.1f} kbps, "
-                    f"CPU Wait: {cpu_during_phase:.1f}%)"
-                    f"🔍 BEFORE: {net_before['bytes_sent']}, AFTER: {net_after['bytes_sent']}, DELTA: {bytes_sent_approx}"
-                )
-            else:
-                dprint(
-                    f"📬 Response: {content[:100]}... "
-                    f"(Pre: {preprocess_ms:.1f}ms, "
-                    f"Non-local: {non_local_ms:.1f}ms, "
-                    f"Local Compute: {local_compute_ms:.1f}ms, "
-                    f"Post: {postprocess_ms:.1f}ms, "
-                    f"Throughput: {app_throughput_kbps:.1f} kbps, "
-                    f"CPU Wait: {cpu_during_phase:.1f}%)"
-                )
-
-            # ====================================================================
-            # Create interaction record
-            # ====================================================================
+ 
             interaction = {
-                "step_index": call_counter if call_counter is not None else self._call_count,
-                "workflow_type": "agentic",
-                "prompt": prompt,
-                "response": content,
-                "model_name": self.config.get("model_id", self.config.get("name", "unknown")),
-                "provider": self.provider,
-                "prompt_tokens": tokens.get("prompt", 0),
-                "completion_tokens": tokens.get("completion", 0),
-                "total_tokens": tokens.get("total", 0),
-                "total_time_ms": total_time_ms,
-                "preprocess_ms": preprocess_ms,
-                "non_local_ms": non_local_ms,
-                "local_compute_ms": local_compute_ms,
-                "postprocess_ms": postprocess_ms,
-                "app_throughput_kbps": app_throughput_kbps,
-                "bytes_sent_approx": bytes_sent_approx,
-                "bytes_recv_approx": bytes_recv_approx,
-                "tcp_retransmits": tcp_retransmits,
-                "cpu_percent_during_wait": cpu_during_phase,
-                # Legacy compatibility
-                "api_latency_ms": total_time_ms,
-                "compute_time_ms": preprocess_ms + postprocess_ms,
-                "pending_interactions": self.pending_interactions.copy(),
-
+                "step_index":               call_counter if call_counter is not None else self._call_count,
+                "workflow_type":            "agentic",
+                "prompt":                   prompt,
+                "response":                 content,
+                "model_name":               self.config.get("model_id", "unknown"),
+                "provider":                 self.provider,
+                "prompt_tokens":            tokens.get("prompt", 0),
+                "completion_tokens":        tokens.get("completion", 0),
+                "total_tokens":             tokens.get("total", 0),
+                "total_time_ms":            total_time_ms,
+                "preprocess_ms":            preprocess_ms,
+                "non_local_ms":             non_local_ms,
+                "local_compute_ms":         local_compute_ms,
+                "postprocess_ms":           postprocess_ms,
+                "app_throughput_kbps":      app_throughput_kbps,
+                "bytes_sent_approx":        bytes_sent,
+                "bytes_recv_approx":        bytes_recv,
+                "tcp_retransmits":          tcp_retransmits,
+                "cpu_percent_during_wait":  cpu_percent_during_wait,
+                # Chunk 4: streaming latency — None for non-streaming adapters
+                "ttft_ms":             phase_metrics.get("ttft_ms"),
+                "tpot_ms":             phase_metrics.get("tpot_ms"),
+                "token_throughput":    phase_metrics.get("token_throughput"),
+                "streaming_enabled":   phase_metrics.get("streaming_enabled", 0),
+                "first_token_time_ns": phase_metrics.get("first_token_time_ns"),
+                "last_token_time_ns":  phase_metrics.get("last_token_time_ns"),                
+                "status":                   "success",
             }
-
+ 
             if not hasattr(self, "pending_interactions"):
                 self.pending_interactions = []
             self.pending_interactions.append(interaction)
-            dprint(f"🔍 DEBUG - Added interaction, now has {len(self.pending_interactions)} items")
-
+ 
             return {
-                "content": content,
-                "tokens": tokens,
-                "total_time_ms": total_time_ms,
-                "preprocess_ms": preprocess_ms,
-                "non_local_ms": non_local_ms,
-                "local_compute_ms": local_compute_ms,
-                "postprocess_ms": postprocess_ms,
-                "app_throughput_kbps": app_throughput_kbps,
-                "bytes_sent_approx": bytes_sent_approx,
-                "bytes_recv_approx": bytes_recv_approx,
-                "tcp_retransmits": tcp_retransmits,
-                "cpu_percent_during_wait": cpu_during_phase,
-                "pending_interactions": self.pending_interactions.copy(),
+                "content":                  content,
+                "tokens":                   tokens,
+                "total_time_ms":            total_time_ms,
+                "preprocess_ms":            preprocess_ms,
+                "non_local_ms":             non_local_ms,
+                "local_compute_ms":         local_compute_ms,
+                "postprocess_ms":           postprocess_ms,
+                "app_throughput_kbps":      app_throughput_kbps,
+                "bytes_sent_approx":        bytes_sent,
+                "bytes_recv_approx":        bytes_recv,
+                "tcp_retransmits":          tcp_retransmits,
+                "cpu_percent_during_wait":  cpu_percent_during_wait,
+                "pending_interactions":     self.pending_interactions.copy(),
             }
-
+ 
         except Exception as e:
-            logger.error(f"LLM call failed: {e}")
-            
-            # Calculate time spent before failure
-            t_error = time.time()
-            total_time_ms = (t_error - t_pre_start) * 1000 if 't_pre_start' in locals() else 0
-            pre_ms = preprocess_ms if 'preprocess_ms' in locals() else 0
-            
-            # Create interaction record even for failure
-            interaction = {
-                "step_index": call_counter if call_counter is not None else self._call_count,
-                "workflow_type": "agentic",
-                "prompt": prompt,
-                "response": f"ERROR: {e}",
-                "model_name": self.config.get("model_id", self.config.get("name", "unknown")),
-                "provider": self.provider,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0,
-                "total_time_ms": total_time_ms,
-                "preprocess_ms": pre_ms,
-                "non_local_ms": 0,
-                "local_compute_ms": 0,
-                "postprocess_ms": 0,
-                "app_throughput_kbps": 0,
-                "bytes_sent_approx": 0,
-                "bytes_recv_approx": 0,
-                "tcp_retransmits": 0,
-                "cpu_percent_during_wait": 0,
-                "error_message": str(e),
-                "status": "failed",
-            }
-            
-            # Store failed interaction
+            logger.error("Adapter call failed in agentic: %s", e)
             if not hasattr(self, "pending_interactions"):
                 self.pending_interactions = []
+            interaction = {
+                "step_index":           call_counter if call_counter is not None else self._call_count,
+                "workflow_type":        "agentic",
+                "prompt":               prompt,
+                "response":             f"ERROR: {e}",
+                "model_name":           self.config.get("model_id", "unknown"),
+                "provider":             self.provider,
+                "prompt_tokens":        0,
+                "completion_tokens":    0,
+                "total_tokens":         0,
+                "total_time_ms":        0,
+                "preprocess_ms":        0,
+                "non_local_ms":         0,
+                "local_compute_ms":     0,
+                "postprocess_ms":       0,
+                "app_throughput_kbps":  0,
+                "bytes_sent_approx":    0,
+                "bytes_recv_approx":    0,
+                "tcp_retransmits":      0,
+                "cpu_percent_during_wait": 0,
+                # Chunk 4: no streaming data on error path
+                "ttft_ms":             None,
+                "tpot_ms":             None,
+                "token_throughput":    None,
+                "streaming_enabled":   0,
+                "first_token_time_ns": None,
+                "last_token_time_ns":  None,
+                "error_message":        str(e),                
+                "error_message":        str(e),
+                "status":               "failed",
+            }
             self.pending_interactions.append(interaction)
-            
             return {
-                "content": f"Error: {e}",
-                "tokens": {},
-                "total_time_ms": total_time_ms,
-                "preprocess_ms": pre_ms,
-                "non_local_ms": 0,
-                "local_compute_ms": 0,
-                "postprocess_ms": 0,
-                "app_throughput_kbps": 0,
-                "bytes_sent_approx": 0,
-                "bytes_recv_approx": 0,
-                "tcp_retransmits": 0,
+                "content":              f"Error: {e}",
+                "tokens":               {},
+                "total_time_ms":        0,
+                "preprocess_ms":        0,
+                "non_local_ms":         0,
+                "local_compute_ms":     0,
+                "postprocess_ms":       0,
+                "app_throughput_kbps":  0,
+                "bytes_sent_approx":    0,
+                "bytes_recv_approx":    0,
+                "tcp_retransmits":      0,
                 "cpu_percent_during_wait": 0,
                 "pending_interactions": self.pending_interactions.copy(),
             }
 
-    def _get_network_metrics(self) -> Dict[str, Any]:
-        """
-        Get network I/O metrics before/after API call.
-        """
-        metrics = {
-            "bytes_sent": 0,
-            "bytes_recv": 0,
-            "tcp_retransmits": 0,
-        }
-
-        try:
-            net_io = psutil.net_io_counters()
-            metrics["bytes_sent"] = net_io.bytes_sent
-            metrics["bytes_recv"] = net_io.bytes_recv
-
-            # Safe TCP parsing
-            try:
-                with open("/proc/net/snmp", "r") as f:
-                    lines = f.readlines()
-                    for i in range(len(lines)):
-                        if lines[i].startswith("Tcp:") and i + 1 < len(lines):
-                            headers = lines[i].split()
-                            values = lines[i + 1].split()
-                            if "RetransSegs" in headers:
-                                idx = headers.index("RetransSegs")
-                                metrics["tcp_retransmits"] = int(values[idx])
-                            break
-            except Exception:
-                pass  # Don't kill metrics if TCP parsing fails
-
-        except Exception as e:
-            logger.debug(f"Could not get network metrics: {e}")
-
-        return metrics
 
     def _emit_event(
         self,

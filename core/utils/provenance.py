@@ -198,6 +198,8 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "ea.energy_per_successful_step_uj":  ("energy_attribution_v1",      "CALCULATED"),
     "ea.energy_per_accepted_answer_uj":  ("energy_attribution_v1",      "CALCULATED"),
     "ea.energy_per_solved_task_uj":      ("energy_attribution_v1",      "CALCULATED"),
+    "ttft_ms":                           ("ttft_measurement_v1",        "MEASURED"),
+    "tpot_ms":                           ("tpot_measurement_v1",        "MEASURED"),    
     # Thermal + residual
     "ea.thermal_penalty_energy_uj":      ("thermal_penalty_weighted",   "INFERRED"),
     "ea.thermal_penalty_time_ms":        ("thermal_penalty_weighted",   "MEASURED"),
@@ -314,7 +316,9 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "measurement_boundary_v1":       1.0,    # perf_counter — monotonic, all platforms
     "measurement_coverage_v1":       1.0,    # derived from sample timestamps 
     "llm_wait_attribution_v1":  0.85,
-    "ml_energy_estimator_v1":   0.0,    # placeholder until Chunk 1.2          
+    "ml_energy_estimator_v1":   0.0,    # placeholder until Chunk 1.2   
+    "ttft_measurement_v1":      1.0,    # perf_counter monotonic, exact
+    "tpot_measurement_v1":      0.95,   # derived from token count estimate       
 }
 
 

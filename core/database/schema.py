@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS experiments (
     description TEXT,
     workflow_type TEXT CHECK(workflow_type IN ('linear','agentic','comparison')),
     model_name TEXT,
+    model_id                  TEXT,
+    execution_site            TEXT,
+    transport                 TEXT,
+    remote_energy_available   INTEGER DEFAULT 0,
     provider TEXT,
     task_name TEXT,
     country_code TEXT,
@@ -884,6 +888,13 @@ CREATE TABLE IF NOT EXISTS llm_interactions (
     local_compute_ms REAL,
     postprocess_ms REAL,
     cpu_percent_during_wait REAL,
+    ttft_ms REAL,                        -- time to first token in ms (MEASURED)
+    tpot_ms REAL,                        -- time per output token in ms (CALCULATED)
+    token_throughput REAL,               -- tokens/sec during decode (CALCULATED)
+    streaming_enabled INTEGER DEFAULT 0, -- 1 if streaming was used (SYSTEM)
+    first_token_time_ns INTEGER,         -- epoch ns of first token arrival (MEASURED)
+    last_token_time_ns INTEGER,          -- epoch ns of last token arrival (MEASURED)
+    prefill_energy_uj INTEGER,           -- RAPL energy during prefill phase (CALCULATED)    
     bytes_sent_approx INTEGER,
     bytes_recv_approx INTEGER,
     tcp_retransmits INTEGER,
@@ -954,6 +965,8 @@ CREATE TABLE IF NOT EXISTS energy_attribution (
     llm_wait_energy_uj              BIGINT DEFAULT 0,
     attribution_method              TEXT DEFAULT 'cpu_fraction_v1',
     ml_model_version                TEXT DEFAULT NULL,
+    ttft_ms                         REAL DEFAULT NULL,
+    tpot_ms                         REAL DEFAULT NULL,    
     created_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (run_id) REFERENCES runs(run_id)

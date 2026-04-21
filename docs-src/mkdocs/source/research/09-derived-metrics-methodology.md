@@ -533,3 +533,92 @@ Fan RPM from `/sys/class/hwmon/hwmon*/fan*_input`.
 - `voltage_vcore_avg` = AVG from thermal_samples
 
 **References:** See `config/methodology_refs/sensors_voltage.yaml`
+# Streaming Latency Metrics — TTFT and TPOT
+
+## Overview
+
+Two new streaming latency metrics were provisioned in Chunk 7 and will be
+populated by Chunk 4 streaming adapter implementation.
+
+Both columns are NULL for all non-streaming calls.
+
+---
+
+## Time to First Token (TTFT)
+
+**Method ID:** `ttft_measurement_v1`
+**Provenance:** MEASURED
+**Layer:** application
+**Confidence:** 1.0
+
+**Formula:**
+
+$$TTFT = t_{first\_token} - t_{request\_sent}$$
+
+**Description:**
+Wall-clock time from when the HTTP request is sent to when the first token
+is received from the model. Measured using `time.perf_counter()` — monotonic,
+high resolution, platform-independent.
+
+**Why it matters:**
+TTFT determines perceived responsiveness. For interactive applications,
+TTFT dominates user experience. For batch workloads, TPOT dominates.
+LLM workloads show distinct TTFT profiles:
+- Local Ollama: low TTFT (no network), high compute
+- Cloud APIs: high TTFT (network + queue), variable compute
+
+**Column:** `runs.ttft_ms REAL DEFAULT NULL`
+
+**Populated by:** Chunk 4 streaming adapter
+**NULL when:** non-streaming call (current default)
+
+---
+
+## Time Per Output Token (TPOT)
+
+**Method ID:** `tpot_measurement_v1`
+**Provenance:** MEASURED
+**Layer:** application
+**Confidence:** 0.95
+
+**Formula:**
+
+$$TPOT = \frac{T_{total} - TTFT}{N_{completion\_tokens} - 1}$$
+
+**Description:**
+Mean inter-token latency after the first token. Measures throughput of the
+decoding phase. Confidence 0.95 (not 1.0) because completion token count
+is estimated from word-split for some providers that don't return exact counts.
+
+**Why it matters:**
+TPOT × completion_tokens ≈ generation time. Used to compare inference
+efficiency across providers and models at same task. Combined with
+`llm_wait_energy_uj` (Chunk 6.1), enables energy-per-token-per-second analysis.
+
+**Column:** `runs.tpot_ms REAL DEFAULT NULL`
+
+**Populated by:** Chunk 4 streaming adapter
+**NULL when:** non-streaming call (current default)
+
+---
+
+## Relationship to LLM Wait Energy (Chunk 6.1 finding)
+
+LLM workloads spend 48-96% of attributed energy in API wait state at ~12.9W.
+TTFT and TPOT decompose this wait into:
+
+```
+total_wait = TTFT + (TPOT × completion_tokens)
+llm_wait_energy_uj = pkg_power_during_wait × total_wait
+```
+
+This enables attribution of wait energy to network vs inference components —
+a novel contribution of this research platform.
+
+---
+
+## References
+
+- Kwon et al. (2023) — "Efficient Large Language Model Serving" — defines TTFT/TPOT
+- A-LEMS Chunk 6.1 — LLM Wait Energy Finding (docs-src/research/15-llm-wait-energy-finding.md)
+- A-LEMS Chunk 7 — Adapter Infrastructure (docs-src/research/16-model-factory-architecture.md)

@@ -304,9 +304,10 @@ class SQLiteAdapter(DatabaseInterface):
             """
             INSERT INTO experiments (
                 name, description, workflow_type, model_name, provider,
+                model_id, execution_site, transport, remote_energy_available,
                 task_name, country_code, group_id, status, started_at, runs_total,optimization_enabled,
                 hw_id, env_id                 
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 experiment_data.get("name", "unnamed"),
@@ -314,6 +315,10 @@ class SQLiteAdapter(DatabaseInterface):
                 experiment_data.get("workflow_type"),
                 experiment_data.get("model_name"),
                 experiment_data.get("provider"),
+                experiment_data.get("model_id"),
+                experiment_data.get("execution_site"),
+                experiment_data.get("transport"),
+                experiment_data.get("remote_energy_available", 0),                
                 experiment_data.get("task_name"),
                 experiment_data.get("country_code", "US"),
                 experiment_data.get("group_id"),
@@ -788,11 +793,12 @@ class SQLiteAdapter(DatabaseInterface):
                 prompt_tokens, completion_tokens, total_tokens,
                 api_latency_ms, compute_time_ms,
                 app_throughput_kbps,
-                total_time_ms, preprocess_ms, non_local_ms, local_compute_ms, postprocess_ms,
+                total_time_ms,ttft_ms, tpot_ms, token_throughput, streaming_enabled,
+                first_token_time_ns, last_token_time_ns, prefill_energy_uj, preprocess_ms, non_local_ms, local_compute_ms, postprocess_ms,
                 cpu_percent_during_wait,
                 bytes_sent_approx, bytes_recv_approx, tcp_retransmits,
                 error_message, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 interaction_data.get("run_id"),
@@ -809,6 +815,14 @@ class SQLiteAdapter(DatabaseInterface):
                 interaction_data.get("compute_time_ms", 0),
                 interaction_data.get("app_throughput_kbps", 0),
                 interaction_data.get("total_time_ms", 0),
+                # Chunk 4 streaming fields — None for non-streaming adapters
+                interaction_data.get('ttft_ms'),
+                interaction_data.get('tpot_ms'),
+                interaction_data.get('token_throughput'),
+                interaction_data.get('streaming_enabled', 0),
+                interaction_data.get('first_token_time_ns'),
+                interaction_data.get('last_token_time_ns'),
+                interaction_data.get('prefill_energy_uj'),                
                 interaction_data.get("preprocess_ms", 0),
                 interaction_data.get("non_local_ms", 0),
                 interaction_data.get("local_compute_ms", 0),

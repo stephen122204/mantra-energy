@@ -681,7 +681,42 @@ def _load_derived_methods() -> List[Dict]:
             "doc":           "15-llm-wait-energy-finding.md",
             "section":       "Future Work",
         },
-
+        {
+            "id":            "ttft_measurement_v1",
+            "name":          "Time to First Token Measurement",
+            "provenance":    "MEASURED",
+            "layer":         "application",
+            "confidence":    1.0,
+            "description":   (
+                "Wall-clock time from request send to first token received. "
+                "Streaming only — NULL for non-streaming calls. "
+                "Provisioned Chunk 7, populated Chunk 4."
+            ),
+            "formula_latex": (
+                r"TTFT = t_{first\_token} - t_{request\_sent}"
+            ),
+            "parameters":    {},
+            "doc":           "09-derived-metrics-methodology.md",
+            "section":       "Streaming Latency Metrics",
+        },
+        {
+            "id":            "tpot_measurement_v1",
+            "name":          "Time Per Output Token Measurement",
+            "provenance":    "MEASURED",
+            "layer":         "application",
+            "confidence":    0.95,
+            "description":   (
+                "Mean inter-token latency after first token. "
+                "(total_time - ttft) / (completion_tokens - 1). "
+                "Streaming only — NULL for non-streaming calls."
+            ),
+            "formula_latex": (
+                r"TPOT = \frac{T_{total} - TTFT}{N_{tokens} - 1}"
+            ),
+            "parameters":    {},
+            "doc":           "09-derived-metrics-methodology.md",
+            "section":       "Streaming Latency Metrics",
+        },
     ]
 
 

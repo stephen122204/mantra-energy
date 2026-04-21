@@ -1,46 +1,266 @@
 {
-  "cloud": {
-    "linear": {
-      "name": "Groq Llama 3.3 70B",
-      "provider": "groq",
-      "api_endpoint": "https://api.groq.com/openai/v1/chat/completions",
-      "api_key_env": "GROQ_API_KEY",
-      "model_id": "llama-3.3-70b-versatile",
-      "max_tokens": 1024,
-      "temperature": 0.7,
-      "tools_supported": false
+  "version": "2.0",
+  "providers": {
+    "ollama_local": {
+      "type": "local_ollama",
+      "base_url": "http://localhost:11434",
+      "models": [
+        {
+          "model_id": "tinyllama-1b",
+          "name": "TinyLlama 1B (local)",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 1024,
+          "temperature": 0.7,
+          "tools_supported": false
+        }
+      ]
     },
-    "agentic": {
-      "name": "Groq Llama 3.3 70B (Agentic)",
-      "provider": "groq",
-      "api_endpoint": "https://api.groq.com/openai/v1/chat/completions",
+    "ollama_remote": {
+      "type": "local_ollama",
+      "base_url": "http://129.153.71.47:11434",
+      "models": [
+        {
+          "model_id": "phi4:latest",
+          "name": "Phi4 14B (Oracle VM)",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 2048,
+          "temperature": 0.7,
+          "tools_supported": false
+        },
+        {
+          "model_id": "qwen2.5-coder:14b",
+          "name": "Qwen2.5 Coder 14B (Oracle VM)",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tools_supported": false
+        },
+        {
+          "model_id": "deepseek-r1:14b",
+          "name": "DeepSeek R1 14B (Oracle VM)",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tools_supported": false
+        },
+        {
+          "model_id": "llama3.2:3b",
+          "name": "Llama 3.2 3B (Oracle VM)",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 2048,
+          "temperature": 0.7,
+          "tools_supported": false
+        },
+        {
+          "model_id": "mashriram/sarvam-m-tools:latest",
+          "name": "Sarvam M Tools Indic (Oracle VM)",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 2048,
+          "temperature": 0.7,
+          "tools_supported": true,
+          "note": "25GB ZRAM model — expect 30-60min response time"
+        }
+      ]
+    },
+    "groq": {
+      "type": "cloud_api",
+      "base_url": "https://api.groq.com/openai/v1",
       "api_key_env": "GROQ_API_KEY",
-      "model_id": "llama-3.3-70b-versatile",
-      "max_tokens": 2048,
-      "temperature": 0.7,
-      "tools_supported": true,
-      "tools": ["web_search", "calculator"]
+      "openai_compat": true,
+      "models": [
+        {
+          "model_id": "llama-3.3-70b-versatile",
+          "name": "Groq Llama 3.3 70B",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 2048,
+          "temperature": 0.7,
+          "tools_supported": true
+        }
+      ]
+    },
+    "openai": {
+      "type": "cloud_api",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "openai_compat": true,
+      "models": [
+        {
+          "model_id": "gpt-4o",
+          "name": "GPT-4o",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tools_supported": true
+        },
+        {
+          "model_id": "gpt-4o-mini",
+          "name": "GPT-4o Mini",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tools_supported": true
+        }
+      ]
+    },
+    "anthropic": {
+      "type": "cloud_api",
+      "base_url": "https://api.anthropic.com",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "openai_compat": false,
+      "models": [
+        {
+          "model_id": "claude-sonnet-4-5",
+          "name": "Claude Sonnet",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tools_supported": true
+        }
+      ]
+    },
+    "gemini": {
+      "type": "cloud_api",
+      "base_url": "https://generativelanguage.googleapis.com",
+      "api_key_env": "GEMINI_API_KEY",
+      "openai_compat": false,
+      "models": [
+        {
+          "model_id": "gemini-2.0-flash",
+          "name": "Gemini 2.0 Flash",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tools_supported": true
+        }
+      ]
+    },
+    "llama_cpp": {
+      "type": "local_gguf",
+      "models": [
+        {
+          "model_id": "tinyllama-1b-gguf",
+          "name": "TinyLlama 1B GGUF",
+          "tasks": ["text-generation"],
+          "modes": ["linear", "agentic"],
+          "model_path": "/home/dpani/mydrive/models/tinyllama.gguf",
+          "max_tokens": 1024,
+          "temperature": 0.7,
+          "tools_supported": false
+        }
+      ]
+    },
+    "kokoro": {
+      "type": "local_env",
+      "env_path": "/opt/ai-stack/envs/kokoro-env",
+      "models": [
+        {
+          "model_id": "kokoro-82m",
+          "name": "Kokoro TTS English",
+          "tasks": ["text-to-speech"],
+          "modes": ["linear"],
+          "voice": "af_heart",
+          "sample_rate": 24000
+        }
+      ]
+    },
+    "indic_parler": {
+      "type": "local_env",
+      "env_path": "/opt/ai-stack/envs/indic-tts-env",
+      "models": [
+        {
+          "model_id": "indic-parler-tts",
+          "name": "Indic Parler TTS (13 languages)",
+          "tasks": ["text-to-speech"],
+          "modes": ["linear"],
+          "languages": ["hi","ta","te","bn","mr","gu","kn","ml","pa","or","as","ur","si"],
+          "sample_rate": 24000
+        }
+      ]
+    },
+    "indic_f5": {
+      "type": "local_env",
+      "env_path": "/opt/ai-stack/envs/indicf5-env",
+      "models": [
+        {
+          "model_id": "indicf5",
+          "name": "IndicF5 Voice Clone",
+          "tasks": ["voice-cloning"],
+          "modes": ["linear"]
+        }
+      ]
+    },
+    "faster_whisper": {
+      "type": "local_env",
+      "env_path": "/opt/ai-stack/envs/whisper-env",
+      "models": [
+        {
+          "model_id": "faster-whisper-small",
+          "name": "Faster Whisper Small",
+          "tasks": ["speech-to-text"],
+          "modes": ["linear"],
+          "model_size": "small",
+          "compute_type": "int8",
+          "beam_size": 5
+        }
+      ]
     }
   },
-  "local": {
-    "linear": {
-      "name": "TinyLlama 1B Offline",
-      "model_id": "tinyllama-1b",
-      "provider": "local",
-      "model_path": "/home/dpani/mydrive/models/tinyllama.gguf",
-      "max_tokens": 1024,
-      "temperature": 0.7,
-      "tools_supported": false
+  "legacy": {
+    "_comment": "Kept for backward compat — harness.py still calls get_model_config(mode, workflow)",
+    "cloud": {
+      "linear": {
+        "name": "Groq Llama 3.3 70B",
+        "provider": "groq",
+        "api_endpoint": "https://api.groq.com/openai/v1/chat/completions",
+        "api_key_env": "GROQ_API_KEY",
+        "model_id": "llama-3.3-70b-versatile",
+        "max_tokens": 1024,
+        "temperature": 0.7,
+        "tools_supported": false
+      },
+      "agentic": {
+        "name": "Groq Llama 3.3 70B (Agentic)",
+        "provider": "groq",
+        "api_endpoint": "https://api.groq.com/openai/v1/chat/completions",
+        "api_key_env": "GROQ_API_KEY",
+        "model_id": "llama-3.3-70b-versatile",
+        "max_tokens": 2048,
+        "temperature": 0.7,
+        "tools_supported": true,
+        "tools": ["web_search", "calculator"]
+      }
     },
-    "agentic": {
-      "name": "TinyLlama 1B Offline (Agentic)",
-      "model_id": "tinyllama-1b",
-      "provider": "local",
-      "model_path": "/home/dpani/mydrive/models/tinyllama.gguf",
-      "max_tokens": 2048,
-      "temperature": 0.7,
-      "tools_supported": true,
-      "tools": ["web_search", "calculator"]
+    "local": {
+      "linear": {
+        "name": "TinyLlama 1B Offline",
+        "model_id": "tinyllama-1b",
+        "provider": "local",
+        "model_path": "/home/dpani/mydrive/models/tinyllama.gguf",
+        "max_tokens": 1024,
+        "temperature": 0.7,
+        "tools_supported": false
+      },
+      "agentic": {
+        "name": "TinyLlama 1B Offline (Agentic)",
+        "model_id": "tinyllama-1b",
+        "provider": "local",
+        "model_path": "/home/dpani/mydrive/models/tinyllama.gguf",
+        "max_tokens": 2048,
+        "temperature": 0.7,
+        "tools_supported": true,
+        "tools": ["web_search", "calculator"]
+      }
     }
   }
 }

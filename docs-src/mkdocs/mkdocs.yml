@@ -57,6 +57,10 @@ nav:
     - Auto-Registration & PageRenderer: developer-guide/15-auto-registration.md
     - Platform detection: developer-guide/18-platform-detection.md
     - Energy Attribution and Normalization: developer-guide/19-attribution-developer-guide.md
+    - Model Factory Architecture: developer-guide/16-model-factory-architecture.md
+    - Adding New Models: developer-guide/how-to-add-model.md
+    - Adding New Providers: developer-guide/how-to-add-provider.md
+    - Testing Models: developer-guide/how-to-test-models.md
 
     - Compliance:
       - Developer Compliance Guide: compliance/COMPLIANCE.md

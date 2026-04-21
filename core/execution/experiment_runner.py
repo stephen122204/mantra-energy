@@ -38,10 +38,11 @@ from core.config_loader import ConfigLoader
 from core.database.manager import DatabaseManager
 from core.models.baseline_measurement import BaselineMeasurement
 from core.utils.provenance import record_run_provenance
-from scripts.etl.phase_attribution_etl import process_run_async
-from scripts.etl.aggregate_hardware_metrics import aggregate_async
-from scripts.etl.energy_attribution_etl import attribution_async 
-from scripts.etl.duration_fix_etl import duration_fix_async        # v9 duration fix
+from scripts.etl.phase_attribution_etl import compute_phase_attribution
+from scripts.etl.aggregate_hardware_metrics import aggregate_hardware_metrics
+from scripts.etl.energy_attribution_etl import compute_energy_attribution
+from scripts.etl.duration_fix_etl import fix_run, fix_run_with_pretask
+from scripts.etl.ttft_tpot_etl import populate_run as populate_ttft_tpot
 
 
 class ExperimentRunner:
@@ -440,6 +441,10 @@ class ExperimentRunner:
             "workflow_type": "comparison",
             "model_name": linear_config.get("name", "unknown"),
             "provider": provider,
+            "model_id":                 linear_config.get("model_id"),
+            "execution_site":           linear_config.get("execution_site"),
+            "transport":                linear_config.get("transport"),
+            "remote_energy_available":  int(linear_config.get("remote_energy_available", False)),            
             "task_name": task_id,
             "country_code": country_code,
             "group_id": self.group_id,  # NEW
@@ -794,21 +799,22 @@ class ExperimentRunner:
             f"   ✅ Pair {rep_num} saved (linear: {linear_id}, agentic: {agentic_id})"
         )
 
-        process_run_async(agentic_id) # Chunk 5: async phase attribution ETL
-        aggregate_async(agentic_id)     # Chunk 12: async hardware metrics aggregation
-        aggregate_async(linear_id)      # Chunk 12: aggregate linear run too
-        attribution_async(agentic_id)   # Chunk 6: multi-layer energy attribution
-        attribution_async(linear_id)    # Chunk 6: attribute linear run too  
-        # v9: duration fix — pass rapl_before_pretask from result dict
-        duration_fix_async(
-            agentic_id,
-            rapl_before_pretask=agentic_result.get("rapl_before_pretask"),
-            pre_task_duration_sec=agentic_result.get("pre_task_duration_sec", 0.0),
-        )
-        duration_fix_async(
-            linear_id,
-            rapl_before_pretask=linear_result.get("rapl_before_pretask"),
-            pre_task_duration_sec=linear_result.get("pre_task_duration_sec", 0.0),
-        )        
+        # ETL runs synchronously — daemon threads were dying before completion
+        compute_phase_attribution(agentic_id)
+        aggregate_hardware_metrics(agentic_id)
+        aggregate_hardware_metrics(linear_id)
+        compute_energy_attribution(agentic_id)
+        compute_energy_attribution(linear_id)
+        #populate_ttft_tpot(agentic_id)
+        #populate_ttft_tpot(linear_id)
+        # v9: duration fix
+        if agentic_result.get("rapl_before_pretask"):
+            fix_run_with_pretask(agentic_id, agentic_result.get("rapl_before_pretask"), agentic_result.get("pre_task_duration_sec", 0.0))
+        else:
+            fix_run(agentic_id)
+        if linear_result.get("rapl_before_pretask"):
+            fix_run_with_pretask(linear_id, linear_result.get("rapl_before_pretask"), linear_result.get("pre_task_duration_sec", 0.0))
+        else:
+            fix_run(linear_id)       
 
         return linear_id, agentic_id

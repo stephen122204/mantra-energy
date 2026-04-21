@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from core.utils.preflight import preflight
+
 
 import numpy as np
 from dotenv import load_dotenv
@@ -32,7 +32,7 @@ from core.execution.experiment_runner import ExperimentRunner
 from core.execution.harness import ExperimentHarness
 from core.execution.linear import LinearExecutor
 from core.utils.task_loader import list_task_summary, load_tasks
-
+from core.utils.preflight import preflight
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -42,7 +42,8 @@ def parse_arguments():
     parser.add_argument("--tasks", type=str, default="simple,capital")
     parser.add_argument("--list-tasks", action="store_true")
     parser.add_argument("--no-warmup", action="store_true")
-    parser.add_argument("--provider", choices=["cloud", "local"], default="cloud")
+    parser.add_argument("--provider", type=str, default="groq",
+        help="Provider from models.yaml e.g. groq, llama_cpp, ollama_remote")
     parser.add_argument("--country", type=str, default="US")
     parser.add_argument("--save-db", action="store_true")
     parser.add_argument("--providers", type=str, help="Comma-separated providers")
@@ -80,8 +81,13 @@ def run_provider_task(
     # ========================================================================
     # Setup executors for this provider
     # ========================================================================
-    linear_config = runner.config.get_model_config(provider, "linear")
-    agentic_config = runner.config.get_model_config(provider, "agentic")
+    models_for_provider = runner.config.list_models(provider)
+    if not models_for_provider:
+        print(f"   ❌ No models found for provider '{provider}', skipping...")
+        return []
+    model_id = models_for_provider[0]["model_id"]
+    linear_config  = runner.config.get_model_config_v2(provider, model_id)
+    agentic_config = runner.config.get_model_config_v2(provider, model_id)
 
     if not linear_config or not agentic_config:
         print(f"   ❌ Failed to load {provider} configs, skipping...")
@@ -151,7 +157,7 @@ def run_provider_task(
                     executor=linear,
                     prompt=task["prompt"],
                     task_id=task["id"],
-                    is_cloud=(provider in ["cloud", "openrouter"]),
+                    is_cloud=not linear_config.get("is_local", False),
                     country_code=args.country,
                     run_number=rep + 1,
                 )
@@ -161,7 +167,7 @@ def run_provider_task(
                     executor=agentic,
                     task=task["prompt"],
                     task_id=task["id"],
-                    is_cloud=(provider in ["cloud", "openrouter"]),
+                    is_cloud=not linear_config.get("is_local", False),
                     country_code=args.country,
                     run_number=rep + 1,
                 )
@@ -332,7 +338,7 @@ def run_all_experiments(args):
     elif args.provider:
         providers = [args.provider]
     else:
-        providers = ["cloud"]
+        providers = ["groq"]
 
     # Load tasks
     all_tasks = load_tasks()

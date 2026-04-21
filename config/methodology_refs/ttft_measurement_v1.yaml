@@ -1,0 +1,19 @@
+method_id: ttft_measurement_v1
+name: "Time to First Token Measurement"
+references:
+  - title: "Efficient Large Language Model Serving"
+    authors: "Kwon et al."
+    year: 2023
+    ref_type: paper
+    relevance: "Defines TTFT as key LLM serving latency metric"
+  - title: "A-LEMS Chunk 7 Adapter Refactor"
+    authors: "Deepak Panigrahy"
+    year: 2026
+    ref_type: internal
+    relevance: "Provisioned in streaming adapter infrastructure; populated by Chunk 4"
+
+method_id_tpot: tpot_measurement_v1
+notes: >
+  ttft_ms = time from request send to first token received (streaming only).
+  tpot_ms = (total_time - ttft) / (completion_tokens - 1) (streaming only).
+  Both NULL for non-streaming calls. Chunk 4 implements streaming and populates.

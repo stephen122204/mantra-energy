@@ -43,6 +43,7 @@ AUTHOR: Deepak Panigrahy
 ================================================================================
 """
 
+import threading
 import asyncio
 import logging
 import sqlite3
@@ -505,23 +506,14 @@ def backfill_all(db_path: Path = DEFAULT_DB) -> None:
     )
 
 
-async def attribution_async(run_id: int, db_path: Path = DEFAULT_DB) -> None:
+def attribution_async(run_id: int, db_path: Path = DEFAULT_DB) -> None:
     """
-    Async wrapper for use in experiment_runner.py save_pair().
-    Runs attribution in executor to avoid blocking the event loop.
-
-    Usage in experiment_runner.py:
-        from scripts.etl.energy_attribution_etl import attribution_async
-        attribution_async(agentic_id)
-        attribution_async(linear_id)
+    Non-blocking thread — replaces async def which was never awaited.
+    Args:
+        run_id: run to attribute
+        db_path: database path
     """
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(
-        None,
-        compute_energy_attribution,
-        run_id,
-        db_path,
-    )
+    threading.Thread(target=compute_energy_attribution, args=(run_id, db_path), daemon=True).start()
 
 
 # =============================================================================

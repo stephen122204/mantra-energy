@@ -38,6 +38,7 @@ from datetime import datetime
 import json
 
 from core.utils.debug import dprint
+from core.execution.model_factory import ModelFactory
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +102,15 @@ class LinearExecutor:
         # ====================================================================
         self._llm = None
         self._effective_kbps_list = []
+        # inject resolved api_key into config so adapter finds it
+        _cfg = dict(self.config)
+        _cfg['_resolved_api_key'] = self.api_key
+        self._adapter = ModelFactory.get_adapter(self.provider, _cfg)
         
-        if self.provider not in ['ollama', 'local'] and not self.api_key:
-            logger.warning(f"API key missing: {self.config.get('api_key_env')}")
-        logger.info(f"LinearExecutor initialized: {self.config.get('model_id')} ({self.provider})")
+        
+        if not self.config.get("is_local", False) and self.config.get("api_key_env") and not self.api_key:
+            error = "API key not found"
+            logger.error(f"No API key available for {self.provider}")
 
     # =========================================================================
     # MAIN EXECUTION ENTRY POINT
@@ -138,7 +144,7 @@ class LinearExecutor:
         # ====================================================================
         # Step 2: Capture pre-request network state (always)
         # ====================================================================
-        net_before = self._get_network_metrics()
+        net_before = {}
         
         dprint(f"\n{'='*60}")
         dprint(f"🚀 LINEAR EXECUTION [{experiment_id}]: {prompt[:100]}...")
@@ -159,7 +165,13 @@ class LinearExecutor:
         execution_time_ms = (end_time - start_time) * 1000
         
         # Network metrics - always calculate
-        net_metrics = self._compute_network_metrics(net_before)
+        # network metrics now captured inside adapter and stored in _current_llm_metrics
+        _r = getattr(self, '_last_adapter_result', {})
+        net_metrics = {
+            'bytes_sent':      _r.get('bytes_sent', 0),
+            'bytes_recv':      _r.get('bytes_recv', 0),
+            'tcp_retransmits': _r.get('tcp_retransmits', 0),
+        }
         
         # Safe compute time (never negative due to clock jitter)
         phase_metrics = getattr(self, '_current_llm_metrics', {})
@@ -251,7 +263,7 @@ class LinearExecutor:
             Tuple of (error, effective_temperature)
         """
         error = None
-        if self.provider not in ['ollama', 'local'] and not self.api_key:
+        if not self.config.get("is_local", False) and self.config.get("api_key_env") and not self.api_key:
             error = "API key not found"
             logger.error(f"No API key available for {self.provider}")
         
@@ -266,356 +278,32 @@ class LinearExecutor:
             Tuple of (content, tokens, api_latency_ms, prompt_bytes, 
                      response_bytes, effective_kbps, error)
         """
-        content = None
-        tokens = {}
-        api_latency_ms = 0
+        # Chunk 7: delegate to adapter — no provider if/else here
         prompt_bytes = len(prompt.encode('utf-8'))
-        response_bytes = 0
-        effective_kbps = 0
-        error = current_error
-        
-        # ====================================================================
-        # Skip execution if we already have an error (e.g., missing API key)
-        # ====================================================================
-        if error is not None:
-            return content, tokens, api_latency_ms, prompt_bytes, response_bytes, effective_kbps, error
-        
+        if current_error is not None:
+            return None, {}, 0, prompt_bytes, 0, 0, current_error
+ 
+        dprint(f"📨 Calling {self.provider} adapter (temp={temp})...")
+        error = None
         try:
-            dprint(f"📨 Calling {self.provider} API (temp={temp})...")
-            
-            # ================================================================
-            # Provider-specific implementations
-            # ================================================================
-            if self.provider == 'ollama':
-                content, tokens, api_latency_ms = self._call_ollama(prompt, temp)
-                
-            elif self.provider == 'local':
-                content, tokens, api_latency_ms = self._call_local(prompt, temp)
-                
-            else:
-                content, tokens, api_latency_ms = self._call_cloud(prompt, temp)
-            
-            # ================================================================
-            # Calculate throughput if we have content
-            # ================================================================
-            if content:
-                response_bytes = len(content.encode('utf-8'))
-                effective_kbps = self._compute_throughput(
-                    prompt_bytes, response_bytes, api_latency_ms
-                )
-                
+            result          = self._adapter.call(prompt, temp)
+            content         = result["content"]
+            tokens          = result["tokens"]
+            api_latency_ms  = result["total_time_ms"]
+            response_bytes  = len(content.encode("utf-8"))
+            effective_kbps  = result["phase_metrics"]["app_throughput_kbps"]
+            # preserve _current_llm_metrics shape — harness reads at line 165
+            self._current_llm_metrics = result["phase_metrics"]
+            self._last_adapter_result = result
         except Exception as e:
             error = str(e)
-            logger.error(f"LLM call failed: {e}")
-            # All other values remain at defaults
-        
+            logger.error("Adapter call failed: %s", e)
+            content, tokens, api_latency_ms = None, {}, 0
+            response_bytes, effective_kbps  = 0, 0
+            self._current_llm_metrics       = {}
+ 
         return content, tokens, api_latency_ms, prompt_bytes, response_bytes, effective_kbps, error
 
-    def _call_ollama(self, prompt: str, temp: float) -> Tuple[str, Dict, float]:
-        """Call Ollama local API with phase timing."""
-        # ====================================================================
-        # Phase 1: PRE-PROCESSING (Local CPU work)
-        # ====================================================================
-        t_pre_start = time.time()
-        
-        prompt_bytes = len(prompt.encode('utf-8'))
-        
-        t_pre_end = time.time()
-        preprocess_ms = (t_pre_end - t_pre_start) * 1000
-        
-        # ====================================================================
-        # Phase 2: WAIT + INFERENCE (Ollama runs locally but has network)
-        # ====================================================================
-        t_inference_start = time.time()
-        
-        response = requests.post(
-            self.config['api_endpoint'],
-            json={
-                "model": self.config['model_id'],
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-                "options": {
-                    "temperature": temp,
-                    "num_predict": self.max_tokens,
-                },
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        data = response.json()
-        
-        t_inference_end = time.time()
-        local_compute_ms = (t_inference_end - t_inference_start) * 1000  # Ollama inference is local
-        
-        # ====================================================================
-        # Phase 3: POST-PROCESSING (Local CPU work)
-        # ====================================================================
-        t_post_start = time.time()
-        
-        content = data["message"]["content"]
-        response_bytes = len(content.encode('utf-8'))
-        
-        tokens = {
-            "prompt": len(prompt.split()),
-            "completion": len(content.split()),
-            "total": len(prompt.split()) + len(content.split()),
-        }
-        
-        t_post_end = time.time()
-        postprocess_ms = (t_post_end - t_post_start) * 1000
-        
-        # ====================================================================
-        # Total time
-        # ====================================================================
-        total_time_ms = preprocess_ms + local_compute_ms + postprocess_ms
-        
-        # Throughput
-        total_bytes = prompt_bytes + response_bytes
-        if total_time_ms > 0:
-            app_throughput_kbps = (total_bytes * 8) / (total_time_ms / 1000) / 1000
-        else:
-            app_throughput_kbps = 0
-        
-        # Store metrics for interaction
-        self._current_llm_metrics = {
-            'total_time_ms': total_time_ms,
-            'preprocess_ms': preprocess_ms,
-            'non_local_ms': 0,  # Ollama runs locally
-            'local_compute_ms': local_compute_ms,
-            'postprocess_ms': postprocess_ms,
-            'app_throughput_kbps': app_throughput_kbps,
-            'cpu_percent_during_wait': 0,
-        }
-        
-        return content, tokens, total_time_ms
-
-    def _call_local(self, prompt: str, temp: float) -> Tuple[str, Dict, float]:
-        """Call local GGUF model with phase timing (matching agentic)."""
-        # ====================================================================
-        # Phase 1: PRE-PROCESSING (Local CPU work)
-        # ====================================================================
-        t_pre_start = time.time()
-        
-        prompt_bytes = len(prompt.encode('utf-8'))
-        
-        t_pre_end = time.time()
-        preprocess_ms = (t_pre_end - t_pre_start) * 1000
-        
-        # ====================================================================
-        # Phase 2: LOCAL INFERENCE (Active compute)
-        # ====================================================================
-        t_inference_start = time.time()
-        
-        # Lazy-load model for performance
-        if self._llm is None:
-            from llama_cpp import Llama
-            self._llm = Llama(model_path=self.model_path)
-        
-        response = self._llm(
-            prompt,
-            max_tokens=self.max_tokens,
-            temperature=temp,
-            echo=False
-        )
-        
-        t_inference_end = time.time()
-        local_compute_ms = (t_inference_end - t_inference_start) * 1000
-        
-        # ====================================================================
-        # Phase 3: POST-PROCESSING (Local CPU work)
-        # ====================================================================
-        t_post_start = time.time()
-        
-        content = response['choices'][0]['text'].strip()
-        response_bytes = len(content.encode('utf-8'))
-        
-        tokens = {
-            'prompt': response['usage']['prompt_tokens'],
-            'completion': response['usage']['completion_tokens'],
-            'total': response['usage']['total_tokens']
-        }
-        
-        t_post_end = time.time()
-        postprocess_ms = (t_post_end - t_post_start) * 1000
-        
-        # ====================================================================
-        # Total time
-        # ====================================================================
-        total_time_ms = preprocess_ms + local_compute_ms + postprocess_ms
-        
-        # Throughput (for local, this is 0 - no network)
-        app_throughput_kbps = 0
-        
-        # Store metrics for interaction
-        self._current_llm_metrics = {
-            'total_time_ms': total_time_ms,
-            'preprocess_ms': preprocess_ms,
-            'non_local_ms': 0,  # No network for local
-            'local_compute_ms': local_compute_ms,
-            'postprocess_ms': postprocess_ms,
-            'app_throughput_kbps': app_throughput_kbps,
-            'cpu_percent_during_wait': 0,  # No wait phase for local
-        }
-        
-        return content, tokens, total_time_ms
-
-    def _call_cloud(self, prompt: str, temp: float) -> Tuple[str, Dict, float]:
-        """Call cloud API with phase timing."""
-        # ====================================================================
-        # Phase 1: PRE-PROCESSING (Local CPU work)
-        # ====================================================================
-        t_pre_start = time.time()
-        
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": self.config['model_id'],
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": self.max_tokens,
-            "temperature": temp
-        }
-        
-        json_payload = json.dumps(payload)
-        prompt_bytes = len(json_payload)
-        
-        t_pre_end = time.time()
-        preprocess_ms = (t_pre_end - t_pre_start) * 1000
-        
-        # ====================================================================
-        # Phase 2: WAIT (Network + remote inference)
-        # ====================================================================
-        t_wait_start = time.time()
-        
-        response = requests.post(
-            self.config['api_endpoint'],
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-        response.raise_for_status()
-        data = response.json()
-        
-        t_wait_end = time.time()
-        non_local_ms = (t_wait_end - t_wait_start) * 1000
-        
-        # Sample CPU during wait
-        cpu_during_wait = psutil.cpu_percent(interval=0.1)
-        
-        # ====================================================================
-        # Phase 3: POST-PROCESSING (Local CPU work)
-        # ====================================================================
-        t_post_start = time.time()
-        
-        if 'choices' in data:
-            content = data['choices'][0]['message']['content']
-            usage = data.get('usage', {})
-            tokens = {
-                'prompt': usage.get('prompt_tokens', 0),
-                'completion': usage.get('completion_tokens', 0),
-                'total': usage.get('total_tokens', 0)
-            }
-        else:
-            content = str(data)
-            tokens = {}
-            logger.warning(f"Unexpected API response format")
-        
-        response_bytes = len(content.encode('utf-8'))
-        
-        t_post_end = time.time()
-        postprocess_ms = (t_post_end - t_post_start) * 1000
-        
-        # ====================================================================
-        # Total time and throughput
-        # ====================================================================
-        total_time_ms = preprocess_ms + non_local_ms + postprocess_ms
-        
-        total_bytes = prompt_bytes + response_bytes
-        if non_local_ms > 0:
-            app_throughput_kbps = (total_bytes * 8) / (non_local_ms / 1000) / 1000
-        else:
-            app_throughput_kbps = 0
-        
-        # Store metrics for interaction
-        self._current_llm_metrics = {
-            'total_time_ms': total_time_ms,
-            'preprocess_ms': preprocess_ms,
-            'non_local_ms': non_local_ms,
-            'postprocess_ms': postprocess_ms,
-            'app_throughput_kbps': app_throughput_kbps,
-            'cpu_percent_during_wait': cpu_during_wait,
-        }
-        
-        return content, tokens, total_time_ms
-
-    def _get_network_metrics(self) -> Dict[str, Any]:
-        """
-        Get network I/O metrics before/after API call.
-        
-        Returns:
-            Dictionary with:
-            - bytes_sent: Total bytes sent
-            - bytes_recv: Total bytes received
-            - tcp_retransmits: Number of TCP retransmissions
-        """
-        metrics = {
-            'bytes_sent': 0,
-            'bytes_recv': 0,
-            'tcp_retransmits': 0
-        }
-        
-        try:
-            # ====================================================================
-            # Get network I/O counters from psutil
-            # ====================================================================
-            net_io = psutil.net_io_counters()
-            metrics['bytes_sent'] = net_io.bytes_sent
-            metrics['bytes_recv'] = net_io.bytes_recv
-            
-            # ====================================================================
-            # Get TCP retransmits from /proc/net/snmp (Linux only)
-            # ====================================================================
-            with open('/proc/net/snmp', 'r') as f:
-                for line in f:
-                    if line.startswith('Tcp:'):
-                        parts = line.split()
-                        if 'RetransSegs' in parts:
-                            idx = parts.index('RetransSegs')
-                            metrics['tcp_retransmits'] = int(parts[idx + 1])
-                        break
-        except Exception as e:
-            logger.debug(f"Could not get network metrics: {e}")
-            # Keep defaults (zeros)
-        
-        return metrics
-
-    def _compute_network_metrics(self, net_before: Dict) -> Dict[str, int]:
-        """
-        Compute network delta metrics.
-        
-        Args:
-            net_before: Network metrics before execution
-            
-        Returns:
-            Dictionary with bytes_sent, bytes_recv, tcp_retransmits deltas
-        """
-        # For local/ollama, network metrics are meaningless - set to 0
-        if self.provider in ["local", "ollama"]:
-            return {
-                'bytes_sent': 0,
-                'bytes_recv': 0,
-                'tcp_retransmits': 0
-            }
-        
-        net_after = self._get_network_metrics()
-        
-        return {
-            'bytes_sent': net_after['bytes_sent'] - net_before['bytes_sent'],
-            'bytes_recv': net_after['bytes_recv'] - net_before['bytes_recv'],
-            'tcp_retransmits': net_after['tcp_retransmits'] - net_before['tcp_retransmits']
-        }
 
     def _compute_throughput(self, prompt_bytes: int, response_bytes: int, latency_ms: float) -> float:
         """
@@ -702,6 +390,13 @@ class LinearExecutor:
             'non_local_ms': phase_metrics.get('non_local_ms', 0),
             'postprocess_ms': phase_metrics.get('postprocess_ms', 0),
             'cpu_percent_during_wait': phase_metrics.get('cpu_percent_during_wait', 0),
+            # Chunk 4: streaming latency — None for non-streaming adapters
+            'ttft_ms':             phase_metrics.get('ttft_ms'),
+            'tpot_ms':             phase_metrics.get('tpot_ms'),
+            'token_throughput':    phase_metrics.get('token_throughput'),
+            'streaming_enabled':   phase_metrics.get('streaming_enabled', 0),
+            'first_token_time_ns': phase_metrics.get('first_token_time_ns'),
+            'last_token_time_ns':  phase_metrics.get('last_token_time_ns'),            
         }
 
     def _build_result(self, experiment_id: str, start_time: float, end_time: float,

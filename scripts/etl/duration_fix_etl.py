@@ -41,6 +41,7 @@ import logging
 import sqlite3
 import sys
 from pathlib import Path
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -403,25 +404,25 @@ def backfill_all(db_path: Path = DEFAULT_DB) -> None:
     logger.info("Backfill done — %d/%d ok, %d failed", passed, total, failed)
 
 
-async def duration_fix_async(
+def duration_fix_async(
     run_id: int,
     rapl_before_pretask: dict | None = None,
     pre_task_duration_sec: float = 0.0,
     db_path: Path = DEFAULT_DB,
 ) -> None:
     """
-    Async wrapper for experiment_runner.py save_pair().
-    Passes rapl_before_pretask from harness result dict.
+    Non-blocking thread — replaces async def which was never awaited.
+    Args:
+        run_id: run to fix
+        rapl_before_pretask: RAPL snapshot before pre-task window (optional)
+        pre_task_duration_sec: pre-task window duration in seconds
+        db_path: database path
     """
-    import asyncio
-    loop = asyncio.get_event_loop()
     if rapl_before_pretask is not None:
-        await loop.run_in_executor(
-            None, fix_run_with_pretask,
-            run_id, rapl_before_pretask, pre_task_duration_sec, db_path,
-        )
+        target, args = fix_run_with_pretask, (run_id, rapl_before_pretask, pre_task_duration_sec, db_path)
     else:
-        await loop.run_in_executor(None, fix_run, run_id, db_path)
+        target, args = fix_run, (run_id, db_path)
+    threading.Thread(target=target, args=args, daemon=True).start()
 
 
 if __name__ == "__main__":

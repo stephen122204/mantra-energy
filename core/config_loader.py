@@ -7,6 +7,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
+from core.models_loader import get_backward_compat, get_model, list_providers, list_models
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -137,6 +138,11 @@ class ConfigLoader:
             print("⚠️ _models_config is None")
             return None
 
+        # v2: cloud/local keys live in models.yaml _backward_compat block
+        bc = get_backward_compat(mode, workflow)
+        if bc:
+            return bc
+        # fallback to raw JSON for any legacy keys still in file
         mode_config = self._models_config.get(mode, {})
         if not mode_config:
             print(f"⚠️ Mode '{mode}' not found in config")
@@ -148,7 +154,44 @@ class ConfigLoader:
             return None
 
         return workflow_config.copy()
+    def get_model_config_v2(self, provider: str, model_id: str):
+        """
+        Get flat merged config for provider + model_id from models.yaml.
+ 
+        Args:
+            provider: e.g. 'ollama_remote', 'groq', 'llama_cpp'
+            model_id: e.g. 'qwen2.5-coder:14b'
+ 
+        Returns:
+            Flat merged dict or None if not found.
+        """
+        return get_model(provider, model_id)
+ 
+    def list_providers(self, task=None):
+        """
+        List all providers from models.yaml, optionally filtered by task.
+ 
+        Args:
+            task: e.g. 'text-generation', None = all
+ 
+        Returns:
+            Dict provider_id -> provider block
+        """
+        return list_providers(task=task)
+ 
+    def list_models(self, provider: str):
+        """
+        List all available models for a provider.
+ 
+        Args:
+            provider: provider key string
+ 
+        Returns:
+            List of expanded model dicts
+        """
+        return list_models(provider)
 
+   
     # ========================================================================
     # NEW METHOD: Get grid intensity data for sustainability calculator
     # ========================================================================

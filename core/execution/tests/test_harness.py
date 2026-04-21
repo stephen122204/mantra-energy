@@ -91,10 +91,15 @@ def parse_arguments():
     parser.add_argument("--no-warmup", action="store_true", help="Skip warmup runs")
     parser.add_argument(
         "--provider",
-        choices=["cloud", "local"],
-        default="cloud",
-        help="Model provider (default: cloud)",
+        type=str,
+        default="groq",
+        help="Provider from models.yaml e.g. groq, llama_cpp, ollama_remote (default: groq)",
     )
+    parser.add_argument("--model", type=str, default=None,
+        help="Model ID. If omitted uses first model for provider.")
+    
+    parser.add_argument("--mode", choices=["linear","agentic","both"], default="both",
+        help="linear | agentic | both (default: both)")    
     parser.add_argument(
         "--country",
         type=str,
@@ -237,8 +242,13 @@ def main():
     # ========================================================================
     print(f"\n🤖 Getting {args.provider} model configs...")
 
-    linear_config = config.get_model_config(args.provider, "linear")
-    agentic_config = config.get_model_config(args.provider, "agentic")
+    models_for_provider = config.list_models(args.provider)
+    if not models_for_provider:
+        print(f"❌ No models found for provider '{args.provider}'")
+        return 1
+    model_id = args.model if args.model else models_for_provider[0]["model_id"]
+    linear_config  = config.get_model_config_v2(args.provider, model_id)
+    agentic_config = config.get_model_config_v2(args.provider, model_id)
 
    
     dummy = type('obj', (object,), {'config': linear_config})()
@@ -334,7 +344,7 @@ def main():
                 executor=linear,
                 prompt=task_prompt,
                 task_id=task_id,
-                is_cloud=(args.provider == "cloud"),
+                is_cloud=not linear_config.get("is_local", False),
                 country_code=country_code,
                 run_number=rep + 1,
             )
@@ -344,7 +354,7 @@ def main():
                 executor=agentic,
                 task=task_prompt,
                 task_id=task_id,
-                is_cloud=(args.provider == "cloud"),
+                is_cloud=not agentic_config.get("is_local", False),
                 country_code=country_code,
                 run_number=rep + 1,
             )

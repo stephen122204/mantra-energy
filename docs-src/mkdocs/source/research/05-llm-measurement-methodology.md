@@ -332,4 +332,113 @@ See [Publication Roadmap](04-publications.md) for detailed plan.
 
 1. A-LEMS Technical Documentation: [System Architecture](../developer-guide/01-architecture.md)
 2. A-LEMS Database Schema: [Database Design](../developer-guide/03-database-schema.md)
-3. Orchestration Tax Analysis: [Mathematical Derivations](02-mathematical-derivations.md)   
+3. Orchestration Tax Analysis: [Mathematical Derivations](02-mathematical-derivations.md)   # APPEND TO: docs-src/mkdocs/source/research/05-llm-measurement-methodology.md
+# Chunk 4: Add TTFT/TPOT section
+# Required by MPC-4 — new derived metrics need a doc section.
+#
+# cp this file then: cat PATCH_5_doc_section.md >> docs-src/mkdocs/source/research/05-llm-measurement-methodology.md
+
+---
+
+## ⏱️ Streaming Metrics: TTFT and TPOT
+
+### Overview
+
+A-LEMS captures two streaming latency metrics for all LLM calls via the
+OpenAI-compatible streaming API and llama-cpp-python `stream=True`:
+
+| Metric | Column | Provenance | Method ID |
+|--------|--------|------------|-----------|
+| Time to First Token | `ttft_ms` | MEASURED | `ttft_measurement_v1` |
+| Time Per Output Token | `tpot_ms` | MEASURED | `tpot_measurement_v1` |
+| Token Throughput | `token_throughput` | CALCULATED | `tpot_measurement_v1` |
+| Streaming Enabled Flag | `streaming_enabled` | SYSTEM | — |
+| First Token Epoch ns | `first_token_time_ns` | MEASURED | `ttft_measurement_v1` |
+| Last Token Epoch ns | `last_token_time_ns` | MEASURED | `ttft_measurement_v1` |
+| Prefill Energy | `prefill_energy_uj` | CALCULATED | `energy_attribution_v1` |
+
+---
+
+### Measurement Definitions
+
+**Time to First Token (TTFT)**
+
+$$TTFT = t_{first\_token} - t_{request\_start}$$
+
+Where $t_{request\_start}$ is `time.time_ns()` captured immediately before
+`requests.post(..., stream=True)` is called, and $t_{first\_token}$ is
+`time.time_ns()` captured on receipt of the first non-empty SSE delta chunk.
+
+TTFT measures the combined latency of: network round-trip + remote model
+prefill (KV cache population for the full prompt). It is the dominant
+perceived latency for interactive use.
+
+**Time Per Output Token (TPOT)**
+
+$$TPOT = \frac{t_{last\_token} - t_{first\_token}}{\max(1,\ N_{tokens} - 1)}$$
+
+Where $N_{tokens}$ is taken from the API `usage.completion_tokens` field when
+available (authoritative), falling back to SSE chunk count. The denominator
+is $N - 1$ because the first token is already accounted for in TTFT.
+
+TPOT measures decode throughput — how smoothly the model generates after
+prefill. Lower TPOT = faster generation per token.
+
+**Token Throughput**
+
+$$\text{throughput} = \frac{N_{tokens}}{(t_{last\_token} - t_{first\_token})\ /\ 10^9}\ \ \text{tokens/sec}$$
+
+Decode-phase tokens per second. Excludes TTFT (prefill) from denominator.
+
+---
+
+### Phase Relationship
+
+TTFT and TPOT map to the existing four-phase model as follows:
+
+```
+t_request_start
+    │
+    ├── preprocess_ms   (prompt serialisation — before HTTP call)
+    │
+    ├── [HTTP call starts — this is t0 for TTFT]
+    │       │
+    │       ├── network RTT + remote prefill
+    │       │
+    │       ├── first token arrives → TTFT measured here
+    │       │
+    │       ├── decode tokens stream in → TPOT measured per-token
+    │       │
+    │       └── last token / [DONE] received
+    │
+    ├── postprocess_ms  (response assembly, parsing)
+    │
+    └── t_end
+```
+
+For **cloud providers** (Groq, OpenAI): TTFT ≈ `non_local_ms` to first token.
+For **local providers** (Ollama, llama.cpp): TTFT ≈ `local_compute_ms` to first token.
+
+---
+
+### Non-Streaming Fallback
+
+Adapters that do not support streaming (Anthropic, Gemini) set:
+- `streaming_enabled = 0`
+- `ttft_ms = NULL`
+- `tpot_ms = NULL`
+
+These are excluded from TTFT/TPOT analysis queries. Filter with:
+```sql
+WHERE streaming_enabled = 1 AND ttft_ms IS NOT NULL
+```
+
+---
+
+### Groq vs NVIDIA Comparison
+
+TTFT and TPOT are the primary metrics for the Groq vs NVIDIA inference
+comparison. Groq's LPU architecture is optimised for low TPOT (high decode
+throughput). NVIDIA GPU inference typically has lower TTFT on large prompts
+due to parallel prefill. The metrics are stored per-interaction in
+`llm_interactions` enabling per-model, per-prompt-length analysis.
