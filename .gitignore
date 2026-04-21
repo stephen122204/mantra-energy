@@ -109,3 +109,5 @@ config/queue_state.yaml
 paper/
 *.tex
 *.pdf
+data/*.bkp_*
+data/*.db.bkp_*
