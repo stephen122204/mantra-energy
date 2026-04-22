@@ -248,11 +248,17 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     # Pre-task instrumentation window (diagnostic, not in attribution model)
     # NULL on non-RAPL platforms (macOS, ARM VM) — PAC compliant
     "pre_task_energy_uj":         ("measurement_boundary_v1",  "MEASURED"),
-    "pre_task_duration_ns":       ("measurement_boundary_v1",  "MEASURED"),                
+    "pre_task_duration_ns":       ("measurement_boundary_v1",  "MEASURED"), 
+
+    # run_quality columns — scored by quality_scorer_v1 post-run
+    "run_quality.experiment_valid": ("quality_scorer_v1", "CALCULATED"),
+    "run_quality.quality_score":    ("quality_scorer_v1", "CALCULATED"),
+    "run_quality.rejection_reason": ("quality_scorer_v1", "CALCULATED"),                   
     # ── INFERRED ─────────────────────────────────────────────────────────────
     "carbon_g":                     ("carbon_calculation",             "INFERRED"),
     "water_ml":                     ("water_calculation",              "INFERRED"),
     "methane_mg":                   ("methane_calculation",            "INFERRED"),
+
 
     # ── SYSTEM — no scientific provenance recorded ────────────────────────────
     "run_id":                       (None, "SYSTEM"),
@@ -273,6 +279,7 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "tool_calls":                   (None, "SYSTEM"),
     "tools_used":                   (None, "SYSTEM"),
     "steps":                        (None, "SYSTEM"),
+
 }
 
 
@@ -318,7 +325,8 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "llm_wait_attribution_v1":  0.85,
     "ml_energy_estimator_v1":   0.0,    # placeholder until Chunk 1.2   
     "ttft_measurement_v1":      1.0,    # perf_counter monotonic, exact
-    "tpot_measurement_v1":      0.95,   # derived from token count estimate       
+    "tpot_measurement_v1":      0.95,   # derived from token count estimate 
+    "quality_scorer_v1":        0.95,   # hard rules exact; soft weights empirical          
 }
 
 

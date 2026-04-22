@@ -1,0 +1,7 @@
+method_id: quality_scorer_v1
+references:
+  - title: "A-LEMS Quality Scoring Methodology"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: "Section 5 — Run quality assessment: hard failure criteria, soft penalty weights, and per-hardware threshold profiles"

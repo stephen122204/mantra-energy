@@ -64,6 +64,7 @@ nav:
 
     - Compliance:
       - Developer Compliance Guide: compliance/COMPLIANCE.md
+      - Run Quality Checks: developer-guide/C10RUN_QUALITY.md
 
     
   - Research:
@@ -77,6 +78,7 @@ nav:
     - Derived Metrics Methodology: research/09-derived-metrics-methodology.md
     - Provenance & Research Value: research/10-provenance-research-value.md
     - Phase Attribution: research/11-phase-attribution-developer-guide.md
+    - Run Quality Methodology: research/16-run-quality-methodology.md  
   
   - API Reference: 
     - Overview: api/reference.md

@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from .base import DatabaseError, DatabaseInterface
-from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,
+from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,CREATE_RUN_QUALITY,
                      CREATE_ENVIRONMENT_CONFIG, CREATE_EVENTS_INDEXES,
                      CREATE_EXPERIMENTS, CREATE_HARDWARE_CONFIG,
                      CREATE_IDLE_BASELINES, CREATE_INTERRUPT_SAMPLES,
@@ -59,6 +59,7 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,
                      CREATE_ENERGY_ATTRIBUTION,
                      CREATE_NORMALIZATION_FACTORS,
                      CREATE_NORMALIZATION_VIEWS,
+
                      )
 
 
@@ -285,7 +286,8 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_IO_SAMPLES)
         self.conn.executescript(CREATE_ENERGY_ATTRIBUTION)
         self.conn.executescript(CREATE_NORMALIZATION_FACTORS)
-        self.conn.executescript(CREATE_NORMALIZATION_VIEWS)        
+        self.conn.executescript(CREATE_NORMALIZATION_VIEWS) 
+        self.conn.executescript(CREATE_RUN_QUALITY)       
 
         # Commit explicitly (DDL should be committed)
         self.conn.commit()

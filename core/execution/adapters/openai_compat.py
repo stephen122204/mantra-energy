@@ -180,8 +180,8 @@ class OpenAICompatAdapter(TextGenABC):
             app_throughput_kbps=kbps,
             cpu_percent_during_wait=cpu_wait,
             # ttft_ms / tpot_ms populated by Chunk 4 streaming — NULL for now
-            ttft_ms=None,
-            tpot_ms=None,
+            ttft_ms=stream_metrics.get("ttft_ms"),
+            tpot_ms=stream_metrics.get("tpot_ms"),
             token_throughput=stream_metrics.get("token_throughput"),
             streaming_enabled=stream_metrics.get("streaming_enabled", 0),
             first_token_time_ns=stream_metrics.get("first_token_time_ns"),
@@ -290,6 +290,7 @@ class OpenAICompatAdapter(TextGenABC):
         chunk_count = 0
         usage_completion_tokens = None
         assembled_content = []
+        usage_prompt_tokens = None
  
         request_start_ns = time.time_ns()
  
@@ -321,9 +322,8 @@ class OpenAICompatAdapter(TextGenABC):
  
                 # Capture usage from final chunk if provider sends it
                 if chunk.get("usage"):
-                    usage_completion_tokens = (
-                        chunk["usage"].get("completion_tokens")
-                    )
+                    usage_completion_tokens = chunk["usage"].get("completion_tokens")
+                    usage_prompt_tokens = chunk["usage"].get("prompt_tokens")
  
                 delta = ""
                 choices = chunk.get("choices", [])
@@ -352,6 +352,7 @@ class OpenAICompatAdapter(TextGenABC):
  
         # Prefer API token count — providers batch tokens per chunk (Groq)
         token_count = usage_completion_tokens if usage_completion_tokens else chunk_count
+        prompt_token_count= usage_prompt_tokens if usage_prompt_tokens else 0
  
         total_ms = (
             (last_token_ns - request_start_ns) / 1e6 if last_token_ns else 0.0
@@ -388,9 +389,9 @@ class OpenAICompatAdapter(TextGenABC):
                 {"message": {"content": full_content}, "finish_reason": "stop"}
             ],
             "usage": {
-                "prompt_tokens": 0,       # not available from stream chunks
+                "prompt_tokens": prompt_token_count,
                 "completion_tokens": token_count,
-                "total_tokens": token_count,
+                "total_tokens": prompt_token_count + token_count,
             },
             "_streamed": True,            # internal flag, ignored by _parse_response
         }

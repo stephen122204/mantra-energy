@@ -1015,7 +1015,19 @@ CREATE INDEX IF NOT EXISTS idx_normalization_factors_run
 CREATE INDEX IF NOT EXISTS idx_normalization_factors_difficulty
     ON normalization_factors(difficulty_bucket, task_category);
 """
- 
+CREATE_RUN_QUALITY = """
+CREATE TABLE IF NOT EXISTS run_quality (
+    run_id              INTEGER PRIMARY KEY,
+    experiment_valid    INTEGER NOT NULL,
+    quality_score       REAL    NOT NULL,
+    rejection_reason    TEXT,
+    quality_version     INTEGER NOT NULL,
+    computed_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_run_quality_run_id ON run_quality(run_id);
+CREATE INDEX IF NOT EXISTS idx_run_quality_valid  ON run_quality(experiment_valid);
+""" 
 # =============================================================================
 # Chunk 6: Normalisation Views
 # =============================================================================

@@ -1,0 +1,46 @@
+# Quality thresholds per hardware profile
+version: 1
+
+profiles:
+  default:
+    max_temp_critical: 85
+    max_temp_warning: 80
+    thermal_delta_critical: 25
+    thermal_delta_warning: 15
+    background_cpu_critical: 20
+    background_cpu_warning: 10
+    interrupts_critical: 50000
+    interrupts_warning: 15000
+    min_energy_samples: 20
+    min_duration_ms: 100
+    max_duration_sec: 60
+
+  laptop_intel:
+    inherits: default
+    max_temp_critical: 90
+    thermal_delta_critical: 30
+
+  arm_oracle_vm:
+    inherits: default
+    max_temp_critical: 75
+    thermal_delta_critical: 10
+
+weights:
+  thermal_absolute: 0.20
+  thermal_delta: 0.15
+  background_cpu: 0.20
+  interrupts: 0.15
+  sample_count: 0.10
+  duration: 0.10
+  zero_energy: 0.10
+
+hash_map:
+  # example entries — replace with real hashes from hardware_config table
+  laptop_hash_abc123: ebe694229b1b9d87
+  # oracle_vm_hash_xyz: arm_oracle_vm
+
+null_handling:
+  max_temp_c: "skip_penalty"
+  start_temp_c: "skip_delta"
+  background_cpu_percent: "assume_zero"
+  interrupts_per_second: "assume_zero"

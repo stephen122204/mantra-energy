@@ -498,6 +498,22 @@ class ExperimentRunner:
             f"   📊 Progress: {runs_completed}/{self._get_total_runs(db, exp_id)} runs"
         )
 
+    def _validate_run(self, db, run_id: int, hw_id) -> None:
+        """Score a completed run and insert into run_quality. Called after each INSERT."""
+        from core.utils.quality_scorer import QualityScorer
+        run = db.get_run(run_id)
+        hw_rows = db.db.execute(
+            "SELECT hardware_hash FROM hardware_config WHERE hw_id = ?", (hw_id,)
+        )
+        scorer = QualityScorer()
+        hardware_hash = hw_rows[0]["hardware_hash"] if hw_rows else "default"
+        valid, score, reason = scorer.compute(run or {}, hardware_hash)
+        db.db.execute(
+            """INSERT OR REPLACE INTO run_quality
+               (run_id, experiment_valid, quality_score, rejection_reason, quality_version)
+               VALUES (?, ?, ?, ?, ?)""",
+            (run_id, valid, score, reason, scorer.VERSION),
+        )
     def _get_total_runs(self, db, exp_id: int) -> int:
         """Get total runs expected for experiment"""
         result = db.db.execute(
@@ -617,6 +633,7 @@ class ExperimentRunner:
             linear_id = db.insert_run(exp_id, hw_id, linear_result)
             record_run_provenance(db, linear_id, linear_result,
                       reader_mode=linear_result.get("reader_mode"))
+            self._validate_run(db, linear_id, hw_id)
 
             # Linear energy samples
             if "energy_samples" in linear_result:
@@ -669,6 +686,7 @@ class ExperimentRunner:
             agentic_id = db.insert_run(exp_id, hw_id, agentic_result)
             record_run_provenance(db, agentic_id, agentic_result,
                       reader_mode=agentic_result.get("reader_mode"))
+            self._validate_run(db, agentic_id, hw_id)
 
             # Agentic energy samples
             if "energy_samples" in agentic_result:
@@ -805,15 +823,25 @@ class ExperimentRunner:
         aggregate_hardware_metrics(linear_id)
         compute_energy_attribution(agentic_id)
         compute_energy_attribution(linear_id)
-        #populate_ttft_tpot(agentic_id)
-        #populate_ttft_tpot(linear_id)
+        populate_ttft_tpot(agentic_id)
+        populate_ttft_tpot(linear_id)
         # v9: duration fix
-        if agentic_result.get("rapl_before_pretask"):
-            fix_run_with_pretask(agentic_id, agentic_result.get("rapl_before_pretask"), agentic_result.get("pre_task_duration_sec", 0.0))
+        print(f"DEBUG rapl_before_pretask agentic={agentic_result.get('rapl_before_pretask')}")
+        print(f"DEBUG rapl_before_pretask linear={linear_result.get('rapl_before_pretask')}")
+        if agentic_result.get("rapl_before_pretask") is not None:
+            fix_run_with_pretask(
+                agentic_id,
+                agentic_result.get("rapl_before_pretask"),
+                agentic_result.get("pre_task_duration_sec", 0.0),
+            )
         else:
             fix_run(agentic_id)
-        if linear_result.get("rapl_before_pretask"):
-            fix_run_with_pretask(linear_id, linear_result.get("rapl_before_pretask"), linear_result.get("pre_task_duration_sec", 0.0))
+        if linear_result.get("rapl_before_pretask") is not None:
+            fix_run_with_pretask(
+                linear_id,
+                linear_result.get("rapl_before_pretask"),
+                linear_result.get("pre_task_duration_sec", 0.0),
+            )
         else:
             fix_run(linear_id)       
 

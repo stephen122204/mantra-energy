@@ -43,6 +43,7 @@ import sys
 from pathlib import Path
 import threading
 
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_DB = Path("data/experiments.db")
@@ -318,11 +319,14 @@ def fix_run_with_pretask(
             rapl_before_pretask.get("package-0")
             or rapl_before_pretask.get("package")
         )
-
         if rapl_before_pkg is None or rapl_start_pkg is None:
+            logger.warning("Run %d: rapl_before_pkg=%s rapl_start_pkg=%s — skipping",
+                           run_id, rapl_before_pkg, rapl_start_pkg)
             return True
-
         pre_task_energy_uj = max(0, int(rapl_start_pkg - rapl_before_pkg))
+        logger.info("Run %d: rapl_before_pkg=%d rapl_start_pkg=%d diff=%d",
+                    run_id, rapl_before_pkg, rapl_start_pkg,
+                    rapl_start_pkg - rapl_before_pkg)
         pre_task_duration_ns = int(pre_task_duration_sec * 1e9)
 
         cursor.execute("""

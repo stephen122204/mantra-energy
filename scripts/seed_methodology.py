@@ -717,6 +717,23 @@ def _load_derived_methods() -> List[Dict]:
             "doc":           "09-derived-metrics-methodology.md",
             "section":       "Streaming Latency Metrics",
         },
+            {
+            "id":            "quality_scorer_v1",
+            "name":          "Run Quality Scorer",
+            "provenance":    "CALCULATED",
+            "layer":         "system",
+            "confidence":    0.95,
+            "output_metric": "quality_score",
+            "output_unit":   "score",
+            "applicable_on": ["any"],
+            "formula_latex": (
+                r"Q = \max\!\left(0,\; 1 - \sum_{i} w_i p_i\right)"
+            ),
+            "parameters":    {"config": "config/quality.yaml", "version": 1},
+            "doc":           "16-run-quality-methodology.md",
+            "section":       "Run Quality Scoring",
+            "fn":            None,
+        },    
     ]
 
 

@@ -90,6 +90,7 @@ class LlamaCppAdapter(TextGenABC):
         chunk_count = 0
         assembled = []
         completion_tokens_from_usage = None
+        usage_prompt_tokens = None
         request_start_ns = time.time_ns()
         try:
             self._ensure_loaded()
@@ -104,6 +105,7 @@ class LlamaCppAdapter(TextGenABC):
                 text = chunk["choices"][0].get("text", "")
                 if chunk.get("usage"):
                     completion_tokens_from_usage = chunk["usage"].get("completion_tokens")
+                    usage_prompt_tokens = chunk["usage"].get("prompt_tokens")
                 if text:
                     if first_token_ns is None:
                         first_token_ns = time.time_ns()
@@ -120,10 +122,11 @@ class LlamaCppAdapter(TextGenABC):
         content = "".join(assembled).strip()
         response_bytes = len(content.encode("utf-8"))
         token_count = completion_tokens_from_usage if completion_tokens_from_usage else chunk_count
+        prompt_token_count = (self._llm.n_tokens - token_count) if self._llm.n_tokens > token_count else 0
         tokens = {
-            "prompt": 0,
+            "prompt": prompt_token_count,
             "completion": token_count,
-            "total": token_count,
+            "total": token_count + prompt_token_count,
         }
         postprocess_ms = (time.time() - t_post) * 1000
 
@@ -171,6 +174,7 @@ class LlamaCppAdapter(TextGenABC):
             return  # already loaded — early return
         from llama_cpp import Llama
         logger.info("Loading GGUF model: %s", self._model_path)
+        
         self._llm = Llama(model_path=self._model_path)
 
     def _error_result(self, error_msg: str, preprocess_ms: float) -> Dict:
