@@ -1,0 +1,42 @@
+# config/experiment_configs/baseline_study.yaml
+# Baseline Energy Benchmark — run first, overnight.
+# Establishes energy-per-goal baselines for linear vs agentic across all task types.
+# experiment_type: normal — primary data for paper analysis.
+
+study:
+  name: "Baseline Energy Benchmark"
+  experiment_type: "normal"
+  experiment_goal: "Establish baseline energy per goal for linear vs agentic workflows across all task types"
+  experiment_notes: "Primary data collection run. No retries. No quality scoring. Clean energy baselines."
+  workflow_modes: ["linear", "agentic"]
+
+tasks:
+  - id: gsm8k_basic
+  - id: gsm8k_multi_step
+  - id: logical_reasoning
+  - id: commonsense_reasoning
+  - id: factual_qa
+  - id: science_qa
+  - id: code_fibonacci
+  - id: code_sorting
+
+providers:
+  - name: ollama_local
+    model_id: qwen2.5-coder:14b
+
+execution:
+  repetitions: 10
+  cool_down_seconds: 30
+  save_db: true
+
+retry_policy:
+  name: "no_retry"
+  max_retries: 0
+  retry_on_timeout: false
+  retry_on_tool_error: false
+  retry_on_api_error: false
+  retry_on_wrong_answer: false
+  backoff_seconds: 0.0
+
+quality:
+  enabled: false

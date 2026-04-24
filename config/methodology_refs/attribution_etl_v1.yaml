@@ -1,0 +1,12 @@
+method_id: attribution_etl_v1
+references:
+  - title: "Orchestration Structure as the Dominant Driver of AI Energy"
+    authors: "Internal"
+    year: 2026
+    ref_type: "internal"
+    relevance: "Core thesis ETL — populates retry, tool failure, and quality-normalized energy stubs"
+  - title: "A-LEMS Energy Attribution ETL"
+    authors: "Internal"
+    year: 2026
+    ref_type: "internal"
+    relevance: "energy_attribution_etl.py populate_chunk8_stubs() function"

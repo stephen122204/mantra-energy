@@ -1,0 +1,21 @@
+# Maps task category to goal_type stored in goal_execution.
+# Edit this file to add new categories — no code change needed.
+# Loaded by core/ontology_registry.py at startup.
+
+reasoning:        reasoning
+coding:           code
+qa:               factual
+summarization:    summarization
+classification:   classification
+extraction:       extraction
+multi_tool:       tool_use
+planning:         planning
+data_analysis:    data_analysis
+debugging:        code
+research:         research
+orchestration:    tool_use
+translation:      translation
+creative_writing: creative_writing
+web_search:       tool_use
+media:            media
+custom:           other

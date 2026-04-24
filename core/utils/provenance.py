@@ -58,6 +58,91 @@ UNIT_OVERRIDES: Dict[str, str] = {
 
 COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
 
+    "experiment_type":  ("system_metadata_v1", "SYSTEM"),
+    "experiment_goal":  ("system_metadata_v1", "SYSTEM"),
+    "experiment_notes": ("system_metadata_v1", "SYSTEM"),
+    # goal_execution table
+    "ge.goal_id":                (None,                              "SYSTEM"),
+    "ge.exp_id":                 (None,                              "SYSTEM"),
+    "ge.goal_type":              (None,                              "SYSTEM"),
+    "ge.workflow_type":          (None,                              "SYSTEM"),
+    "ge.difficulty_level":       (None,                              "SYSTEM"),
+    "ge.total_attempts":         (None,                              "SYSTEM"),
+    "ge.success":                (None,                              "SYSTEM"),
+    "ge.total_energy_uj":        ("goal_execution_rollup_v1",        "CALCULATED"),
+    "ge.successful_energy_uj":   ("goal_execution_rollup_v1",        "CALCULATED"),
+    "ge.overhead_energy_uj":     ("goal_execution_rollup_v1",        "CALCULATED"),
+    "ge.overhead_fraction":      ("goal_overhead_fraction_v1",       "CALCULATED"),
+    "ge.orchestration_fraction": ("goal_overhead_fraction_v1",       "CALCULATED"),
+    "ge.wall_time_ms":           ("system_clock",                    "MEASURED"),
+    # goal_attempt table
+    "ga.attempt_id":             (None,                              "SYSTEM"),
+    "ga.goal_id":                (None,                              "SYSTEM"),
+    "ga.run_id":                 (None,                              "SYSTEM"),
+    "ga.outcome":                (None,                              "SYSTEM"),
+    "ga.failure_cause":          (None,                              "SYSTEM"),
+    "ga.energy_uj":              ("goal_execution_rollup_v1",        "CALCULATED"),
+    "ga.orchestration_uj":       ("goal_execution_rollup_v1",        "CALCULATED"),
+    "ga.compute_uj":             ("goal_execution_rollup_v1",        "CALCULATED"),
+    "ga.normalized_score":       ("output_quality_normalization_v1", "CALCULATED"),
+    # hallucination_events table
+    "he.hallucination_id":       ("system_metadata_v1",             "SYSTEM"),
+    "he.attempt_id":             ("system_metadata_v1",             "SYSTEM"),
+    "he.goal_id":                ("system_metadata_v1",             "SYSTEM"),
+    "he.hallucination_type":     ("system_metadata_v1",             "SYSTEM"),
+    "he.detection_method":       ("system_metadata_v1",             "SYSTEM"),
+    "he.detection_confidence":   ("hallucination_detection_v1",     "INFERRED"),
+    "he.semantic_similarity":    ("hallucination_detection_v1",     "INFERRED"),
+    "he.severity":               ("hallucination_detection_v1",     "INFERRED"),
+    "he.wasted_energy_uj":       ("hallucination_wasted_energy_v1", "CALCULATED"),
+ 
+    # output_quality table
+    "oq.quality_id":             ("system_metadata_v1",                 "SYSTEM"),
+    "oq.attempt_id":             ("system_metadata_v1",                 "SYSTEM"),
+    "oq.goal_id":                ("system_metadata_v1",                 "SYSTEM"),
+    "oq.metric_type":            ("system_metadata_v1",                 "SYSTEM"),
+    "oq.judge_method":           ("system_metadata_v1",                 "SYSTEM"),
+    "oq.score_method":           ("system_metadata_v1",                 "SYSTEM"),
+    "oq.judge_count":            ("system_metadata_v1",                 "SYSTEM"),
+    "oq.manual_reviewed":        ("system_metadata_v1",                 "SYSTEM"),
+    "oq.raw_score":              ("output_quality_normalization_v1",    "MEASURED"),
+    "oq.normalized_score":       ("output_quality_normalization_v1",    "CALCULATED"),
+    "oq.agreement_score":        ("output_quality_normalization_v1",    "CALCULATED"),
+    "oq.energy_uj_at_judgment":  ("goal_execution_rollup_v1",           "CALCULATED"),
+ 
+    # output_quality_judges table
+    "oqj.judge_entry_id":        ("system_metadata_v1",                 "SYSTEM"),
+    "oqj.quality_id":            ("system_metadata_v1",                 "SYSTEM"),
+    "oqj.attempt_id":            ("system_metadata_v1",                 "SYSTEM"),
+    "oqj.goal_id":               ("system_metadata_v1",                 "SYSTEM"),
+    "oqj.judge_model":           ("system_metadata_v1",                 "SYSTEM"),
+    "oqj.judge_provider":        ("system_metadata_v1",                 "SYSTEM"),
+    "oqj.judge_version":         ("system_metadata_v1",                 "SYSTEM"),
+    "oqj.judge_prompt_hash":     ("system_metadata_v1",                 "SYSTEM"),
+    "oqj.judge_score":           ("output_quality_normalization_v1",    "MEASURED"),
+    "oqj.judge_confidence":      ("output_quality_normalization_v1",    "INFERRED"),  
+    # tool_failure_events table
+    "tfe.failure_id":            ("system_metadata_v1",             "SYSTEM"),
+    "tfe.attempt_id":            ("system_metadata_v1",             "SYSTEM"),
+    "tfe.goal_id":               ("system_metadata_v1",             "SYSTEM"),
+    "tfe.tool_name":             ("system_metadata_v1",             "SYSTEM"),
+    "tfe.failure_type":          ("system_metadata_v1",             "SYSTEM"),
+    "tfe.failure_phase":         ("system_metadata_v1",             "SYSTEM"),
+    "tfe.retry_attempted":       ("system_metadata_v1",             "SYSTEM"),
+    "tfe.retry_success":         ("system_metadata_v1",             "SYSTEM"),
+    "tfe.recovery_strategy":     ("system_metadata_v1",             "SYSTEM"),
+    "tfe.wasted_energy_uj":      ("tool_failure_wasted_energy_v1",  "CALCULATED"),
+
+    # energy_attribution stub columns — populated by attribution ETL
+    "ea.energy_per_accepted_answer_uj":  ("attribution_etl_v1",     "CALCULATED"),
+    "ea.energy_per_solved_task_uj":      ("attribution_etl_v1",     "CALCULATED"),
+
+    # goal_execution ETL columns
+    "ge.total_energy_uj":        ("goal_execution_rollup_v1",       "CALCULATED"),
+    "ge.successful_energy_uj":   ("goal_execution_rollup_v1",       "CALCULATED"),
+    "ge.overhead_energy_uj":     ("goal_execution_rollup_v1",       "CALCULATED"),
+    "ge.overhead_fraction":      ("goal_overhead_fraction_v1",      "CALCULATED"),
+    "ge.orchestration_fraction": ("goal_overhead_fraction_v1",      "CALCULATED"),          
     # ── MEASURED ─────────────────────────────────────────────────────────────
     "pkg_energy_uj":                ("rapl_msr_pkg_energy",           "MEASURED"),
     "core_energy_uj":               ("rapl_msr_pkg_energy",           "MEASURED"),
@@ -183,9 +268,9 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "ea.execution_energy_uj":            ("phase_attribution_cpu_v1",   "CALCULATED"),
     "ea.synthesis_energy_uj":            ("phase_attribution_cpu_v1",   "CALCULATED"),
     "ea.tool_energy_uj":                 ("energy_attribution_v1",      "INFERRED"),
-    "ea.retry_energy_uj":                ("energy_attribution_v1",      "CALCULATED"),
-    "ea.failed_tool_energy_uj":          ("energy_attribution_v1",      "CALCULATED"),
-    "ea.rejected_generation_energy_uj":  ("energy_attribution_v1",      "CALCULATED"),
+    "ea.retry_energy_uj":                ("attribution_etl_v1",         "CALCULATED"),
+    "ea.failed_tool_energy_uj":          ("attribution_etl_v1",         "CALCULATED"),
+    "ea.rejected_generation_energy_uj":  ("attribution_etl_v1",         "CALCULATED"),
     # L4: Model compute
     "ea.llm_compute_energy_uj":          ("energy_attribution_v1",      "CALCULATED"),
     "ea.llm_compute_energy_uj":          ("energy_attribution_v1",      "CALCULATED"),
@@ -248,7 +333,19 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     # Pre-task instrumentation window (diagnostic, not in attribution model)
     # NULL on non-RAPL platforms (macOS, ARM VM) — PAC compliant
     "pre_task_energy_uj":         ("measurement_boundary_v1",  "MEASURED"),
-    "pre_task_duration_ns":       ("measurement_boundary_v1",  "MEASURED"), 
+    "pre_task_duration_ns":       ("measurement_boundary_v1",  "MEASURED"),
+    # Post-task instrumentation window — stop_measurement() + cleanup cost
+    # Regime-separated: uses idle_baselines.package_power_watts, not task baseline
+    # NULL on non-RAPL platforms (macOS, ARM VM) — PAC compliant
+    "post_task_energy_uj":          ("measurement_boundary_v1",  "MEASURED"),
+    "post_task_duration_ns":        ("measurement_boundary_v1",  "MEASURED"),
+    # RAPL package counter anchors bounding all three windows
+    # rapl_after_task_uj captured AFTER stop_measurement() — prevents overshoot
+    "rapl_before_pretask_uj":       ("measurement_boundary_v1",  "MEASURED"),
+    "rapl_after_task_uj":           ("measurement_boundary_v1",  "MEASURED"),
+    # Total framework energy = pre + post — proves measurement transparency
+    "framework_overhead_energy_uj": ("measurement_boundary_v1",  "CALCULATED"),
+    # run_quality columns — scored by quality_scorer_v1 post-run
 
     # run_quality columns — scored by quality_scorer_v1 post-run
     "run_quality.experiment_valid": ("quality_scorer_v1", "CALCULATED"),
@@ -279,7 +376,19 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "tool_calls":                   (None, "SYSTEM"),
     "tools_used":                   (None, "SYSTEM"),
     "steps":                        (None, "SYSTEM"),
-
+    "ge.task_id":     ("goal_tracking_runtime_v1", "SYSTEM"),
+    "ge.status":      ("goal_tracking_runtime_v1", "SYSTEM"),
+    "ge.started_at":  ("goal_tracking_runtime_v1", "SYSTEM"),
+    "ge.finished_at": ("goal_tracking_runtime_v1", "SYSTEM"),
+    "ge.updated_at":  ("goal_tracking_runtime_v1", "SYSTEM"),
+    "ga.status":      ("goal_tracking_runtime_v1", "SYSTEM"),
+    "ga.started_at":  ("goal_tracking_runtime_v1", "SYSTEM"),
+    "ga.finished_at": ("goal_tracking_runtime_v1", "SYSTEM"),
+    "ga.updated_at":  ("goal_tracking_runtime_v1", "SYSTEM"),
+    "eq.entity_type": ("etl_queue_management_v1",  "SYSTEM"),
+    "eq.entity_id":   ("etl_queue_management_v1",  "SYSTEM"),
+    "eq.etl_name":    ("etl_queue_management_v1",  "SYSTEM"),
+    "eq.status":      ("etl_queue_management_v1",  "SYSTEM"),
 }
 
 
@@ -326,7 +435,19 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "ml_energy_estimator_v1":   0.0,    # placeholder until Chunk 1.2   
     "ttft_measurement_v1":      1.0,    # perf_counter monotonic, exact
     "tpot_measurement_v1":      0.95,   # derived from token count estimate 
-    "quality_scorer_v1":        0.95,   # hard rules exact; soft weights empirical          
+    "quality_scorer_v1":        0.95,   # hard rules exact; soft weights empirical   
+    "system_metadata_v1":       1.0,    # experiment classification metadata, no computation   
+    "goal_execution_rollup_v1": 1.0,    # sum of run energies per goal, deterministic
+    "goal_overhead_fraction_v1":1.0,    # overhead/total ratio, deterministic arithmetic  
+    "output_quality_normalization_v1": 0.90,  # stub — seed entry owned by Agent 8.3 
+    "hallucination_detection_v1":      0.85,  # detection confidence + similarity signals
+    "hallucination_wasted_energy_v1":  0.85,  # energy from attempt start to detection 
+    "tool_failure_wasted_energy_v1":   0.90,  # energy consumed by failed tool call
+    "attribution_etl_v1":              0.90,  # attribution stub ETL
+    "goal_execution_rollup_v1":        1.0,   # sum of attempt energies, deterministic
+    "goal_overhead_fraction_v1":       1.0,   # overhead/total ratio, deterministic arithmetic 
+    "goal_tracking_runtime_v1": 1.0,
+    "etl_queue_management_v1":  1.0,           
 }
 
 

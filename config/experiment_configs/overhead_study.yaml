@@ -1,0 +1,39 @@
+# config/experiment_configs/overhead_study.yaml
+# Orchestration Overhead Study — run after baseline_study completes.
+# Direct thesis proof: measures orchestration_fraction across workflow types.
+# experiment_type: overhead_study — signals analysis pipeline to compute overhead metrics.
+
+study:
+  name: "Orchestration Overhead Study"
+  experiment_type: "overhead_study"
+  experiment_goal: "Measure orchestration_fraction across workflow types and task categories to prove thesis"
+  experiment_notes: "Higher repetition count than baseline for statistical power on overhead_fraction. No retries."
+  workflow_modes: ["linear", "agentic"]
+
+tasks:
+  - id: gsm8k_basic
+  - id: gsm8k_multi_step
+  - id: logical_reasoning
+  - id: factual_qa
+  - id: code_fibonacci
+
+providers:
+  - name: ollama_local
+    model_id: qwen2.5-coder:14b
+
+execution:
+  repetitions: 15
+  cool_down_seconds: 45
+  save_db: true
+
+retry_policy:
+  name: "no_retry"
+  max_retries: 0
+  retry_on_timeout: false
+  retry_on_tool_error: false
+  retry_on_api_error: false
+  retry_on_wrong_answer: false
+  backoff_seconds: 0.0
+
+quality:
+  enabled: false

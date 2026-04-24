@@ -33,6 +33,7 @@ from core.execution.harness import ExperimentHarness
 from core.execution.linear import LinearExecutor
 from core.utils.task_loader import list_task_summary, load_tasks
 from core.utils.preflight import preflight
+from core.execution.experiment_config_loader import apply_config
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -53,7 +54,31 @@ def parse_arguments():
     parser.add_argument(
         "--optimizer", action="store_true", help="Use optimizer wrapper"
     )
-
+    parser.add_argument(
+        '--experiment-type',
+        default='normal',
+        choices=[
+            'normal','overhead_study','retry_study','failure_injection',
+            'quality_sweep','calibration','ablation','pilot','debug',
+        ],
+        help='Research intent of this experiment run.',
+    )
+    parser.add_argument(
+        '--experiment-goal',
+        default=None,
+        help='Human readable research question being answered.',
+    )
+    parser.add_argument(
+        '--workflow-mode',
+        default='comparison',
+        choices=['linear', 'agentic', 'comparison'],
+        help='Which workflow sides to run. comparison runs both.',
+    )
+    parser.add_argument(
+        '--config',
+        default=None,
+        help='Path to experiment config YAML. Overrides individual CLI args.',
+    )
     return parser.parse_args()
 
 
@@ -135,6 +160,9 @@ def run_provider_task(
                 hw_id,
                 env_id,
                 optimizer=args.optimizer,
+                experiment_type=getattr(args, 'experiment_type', 'normal'),
+                experiment_goal=getattr(args, 'experiment_goal', None),
+                workflow_mode=getattr(args, 'workflow_mode', 'comparison'),                
             )
 
         # Storage for results
@@ -153,44 +181,61 @@ def run_provider_task(
                 print(f"      {'─'*50}")
 
                 # Run linear
-                linear_result = harness.run_linear(
-                    executor=linear,
-                    prompt=task["prompt"],
-                    task_id=task["id"],
-                    is_cloud=not linear_config.get("is_local", False),
-                    country_code=args.country,
-                    run_number=rep + 1,
-                )
+                workflow_mode = getattr(args, 'workflow_mode', 'comparison')
 
-                # Run agentic
-                agentic_result = harness.run_agentic(
-                    executor=agentic,
-                    task=task["prompt"],
-                    task_id=task["id"],
-                    is_cloud=not linear_config.get("is_local", False),
-                    country_code=args.country,
-                    run_number=rep + 1,
-                )
-
-                # Store
-                linear_results.append(linear_result)
-                agentic_results.append(agentic_result)
-
-                # Calculate tax
-                linear_energy = linear_result["ml_features"]["energy_j"]
-                agentic_energy = agentic_result["ml_features"]["energy_j"]
-                tax = agentic_energy / linear_energy if linear_energy > 0 else 0
-                taxes.append(tax)
-
-                print(f"\n         Linear:  {linear_energy:.4f} J")
-                print(f"         Agentic: {agentic_energy:.4f} J")
-                print(f"         Tax: {tax:.2f}x")
-
-                # Insert to database
-                if args.save_db and db:
-                    runner.save_pair(
-                        db, exp_id, hw_id, linear_result, agentic_result, rep + 1
+                # Run linear side if requested
+                linear_result = None
+                if workflow_mode in ('linear', 'comparison'):
+                    linear_result = harness.run_linear(
+                        executor=linear,
+                        prompt=task["prompt"],
+                        task_id=task["id"],
+                        is_cloud=not linear_config.get("is_local", False),
+                        country_code=args.country,
+                        run_number=rep + 1,
                     )
+                    linear_results.append(linear_result)
+
+                # Run agentic side if requested
+                agentic_result = None
+                if workflow_mode in ('agentic', 'comparison'):
+                    agentic_result = harness.run_agentic(
+                        executor=agentic,
+                        task=task["prompt"],
+                        task_id=task["id"],
+                        is_cloud=not linear_config.get("is_local", False),
+                        country_code=args.country,
+                        run_number=rep + 1,
+                    )
+                    agentic_results.append(agentic_result)
+
+
+                # Tax only meaningful when both sides ran
+                if linear_result and agentic_result:
+                    linear_energy  = linear_result["ml_features"]["energy_j"]
+                    agentic_energy = agentic_result["ml_features"]["energy_j"]
+                    tax = agentic_energy / linear_energy if linear_energy > 0 else 0
+                    taxes.append(tax)
+                    print(f"\n         Linear:  {linear_energy:.4f} J")
+                    print(f"         Agentic: {agentic_energy:.4f} J")
+                    print(f"         Tax: {tax:.2f}x")
+
+                # Save — pair or single depending on workflow_mode
+                if args.save_db and db:
+                    if workflow_mode == 'comparison':
+                        runner.save_pair(
+                            db, exp_id, hw_id, linear_result, agentic_result, rep + 1,
+                            task_id=task.get("id"), task_name=task.get("name"),
+                            task_meta=task.get("meta"),
+                        )
+                    elif workflow_mode == 'linear':
+                        runner.save_single(
+                            db, exp_id, hw_id, linear_result, rep + 1, 'linear',
+                        )
+                    elif workflow_mode == 'agentic':
+                        runner.save_single(
+                            db, exp_id, hw_id, agentic_result, rep + 1, 'agentic',
+                        )
                     print(f"         ✅ Pair {rep+1}/{repetitions} saved")
 
                     # Update progress in real-time
@@ -421,7 +466,7 @@ def display_master_summary(all_results):
 def main():
     """Main entry point - minimal logic."""
     args = parse_arguments()
-
+    apply_config(args)
     if args.list_tasks:
         tasks = load_tasks()
         list_task_summary(tasks)

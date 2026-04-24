@@ -1,0 +1,7 @@
+method_id: goal_execution_rollup_v1
+references:
+  - title: "A-LEMS Chunk 8 Master Specification v2"
+    authors: "A-LEMS Research Team"
+    year: 2026
+    ref_type: "internal"
+    relevance: "Defines goal-level energy rollup as the paper's fundamental unit of analysis — energy per successful goal aggregated across all attempts"

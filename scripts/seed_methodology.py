@@ -63,6 +63,19 @@ def _load_measured_methods() -> List[Dict]:
     """Static measured methods — sensors, clocks, OS readers."""
     return [
         {
+            "id":           "system_metadata_v1",
+            "name":         "Experiment Classification Metadata",
+            "provenance":   "MEASURED",
+            "layer":        "orchestration",
+            "output_metric":"experiment_type",
+            "output_unit":  "category",
+            "applicable_on":["any"],
+            "formula_latex": r"\text{experiment\_type} \in \{\text{normal, overhead\_study, retry\_study, ...}\}",
+            "parameters":   {"values": "VALID_EXPERIMENT_TYPES", "enforcement": "sqlite_trigger"},
+            "doc":          "17-experiment-classification-methodology.md",
+            "section":      "Experiment Classification Methodology",
+        },
+        {
             "id":           "perf_counters",
             "name":         "Linux perf Hardware Counters",
             "provenance":   "MEASURED",
@@ -236,6 +249,122 @@ def _load_derived_methods() -> List[Dict]:
     from core.execution.agentic         import AgenticExecutor
 
     return [
+        {
+            "id":           "goal_execution_rollup_v1",
+            "name":         "Goal Execution Energy Rollup",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "confidence":   1.0,
+            "description":  "Aggregates attempt-level energies into goal-level totals. total_energy_uj = sum of all attempts. successful_energy_uj = winning attempt only. overhead_energy_uj = total - successful.",
+            "formula_latex": r"E_{total} = \sum_{i=1}^{N} E_{attempt_i}, \quad E_{overhead} = E_{total} - E_{success}",
+            "parameters":   {"etl_script": "goal_execution_etl.py", "insert_as": "NULL"},
+            "doc":          "18-goal-execution-methodology.md",
+            "section":      "Goal Execution and Overhead Fraction Methodology",
+        },
+        {
+            "id":           "goal_overhead_fraction_v1",
+            "name":         "Goal Overhead and Orchestration Fraction",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "confidence":   1.0,
+            "description":  "Computes overhead_fraction (wasted energy ratio) and orchestration_fraction (orchestration share of winning run). Core metrics for paper thesis.",
+            "formula_latex": r"f_{overhead} = \frac{E_{overhead}}{E_{total}}, \quad f_{orchestration} = \frac{E_{orchestration}}{E_{success}}",
+            "parameters":   {"etl_script": "goal_execution_etl.py", "source": "energy_attribution.orchestration_energy_uj"},
+            "doc":          "18-goal-execution-methodology.md",
+            "section":      "Goal Execution and Overhead Fraction Methodology",
+        },
+        {
+            "id":           "hallucination_detection_v1",
+            "name":         "Hallucination Detection",
+            "provenance":   "INFERRED",
+            "layer":        "orchestration",
+            "confidence":   0.85,
+            "description":  "Classifies LLM outputs as hallucinatory using detection_method (exact_match, semantic_similarity, llm_judge, unit_test, human_review). Records detection_confidence and semantic_similarity as evidence signals. hallucination_type governed by core/ontology_registry.py.",
+            "formula_latex": r"\text{detection\_confidence} \in [0,1], \quad \text{semantic\_similarity} = \cos(\vec{e}_{expected}, \vec{e}_{actual})",
+            "parameters":   {"ontology": "core/ontology_registry.py", "version": "1.0.0"},
+            "doc":          "19-hallucination-output-quality-methodology.md",
+            "section":      "Hallucination Detection Methodology",
+        },
+        {
+            "id":           "hallucination_wasted_energy_v1",
+            "name":         "Hallucination Wasted Energy",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "confidence":   0.85,
+            "description":  "Computes energy wasted per hallucination event: energy consumed from attempt start until hallucination detected. Populated by energy_attribution_etl.py.",
+            "formula_latex": r"E_{wasted} = E_{attempt\_start \to detected}",
+            "parameters":   {"etl_script": "energy_attribution_etl.py", "source": "orchestration_events.event_energy_uj"},
+            "doc":          "19-hallucination-output-quality-methodology.md",
+            "section":      "Hallucination Wasted Energy Methodology",
+        },
+        {
+            "id":           "output_quality_normalization_v1",
+            "name":         "Output Quality Normalization",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "confidence":   0.90,
+            "description":  "Reconciles N judge scores into a single normalized_score using tie-break logic: agreement>=0.8 averaged, >=0.5 conservative_min, <0.5 needs_review. agreement_score = 1 - ABS(score_a - score_b) for two judges, normalized std for N judges.",
+            "formula_latex": r"\text{agreement} = 1 - |s_1 - s_2|, \quad s_{norm} = \begin{cases} \bar{s} & \text{agreement} \geq 0.8 \\ \min(s) & \text{agreement} \geq 0.5 \\ \text{NULL} & \text{otherwise} \end{cases}",
+            "parameters":   {"child_table": "output_quality_judges", "judge_count_field": "judge_count"},
+            "doc":          "19-hallucination-output-quality-methodology.md",
+            "section":      "Output Quality Normalization Methodology",
+        },  
+        {
+            "id":            "goal_tracking_runtime_v1",
+            "name":          "Goal Tracking Runtime Wiring",
+            "provenance":    "SYSTEM",
+            "layer":         "application",
+            "confidence":    1.0,
+            "description":   (
+                "Records goal_execution and goal_attempt rows at experiment "
+                "runtime. GoalTracker owns all state transitions. "
+                "experiment_runner calls GoalTracker — never writes goal tables directly."
+            ),
+            "formula_latex": r"\text{goal\_id} \leftarrow \text{INSERT on experiment start}",
+            "parameters":    {},
+            "doc":           "21-goal-tracking-runtime.md",
+            "section":       "Goal Tracking Runtime",           
+        },
+        {
+            "id":            "etl_queue_management_v1",
+            "name":          "ETL Queue Management",
+            "provenance":    "SYSTEM",
+            "layer":         "application",
+            "confidence":    1.0,
+            "description":   (
+                "Table-backed queue for decoupled ETL execution. "
+                "Runner enqueues pending entries after save_pair(). "
+                "ETL runner reads etl_queue and processes entries independently."
+            ),
+            "formula_latex": r"\text{queue} \leftarrow \text{pending} \rightarrow \text{done}",
+            "parameters":    {},
+            "doc":           "21-goal-tracking-runtime.md",
+            "section":       "ETL Queue Management",         
+        },        
+        {
+            "id":           "tool_failure_wasted_energy_v1",
+            "name":         "Tool Failure Wasted Energy",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "confidence":   0.90,
+            "description":  "Energy consumed by a failed tool call. Source: orchestration_events.event_energy_uj when event is linked, otherwise inferred from attempt energy fraction. Populated by energy_attribution_etl.py.",
+            "formula_latex": r"E_{wasted} = E_{\text{tool call start} \to \text{failure detected}}",
+            "parameters":   {"etl_script": "energy_attribution_etl.py", "source": "orchestration_events.event_energy_uj"},
+            "doc":          "20-tool-failure-methodology.md",
+            "section":      "Tool Failure Wasted Energy Methodology",
+        },
+        {
+            "id":           "attribution_etl_v1",
+            "name":         "Chunk 8 Attribution ETL",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "confidence":   0.90,
+            "description":  "Populates 5 stub columns in energy_attribution: retry_energy_uj, failed_tool_energy_uj, rejected_generation_energy_uj, energy_per_accepted_answer_uj, energy_per_solved_task_uj. Also backfills hallucination_count, hallucination_rate, failed_tool_calls in normalization_factors.",
+            "formula_latex": r"E_{retry} = \sum_{k>1} E_{attempt_k}, \quad E_{per\_solved} = E_{successful} / N_{solved}",
+            "parameters":   {"etl_script": "energy_attribution_etl.py", "acceptance_threshold": 0.7, "threshold_method": "output_quality_normalization_v1"},
+            "doc":          "20-tool-failure-methodology.md",
+            "section":      "Attribution ETL Methodology",
+        },              
         {
             "id":           "dynamic_energy_calculation",
             "name":         "Dynamic Energy Calculation",
@@ -578,23 +707,43 @@ def _load_derived_methods() -> List[Dict]:
                 "Linux ARM, macOS, Windows."
             ),
             "formula_latex": (
+                # Duration windows — time.perf_counter() anchors
+                r"t_{pre} = t_0 - t_{before}, \quad"
                 r"t_{task} = t_1 - t_0, \quad"
-                r"t_{framework} = t_2 - t_1, \quad"
+                r"t_{post} = t_2 - t_1, \quad"
+                r"t_{total} = t_{pre} + t_{task} + t_{post} \\"
+                # Corrected power — task window only
                 r"\bar{P}_{task} = \frac{E_{pkg}}{t_{task}}, \quad"
-                r"\tau_{framework} = \frac{t_{framework}}{t_{task}}"
+                r"\tau_{framework} = \frac{t_{pre} + t_{post}}{t_{task}} \\"
+                # Pre-task energy — idle regime
+                r"E_{pre} = \max\!\left(0,\ \bigl(RAPL(t_0) - RAPL(t_{before})\bigr)"
+                r" - P_{idle} \cdot t_{pre}\right) \times f_{cpu,pre} \\"
+                # Post-task energy — idle regime
+                r"E_{post} = \max\!\left(0,\ \bigl(RAPL(t_2) - RAPL(t_1)\bigr)"
+                r" - P_{idle} \cdot t_{post}\right) \times f_{cpu,post} \\"
+                # Framework overhead energy
+                r"E_{framework} = E_{pre} + E_{post}"
             ),
             "parameters":    {
-                "t0": "run_start_perf (before start_measurement)",
-                "t1": "task_end_perf (after executor.execute returns)",
-                "t2": "run_end_perf (after all post-processing)",
-                "t_pre": "before _read_interrupts() (opens pre-task window)",
-                "timer": "time.perf_counter() — monotonic, all platforms",
-                "rapl_domain": "package-0 for pre_task_energy_uj",
-                "platform_note": "pre_task_energy_uj=NULL on non-RAPL platforms",
-                "historical_runs": "task_duration estimated from energy_samples span",
+                "t_before": "_pre_task_start_perf — before instrumentation reads",
+                "t0":       "run_start_perf — before start_measurement()",
+                "t1":       "task_end_perf — immediately after executor.execute() returns",
+                "t2":       "run_end_perf — after stop_measurement() and all post-processing",
+                "RAPL_t0":  "MIN(energy_samples.pkg_start_uj) — first energy sample anchor",
+                "RAPL_t1":  "rapl_after_task_uj — read AFTER stop_measurement() to prevent MAX(pkg_end_uj) overshoot",
+                "RAPL_t_before": "rapl_before_pretask_uj — raw pkg counter before pre-task reads",
+                "P_idle":   "idle_baselines.package_power_watts — measured idle power, NOT task-era baseline",
+                "f_cpu_pre":  "/proc/stat ticks ratio for A-LEMS process during pre window",
+                "f_cpu_post": "/proc/stat ticks ratio for A-LEMS process during post window",
+                "regime_note": "Overhead windows use idle baseline — regime-separated from task window",
+                "timer":    "time.perf_counter() — monotonic, nanosecond resolution, all platforms",
+                "rapl_domain": "package-0 — full socket energy including CPU+uncore+DRAM",
+                "platform_note": "All energy columns NULL on non-RAPL platforms (macOS, ARM VM) — PAC compliant",
+                "historical_runs": "task_duration_ns estimated from energy_samples span for pre-v9 runs",
+                "total_run_duration": "pre + task + post — fixed in v3, previously missing pre window",
             },
             "doc":           "14-measurement-boundary-methodology.md",
-            "section":       "Task Duration Model",
+            "section":       "Task Duration Model and Framework Overhead Energy",
         },
     
         # ── v9: Measurement Coverage ──────────────────────────────────────────────
@@ -837,6 +986,10 @@ def _insert_registry(conn, row: Dict, dry_run: bool) -> None:
     for err in errors:
         logger.warning("VALIDATION: %s", err)
 
+    # Ensure confidence has a value — older methods may not define it explicitly
+    if "confidence" not in row:
+        row["confidence"] = 1.0
+
     if dry_run:
         logger.info(
             "[DRY-RUN] %-42s  %-12s  %-12s  formula=%s  code=%s  desc=%d  warns=%d",
@@ -854,13 +1007,13 @@ def _insert_registry(conn, row: Dict, dry_run: bool) -> None:
             code_snapshot, code_language, code_version,
             parameters, output_metric, output_unit,
             provenance, layer, applicable_on, fallback_method_id,
-            validated, active, updated_at
+            validated, active, confidence, updated_at
         ) VALUES (
             :id, :name, :version, :description, :formula_latex,
             :code_snapshot, :code_language, :code_version,
             :parameters, :output_metric, :output_unit,
             :provenance, :layer, :applicable_on, :fallback_method_id,
-            0, 1, unixepoch()
+            0, 1, :confidence, unixepoch()
         )
     """, row)
 
@@ -930,6 +1083,7 @@ def _build_row_from_entry(entry: Dict, doc_map: Dict, code_version: str) -> Dict
         "layer":             entry["layer"],
         "applicable_on":     json.dumps(entry.get("applicable_on", ["any"])),
         "fallback_method_id": entry.get("fallback_method_id"),
+        "confidence":        entry.get("confidence", 1.0),
     }
 
 

@@ -63,12 +63,232 @@ THERMAL_THRESHOLD_C = 85.0
 THERMAL_PENALTY_FRACTION = 0.20
 
 # Attribution model version — bump when formula changes
+# Attribution model version — bump when formula changes
 ATTRIBUTION_MODEL_VERSION = "v1"
+ 
+# Minimum normalized score to count as an accepted answer
+# Documented in: 19-hallucination-output-quality-methodology.md
+# Method: output_quality_normalization_v1
+ACCEPTANCE_THRESHOLD = 0.7  # output_quality_normalization_v1
 
 
 # =============================================================================
 # INTERNAL HELPERS
 # =============================================================================
+
+def populate_attribution_stubs(run_id: int, conn: sqlite3.Connection) -> bool:
+    """
+    Populate the 5 Chunk 8 stub columns in energy_attribution for one run.
+    Also backfills hallucination_count, hallucination_rate, failed_tool_calls
+    in normalization_factors.
+ 
+    Called after goal_execution_etl completes for this run.
+    Idempotent — safe to rerun (UPDATE not INSERT).
+ 
+    Returns True on success, False if energy_attribution row missing.
+    """
+    # ── Invariant: energy_attribution row must exist ──────────────────────────
+    ea_exists = conn.execute(
+        "SELECT run_id FROM energy_attribution WHERE run_id = ?", (run_id,)
+    ).fetchone()
+ 
+    if ea_exists is None:
+        logger.warning(
+            "run_id=%d has no energy_attribution row — stub population skipped",
+            run_id
+        )
+        return False
+ 
+    # ── Get attempt_ids for this run ──────────────────────────────────────────
+    attempt_ids = [
+        r[0] for r in conn.execute(
+            "SELECT attempt_id FROM goal_attempt WHERE run_id = ?", (run_id,)
+        ).fetchall()
+    ]
+ 
+    if not attempt_ids:
+        logger.debug("run_id=%d has no goal_attempt rows — stubs set to 0", run_id)
+        attempt_ids = []
+ 
+    placeholders = ",".join("?" * len(attempt_ids)) if attempt_ids else "NULL"
+ 
+    # ── retry_energy_uj ───────────────────────────────────────────────────────
+    # Energy spent on non-first attempts (attempt_number > 1) = retry cost
+    retry_energy = 0
+    if attempt_ids:
+        row = conn.execute(f"""
+            SELECT COALESCE(SUM(energy_uj), 0)
+            FROM goal_attempt
+            WHERE run_id = ? AND attempt_number > 1
+        """, (run_id,)).fetchone()
+        retry_energy = row[0] or 0
+ 
+    # ── failed_tool_energy_uj ─────────────────────────────────────────────────
+    failed_tool_energy = 0
+    if attempt_ids:
+        row = conn.execute(f"""
+            SELECT COALESCE(SUM(wasted_energy_uj), 0)
+            FROM tool_failure_events
+            WHERE attempt_id IN ({placeholders})
+        """, attempt_ids).fetchone()
+        failed_tool_energy = row[0] or 0
+ 
+    # ── rejected_generation_energy_uj ────────────────────────────────────────
+    # Energy wasted on hallucinated outputs (uses REAL column for precision)
+    rejected_energy = 0
+    if attempt_ids:
+        row = conn.execute(f"""
+            SELECT COALESCE(SUM(wasted_energy_uj_real), 0)
+            FROM hallucination_events
+            WHERE attempt_id IN ({placeholders})
+        """, attempt_ids).fetchone()
+        rejected_energy = row[0] or 0
+ 
+    # ── energy_per_accepted_answer_uj ────────────────────────────────────────
+    # Total run energy / count of quality-passing answers
+    # Accepted = normalized_score >= ACCEPTANCE_THRESHOLD and not needs_review
+    energy_per_accepted = None
+    if attempt_ids:
+        pkg_row = conn.execute(
+            "SELECT pkg_energy_uj FROM energy_attribution WHERE run_id = ?",
+            (run_id,)
+        ).fetchone()
+        accepted_count_row = conn.execute(f"""
+            SELECT COUNT(*)
+            FROM output_quality
+            WHERE attempt_id IN ({placeholders})
+              AND normalized_score >= ?
+              AND score_method != 'needs_review'
+        """, (*attempt_ids, ACCEPTANCE_THRESHOLD)).fetchone()
+ 
+        pkg_energy = pkg_row[0] if pkg_row else None
+        accepted_count = accepted_count_row[0] if accepted_count_row else 0
+ 
+        if pkg_energy and accepted_count > 0:
+            energy_per_accepted = pkg_energy / accepted_count
+ 
+    # ── energy_per_solved_task_uj ─────────────────────────────────────────────
+    # Successful goal energy / count of solved goals for this run
+    energy_per_solved = None
+    solved_row = conn.execute("""
+        SELECT COALESCE(SUM(successful_energy_uj), 0), COUNT(*)
+        FROM goal_execution
+        WHERE first_run_id = ? AND success = 1
+    """, (run_id,)).fetchone()
+ 
+    total_successful_energy = solved_row[0] or 0
+    solved_count = solved_row[1] or 0
+ 
+    if solved_count > 0 and total_successful_energy > 0:
+        energy_per_solved = total_successful_energy / solved_count
+ 
+    # ── UPDATE energy_attribution stubs ──────────────────────────────────────
+    conn.execute("""
+        UPDATE energy_attribution
+        SET retry_energy_uj                = ?,
+            failed_tool_energy_uj          = ?,
+            rejected_generation_energy_uj  = ?,
+            energy_per_accepted_answer_uj  = ?,
+            energy_per_solved_task_uj      = ?
+        WHERE run_id = ?
+    """, (
+        retry_energy,
+        failed_tool_energy,
+        rejected_energy,
+        energy_per_accepted,
+        energy_per_solved,
+        run_id,
+    ))
+ 
+    # ── Backfill normalization_factors ────────────────────────────────────────
+    halluc_count = 0
+    failed_tool_count = 0
+ 
+    if attempt_ids:
+        h_row = conn.execute(f"""
+            SELECT COUNT(*) FROM hallucination_events
+            WHERE attempt_id IN ({placeholders})
+        """, attempt_ids).fetchone()
+        halluc_count = h_row[0] or 0
+ 
+        t_row = conn.execute(f"""
+            SELECT COUNT(*) FROM tool_failure_events
+            WHERE attempt_id IN ({placeholders})
+        """, attempt_ids).fetchone()
+        failed_tool_count = t_row[0] or 0
+ 
+    # hallucination_rate = hallucination_count / total_attempts for this run
+    total_attempts_row = conn.execute(
+        "SELECT COUNT(*) FROM goal_attempt WHERE run_id = ?", (run_id,)
+    ).fetchone()
+    total_attempts = total_attempts_row[0] or 0
+    halluc_rate = (halluc_count / total_attempts) if total_attempts > 0 else 0.0
+ 
+    nf_exists = conn.execute(
+        "SELECT run_id FROM normalization_factors WHERE run_id = ?", (run_id,)
+    ).fetchone()
+ 
+    if nf_exists:
+        conn.execute("""
+            UPDATE normalization_factors
+            SET hallucination_count = ?,
+                hallucination_rate  = ?,
+                failed_tool_calls   = ?
+            WHERE run_id = ?
+        """, (halluc_count, halluc_rate, failed_tool_count, run_id))
+    else:
+        logger.warning(
+            "run_id=%d has no normalization_factors row — skipping backfill",
+            run_id
+        )
+ 
+    logger.debug(
+        "run_id=%d stubs updated: retry=%.0f failed_tool=%.0f rejected=%.0f",
+        run_id, retry_energy, failed_tool_energy, rejected_energy
+    )
+    return True
+ 
+ 
+def backfill_attribution_stubs(db_path: str) -> None:
+    """
+    Backfill Chunk 8 stub columns for all runs where they are still NULL.
+    Run after goal_execution_etl.py --backfill-all completes.
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+ 
+    try:
+        pending = conn.execute("""
+            SELECT run_id FROM energy_attribution
+            WHERE retry_energy_uj IS NULL
+        """).fetchall()
+ 
+        logger.info(
+            "Backfilling Chunk 8 attribution stubs for %d runs", len(pending)
+        )
+ 
+        processed = 0
+        failed = 0
+        for row in pending:
+            success = populate_attribution_stubs(row["run_id"], conn)
+            if success:
+                processed += 1
+            else:
+                failed += 1
+ 
+        conn.commit()
+        logger.info(
+            "attribution stub backfill complete: processed=%d failed=%d",
+            processed, failed
+        )
+ 
+    except Exception:
+        conn.rollback()
+        logger.exception("attribution stub backfill failed — rolled back")
+        raise
+    finally:
+        conn.close()
 
 def _get_run(cursor: sqlite3.Cursor, run_id: int) -> dict | None:
     """Fetch run row as dict. Returns None if run not found."""
@@ -526,7 +746,14 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
     )
 
-    if "--backfill-all" in sys.argv:
+    if "--backfill-attribution" in sys.argv:
+        db = DEFAULT_DB
+        for i, arg in enumerate(sys.argv):
+            if arg == "--db" and i + 1 < len(sys.argv):
+                db = sys.argv[i + 1]
+        backfill_attribution_stubs(str(db))
+        sys.exit(0)
+    elif "--backfill-all" in sys.argv:
         backfill_all()
     elif "--run-id" in sys.argv:
         idx = sys.argv.index("--run-id")
@@ -541,4 +768,5 @@ if __name__ == "__main__":
         print("Usage:")
         print("  python scripts/etl/energy_attribution_etl.py --run-id <id>")
         print("  python scripts/etl/energy_attribution_etl.py --backfill-all")
+        print("  python scripts/etl/energy_attribution_etl.py --backfill-attribution")
         sys.exit(1)

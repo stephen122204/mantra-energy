@@ -1,0 +1,17 @@
+method_id: hallucination_detection_v1
+references:
+  - title: "TruthfulQA: Measuring How Models Mimic Human Falsehoods"
+    authors: "Lin, S., Hilton, J., Evans, O."
+    year: 2022
+    ref_type: "paper"
+    relevance: "Foundational hallucination taxonomy and evaluation methodology"
+  - title: "A Survey of Hallucination in Large Language Models"
+    authors: "Zhang, Y. et al."
+    year: 2023
+    ref_type: "paper"
+    relevance: "Comprehensive hallucination type classification framework"
+  - title: "A-LEMS Ontology Registry"
+    authors: "Internal"
+    year: 2026
+    ref_type: "internal"
+    relevance: "Platform taxonomy governance — core/ontology_registry.py v1.0.0"

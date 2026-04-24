@@ -1,0 +1,7 @@
+method_id: goal_overhead_fraction_v1
+references:
+  - title: "A-LEMS Chunk 8 Master Specification v2"
+    authors: "A-LEMS Research Team"
+    year: 2026
+    ref_type: "internal"
+    relevance: "Defines overhead and orchestration fraction computation — core metrics for paper thesis that orchestration structure dominates energy in agentic workloads"

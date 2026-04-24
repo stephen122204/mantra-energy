@@ -88,6 +88,7 @@ class MethodologyRepository:
             method.get("validated_date"),
             method.get("active", 1),
             method.get("deprecated_reason"),
+            method.get("confidence", 1.0),
         )
 
         self.db.execute("""
@@ -97,7 +98,7 @@ class MethodologyRepository:
                 parameters, output_metric, output_unit,
                 provenance, layer, applicable_on, fallback_method_id,
                 validated, validated_by, validated_date,
-                active, deprecated_reason,
+                active, deprecated_reason,confidence,
                 updated_at
             ) VALUES (
                 ?,?,?,?,?,
@@ -105,7 +106,7 @@ class MethodologyRepository:
                 ?,?,?,
                 ?,?,?,?,
                 ?,?,?,
-                ?,?,
+                ?,?,?,
                 unixepoch()
             )
         """, params)

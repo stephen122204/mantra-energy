@@ -78,7 +78,11 @@ nav:
     - Derived Metrics Methodology: research/09-derived-metrics-methodology.md
     - Provenance & Research Value: research/10-provenance-research-value.md
     - Phase Attribution: research/11-phase-attribution-developer-guide.md
-    - Run Quality Methodology: research/16-run-quality-methodology.md  
+    - Run Quality Methodology: research/16-run-quality-methodology.md
+    - Experiment Classification Methodology : research/17-experiment-classification-methodology.md
+    - Goal Execution Methodology: research/18-goal-execution-methodology.md
+    - Hallucination and Output Quality Methodology: research/19-hallucination-output-quality-methodology.md
+    - Tool Failure and Attribution ETL Methodology: research/20-tool-failure-methodology.md
   
   - API Reference: 
     - Overview: api/reference.md

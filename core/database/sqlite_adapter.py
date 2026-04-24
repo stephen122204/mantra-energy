@@ -34,7 +34,10 @@ from typing import Any, Dict, List, Optional, Union
 from .base import DatabaseError, DatabaseInterface
 from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,CREATE_RUN_QUALITY,
                      CREATE_ENVIRONMENT_CONFIG, CREATE_EVENTS_INDEXES,
-                     CREATE_EXPERIMENTS, CREATE_HARDWARE_CONFIG,
+                     CREATE_EXPERIMENTS, CREATE_EXPERIMENT_TYPE_TRIGGERS,CREATE_HARDWARE_CONFIG,
+                     CREATE_GOAL_EXECUTION, CREATE_GOAL_ATTEMPT,CREATE_ETL_QUEUE,
+                     CREATE_HALLUCINATION_EVENTS, CREATE_OUTPUT_QUALITY, CREATE_OUTPUT_QUALITY_JUDGES,
+                     CREATE_TOOL_FAILURE_EVENTS,
                      CREATE_IDLE_BASELINES, CREATE_INTERRUPT_SAMPLES,
                      CREATE_LLM_INTERACTIONS, CREATE_ML_VIEW,
                      CREATE_ORCHESTRATION_ANALYSIS,
@@ -59,7 +62,9 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,CREATE_RUN_QUALIT
                      CREATE_ENERGY_ATTRIBUTION,
                      CREATE_NORMALIZATION_FACTORS,
                      CREATE_NORMALIZATION_VIEWS,
-
+                     CREATE_VIEW_GOAL_ENERGY_DECOMPOSITION,
+                     CREATE_VIEW_FAILURE_ENERGY_TAXONOMY,
+                     CREATE_VIEW_QUALITY_ENERGY_FRONTIER,                     
                      )
 
 
@@ -251,6 +256,14 @@ class SQLiteAdapter(DatabaseInterface):
 
         # Execute each CREATE statement in order - NO transaction wrapper
         self.conn.execute(CREATE_EXPERIMENTS)
+        self.conn.executescript(CREATE_EXPERIMENT_TYPE_TRIGGERS)
+        self.conn.executescript(CREATE_GOAL_EXECUTION)
+        self.conn.executescript(CREATE_GOAL_ATTEMPT)
+        self.conn.executescript(CREATE_ETL_QUEUE)
+        self.conn.executescript(CREATE_TOOL_FAILURE_EVENTS)        
+        self.conn.executescript(CREATE_HALLUCINATION_EVENTS)
+        self.conn.executescript(CREATE_OUTPUT_QUALITY)
+        self.conn.executescript(CREATE_OUTPUT_QUALITY_JUDGES)                
         self.conn.execute(CREATE_HARDWARE_CONFIG)
         self.conn.execute(CREATE_IDLE_BASELINES)
         self.conn.execute(CREATE_RUNS)
@@ -287,7 +300,11 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_ENERGY_ATTRIBUTION)
         self.conn.executescript(CREATE_NORMALIZATION_FACTORS)
         self.conn.executescript(CREATE_NORMALIZATION_VIEWS) 
-        self.conn.executescript(CREATE_RUN_QUALITY)       
+        self.conn.executescript(CREATE_RUN_QUALITY)  
+        self.conn.executescript(CREATE_VIEW_GOAL_ENERGY_DECOMPOSITION)
+        self.conn.executescript(CREATE_VIEW_FAILURE_ENERGY_TAXONOMY)
+        self.conn.executescript(CREATE_VIEW_QUALITY_ENERGY_FRONTIER)        
+
 
         # Commit explicitly (DDL should be committed)
         self.conn.commit()

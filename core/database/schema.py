@@ -58,10 +58,347 @@ CREATE TABLE IF NOT EXISTS experiments (
     runs_total INTEGER,
     optimization_enabled INTEGER DEFAULT 0,                                            -- Total runs planned (TD8)
     -- ========== NEW COLUMNS END ==========
+    experiment_type TEXT NOT NULL DEFAULT 'normal',  -- study intent: normal/overhead_study/retry_study/failure_injection/quality_sweep/calibration/ablation/pilot/debug
+    experiment_goal TEXT,                             -- free-text description of what this experiment measures
+    experiment_notes TEXT,                            -- free-text operational notes
     hw_id INTEGER REFERENCES hardware_config(hw_id),
     env_id INTEGER REFERENCES environment_config(env_id)    
 );
 """
+
+# Valid experiment_type values — single source of truth for triggers and application validation
+VALID_EXPERIMENT_TYPES = (
+    'normal', 'overhead_study', 'retry_study', 'failure_injection',
+    'quality_sweep', 'calibration', 'ablation', 'pilot', 'debug'
+)
+
+CREATE_EXPERIMENT_TYPE_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS trg_exp_type_insert
+BEFORE INSERT ON experiments
+BEGIN
+    SELECT CASE
+        WHEN NEW.experiment_type IS NULL OR NEW.experiment_type NOT IN (
+            'normal','overhead_study','retry_study','failure_injection',
+            'quality_sweep','calibration','ablation','pilot','debug'
+        )
+        THEN RAISE(ABORT, 'Invalid experiment_type value')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_exp_type_update
+BEFORE UPDATE OF experiment_type ON experiments
+BEGIN
+    SELECT CASE
+        WHEN NEW.experiment_type IS NULL OR NEW.experiment_type NOT IN (
+            'normal','overhead_study','retry_study','failure_injection',
+            'quality_sweep','calibration','ablation','pilot','debug'
+        )
+        THEN RAISE(ABORT, 'Invalid experiment_type value')
+    END;
+END;
+"""
+# ========================================================================
+# Table 2b: goal_execution
+# Paper's fundamental unit of analysis — energy per successful goal
+# workflow_type set by application layer explicitly — never derived from
+# experiments.workflow_type because comparison experiments contain both sides
+# ETL columns insert as NULL, populated async by chunk8_goal_etl.py
+#-- goal_execution
+#-- PAPER UNIT OF ANALYSIS. One row per user goal across one experiment.
+#-- A goal may require multiple attempts (retries). This table aggregates
+#-- all attempt outcomes into a single success/failure verdict with full
+#-- energy accounting. ETL columns (total_energy_uj etc.) are NULL at insertCREATE_GOAL_ATTEMPT = """
+#-- and populated asynchronously by goal_execution_etl.py.
+#-- FK anchor: exp_id → experiments, first_run_id → runs, winning_run_id → runs
+# ========================================================================
+CREATE_GOAL_EXECUTION = """
+CREATE TABLE IF NOT EXISTS goal_execution (
+    goal_id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    exp_id                  INTEGER NOT NULL,
+    first_run_id            INTEGER,
+    goal_description        TEXT NOT NULL,
+    goal_type               TEXT NOT NULL,
+    workflow_type           TEXT NOT NULL
+                            CHECK(workflow_type IN ('linear','agentic')),
+    difficulty_level        TEXT
+                            CHECK(difficulty_level IS NULL OR difficulty_level IN (
+                                'easy','medium','hard'
+                            )),
+    total_attempts          INTEGER NOT NULL DEFAULT 1,
+    success                 INTEGER NOT NULL DEFAULT 0,
+    winning_run_id          INTEGER,
+    total_energy_uj         INTEGER,
+    successful_energy_uj    INTEGER,
+    overhead_energy_uj      INTEGER,
+    overhead_fraction       REAL,
+    orchestration_fraction  REAL,
+    wall_time_ms            REAL,
+    task_id                 TEXT,
+    status                  TEXT NOT NULL DEFAULT 'pending'
+                            CHECK(status IN ('pending','running','solved','failed','partial')),
+    started_at              TIMESTAMP,
+    finished_at             TIMESTAMP,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (exp_id)         REFERENCES experiments(exp_id),
+    FOREIGN KEY (winning_run_id) REFERENCES runs(run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_goal_exec_exp_id       ON goal_execution(exp_id);
+CREATE INDEX IF NOT EXISTS idx_goal_exec_workflow      ON goal_execution(workflow_type, success);
+CREATE INDEX IF NOT EXISTS idx_goal_exec_type          ON goal_execution(goal_type);
+CREATE INDEX IF NOT EXISTS idx_goal_exec_difficulty    ON goal_execution(difficulty_level, success);
+CREATE INDEX IF NOT EXISTS idx_goal_exec_success       ON goal_execution(success, exp_id);
+CREATE INDEX IF NOT EXISTS idx_goal_exec_task_id       ON goal_execution(task_id);
+CREATE INDEX IF NOT EXISTS idx_goal_exec_status        ON goal_execution(status);
+"""
+
+# ========================================================================
+# Table 2c: goal_attempt
+# Thin linkage layer — outcome + energy snapshot per attempt
+# energy columns are denormalized point-in-time snapshots from runs
+# normalized_score populated by Agent 8.3 output_quality ETL
+#-- goal_attempt
+#-- One row per execution attempt for a goal. Links a goal to the run that
+#-- measured it. Outcome records terminal state. Energy columns are denormalized
+#-- snapshots from runs/energy_attribution at insert time for analytics speed.
+#-- normalized_score and pass_fail populated by output_quality ETL (Agent 8.4).
+#-- UNIQUE(goal_id, attempt_number) prevents duplicate retry numbering.
+#-- FK anchor: goal_id → goal_execution, run_id → runs
+# ========================================================================
+CREATE_GOAL_ATTEMPT = """
+CREATE TABLE IF NOT EXISTS goal_attempt (
+    attempt_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id                 INTEGER NOT NULL,
+    run_id                  INTEGER NOT NULL,
+    attempt_number          INTEGER NOT NULL DEFAULT 1,
+    is_winning              INTEGER NOT NULL DEFAULT 0,
+    outcome                 TEXT NOT NULL
+                            CHECK(outcome IN (
+                                'success','failure','hallucination',
+                                'timeout','context_overflow','api_error'
+                            )),
+    failure_cause           TEXT
+                            CHECK(failure_cause IS NULL OR failure_cause IN (
+                                'api_error','tool_error','wrong_answer',
+                                'timeout','context_overflow','rate_limit'
+                            )),
+    energy_uj               INTEGER,
+    orchestration_uj        INTEGER,
+    compute_uj              INTEGER,
+    normalized_score        REAL,
+    pass_fail               INTEGER,
+    status                  TEXT NOT NULL DEFAULT 'running'
+                            CHECK(status IN (
+                                'running','success','failed',
+                                'cancelled','timeout','crashed'
+                            )),
+    started_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    finished_at             TIMESTAMP,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(goal_id, attempt_number),
+    FOREIGN KEY (goal_id) REFERENCES goal_execution(goal_id),
+    FOREIGN KEY (run_id)  REFERENCES runs(run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_goal_attempt_goal_id         ON goal_attempt(goal_id);
+CREATE INDEX IF NOT EXISTS idx_goal_attempt_run_id          ON goal_attempt(run_id);
+CREATE INDEX IF NOT EXISTS idx_goal_attempt_outcome         ON goal_attempt(outcome);
+CREATE INDEX IF NOT EXISTS idx_goal_attempt_winning         ON goal_attempt(goal_id, is_winning);
+CREATE INDEX IF NOT EXISTS idx_goal_attempt_goal_attemptnum ON goal_attempt(goal_id, attempt_number);
+CREATE INDEX IF NOT EXISTS idx_goal_attempt_status          ON goal_attempt(status);
+"""
+# ========================================================================
+# Table 2d: tool_failure_events
+# tool_failure_events
+# One row per failed tool call within one attempt.
+# failure_phase records where in the orchestration pipeline failure occurred:
+#   selection → agent chose wrong tool
+#   execution → tool call failed during execution
+#   parsing → tool output could not be parsed
+#   post_processing → downstream processing of tool result failed
+# wasted_energy_uj (REAL) populated by energy_attribution_etl.py. NULL at insert.
+# recovery_strategy records what the orchestration layer did after failure.
+# FK anchor: attempt_id → goal_attempt, goal_id → goal_execution
+# ========================================================================
+CREATE_TOOL_FAILURE_EVENTS = """
+CREATE TABLE IF NOT EXISTS tool_failure_events (
+    failure_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    attempt_id              INTEGER NOT NULL,
+    goal_id                 INTEGER NOT NULL,
+    orchestration_event_id  INTEGER,
+    tool_name               TEXT NOT NULL,
+    failure_type            TEXT NOT NULL CHECK(failure_type IN (
+                                'timeout','api_error','malformed_input',
+                                'malformed_output','rate_limit',
+                                'auth_error','not_found','other'
+                            )),
+    failure_phase           TEXT CHECK(failure_phase IS NULL OR failure_phase IN (
+                                'selection','execution','parsing','post_processing'
+                            )),
+    error_message           TEXT,
+    retry_attempted         INTEGER NOT NULL DEFAULT 0,
+    retry_success           INTEGER NOT NULL DEFAULT 0,
+    recovery_strategy       TEXT CHECK(recovery_strategy IS NULL OR recovery_strategy IN (
+                                'immediate_retry','backoff_retry',
+                                'fallback_tool','skip','abort'
+                            )),
+    wasted_energy_uj        REAL,
+    created_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (attempt_id)             REFERENCES goal_attempt(attempt_id),
+    FOREIGN KEY (goal_id)                REFERENCES goal_execution(goal_id),
+    FOREIGN KEY (orchestration_event_id) REFERENCES orchestration_events(event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tool_fail_attempt      ON tool_failure_events(attempt_id);
+CREATE INDEX IF NOT EXISTS idx_tool_fail_goal         ON tool_failure_events(goal_id);
+CREATE INDEX IF NOT EXISTS idx_tool_fail_tool         ON tool_failure_events(tool_name);
+CREATE INDEX IF NOT EXISTS idx_tool_fail_type         ON tool_failure_events(failure_type);
+CREATE INDEX IF NOT EXISTS idx_tool_fail_phase        ON tool_failure_events(failure_phase);
+CREATE INDEX IF NOT EXISTS idx_tool_fail_orch_event   ON tool_failure_events(orchestration_event_id);
+CREATE INDEX IF NOT EXISTS idx_tool_fail_attempt_type ON tool_failure_events(attempt_id, failure_type);
+"""
+# ========================================================================
+# Table 2e: hallucination_events
+# hallucination_events
+# One row per hallucination detected within one attempt. A hallucination is
+# an unsupported or incorrect output later classified as hallucinatory.
+# hallucination_type and detection_method are open TEXT governed by
+# core/ontology_registry.py — not CHECK enums — to allow taxonomy evolution
+# across 100 papers without DB migrations.
+# wasted_energy_uj_real (REAL) is the authoritative energy column.
+# wasted_energy_uj (INTEGER) retained for backward compatibility only.
+# Populated by energy_attribution_etl.py. NULL at insert.
+# FK anchor: attempt_id → goal_attempt, goal_id → goal_execution
+# ========================================================================
+CREATE_HALLUCINATION_EVENTS = """
+CREATE TABLE IF NOT EXISTS hallucination_events (
+    hallucination_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    attempt_id              INTEGER NOT NULL,
+    goal_id                 INTEGER NOT NULL,
+    decision_id             INTEGER,
+    interaction_id          INTEGER,
+    orchestration_event_id  INTEGER,
+    hallucination_type      TEXT NOT NULL,
+    detection_method        TEXT NOT NULL,
+    detection_confidence    REAL,
+    semantic_similarity     REAL,
+    severity                REAL,
+    expected_output         TEXT,
+    actual_output           TEXT,
+    wasted_energy_uj        INTEGER,
+    detected_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (attempt_id)             REFERENCES goal_attempt(attempt_id),
+    FOREIGN KEY (goal_id)                REFERENCES goal_execution(goal_id),
+    FOREIGN KEY (decision_id)            REFERENCES agent_decision_tree(decision_id),
+    FOREIGN KEY (interaction_id)         REFERENCES llm_interactions(interaction_id),
+    FOREIGN KEY (orchestration_event_id) REFERENCES orchestration_events(event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_halluc_attempt_id   ON hallucination_events(attempt_id);
+CREATE INDEX IF NOT EXISTS idx_halluc_goal_id      ON hallucination_events(goal_id);
+CREATE INDEX IF NOT EXISTS idx_halluc_type         ON hallucination_events(hallucination_type);
+CREATE INDEX IF NOT EXISTS idx_halluc_method       ON hallucination_events(detection_method);
+CREATE INDEX IF NOT EXISTS idx_halluc_attempt_type ON hallucination_events(attempt_id, hallucination_type);
+"""
+# ========================================================================
+# Table 2f: output_quality
+# output_quality
+# One row per goal_attempt. Reconciled judgment verdict across all judges.
+# Per-judge evidence lives in output_quality_judges child table — supports N judges.
+# score_method and normalized_score computed by application layer at insert time:
+#   single_judge: one judge only
+#   averaged: agreement >= 0.8
+#   conservative_min: agreement >= 0.5
+#   needs_review: agreement < 0.5, normalized_score = NULL
+# Rows with score_method = 'needs_review' excluded from all paper analysis queries.
+# UNIQUE(attempt_id) enforces one verdict per attempt.
+# FK anchor: attempt_id → goal_attempt, goal_id → goal_execution
+# ======================================================================== 
+CREATE_OUTPUT_QUALITY = """
+CREATE TABLE IF NOT EXISTS output_quality (
+    quality_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    attempt_id              INTEGER NOT NULL,
+    goal_id                 INTEGER NOT NULL,
+    task_id                 TEXT,
+    metric_type             TEXT NOT NULL CHECK(metric_type IN ('binary','scalar','pairwise','testsuite')),
+    raw_score               REAL,
+    normalized_score        REAL,
+    pass_fail               INTEGER,
+    judge_method            TEXT NOT NULL CHECK(judge_method IN ('exact_match','semantic','llm_judge','unit_test')),
+    judge_count             INTEGER NOT NULL DEFAULT 1,
+    agreement_score         REAL,
+    score_method            TEXT CHECK(score_method IN ('averaged','conservative_min','needs_review','single_judge')),
+    expected_output         TEXT,
+    actual_output           TEXT,
+    energy_uj_at_judgment   INTEGER,
+    manual_reviewed         INTEGER NOT NULL DEFAULT 0,
+    judged_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(attempt_id),
+    FOREIGN KEY (attempt_id) REFERENCES goal_attempt(attempt_id),
+    FOREIGN KEY (goal_id)    REFERENCES goal_execution(goal_id)
+);
+CREATE INDEX IF NOT EXISTS idx_output_qual_attempt ON output_quality(attempt_id);
+CREATE INDEX IF NOT EXISTS idx_output_qual_goal    ON output_quality(goal_id);
+CREATE INDEX IF NOT EXISTS idx_output_qual_metric  ON output_quality(metric_type);
+CREATE INDEX IF NOT EXISTS idx_output_qual_score   ON output_quality(normalized_score);
+CREATE INDEX IF NOT EXISTS idx_output_qual_method  ON output_quality(judge_method);
+"""
+# ========================================================================
+# Table 2g: output_quality_judges
+# output_quality_judges
+# One row per judge per attempt. Evidence trail for the reconciled verdict
+# in output_quality. Supports N judges — no hardcoded two-judge ceiling.
+# judge_prompt_hash enables exact reproduction of judgments across papers.
+# judge_version/temperature/provider required for cross-paper judge pipeline
+# comparison and reproducibility.
+# FK anchor: quality_id → output_quality, attempt_id → goal_attempt
+# ========================================================================  
+CREATE_OUTPUT_QUALITY_JUDGES = """
+CREATE TABLE IF NOT EXISTS output_quality_judges (
+    judge_entry_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    quality_id              INTEGER NOT NULL,
+    attempt_id              INTEGER NOT NULL,
+    goal_id                 INTEGER NOT NULL,
+    judge_model             TEXT NOT NULL,
+    judge_provider          TEXT,
+    judge_version           TEXT,
+    judge_temperature       REAL,
+    judge_score             REAL NOT NULL,
+    judge_confidence        REAL,
+    judge_prompt_hash       TEXT,
+    judge_reasoning         TEXT,
+    judged_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (quality_id) REFERENCES output_quality(quality_id),
+    FOREIGN KEY (attempt_id) REFERENCES goal_attempt(attempt_id),
+    FOREIGN KEY (goal_id)    REFERENCES goal_execution(goal_id)
+);
+CREATE INDEX IF NOT EXISTS idx_oqj_quality ON output_quality_judges(quality_id);
+CREATE INDEX IF NOT EXISTS idx_oqj_attempt ON output_quality_judges(attempt_id);
+CREATE INDEX IF NOT EXISTS idx_oqj_goal    ON output_quality_judges(goal_id);
+"""
+# ── NEW CONSTANT — paste after CREATE_GOAL_ATTEMPT block ─────────────────────
+# etl_queue
+# Table-backed queue for decoupled ETL execution.
+# Runner enqueues pending entries after save_pair(). ETL runner processes them.
+# status: pending → processing → done|failed
+# error_message populated on failure for diagnosis. NULL on success.
+CREATE_ETL_QUEUE = """
+CREATE TABLE IF NOT EXISTS etl_queue (
+    queue_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type   TEXT NOT NULL
+                  CHECK(entity_type IN ('goal_execution','run')),
+    entity_id     INTEGER NOT NULL,
+    etl_name      TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'pending'
+                  CHECK(status IN ('pending','processing','done','failed')),
+    error_message TEXT,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at  TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_etl_queue_status
+    ON etl_queue(status, etl_name);
+CREATE INDEX IF NOT EXISTS idx_etl_queue_entity
+    ON etl_queue(entity_type, entity_id);
+"""
+
 # ========================================================================
 # Table 3: idle_baselines
 # ========================================================================
@@ -242,29 +579,27 @@ CREATE TABLE IF NOT EXISTS runs (
     disk_read_bytes_total   BIGINT,  -- Chunk 12: SUM from io_samples
     disk_write_bytes_total  BIGINT,
     voltage_vcore_avg       REAL,     -- Chunk 12: AVG from thermal_samples
-    -- ── v9: Measurement Boundary (Duration Fix) ──────────────────────────────
-    -- Separates task execution time from A-LEMS instrumentation overhead.
-    -- Core principle: "A-LEMS measures execution energy, not instrumentation energy"
-    --
-    -- task_duration_ns: t1-t0 — executor time only — canonical energy denominator
-    task_duration_ns              INTEGER,
-    -- framework_overhead_ns: t2-t1 — stop_measurement + post-processing cost
-    framework_overhead_ns         INTEGER,
-    -- total_run_duration_ns: t2-t0 — full wall clock (= legacy duration_ns)
-    total_run_duration_ns         INTEGER,
-    -- duration_includes_overhead: 1=historical run, 0=corrected new run
-    duration_includes_overhead    INTEGER DEFAULT 1,
-    -- energy_sample_coverage_pct: sample_span/task_duration × 100
-    -- gold ≥95%, acceptable 80-95%, poor <80%
-    energy_sample_coverage_pct    REAL,
-    -- avg_task_power_watts: pkg_energy / task_duration (correct power denominator)
-    avg_task_power_watts          REAL,
-    -- pre_task_energy_uj: RAPL delta during pre-task context reads (diagnostic only)
-    -- NULL on non-RAPL platforms (macOS, ARM VM) — PAC compliant
-    -- NOT part of attribution model — A-LEMS instrumentation overhead
-    pre_task_energy_uj            INTEGER,
-    -- pre_task_duration_ns: wall time from first pre-task read to run_start_perf
-    pre_task_duration_ns          INTEGER,    
+    -- ── v9: Measurement Boundary ─────────────────────────────────────────────
+    task_duration_ns              INTEGER,  -- t1-t0: executor only (canonical denominator)
+    framework_overhead_ns         INTEGER,  -- pre + post instrumentation wall time
+    total_run_duration_ns         INTEGER,  -- t2-t0: full wall clock
+    duration_includes_overhead    INTEGER DEFAULT 1,  -- 1=historical, 0=corrected
+    energy_sample_coverage_pct    REAL,     -- sample_span/task_duration × 100
+    avg_task_power_watts          REAL,     -- pkg_energy / task_duration (correct)
+
+    -- ── Pre-task window (t_before → t0) ──────────────────────────────────────
+    rapl_before_pretask_uj        INTEGER,  -- raw RAPL pkg before instrumentation reads
+    pre_task_energy_uj            INTEGER,  -- attributed: (delta - baseline) * cpu_frac
+    pre_task_duration_ns          INTEGER,  -- t0 - t_before
+
+    -- ── Post-task window (t1 → t2) ───────────────────────────────────────────
+    rapl_after_task_uj            INTEGER,  -- raw RAPL pkg after executor returns
+    post_task_energy_uj           INTEGER,  -- attributed: (delta - baseline) * cpu_frac
+    post_task_duration_ns         INTEGER,  -- t2 - t1
+
+    -- ── Framework overhead summary ────────────────────────────────────────────
+    framework_overhead_energy_uj  INTEGER,  -- pre + post energy (diagnostic only)
+   
 
     FOREIGN KEY(exp_id) REFERENCES experiments(exp_id),
     FOREIGN KEY(hw_id) REFERENCES hardware_config(hw_id),
@@ -1404,3 +1739,124 @@ CREATE TABLE IF NOT EXISTS page_templates (
 );
 """
 
+CREATE_VIEW_GOAL_ENERGY_DECOMPOSITION = """
+-- Per-goal energy breakdown by workflow type. Primary paper view.
+-- ge.total_energy_uj is authoritative (ETL-populated, includes all retries).
+-- orchestration_fraction from winning run only — it is a rate, not a sum.
+-- had_retry flag enables stratified retry vs non-retry analysis.
+-- Views never recompute energy — reads ETL-populated columns only.
+CREATE VIEW IF NOT EXISTS v_goal_energy_decomposition AS
+SELECT
+    ge.goal_id,
+    ge.exp_id,
+    ge.workflow_type,
+    ge.goal_type,
+    ge.difficulty_level,
+    ge.total_attempts,
+    ge.success,
+    ge.total_energy_uj          / 1e6  AS total_energy_j,
+    ge.successful_energy_uj     / 1e6  AS successful_energy_j,
+    ge.overhead_energy_uj       / 1e6  AS overhead_energy_j,
+    ge.overhead_fraction,
+    ge.orchestration_fraction,
+    ea.llm_compute_energy_uj    / 1e6  AS compute_energy_j,
+    ea.orchestration_energy_uj  / 1e6  AS orchestration_energy_j,
+    ROUND(ea.llm_compute_energy_uj * 100.0
+          / NULLIF(ea.pkg_energy_uj, 0), 2)        AS compute_pct,
+    ROUND(ea.orchestration_energy_uj * 100.0
+          / NULLIF(ea.pkg_energy_uj, 0), 2)        AS orchestration_pct,
+    CASE WHEN ge.total_attempts > 1 THEN 1 ELSE 0
+    END                                            AS had_retry,
+    e.experiment_type,
+    e.experiment_goal
+FROM goal_execution ge
+JOIN experiments e
+    ON ge.exp_id = e.exp_id
+LEFT JOIN energy_attribution ea
+    ON ge.winning_run_id = ea.run_id
+WHERE e.experiment_type IN (
+    'normal','overhead_study','retry_study',
+    'failure_injection','quality_sweep','ablation','pilot'
+);
+"""
+ 
+CREATE_VIEW_FAILURE_ENERGY_TAXONOMY = """
+-- Energy wasted per failure type across hallucination and tool failure events.
+-- failure_domain separates reasoning failures from execution failures —
+-- required for cross-category paper comparisons (different ontologies).
+-- corrected_by_retry derived inline from goal_attempt — not stored.
+-- wasted_energy_uj_real (REAL) used for hallucination precision.
+CREATE VIEW IF NOT EXISTS v_failure_energy_taxonomy AS
+SELECT
+    'reasoning'                 AS failure_domain,
+    'hallucination'             AS failure_category,
+    he.hallucination_type       AS failure_subtype,
+    COUNT(*)                    AS event_count,
+    SUM(he.wasted_energy_uj_real) / 1e6  AS total_wasted_j,
+    AVG(he.wasted_energy_uj_real) / 1e6  AS avg_wasted_j,
+    ge.workflow_type,
+    EXISTS (
+        SELECT 1 FROM goal_attempt ga2
+        WHERE ga2.goal_id = he.goal_id
+          AND ga2.attempt_number > ga.attempt_number
+          AND ga2.outcome = 'success'
+    )                           AS corrected_by_retry
+FROM hallucination_events he
+JOIN goal_attempt ga   ON he.attempt_id = ga.attempt_id
+JOIN goal_execution ge ON he.goal_id = ge.goal_id
+GROUP BY he.hallucination_type, ge.workflow_type
+ 
+UNION ALL
+ 
+SELECT
+    'execution'                 AS failure_domain,
+    'tool_failure'              AS failure_category,
+    tfe.failure_type            AS failure_subtype,
+    COUNT(*)                    AS event_count,
+    SUM(tfe.wasted_energy_uj) / 1e6  AS total_wasted_j,
+    AVG(tfe.wasted_energy_uj) / 1e6  AS avg_wasted_j,
+    ge.workflow_type,
+    0                           AS corrected_by_retry
+FROM tool_failure_events tfe
+JOIN goal_attempt ga   ON tfe.attempt_id = ga.attempt_id
+JOIN goal_execution ge ON tfe.goal_id = ge.goal_id
+GROUP BY tfe.failure_type, ge.workflow_type;
+"""
+ 
+CREATE_VIEW_QUALITY_ENERGY_FRONTIER = """
+-- Quality vs total goal energy. Supports paper quality-energy tradeoff figure.
+-- Uses ge.total_energy_uj (all retries included) NOT ga.energy_uj (single attempt).
+-- energy_per_quality_point_uj = total goal cost / normalized score.
+-- Excludes needs_review scores and non-research experiment types.
+CREATE VIEW IF NOT EXISTS v_quality_energy_frontier AS
+SELECT
+    oq.attempt_id,
+    oq.goal_id,
+    oq.normalized_score,
+    oq.metric_type,
+    oq.judge_method,
+    oq.score_method,
+    oq.judge_count,
+    ge.total_energy_uj      / 1e6  AS total_goal_energy_j,
+    ga.energy_uj            / 1e6  AS attempt_energy_j,
+    ga.orchestration_uj     / 1e6  AS attempt_orchestration_j,
+    ga.compute_uj           / 1e6  AS attempt_compute_j,
+    ga.outcome,
+    ge.workflow_type,
+    ge.goal_type,
+    ge.difficulty_level,
+    CASE WHEN oq.normalized_score > 0
+         THEN ge.total_energy_uj / oq.normalized_score
+         ELSE NULL
+    END                            AS energy_per_quality_point_uj,
+    e.experiment_type
+FROM output_quality oq
+JOIN goal_attempt ga   ON oq.attempt_id = ga.attempt_id
+JOIN goal_execution ge ON oq.goal_id = ge.goal_id
+JOIN experiments e     ON ge.exp_id = e.exp_id
+WHERE oq.score_method != 'needs_review'
+  AND e.experiment_type IN (
+      'normal','overhead_study','retry_study',
+      'failure_injection','quality_sweep','ablation','pilot'
+  );
+"""

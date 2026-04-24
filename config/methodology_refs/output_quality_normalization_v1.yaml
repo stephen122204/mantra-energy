@@ -1,0 +1,17 @@
+method_id: output_quality_normalization_v1
+references:
+  - title: "Measuring Massive Multitask Language Understanding"
+    authors: "Hendrycks, D. et al."
+    year: 2021
+    ref_type: "paper"
+    relevance: "Multi-judge evaluation reconciliation and normalization methodology"
+  - title: "Inter-Rater Reliability and Agreement"
+    authors: "Krippendorff, K."
+    year: 2011
+    ref_type: "paper"
+    relevance: "Agreement score computation for N-judge ensembles"
+  - title: "A-LEMS Output Quality Design"
+    authors: "Internal"
+    year: 2026
+    ref_type: "internal"
+    relevance: "Tie-break logic: agreement>=0.8 averaged, >=0.5 conservative_min, <0.5 needs_review"

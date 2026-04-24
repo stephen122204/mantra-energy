@@ -43,7 +43,13 @@ from scripts.etl.aggregate_hardware_metrics import aggregate_hardware_metrics
 from scripts.etl.energy_attribution_etl import compute_energy_attribution
 from scripts.etl.duration_fix_etl import fix_run, fix_run_with_pretask
 from scripts.etl.ttft_tpot_etl import populate_run as populate_ttft_tpot
+from core.execution.goal_tracker import GoalTracker
+import scripts.etl.goal_execution_etl as goal_execution_etl
+import scripts.etl.energy_attribution_etl as energy_attribution_etl
+import logging
+logger = logging.getLogger(__name__)
 
+_goal_tracker = GoalTracker()   # module-level singleton — stateless class
 
 class ExperimentRunner:
     """Shared experiment logic - ONLY duplicate code + new features"""
@@ -433,6 +439,9 @@ class ExperimentRunner:
         hw_id,
         env_id,
         optimizer=False,
+        experiment_type='normal',     # research intent — DB trigger enforces valid values
+        experiment_goal=None,         # human research question free text
+        workflow_mode='comparison',   # 'linear'|'agentic'|'comparison'        
     ) -> int:
         """Create experiment with session tracking (NEW)"""
         experiment_meta = {
@@ -454,6 +463,9 @@ class ExperimentRunner:
             "optimization_enabled": 1 if optimizer else 0,
             "hw_id": hw_id,
             "env_id": env_id,
+            'experiment_type': experiment_type,    
+            'experiment_goal': experiment_goal,    
+            'workflow_type':   workflow_mode,            
         }
         return db.insert_experiment(experiment_meta)
 
@@ -616,12 +628,19 @@ class ExperimentRunner:
             print(f"❌ Failed to save baseline: {e}")
             return False
 
-    def save_pair(self, db, exp_id, hw_id, linear_result, agentic_result, rep_num):
+    def save_pair(self, db, exp_id, hw_id, linear_result, agentic_result, rep_num,
+                  task_id=None, task_name=None, task_meta=None):
         """Save one pair of runs with all samples."""
 
         # Set run_number
         linear_result["ml_features"]["run_number"] = rep_num
         agentic_result["ml_features"]["run_number"] = rep_num
+        # Derive task context from results if not passed explicitly by caller
+        task_id   = task_id   or linear_result.get("task_id", "unknown")
+        task_name = task_name or linear_result.get("task_name", task_id)
+        task_meta = task_meta or linear_result.get("task_meta", {})
+        linear_outcome  = "success" if linear_result.get("execution", {}).get("status") == "success"  else "failure"
+        agentic_outcome = "success" if agentic_result.get("execution", {}).get("status") == "success" else "failure"
 
         linear_copy = linear_result.copy()
         agentic_copy = agentic_result.copy()
@@ -828,21 +847,381 @@ class ExperimentRunner:
         # v9: duration fix
         print(f"DEBUG rapl_before_pretask agentic={agentic_result.get('rapl_before_pretask')}")
         print(f"DEBUG rapl_before_pretask linear={linear_result.get('rapl_before_pretask')}")
-        if agentic_result.get("rapl_before_pretask") is not None:
+        _aml = agentic_result.get("ml_features", {})
+        if _aml.get("rapl_before_pretask") is not None:
             fix_run_with_pretask(
                 agentic_id,
-                agentic_result.get("rapl_before_pretask"),
-                agentic_result.get("pre_task_duration_sec", 0.0),
+                _aml.get("rapl_before_pretask"),
+                _aml.get("rapl_after_task"),
+                _aml.get("pre_task_duration_sec", 0.0),
+                _aml.get("post_task_duration_sec", 0.0),
+                _aml.get("cpu_frac_pre", 0.0),
+                _aml.get("cpu_frac_post", 0.0),
             )
         else:
             fix_run(agentic_id)
-        if linear_result.get("rapl_before_pretask") is not None:
+
+        _lml = linear_result.get("ml_features", {})
+        if _lml.get("rapl_before_pretask") is not None:
             fix_run_with_pretask(
                 linear_id,
-                linear_result.get("rapl_before_pretask"),
-                linear_result.get("pre_task_duration_sec", 0.0),
+                _lml.get("rapl_before_pretask"),
+                _lml.get("rapl_after_task"),
+                _lml.get("pre_task_duration_sec", 0.0),
+                _lml.get("post_task_duration_sec", 0.0),
+                _lml.get("cpu_frac_pre", 0.0),
+                _lml.get("cpu_frac_post", 0.0),
             )
         else:
-            fix_run(linear_id)       
+            fix_run(linear_id)
+     
+        # ── Goal tracking wiring (8.5-A) ─────────────────────────────────────
+        # One goal_execution + goal_attempt row per workflow side.
+        # ETL populates energy rollup columns synchronously after both goals recorded.
+        linear_goal_id = self._record_goal_pair(
+            db=db,
+            exp_id=exp_id,
+            task_id=task_id,
+            task_name=task_name,
+            task_meta=task_meta,
+            workflow_type='linear',
+            run_id=linear_id,
+            outcome=linear_outcome,
+            energy_uj=linear_uj,
+            orchestration_uj=linear_orchestration_uj,
+            compute_uj=0,
+        )
+        agentic_goal_id = self._record_goal_pair(
+            db=db,
+            exp_id=exp_id,
+            task_id=task_id,
+            task_name=task_name,
+            task_meta=task_meta,
+            workflow_type='agentic',
+            run_id=agentic_id,
+            outcome=agentic_outcome,
+            energy_uj=agentic_uj,
+            orchestration_uj=agentic_orchestration_uj,
+            compute_uj=0,
+        )
+        # ETL runs sync — after both goals recorded so normalization_factors
+        # sees the full picture for this experiment repetition.
+        if linear_goal_id is not None:
+            goal_execution_etl.process_one(linear_goal_id, db.db.conn)
+            _goal_tracker.queue_etl(
+                db.db.conn, 'goal_execution', linear_goal_id, 'goal_execution_etl',
+            )
+        if agentic_goal_id is not None:
+            goal_execution_etl.process_one(agentic_goal_id, db.db.conn)
+            _goal_tracker.queue_etl(
+                db.db.conn, 'goal_execution', agentic_goal_id, 'goal_execution_etl',
+            )
+        # Attribution stubs — runs sync after goal rows exist
+        energy_attribution_etl.populate_attribution_stubs(linear_id, db.db.conn)
+        energy_attribution_etl.populate_attribution_stubs(agentic_id, db.db.conn)
+        _goal_tracker.queue_etl(db.db.conn, 'run', linear_id, 'energy_attribution_etl')
+        _goal_tracker.queue_etl(db.db.conn, 'run', agentic_id, 'energy_attribution_etl')
 
         return linear_id, agentic_id
+
+    def _record_goal_pair(
+        self,
+        db,
+        exp_id: int,
+        task_id: str,
+        task_name: str,
+        task_meta: dict,
+        workflow_type: str,
+        run_id: int,
+        outcome: str,
+        energy_uj: int,
+        orchestration_uj: int,
+        compute_uj: int,
+    ) -> int:
+        """
+        Create one goal_execution + one goal_attempt for a completed single-attempt run.
+ 
+        Single-attempt path only — no retry logic here. 8.5-B owns retry.
+        Returns goal_id, or None if creation failed.
+ 
+        Args:
+            db:               DB adapter with .db.conn attribute.
+            exp_id:           Parent experiment ID.
+            task_id:          Task identifier string.
+            task_name:        Human readable name for goal_description.
+            task_meta:        Dict with optional 'level' and 'category' keys.
+            workflow_type:    'linear' or 'agentic' — never 'comparison'.
+            run_id:           Completed run_id from save_pair()/save_single().
+            outcome:          Terminal outcome string.
+            energy_uj:        Total energy snapshot.
+            orchestration_uj: Orchestration energy snapshot.
+            compute_uj:       Compute energy snapshot.
+ 
+        Returns:
+            goal_id (int) or None on failure.
+        """
+        conn = db.db.conn
+ 
+        # Derive difficulty and goal_type from task metadata
+        level = task_meta.get("level") if task_meta else None
+        category = task_meta.get("category", "custom") if task_meta else "custom"
+ 
+        # goal_id created with -1 placeholder for first_run_id — resolved below
+        goal_id = _goal_tracker.start_goal(
+            conn=conn,
+            exp_id=exp_id,
+            task_id=task_id,
+            task_name=task_name,
+            goal_type=category,
+            workflow_type=workflow_type,
+            difficulty_level=level,
+            first_run_id=-1,
+        )
+        if goal_id is None:
+            return None
+ 
+        # Single attempt — attempt_number=1, no retry_of_attempt_id
+        attempt_id = _goal_tracker.start_attempt(
+            conn=conn,
+            goal_id=goal_id,
+            attempt_number=1,
+        )
+        if attempt_id is None:
+            return goal_id  # goal row exists — return it even if attempt failed
+ 
+        _goal_tracker.finish_attempt(
+            conn=conn,
+            attempt_id=attempt_id,
+            run_id=run_id,
+            outcome=outcome,
+            energy_uj=energy_uj,
+            orchestration_uj=orchestration_uj,
+            compute_uj=compute_uj,
+        )
+ 
+        success = (outcome == "success")
+        _goal_tracker.finish_goal(
+            conn=conn,
+            goal_id=goal_id,
+            success=success,
+            winning_run_id=run_id if success else None,
+            total_attempts=1,
+        )
+ 
+        return goal_id
+    
+    def save_single(
+            self,
+            db,
+            exp_id: int,
+            hw_id: int,
+            result: dict,
+            rep_num: int,
+            workflow_type: str,
+        ) -> int:
+            """
+            Save one run for single-workflow-mode experiments (linear or agentic only).
+
+            Mirrors save_pair() exactly for one side. All sample types, ETL chain,
+            duration fix, and goal tracking are identical to the corresponding side
+            in save_pair(). Returns run_id or None on failure.
+
+            Args:
+                db:            DB adapter.
+                exp_id:        Parent experiment ID.
+                hw_id:         Hardware profile ID.
+                result:        Harness result dict — same structure as save_pair() sides.
+                rep_num:       Repetition number (1-indexed).
+                workflow_type: 'linear' or 'agentic' only — never 'comparison'.
+            """
+            if workflow_type not in ("linear", "agentic"):
+                logger.warning(
+                    "save_single: invalid workflow_type=%r — must be linear or agentic",
+                    workflow_type,
+                )
+                return None
+
+            # Mirror save_pair() pre-insert setup exactly
+            result["ml_features"]["run_number"] = rep_num
+            result_copy = result.copy()
+            result_copy["baseline_id"] = result_copy["ml_features"].get("baseline_id")
+
+            task_id   = result.get("task_id", "unknown")
+            task_name = result.get("task_name", task_id)
+            task_meta = result.get("task_meta", {})
+            outcome   = "success" if result.get("execution", {}).get("status") == "success" else "failure"
+
+            with db.transaction():
+                run_id = db.insert_run(exp_id, hw_id, result)
+                if run_id is None:
+                    logger.warning("save_single: insert_run returned None — aborting")
+                    return None
+
+                record_run_provenance(db, run_id, result,
+                                    reader_mode=result.get("reader_mode"))
+                self._validate_run(db, run_id, hw_id)
+
+                # Energy samples — with backward compat tuple conversion
+                if "energy_samples" in result:
+                    converted = []
+                    for sample in result["energy_samples"]:
+                        if isinstance(sample, dict):
+                            converted.append(sample)
+                        elif len(sample) == 2 and isinstance(sample[1], dict):
+                            timestamp, energy_dict = sample
+                            converted.append({
+                                "timestamp_ns":     int(timestamp * 1_000_000_000),
+                                "pkg_energy_uj":    energy_dict.get("package-0", 0),
+                                "core_energy_uj":   energy_dict.get("core", 0),
+                                "uncore_energy_uj": energy_dict.get("uncore", 0),
+                                "dram_energy_uj":   0,
+                            })
+                    if converted:
+                        db.insert_energy_samples(run_id, converted)
+
+                if "cpu_samples" in result:
+                    db.insert_cpu_samples(run_id, result["cpu_samples"])
+
+                if "interrupt_samples" in result:
+                    db.insert_interrupt_samples(run_id, result["interrupt_samples"])
+
+                if "io_samples" in result:
+                    db.insert_io_samples(run_id, result["io_samples"])
+
+                if "thermal_samples" in result:
+                    db.insert_thermal_samples(run_id, result["thermal_samples"])
+                    # Aggregate hardware stats after thermal samples inserted — mirrors save_pair()
+                    agg = self.aggregate_run_stats(
+                        run_id,
+                        result.get("cpu_samples", []),
+                        result.get("interrupt_samples", []),
+                    )
+                    db.update_run_stats(run_id, agg)
+
+                # Orchestration events — present on agentic side
+                if "orchestration_events" in result:
+                    db.insert_orchestration_events(run_id, result["orchestration_events"])
+
+                # LLM interactions — key is pending_interactions, run_id set per interaction
+                if result.get("pending_interactions"):
+                    for interaction in result["pending_interactions"]:
+                        interaction["run_id"] = run_id
+                        db.insert_llm_interaction(interaction)
+
+                # Energy summary — single side has no pair partner, skip tax summary
+                energy_uj        = result["layer3_derived"]["energy_uj"]["workload"]
+                orchestration_uj = result["layer3_derived"]["energy_uj"].get(
+                    "orchestration_tax", 0
+                )
+
+            logger.info("save_single: run_id=%d workflow=%s rep=%d", run_id, workflow_type, rep_num)
+
+            # ETL chain — same order as save_pair()
+            compute_phase_attribution(run_id)
+            aggregate_hardware_metrics(run_id)
+            compute_energy_attribution(run_id)
+            populate_ttft_tpot(run_id)
+
+            # Duration fix — mirrors save_pair() fix_run_with_pretask block
+            _ml = result.get("ml_features", {})
+            if _ml.get("rapl_before_pretask") is not None:
+                fix_run_with_pretask(
+                    run_id,
+                    _ml.get("rapl_before_pretask"),
+                    _ml.get("rapl_after_task"),
+                    _ml.get("pre_task_duration_sec", 0.0),
+                    _ml.get("post_task_duration_sec", 0.0),
+                    _ml.get("cpu_frac_pre", 0.0),
+                    _ml.get("cpu_frac_post", 0.0),
+                )
+            else:
+                fix_run(run_id)
+
+            # Goal tracking — single side only
+            goal_id = self._record_goal_pair(
+                db=db,
+                exp_id=exp_id,
+                task_id=task_id,
+                task_name=task_name,
+                task_meta=task_meta,
+                workflow_type=workflow_type,
+                run_id=run_id,
+                outcome=outcome,
+                energy_uj=energy_uj,
+                orchestration_uj=orchestration_uj,
+                compute_uj=0,
+            )
+
+            if goal_id is not None:
+                goal_execution_etl.process_one(goal_id, db.db.conn)
+                _goal_tracker.queue_etl(
+                    db.db.conn, "goal_execution", goal_id, "goal_execution_etl",
+                )
+
+            energy_attribution_etl.populate_attribution_stubs(run_id, db.db.conn)
+            _goal_tracker.queue_etl(db.db.conn, "run", run_id, "energy_attribution_etl")
+
+            return run_id
+
+    def _save_run_samples(self, db, run_id: int, result: dict) -> None:
+        """
+        Insert all sample tables for one completed run.
+
+        Called by both save_pair() and save_single() — single place for
+        all sample insertion logic. Mirrors the existing per-side blocks
+        in save_pair() exactly. Safe to call inside or outside a transaction.
+
+        Args:
+            db:     DB adapter with insert_* methods.
+            run_id: The run_id just inserted by db.insert_run().
+            result: Full harness result dict for this side.
+        """
+        # Provenance — must be first after insert_run
+        record_run_provenance(db, run_id, result,
+                            reader_mode=result.get("reader_mode"))
+        self._validate_run(db, run_id, None)
+
+        # Energy samples — convert old tuple format for backward compat
+        if "energy_samples" in result:
+            converted = []
+            for sample in result["energy_samples"]:
+                if isinstance(sample, dict):
+                    converted.append(sample)
+                elif len(sample) == 2 and isinstance(sample[1], dict):
+                    timestamp, energy_dict = sample
+                    converted.append({
+                        "timestamp_ns":     int(timestamp * 1_000_000_000),
+                        "pkg_energy_uj":    energy_dict.get("package-0", 0),
+                        "core_energy_uj":   energy_dict.get("core", 0),
+                        "uncore_energy_uj": energy_dict.get("uncore", 0),
+                        "dram_energy_uj":   0,
+                    })
+            if converted:
+                db.insert_energy_samples(run_id, converted)
+
+        if "cpu_samples" in result:
+            db.insert_cpu_samples(run_id, result["cpu_samples"])
+
+        if "interrupt_samples" in result:
+            db.insert_interrupt_samples(run_id, result["interrupt_samples"])
+
+        if "io_samples" in result:
+            db.insert_io_samples(run_id, result["io_samples"])
+
+        if "thermal_samples" in result:
+            db.insert_thermal_samples(run_id, result["thermal_samples"])
+            # Aggregate hardware stats after thermal samples inserted
+            self.aggregate_run_stats(
+                run_id,
+                result.get("cpu_samples", []),
+                result.get("interrupt_samples", []),
+            )
+
+        # Orchestration events — agentic only in practice, safe to call on linear
+        if "orchestration_events" in result:
+            db.insert_orchestration_events(run_id, result["orchestration_events"])
+
+        # LLM interactions
+        if "llm_interactions" in result:
+            for interaction in result["llm_interactions"]:
+                db.insert_llm_interaction(interaction)

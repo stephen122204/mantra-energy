@@ -1,0 +1,12 @@
+method_id: tool_failure_wasted_energy_v1
+references:
+  - title: "Measuring the Energy Consumption of Agentic AI Systems"
+    authors: "Internal"
+    year: 2026
+    ref_type: "internal"
+    relevance: "Tool failure energy attribution methodology for agentic orchestration pipelines"
+  - title: "A-LEMS Attribution ETL"
+    authors: "Internal"
+    year: 2026
+    ref_type: "internal"
+    relevance: "energy_attribution_etl.py — populates tool_failure_events.wasted_energy_uj"

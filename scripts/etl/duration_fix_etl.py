@@ -53,44 +53,73 @@ COVERAGE_GOLD       = 95.0
 COVERAGE_ACCEPTABLE = 80.0
 
 
+def _pkg_uj(rapl_dict: dict | None) -> int | None:
+    """Extract package energy µJ from a rapl.read_energy() dict. PAC safe."""
+    if not rapl_dict:
+        return None
+    return rapl_dict.get("package-0") or rapl_dict.get("package")
+ 
+ 
+def _compute_window_energy(
+    rapl_start_uj: int | None,
+    rapl_end_uj:   int | None,
+    baseline_power_watts: float | None,
+    duration_ns:   int | None,
+    cpu_fraction:  float | None,
+) -> int | None:
+    """
+    Compute net attributed energy for a measurement window.
+ 
+    Formula:
+        raw_delta  = rapl_end_uj - rapl_start_uj
+        baseline   = baseline_power_watts * duration_sec * 1e6  (µJ)
+        dynamic    = raw_delta - baseline
+        attributed = dynamic * cpu_fraction
+ 
+    Args:
+        rapl_start_uj:        RAPL pkg counter at window start (µJ).
+        rapl_end_uj:          RAPL pkg counter at window end (µJ).
+        baseline_power_watts: Idle baseline power (W) for this run.
+        duration_ns:          Window duration in nanoseconds.
+        cpu_fraction:         A-LEMS process CPU share during window.
+ 
+    Returns:
+        Attributed energy in µJ as int, or None if inputs unavailable.
+        Returns 0 minimum (no negative energy).
+    """
+    if rapl_start_uj is None or rapl_end_uj is None:
+        return None
+    if baseline_power_watts is None or duration_ns is None or cpu_fraction is None:
+        return None
+ 
+    raw_delta_uj  = rapl_end_uj - rapl_start_uj
+    if raw_delta_uj < 0:
+        logger.warning("RAPL counter wrap detected — window energy invalid")
+        return None
+
+    # No baseline subtraction for overhead windows — the pre/post task windows
+    # are short instrumentation periods, not LLM work. Subtracting the task-era
+    # baseline (which reflects LLM power draw) would under-report or zero out
+    # the signal. Use raw delta attributed by CPU fraction only.
+    attributed_uj = raw_delta_uj * cpu_fraction
+    return max(0, int(attributed_uj))
+ 
+ 
 def _compute_pre_task_energy(
     rapl_before: dict | None,
     rapl_start:  dict | None,
 ) -> int | None:
-    """
-    Compute pre-task window energy from two RAPL snapshots.
-
-    Formula: E_pre_task = rapl_before["package-0"] - rapl_start["package-0"]
-
-    Note: RAPL is a cumulative counter. rapl_before < rapl_start always
-    (time moves forward). If rapl_before > rapl_start, counter wrapped
-    — return None (invalid).
-
-    Args:
-        rapl_before: Dict from rapl.read_energy() before pre-task reads.
-                     Keys: "package-0", "core", "dram", "uncore".
-        rapl_start:  Dict from rapl.read_energy() inside start_measurement().
-
-    Returns:
-        pre_task_energy_uj as int, or None if unavailable/invalid.
-    """
-    if not rapl_before or not rapl_start:
-        return None
-
-    # Use package-0 as the primary domain
-    before_pkg = rapl_before.get("package-0") or rapl_before.get("package")
-    start_pkg  = rapl_start.get("package-0")  or rapl_start.get("package")
-
+    """Legacy wrapper — kept for backfill_all path."""
+    before_pkg = _pkg_uj(rapl_before)
+    start_pkg  = _pkg_uj(rapl_start)
     if before_pkg is None or start_pkg is None:
         return None
-
     delta = start_pkg - before_pkg
     if delta < 0:
-        # RAPL counter wrapped — cannot compute reliably
         logger.warning("RAPL counter wrap detected in pre-task window")
         return None
-
     return int(delta)
+
 
 
 def _fix_run(cursor: sqlite3.Cursor, run_id: int) -> dict | None:
@@ -182,22 +211,28 @@ def _fix_run(cursor: sqlite3.Cursor, run_id: int) -> dict | None:
         if task_duration_ns > 0 and pkg_uj else None
     )
 
-    # pre_task_energy: NULL for historical runs (rapl_before not captured)
-    # Will be populated for new runs via experiment_runner result dict
+    # pre/post task energy: NULL for historical runs (RAPL snapshots not captured)
+    # Will be populated for new runs via fix_run_with_pretask()
     pre_task_energy_uj   = existing_pre   # preserve if already set
     pre_task_duration_ns = None           # not recoverable for historical runs
-
+ 
     return {
-        "run_id":                     run_id,
-        "task_duration_ns":           task_duration_ns,
-        "framework_overhead_ns":      framework_overhead_ns,
-        "total_run_duration_ns":      total_run_duration_ns,
-        "duration_includes_overhead": 1,    # all backfilled runs are historical
-        "energy_sample_coverage_pct": coverage_pct,
-        "avg_task_power_watts":       avg_task_power_watts,
-        "pre_task_energy_uj":         pre_task_energy_uj,
-        "pre_task_duration_ns":       pre_task_duration_ns,
+        "run_id":                       run_id,
+        "task_duration_ns":             task_duration_ns,
+        "framework_overhead_ns":        framework_overhead_ns,
+        "total_run_duration_ns":        total_run_duration_ns,
+        "duration_includes_overhead":   1,
+        "energy_sample_coverage_pct":   coverage_pct,
+        "avg_task_power_watts":         avg_task_power_watts,
+        "pre_task_energy_uj":           pre_task_energy_uj,
+        "pre_task_duration_ns":         pre_task_duration_ns,
+        "post_task_duration_ns":        None,   # not recoverable for historical runs
+        "post_task_energy_uj":          None,
+        "rapl_before_pretask_uj":       None,
+        "rapl_after_task_uj":           None,
+        "framework_overhead_energy_uj": None,
     }
+
 
 
 def fix_run(run_id: int, db_path: Path = DEFAULT_DB) -> bool:
@@ -224,16 +259,22 @@ def fix_run(run_id: int, db_path: Path = DEFAULT_DB) -> bool:
 
         cursor.execute("""
             UPDATE runs SET
-                task_duration_ns           = :task_duration_ns,
-                framework_overhead_ns      = :framework_overhead_ns,
-                total_run_duration_ns      = :total_run_duration_ns,
-                duration_includes_overhead = :duration_includes_overhead,
-                energy_sample_coverage_pct = :energy_sample_coverage_pct,
-                avg_task_power_watts       = :avg_task_power_watts,
-                pre_task_energy_uj         = :pre_task_energy_uj,
-                pre_task_duration_ns       = :pre_task_duration_ns
+                task_duration_ns             = :task_duration_ns,
+                framework_overhead_ns        = :framework_overhead_ns,
+                total_run_duration_ns        = :total_run_duration_ns,
+                duration_includes_overhead   = :duration_includes_overhead,
+                energy_sample_coverage_pct   = :energy_sample_coverage_pct,
+                avg_task_power_watts         = :avg_task_power_watts,
+                pre_task_energy_uj           = :pre_task_energy_uj,
+                pre_task_duration_ns         = :pre_task_duration_ns,
+                post_task_duration_ns        = :post_task_duration_ns,
+                post_task_energy_uj          = :post_task_energy_uj,
+                rapl_before_pretask_uj       = :rapl_before_pretask_uj,
+                rapl_after_task_uj           = :rapl_after_task_uj,
+                framework_overhead_energy_uj = :framework_overhead_energy_uj
             WHERE run_id = :run_id
         """, data)
+
 
         conn.commit()
         logger.info(
@@ -260,9 +301,14 @@ def fix_run(run_id: int, db_path: Path = DEFAULT_DB) -> bool:
 def fix_run_with_pretask(
     run_id: int,
     rapl_before_pretask: dict | None,
+    rapl_after_task: dict | None,
     pre_task_duration_sec: float,
+    post_task_duration_sec: float,
+    cpu_frac_pre: float,
+    cpu_frac_post: float,
     db_path: Path = DEFAULT_DB,
 ) -> bool:
+
     """
     Called by experiment_runner for NEW runs (post-v9).
     Stores pre_task_energy_uj from live RAPL capture.
@@ -290,66 +336,113 @@ def fix_run_with_pretask(
         return False
 
     if rapl_before_pretask is None:
-        # Non-RAPL platform — pre_task_energy stays NULL
-        logger.debug("Run %d: non-RAPL platform, pre_task_energy=NULL", run_id)
+        # Non-RAPL platform — pre/post energy stays NULL — PAC compliant
+        logger.debug("Run %d: non-RAPL platform, pre/post energy=NULL", run_id)
         return True
-
+ 
     conn = sqlite3.connect(str(db_path))
     try:
         cursor = conn.cursor()
-
-        # Get rapl_start from energy_samples first timestamp
-        # rapl_start = RAPL value at start_measurement() call
-        # We approximate from first energy_sample pkg_start_uj
+ 
+        # ── Get baseline power for this run ───────────────────────────────
         cursor.execute("""
-            SELECT pkg_start_uj
-            FROM energy_samples
-            WHERE run_id = ?
-            ORDER BY sample_start_ns ASC
-            LIMIT 1
+            SELECT avg_task_power_watts, baseline_energy_uj, task_duration_ns
+            FROM runs WHERE run_id = ?
         """, (run_id,))
-        row = cursor.fetchone()
-        if not row:
-            logger.warning("Run %d: no energy_samples for pre_task calc", run_id)
+        run_row = cursor.fetchone()
+        existing_task_dur_ns = run_row[2] if run_row else None
+        baseline_power_watts = None
+        if run_row and run_row[1] and run_row[2] and run_row[2] > 0:
+            baseline_power_watts = (
+                run_row[1] / 1e6 / (run_row[2] / 1e9)
+            )
+ 
+        # ── RAPL anchors ──────────────────────────────────────────────────
+        rapl_before_uj = _pkg_uj(rapl_before_pretask)
+        rapl_after_uj  = _pkg_uj(rapl_after_task)
+        logger.info("Run %d: rapl_before=%s rapl_after=%s before_uj=%s after_uj=%s cpu_pre=%s cpu_post=%s post_dur=%s",
+                    run_id, rapl_before_pretask, rapl_after_task,
+                    rapl_before_uj, rapl_after_uj, cpu_frac_pre, cpu_frac_post, post_task_duration_sec)
+        # rapl_t0 = first energy_sample pkg_start_uj (start_measurement anchor)
+        cursor.execute("""
+            SELECT MIN(pkg_start_uj), MAX(pkg_end_uj)
+            FROM energy_samples WHERE run_id = ?
+        """, (run_id,))
+        es_row = cursor.fetchone()
+        if not es_row or es_row[0] is None:
+            logger.warning("Run %d: no energy_samples — skipping pre/post energy", run_id)
             return True
-
-        # rapl_start pkg value (µJ)
-        rapl_start_pkg = row[0]
-        rapl_before_pkg = (
-            rapl_before_pretask.get("package-0")
-            or rapl_before_pretask.get("package")
-        )
-        if rapl_before_pkg is None or rapl_start_pkg is None:
-            logger.warning("Run %d: rapl_before_pkg=%s rapl_start_pkg=%s — skipping",
-                           run_id, rapl_before_pkg, rapl_start_pkg)
-            return True
-        pre_task_energy_uj = max(0, int(rapl_start_pkg - rapl_before_pkg))
-        logger.info("Run %d: rapl_before_pkg=%d rapl_start_pkg=%d diff=%d",
-                    run_id, rapl_before_pkg, rapl_start_pkg,
-                    rapl_start_pkg - rapl_before_pkg)
+ 
+        rapl_t0_uj   = es_row[0]   # RAPL at start_measurement()
+        rapl_t1_uj   = es_row[1]   # RAPL at stop_measurement() proxy
+ 
+        # ── Compute pre-task energy ───────────────────────────────────────
         pre_task_duration_ns = int(pre_task_duration_sec * 1e9)
-
+        pre_task_energy_uj   = _compute_window_energy(
+            rapl_before_uj, rapl_t0_uj,
+            baseline_power_watts,
+            pre_task_duration_ns,
+            cpu_frac_pre,
+        )
+ 
+        # ── Compute post-task energy ──────────────────────────────────────
+        post_task_duration_ns = int(post_task_duration_sec * 1e9)
+        post_task_energy_uj   = _compute_window_energy(
+            rapl_t1_uj, rapl_after_uj,
+            baseline_power_watts,
+            post_task_duration_ns,
+            cpu_frac_post,
+        )
+ 
+        # ── Framework overhead energy = pre + post ────────────────────────
+        if pre_task_energy_uj is not None and post_task_energy_uj is not None:
+            framework_overhead_energy_uj = pre_task_energy_uj + post_task_energy_uj
+        else:
+            framework_overhead_energy_uj = None
+ 
         cursor.execute("""
             UPDATE runs SET
-                pre_task_energy_uj   = ?,
-                pre_task_duration_ns = ?,
-                duration_includes_overhead = 0
+                rapl_before_pretask_uj       = ?,
+                rapl_after_task_uj           = ?,
+                pre_task_duration_ns         = ?,
+                pre_task_energy_uj           = ?,
+                post_task_duration_ns        = ?,
+                post_task_energy_uj          = ?,
+                framework_overhead_energy_uj = ?,
+                framework_overhead_ns        = ?,
+                total_run_duration_ns        = ?,
+                duration_includes_overhead   = 0
             WHERE run_id = ?
-        """, (pre_task_energy_uj, pre_task_duration_ns, run_id))
-
+        """, (
+            rapl_before_uj,
+            rapl_after_uj,
+            pre_task_duration_ns,
+            pre_task_energy_uj,
+            post_task_duration_ns,
+            post_task_energy_uj,
+            framework_overhead_energy_uj,
+            pre_task_duration_ns + post_task_duration_ns,
+            (pre_task_duration_ns + existing_task_dur_ns + post_task_duration_ns
+             if existing_task_dur_ns else None),
+            run_id,
+        ))
         conn.commit()
         logger.info(
-            "Run %d | pre_task_energy=%dµJ pre_task_duration=%dms",
-            run_id, pre_task_energy_uj, pre_task_duration_ns // 1_000_000,
+            "Run %d | pre=%dµJ(%dms) post=%dµJ(%dms) overhead=%dµJ",
+            run_id,
+            pre_task_energy_uj  or 0, pre_task_duration_ns  // 1_000_000,
+            post_task_energy_uj or 0, post_task_duration_ns // 1_000_000,
+            framework_overhead_energy_uj or 0,
         )
         return True
-
+ 
     except Exception as exc:
-        logger.error("Pre-task energy fix failed for run %d: %s", run_id, exc)
+        logger.error("Pre/post task energy fix failed for run %d: %s", run_id, exc)
         conn.rollback()
         return False
     finally:
         conn.close()
+
 
 
 def backfill_all(db_path: Path = DEFAULT_DB) -> None:

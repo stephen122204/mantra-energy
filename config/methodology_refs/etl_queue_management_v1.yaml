@@ -1,0 +1,10 @@
+method_id: etl_queue_management_v1
+references:
+  - title: "A-LEMS ETL Queue Design"
+    authors: "A-LEMS Platform"
+    year: 2026
+    ref_type: "internal"
+    relevance: >
+      Table-backed queue for decoupled ETL execution. experiment_runner enqueues
+      pending entries after save_pair(). ETL runner reads etl_queue and processes
+      entries independently. Allows ETL reruns without rerunning experiments.

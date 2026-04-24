@@ -242,10 +242,13 @@ class ExperimentHarness:
         # ====================================================================
         # Capture system state BEFORE run (M3-1 through M3-6)
         # ====================================================================
-        # Capture RAPL and timestamp BEFORE pre-task instrumentation reads.
-        # This opens the diagnostic pre-task energy window.
-        # rapl.read_energy() returns None on non-RAPL platforms (PAC safe).
+        # Capture RAPL and CPU ticks BEFORE pre-task instrumentation reads.
+        # Opens the diagnostic pre-task energy window (t_before_pretask → t0).
+        # read_energy() returns None on non-RAPL platforms — PAC compliant.
         _rapl_before_pretask = self.energy_engine.rapl.read_energy()
+        _pid_pre             = os.getpid()
+        _total_ticks_pre     = read_total_cpu_ticks()
+        _pid_ticks_pre       = read_process_cpu_ticks(_pid_pre)
         _pre_task_start_perf = time.perf_counter()
 
         intr_before = _read_interrupts()
@@ -269,19 +272,29 @@ class ExperimentHarness:
         self.energy_engine.set_workload_pid(_pid)  # Chunk 5: pass PID to interrupt sampler        
         exec_result = executor.execute(prompt)
         # t1: task boundary — executor has returned, task is complete.
-        # Captured BEFORE stop_measurement() to exclude its cleanup overhead.
-        task_end_perf = time.perf_counter()
+        task_end_perf        = time.perf_counter()
+        _total_ticks_t1      = read_total_cpu_ticks()
+        _pid_ticks_t1        = read_process_cpu_ticks(os.getpid())
         raw_energy = (
             self.energy_engine.stop_measurement()
         )  # RawEnergyMeasurement (Layer 1)
-        run_end_dt = datetime.now()   # t2: human-readable (post-framework)
-        run_end_perf = time.perf_counter()
+        # rapl_after_task captured AFTER stop_measurement() so MAX(pkg_end_uj)
+        # from energy_samples cannot overshoot this anchor.
+        _rapl_after_task     = self.energy_engine.rapl.read_energy()
+        run_end_dt           = datetime.now()   # t2: human-readable (post-framework)
+        run_end_perf         = time.perf_counter()
+        _total_ticks_t2      = read_total_cpu_ticks()
+        _pid_ticks_t2        = read_process_cpu_ticks(os.getpid())
         # task_duration = executor time only — canonical energy denominator
-        task_duration_sec = task_end_perf - run_start_perf
-        # framework_overhead = stop_measurement + post-processing cost
-        framework_overhead_sec = run_end_perf - task_end_perf
-        # pre_task_duration = time spent on context reads before measurement
-        pre_task_duration_sec = run_start_perf - _pre_task_start_perf
+        task_duration_sec    = task_end_perf - run_start_perf
+        # post_task_duration = stop_measurement + post-processing cost (t1→t2)
+        post_task_duration_sec = run_end_perf - task_end_perf
+        # pre_task_duration = instrumentation reads before measurement (t_before→t0)
+        pre_task_duration_sec  = run_start_perf - _pre_task_start_perf
+        # framework_overhead = pre + post (total instrumentation wall time)
+        framework_overhead_sec = pre_task_duration_sec + post_task_duration_sec
+
+
         # legacy field kept for backward compat
         run_duration_sec = task_duration_sec
 
@@ -509,9 +522,19 @@ class ExperimentHarness:
                 "duration_ms": task_duration_sec * 1000,
                 "task_duration_sec": task_duration_sec,
                 "framework_overhead_sec": framework_overhead_sec,
-                "total_run_duration_sec": run_end_perf - run_start_perf,
-                "pre_task_duration_sec": pre_task_duration_sec,
-                "rapl_before_pretask": _rapl_before_pretask,  # Dict or None
+                "total_run_duration_sec": run_end_perf - _pre_task_start_perf,
+                "pre_task_duration_sec":  pre_task_duration_sec,
+                "post_task_duration_sec": post_task_duration_sec,
+                "rapl_before_pretask":    _rapl_before_pretask,   # Dict or None
+                "rapl_after_task":        _rapl_after_task,        # Dict or None
+                "cpu_frac_pre":           compute_cpu_fraction(
+                    _pid_ticks_start - _pid_ticks_pre,
+                    _total_ticks_start - _total_ticks_pre,
+                ),
+                "cpu_frac_post":          compute_cpu_fraction(
+                    _pid_ticks_t2 - _pid_ticks_t1,
+                    _total_ticks_t2 - _total_ticks_t1,
+                ),
                 "duration_includes_overhead": 0,              # corrected run
                 "instructions": derived.instructions,
                 "pkg_energy_uj": derived.package_energy_uj,
@@ -724,7 +747,10 @@ class ExperimentHarness:
         # This opens the diagnostic pre-task energy window.
         # rapl.read_energy() returns None on non-RAPL platforms (PAC safe).
         _rapl_before_pretask = self.energy_engine.rapl.read_energy()
-        _pre_task_start_perf = time.perf_counter()        
+        _pid_pre             = os.getpid()
+        _total_ticks_pre     = read_total_cpu_ticks()
+        _pid_ticks_pre       = read_process_cpu_ticks(_pid_pre)
+        _pre_task_start_perf = time.perf_counter()
         intr_before = _read_interrupts()
         temp_start = _read_temperature()
         governor = get_governor()
@@ -745,19 +771,27 @@ class ExperimentHarness:
         self.energy_engine.set_workload_pid(_pid)  # Chunk 5: pass PID to interrupt sampler        
         exec_result = executor.execute_comparison(task)
         # t1: task boundary — agentic executor has returned, all phases complete.
-        # Captured BEFORE stop_measurement() to exclude its cleanup overhead.
-        task_end_perf = time.perf_counter()
+        task_end_perf        = time.perf_counter()
+        _total_ticks_t1      = read_total_cpu_ticks()
+        _pid_ticks_t1        = read_process_cpu_ticks(os.getpid())
         raw_energy = (
             self.energy_engine.stop_measurement()
         )  # RawEnergyMeasurement (Layer 1)
-        run_end_dt = datetime.now()   # t2: human-readable (post-framework)
-        run_end_perf = time.perf_counter()
+        # rapl_after_task captured AFTER stop_measurement() so MAX(pkg_end_uj)
+        # from energy_samples cannot overshoot this anchor.
+        _rapl_after_task     = self.energy_engine.rapl.read_energy()
+        run_end_dt           = datetime.now()   # t2: human-readable (post-framework)
+        run_end_perf         = time.perf_counter()
+        _total_ticks_t2      = read_total_cpu_ticks()
+        _pid_ticks_t2        = read_process_cpu_ticks(os.getpid())
         # task_duration = executor time only — canonical energy denominator
-        task_duration_sec = task_end_perf - run_start_perf
-        # framework_overhead = stop_measurement + post-processing cost
-        framework_overhead_sec = run_end_perf - task_end_perf
-        # pre_task_duration = time spent on context reads before measurement
-        pre_task_duration_sec = run_start_perf - _pre_task_start_perf
+        task_duration_sec    = task_end_perf - run_start_perf
+        # post_task_duration = stop_measurement + post-processing cost (t1→t2)
+        post_task_duration_sec = run_end_perf - task_end_perf
+        # pre_task_duration = instrumentation reads before measurement (t_before→t0)
+        pre_task_duration_sec  = run_start_perf - _pre_task_start_perf
+        # framework_overhead = pre + post (total instrumentation wall time)
+        framework_overhead_sec = pre_task_duration_sec + post_task_duration_sec
         # legacy field kept for backward compat
         run_duration_sec = task_duration_sec
  
@@ -990,9 +1024,19 @@ class ExperimentHarness:
                 "duration_ms": task_duration_sec * 1000,
                 "task_duration_sec": task_duration_sec,
                 "framework_overhead_sec": framework_overhead_sec,
-                "total_run_duration_sec": run_end_perf - run_start_perf,
+                "total_run_duration_sec": run_end_perf - _pre_task_start_perf,
                 "pre_task_duration_sec": pre_task_duration_sec,
-                "rapl_before_pretask": _rapl_before_pretask,  # Dict or None
+                "post_task_duration_sec":  post_task_duration_sec,
+                "rapl_before_pretask":     _rapl_before_pretask,   # Dict or None
+                "rapl_after_task":         _rapl_after_task,        # Dict or None
+                "cpu_frac_pre":            compute_cpu_fraction(
+                    _pid_ticks_start - _pid_ticks_pre,
+                    _total_ticks_start - _total_ticks_pre,
+                ),
+                "cpu_frac_post":           compute_cpu_fraction(
+                    _pid_ticks_t2 - _pid_ticks_t1,
+                    _total_ticks_t2 - _total_ticks_t1,
+                ),                
                 "duration_includes_overhead": 0,              # corrected run
                 "instructions": derived.instructions,
                 "pkg_energy_uj": derived.package_energy_uj,

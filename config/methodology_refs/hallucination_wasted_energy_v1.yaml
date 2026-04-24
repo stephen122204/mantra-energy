@@ -1,0 +1,12 @@
+method_id: hallucination_wasted_energy_v1
+references:
+  - title: "Measuring the Carbon Intensity of AI in Cloud Instances"
+    authors: "Lottick, K. et al."
+    year: 2019
+    ref_type: "paper"
+    relevance: "Energy attribution methodology for compute workloads"
+  - title: "A-LEMS Phase Attribution ETL"
+    authors: "Internal"
+    year: 2026
+    ref_type: "internal"
+    relevance: "chunk8_attribution_etl.py — populates wasted_energy_uj from orchestration_events"

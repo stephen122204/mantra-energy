@@ -266,6 +266,13 @@ class RunsRepository:
         duration_includes_overhead = int(ml.get("duration_includes_overhead",
                                          fields.get("duration_includes_overhead", 1)))
         pre_task_energy_uj    = ml.get("pre_task_energy_uj")
+        _post_dur_sec         = ml.get("post_task_duration_sec") or fields.get("post_task_duration_sec")
+        post_task_duration_ns = int(_post_dur_sec * 1e9) if _post_dur_sec else None
+        _rapl_before          = ml.get("rapl_before_pretask") or {}
+        _rapl_after           = ml.get("rapl_after_task") or {}
+        rapl_before_pretask_uj = _rapl_before.get("package-0") or _rapl_before.get("package")
+        rapl_after_task_uj     = _rapl_after.get("package-0")  or _rapl_after.get("package")
+
         # Fallback to old method if per-run timestamps missing
 
         # Fallback to old method if per-run timestamps missing
@@ -331,7 +338,10 @@ class RunsRepository:
                 l3_cache_misses_total, disk_read_bytes_total, disk_write_bytes_total,
                 voltage_vcore_avg,
                 task_duration_ns, framework_overhead_ns, total_run_duration_ns,
-                duration_includes_overhead, pre_task_energy_uj, pre_task_duration_ns
+                duration_includes_overhead, pre_task_energy_uj, pre_task_duration_ns,
+                rapl_before_pretask_uj, rapl_after_task_uj,
+                post_task_duration_ns, post_task_energy_uj,
+                framework_overhead_energy_uj
 
             ) VALUES (
                 ?, ?, ?, ?, ?,
@@ -363,7 +373,9 @@ class RunsRepository:
                 ? , ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
-                ? , ?, ?, ?, ?, ?
+                ? , ?, ?, ?, ?, ?,
+                ?, ?,
+                ?, ?, ?
             )
         """
 
@@ -485,7 +497,12 @@ class RunsRepository:
             total_run_duration_ns,          # full wall clock (legacy compat)
             duration_includes_overhead,     # 0=corrected, 1=historical
             pre_task_energy_uj,             # diagnostic — NOT in attribution
-            pre_task_duration_ns,           # pre-task context reads time                   
+            pre_task_duration_ns,           # pre-task context reads time  
+            rapl_before_pretask_uj,             # raw RAPL pkg at t_before
+            rapl_after_task_uj,                 # raw RAPL pkg at t1
+            post_task_duration_ns,              # t2 - t1
+            None,   # post_task_energy_uj — ETL populated (fix_run_with_pretask)
+            None,   # framework_overhead_energy_uj — ETL populated                             
         )
 
         try:

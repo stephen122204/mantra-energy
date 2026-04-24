@@ -1,0 +1,10 @@
+method_id: goal_tracking_runtime_v1
+references:
+  - title: "A-LEMS Runtime Goal Tracking Design"
+    authors: "A-LEMS Platform"
+    year: 2026
+    ref_type: "internal"
+    relevance: >
+      Defines the INSERT/UPDATE lifecycle for goal_execution and goal_attempt rows
+      at experiment runtime. goal_tracker.py owns all state transitions.
+      experiment_runner.py calls goal_tracker — never writes goal tables directly.
