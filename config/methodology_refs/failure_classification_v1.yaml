@@ -1,0 +1,12 @@
+method_id: failure_classification_v1
+references:
+  - title: "Error Classification in LLM-Based Systems"
+    authors: "A-LEMS Team"
+    year: 2026
+    ref_type: internal
+    relevance: "Canonical seven-type taxonomy: timeout, api_error, tool_error, wrong_answer, context_overflow, rate_limit, crashed"
+  - title: "Exception Handling Patterns in Distributed AI Workloads"
+    authors: "A-LEMS Team"
+    year: 2026
+    ref_type: internal
+    relevance: "Priority ordering: exception type > run_result fields > crashed fallback"

@@ -1,0 +1,12 @@
+method_id: retry_policy_v1
+references:
+  - title: "Fault Tolerance in Distributed Systems"
+    authors: "Cristian, F."
+    year: 1991
+    ref_type: paper
+    relevance: "Foundational retry and backoff strategy theory"
+  - title: "A-LEMS Retry Policy Design"
+    authors: "A-LEMS Team"
+    year: 2026
+    ref_type: internal
+    relevance: "Four canonical policies (no_retry, default, aggressive, conservative) covering all paper experiment types"

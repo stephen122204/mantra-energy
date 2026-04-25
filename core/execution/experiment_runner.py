@@ -46,6 +46,9 @@ from scripts.etl.ttft_tpot_etl import populate_run as populate_ttft_tpot
 from core.execution.goal_tracker import GoalTracker
 import scripts.etl.goal_execution_etl as goal_execution_etl
 import scripts.etl.energy_attribution_etl as energy_attribution_etl
+from core.execution.retry_coordinator import RetryCoordinator, ExecutionResult
+from core.execution.failure_classifier import FailureClassifier
+from core.execution.failure_injector import FailureInjector
 import logging
 logger = logging.getLogger(__name__)
 
@@ -980,14 +983,17 @@ class ExperimentRunner:
         if goal_id is None:
             return None
  
-        # Single attempt — attempt_number=1, no retry_of_attempt_id
+        # Single attempt — no retry loop here, called from save_pair/save_single
+        # which already have a completed run_id. Retry loop lives in _record_goal_with_retry.
         attempt_id = _goal_tracker.start_attempt(
             conn=conn,
             goal_id=goal_id,
             attempt_number=1,
+            is_retry=False,
+            retry_of_attempt_id=None,
         )
         if attempt_id is None:
-            return goal_id  # goal row exists — return it even if attempt failed
+            return goal_id
  
         _goal_tracker.finish_attempt(
             conn=conn,
@@ -997,6 +1003,7 @@ class ExperimentRunner:
             energy_uj=energy_uj,
             orchestration_uj=orchestration_uj,
             compute_uj=compute_uj,
+            failure_type=None,
         )
  
         success = (outcome == "success")

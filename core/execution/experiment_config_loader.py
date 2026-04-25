@@ -53,7 +53,8 @@ def apply_config(args) -> None:
     _apply_study_section(args, cfg.get("study", {}))
     _apply_execution_section(args, cfg.get("execution", {}))
     _apply_retry_section(args, cfg.get("retry_policy", {}))
-
+    _apply_tasks_section(args, cfg.get("tasks", []))
+    _apply_providers_section(args, cfg.get("providers", []))    
     logger.info("apply_config: loaded config from %s", config_path)
 
 
@@ -82,6 +83,21 @@ def _apply_study_section(args, study: dict) -> None:
             # Multiple modes → comparison experiment (both sides run)
             args.workflow_mode = "comparison"
         logger.debug("apply_config: workflow_mode = %s", getattr(args, "workflow_mode", None))
+    if "tasks" in study:
+        # Extract task IDs from list of dicts [{id: ...}] or plain strings
+        task_entries = study["tasks"]
+        ids = []
+        for t in task_entries:
+            if isinstance(t, dict):
+                ids.append(t["id"])
+            else:
+                ids.append(str(t))
+        if ids:
+            # task_id is the single-task CLI arg — set first task for single-task entry points
+            args.task_id = ids[0]
+            # task_ids carries full list — run_experiment.py and config-driven runs use this
+            args.task_ids = ids
+            logger.debug("apply_config: task_ids = %s", ids)
 
 
 def _apply_execution_section(args, execution: dict) -> None:
@@ -99,6 +115,41 @@ def _apply_execution_section(args, execution: dict) -> None:
         args.cool_down = val
         logger.debug("apply_config: cool_down = %d", val)
 
+def _apply_tasks_section(args, tasks: list) -> None:
+    """
+    Override task_id and task_ids from top-level tasks list in config.
+    tasks is a list of dicts [{id: ...}] or plain strings.
+    task_id set to first entry for single-task harness entry points.
+    task_ids carries full list for multi-task run_experiment.py.
+    """
+    if not tasks:
+        return
+    ids = []
+    for t in tasks:
+        if isinstance(t, dict):
+            ids.append(t["id"])
+        else:
+            ids.append(str(t))
+    if ids:
+        args.task_id  = ids[0]
+        args.task_ids = ids
+        logger.debug("apply_config: task_ids = %s", ids)
+        
+def _apply_providers_section(args, providers: list) -> None:
+    """
+    Override provider and model from top-level providers list.
+    Takes first provider only — test_harness is single-provider.
+    run_experiment.py loops over full list itself.
+    """
+    if not providers:
+        return
+    first = providers[0] if isinstance(providers[0], dict) else {}
+    if "name" in first:
+        args.provider = first["name"]
+        logger.debug("apply_config: provider = %s", args.provider)
+    if "model_id" in first:
+        args.model = first["model_id"]
+        logger.debug("apply_config: model = %s", args.model)
 
 def _apply_retry_section(args, retry: dict) -> None:
     """

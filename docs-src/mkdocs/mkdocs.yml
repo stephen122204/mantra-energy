@@ -61,6 +61,7 @@ nav:
     - Adding New Models: developer-guide/how-to-add-model.md
     - Adding New Providers: developer-guide/how-to-add-provider.md
     - Testing Models: developer-guide/how-to-test-models.md
+    - Retry Study Design: developer-guide/20-retry-study-design.md
 
     - Compliance:
       - Developer Compliance Guide: compliance/COMPLIANCE.md
@@ -83,6 +84,9 @@ nav:
     - Goal Execution Methodology: research/18-goal-execution-methodology.md
     - Hallucination and Output Quality Methodology: research/19-hallucination-output-quality-methodology.md
     - Tool Failure and Attribution ETL Methodology: research/20-tool-failure-methodology.md
+    - Goal Tracking Runtime Methodology: research/21-goal-tracking-runtime.md
+    - Retry and Tool Failure Methodology: research/22-retry-tool-failure-methodology.md
+    - Goal Retry Study Researcher Guide: research/23-researcher-guide.md
   
   - API Reference: 
     - Overview: api/reference.md

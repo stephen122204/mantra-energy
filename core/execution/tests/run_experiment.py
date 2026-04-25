@@ -40,7 +40,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Run A-LEMS experiments")
     parser.add_argument("--repetitions", "-n", type=int, default=None)
     parser.add_argument("--cool-down", type=int, default=None)
-    parser.add_argument("--tasks", type=str, default="simple,capital")
+    parser.add_argument("--tasks", type=str, default="gsm8k_basic,factual_qa")
     parser.add_argument("--list-tasks", action="store_true")
     parser.add_argument("--no-warmup", action="store_true")
     parser.add_argument("--provider", type=str, default="groq",

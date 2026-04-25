@@ -1,0 +1,12 @@
+method_id: failure_injection_v1
+references:
+  - title: "Chaos Engineering: Building Confidence in System Behaviour"
+    authors: "Rosenthal, C. et al."
+    year: 2020
+    ref_type: paper
+    relevance: "Deterministic failure injection principle: reproducible seeds ensure replay gives identical failure patterns"
+  - title: "A-LEMS Failure Injection Design"
+    authors: "A-LEMS Team"
+    year: 2026
+    ref_type: internal
+    relevance: "Seed = hash(tool_name, run_id, attempt_number) — independent draws per tool, reproducible across replays"

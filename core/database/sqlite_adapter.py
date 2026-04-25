@@ -36,6 +36,7 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,CREATE_RUN_QUALIT
                      CREATE_ENVIRONMENT_CONFIG, CREATE_EVENTS_INDEXES,
                      CREATE_EXPERIMENTS, CREATE_EXPERIMENT_TYPE_TRIGGERS,CREATE_HARDWARE_CONFIG,
                      CREATE_GOAL_EXECUTION, CREATE_GOAL_ATTEMPT,CREATE_ETL_QUEUE,
+                     CREATE_RETRY_POLICY, CREATE_TASK_RETRY_OVERRIDE,
                      CREATE_HALLUCINATION_EVENTS, CREATE_OUTPUT_QUALITY, CREATE_OUTPUT_QUALITY_JUDGES,
                      CREATE_TOOL_FAILURE_EVENTS,
                      CREATE_IDLE_BASELINES, CREATE_INTERRUPT_SAMPLES,
@@ -260,6 +261,8 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_GOAL_EXECUTION)
         self.conn.executescript(CREATE_GOAL_ATTEMPT)
         self.conn.executescript(CREATE_ETL_QUEUE)
+        self.conn.executescript(CREATE_RETRY_POLICY)
+        self.conn.executescript(CREATE_TASK_RETRY_OVERRIDE)        
         self.conn.executescript(CREATE_TOOL_FAILURE_EVENTS)        
         self.conn.executescript(CREATE_HALLUCINATION_EVENTS)
         self.conn.executescript(CREATE_OUTPUT_QUALITY)
@@ -325,8 +328,8 @@ class SQLiteAdapter(DatabaseInterface):
                 name, description, workflow_type, model_name, provider,
                 model_id, execution_site, transport, remote_energy_available,
                 task_name, country_code, group_id, status, started_at, runs_total,optimization_enabled,
-                hw_id, env_id                 
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                hw_id, env_id,experiment_type, experiment_goal                 
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 experiment_data.get("name", "unnamed"),
@@ -347,10 +350,49 @@ class SQLiteAdapter(DatabaseInterface):
                 experiment_data.get("optimization_enabled", 0),
                 experiment_data.get("hw_id"),
                 experiment_data.get("env_id"),
+                experiment_data.get("experiment_type", "normal"),
+                experiment_data.get("experiment_goal"),                
             ),
         )
         return cursor.lastrowid
 
+    def insert_tool_failure(self, failure_data: dict) -> int:
+        """
+        Insert one tool_failure_events row.
+ 
+        wasted_energy_uj is always NULL at insert time — energy_attribution_etl
+        populates it after the run completes (SC-4 ETL pattern).
+ 
+        Args:
+            failure_data: Dict with keys matching tool_failure_events columns.
+ 
+        Returns:
+            failure_id (lastrowid) or None on error.
+        """
+        cursor = self.conn.execute(
+            """
+            INSERT INTO tool_failure_events (
+                attempt_id, goal_id, orchestration_event_id,
+                tool_name, failure_type, failure_phase,
+                error_message, retry_attempted, retry_success,
+                recovery_strategy, wasted_energy_uj
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                failure_data.get("attempt_id"),
+                failure_data.get("goal_id"),
+                failure_data.get("orchestration_event_id"),
+                failure_data.get("tool_name"),
+                failure_data.get("failure_type", "other"),
+                failure_data.get("failure_phase"),
+                failure_data.get("error_message"),
+                failure_data.get("retry_attempted", 0),
+                failure_data.get("retry_success", 0),
+                failure_data.get("recovery_strategy"),
+            ),
+        )
+        return cursor.lastrowid
+    
     def insert_hardware(self, hardware_data: Dict[str, Any]) -> int:
         """
         Insert hardware configuration or return existing ID.

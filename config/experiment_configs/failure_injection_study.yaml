@@ -1,0 +1,34 @@
+# config/experiment_configs/failure_injection_study.yaml
+# Failure Injection Study — Paper Night 2.
+# Injects deterministic failures to measure recovery energy cost.
+# experiment_type: failure_injection — only type that activates FailureInjector.
+study:
+  name: "Failure Injection Study"
+  experiment_type: "failure_injection"
+  experiment_goal: "Measure energy cost of tool failure recovery under controlled injection"
+  experiment_notes: "Paper Figure 3 — failure recovery taxonomy. Agentic only."
+  workflow_modes: ["agentic"]
+tasks:
+  - id: gsm8k_basic
+  - id: factual_qa
+providers:
+  - name: ollama_local
+    model_id: qwen2.5-coder:14b
+execution:
+  repetitions: 10
+  cool_down_seconds: 30
+  save_db: true
+retry_policy:
+  name: "default"
+  max_retries: 1
+  retry_on_timeout: true
+  retry_on_tool_error: true
+  retry_on_api_error: true
+  retry_on_wrong_answer: false
+  backoff_seconds: 0.0
+quality:
+  enabled: false
+failure_injection:
+  enabled: true
+  tool_failure_rate: 0.3
+  timeout_rate: 0.1

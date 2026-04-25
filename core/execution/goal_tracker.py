@@ -133,18 +133,18 @@ class GoalTracker:
         goal_id: int,
         attempt_number: int,
         retry_of_attempt_id: int = None,
+        is_retry: bool = False,
     ) -> int:
         """
         INSERT goal_attempt with status='running', started_at=NOW. Returns attempt_id.
-
-        retry_of_attempt_id is None for first attempt — 8.5-B populates it for retries.
-
+        is_retry and retry_of_attempt_id are set by RetryCoordinator for attempts > 1.
+ 
         Args:
             conn:                 Active DB connection.
             goal_id:              Parent goal_execution row.
             attempt_number:       1-indexed attempt counter per goal.
-            retry_of_attempt_id:  None for attempt_number=1. 8.5-B sets this.
-
+            retry_of_attempt_id:  None for attempt_number=1. Set by RetryCoordinator for retries.
+            is_retry:             True for any attempt_number > 1.
         Returns:
             attempt_id (int) of the inserted row, or None on failure.
         """
@@ -154,16 +154,19 @@ class GoalTracker:
 
         now = _now_utc()
         # outcome placeholder required by NOT NULL — will be overwritten by finish_attempt
+        # is_retry and retry_of_attempt_id written now — not updated later
         sql = """
             INSERT INTO goal_attempt (
                 goal_id, run_id, attempt_number, is_winning,
-                outcome, status, started_at, updated_at
-            ) VALUES (?, -1, ?, 0, 'failure', 'running', ?, ?)
+                outcome, status, started_at, updated_at,
+                is_retry, retry_of_attempt_id
+            ) VALUES (?, -1, ?, 0, 'failure', 'running', ?, ?, ?, ?)
         """
         # run_id = -1 placeholder; finish_attempt() updates it with real run_id
         try:
             conn.execute("PRAGMA foreign_keys = OFF")
-            cur = conn.execute(sql, (goal_id, attempt_number, now, now))
+            cur = conn.execute(sql, (goal_id, attempt_number, now, now,
+                                     1 if is_retry else 0, retry_of_attempt_id))
             conn.commit()
             conn.execute("PRAGMA foreign_keys = ON")
             attempt_id = cur.lastrowid
@@ -224,6 +227,7 @@ class GoalTracker:
                 orchestration_uj = ?,
                 compute_uj       = ?,
                 failure_cause    = ?,
+                failure_type     = ?,
                 finished_at      = ?,
                 updated_at       = ?
             WHERE attempt_id = ?
@@ -232,7 +236,7 @@ class GoalTracker:
             conn.execute(sql, (
                 run_id, outcome, status, is_winning,
                 energy_uj, orchestration_uj, compute_uj,
-                failure_cause, now, now,
+                failure_cause, failure_type, now, now,
                 attempt_id,
             ))
             conn.commit()

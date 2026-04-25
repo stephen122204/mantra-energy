@@ -1,0 +1,33 @@
+# config/experiment_configs/retry_study.yaml
+# Retry Energy Study — Paper Night 2.
+# Measures energy wasted on failed attempts before a successful retry.
+# experiment_type: retry_study — populates retry_energy_uj in energy_attribution.
+study:
+  name: "Retry Energy Study"
+  experiment_type: "retry_study"
+  experiment_goal: "Measure energy overhead of retry attempts across workflow types"
+  experiment_notes: "Paper Figure 3 — wasted energy taxonomy. Run after baseline_study."
+  workflow_modes: ["linear", "agentic"]
+tasks:
+  - id: gsm8k_basic
+  - id: factual_qa
+  - id: code_fibonacci
+providers:
+  - name: llama_cpp
+    model_id: tinyllama-1b-gguf
+execution:
+  repetitions: 2
+  cool_down_seconds: 30
+  save_db: true
+retry_policy:
+  name: "aggressive"
+  max_retries: 3
+  retry_on_timeout: true
+  retry_on_tool_error: true
+  retry_on_api_error: true
+  retry_on_wrong_answer: true
+  backoff_seconds: 2.0
+quality:
+  enabled: false
+failure_injection:
+  enabled: false

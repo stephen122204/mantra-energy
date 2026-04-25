@@ -83,8 +83,8 @@ def parse_arguments():
     parser.add_argument(
         "--task-id",
         type=str,
-        default="simple",
-        help="Task ID from config/tasks.yaml (default: simple, ignored if --task is used)",
+        default="gsm8k_basic",
+        help="Task ID from config/tasks.yaml (default: gsm8k_basic, ignored if --task is used)",
     )
     parser.add_argument(
         "--list-tasks", action="store_true", help="List all available tasks and exit"

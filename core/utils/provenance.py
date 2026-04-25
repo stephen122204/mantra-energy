@@ -389,6 +389,13 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "eq.entity_id":   ("etl_queue_management_v1",  "SYSTEM"),
     "eq.etl_name":    ("etl_queue_management_v1",  "SYSTEM"),
     "eq.status":      ("etl_queue_management_v1",  "SYSTEM"),
+    # retry_policy table — migration 032
+    "rp.policy_name":         ("retry_policy_v1",          "SYSTEM"),
+    "rp.max_retries":         ("retry_policy_v1",          "SYSTEM"),
+    # goal_attempt retry columns — migration 032
+    "ga.retry_of_attempt_id": ("retry_policy_v1",          "SYSTEM"),
+    "ga.failure_type":        ("failure_classification_v1", "SYSTEM"),
+    "ga.is_retry":            ("retry_policy_v1",          "SYSTEM"),    
 }
 
 
@@ -444,10 +451,11 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "hallucination_wasted_energy_v1":  0.85,  # energy from attempt start to detection 
     "tool_failure_wasted_energy_v1":   0.90,  # energy consumed by failed tool call
     "attribution_etl_v1":              0.90,  # attribution stub ETL
-    "goal_execution_rollup_v1":        1.0,   # sum of attempt energies, deterministic
-    "goal_overhead_fraction_v1":       1.0,   # overhead/total ratio, deterministic arithmetic 
     "goal_tracking_runtime_v1": 1.0,
-    "etl_queue_management_v1":  1.0,           
+    "etl_queue_management_v1":  1.0,
+    "retry_policy_v1":                 0.90,  # retry loop — 0.10 uncertainty on context_overflow assumption
+    "failure_classification_v1":       0.85,  # string-based exception matching
+    "failure_injection_v1":            1.0,   # deterministic arithmetic, no measurement uncertainty               
 }
 
 

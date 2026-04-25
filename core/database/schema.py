@@ -375,7 +375,7 @@ CREATE INDEX IF NOT EXISTS idx_oqj_attempt ON output_quality_judges(attempt_id);
 CREATE INDEX IF NOT EXISTS idx_oqj_goal    ON output_quality_judges(goal_id);
 """
 # ── NEW CONSTANT — paste after CREATE_GOAL_ATTEMPT block ─────────────────────
-# etl_queue
+# Table 2h:etl_queue
 # Table-backed queue for decoupled ETL execution.
 # Runner enqueues pending entries after save_pair(). ETL runner processes them.
 # status: pending → processing → done|failed
@@ -398,7 +398,41 @@ CREATE INDEX IF NOT EXISTS idx_etl_queue_status
 CREATE INDEX IF NOT EXISTS idx_etl_queue_entity
     ON etl_queue(entity_type, entity_id);
 """
-
+# ========================================================================
+# Table 2i:retry_policy
+# Retry Policy Tables (migration 032)
+# retry_policy: template policies loaded at seed time
+# task_retry_override: per-category max_retries override
+# ========================================================================
+CREATE_RETRY_POLICY = """
+CREATE TABLE IF NOT EXISTS retry_policy (
+    policy_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    policy_name            TEXT NOT NULL UNIQUE,
+    max_retries            INTEGER NOT NULL DEFAULT 1,
+    retry_on_timeout       INTEGER NOT NULL DEFAULT 1,
+    retry_on_tool_error    INTEGER NOT NULL DEFAULT 1,
+    retry_on_api_error     INTEGER NOT NULL DEFAULT 1,
+    retry_on_wrong_answer  INTEGER NOT NULL DEFAULT 0,
+    backoff_seconds        REAL NOT NULL DEFAULT 0.0,
+    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_retry_policy_name
+    ON retry_policy(policy_name);
+"""
+ 
+# ========================================================================
+# Table 2j:task_retry_override
+# task_retry_override — per-category max_retries override
+# Takes precedence over template policy max_retries only.
+# ========================================================================
+CREATE_TASK_RETRY_OVERRIDE = """
+CREATE TABLE IF NOT EXISTS task_retry_override (
+    task_category   TEXT PRIMARY KEY,
+    max_retries     INTEGER NOT NULL,
+    policy_name     TEXT NOT NULL,
+    FOREIGN KEY (policy_name) REFERENCES retry_policy(policy_name)
+);
+"""
 # ========================================================================
 # Table 3: idle_baselines
 # ========================================================================
