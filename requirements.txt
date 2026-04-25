@@ -25,3 +25,8 @@ tomli>=2.0.1
 # ── SYSTEM PACKAGES (apt, Oracle VM only) ─────────────────────────────────────
 # sudo apt install postgresql postgresql-contrib libpq-dev graphviz
 # sudo apt install iptables-persistent netfilter-persistent
+sqlparse>=0.4.4
+sympy>=1.12
+fastapi>=0.100.0
+uvicorn>=0.23.0
+datasets>=2.14.0

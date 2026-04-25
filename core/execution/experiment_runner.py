@@ -462,7 +462,7 @@ class ExperimentRunner:
             "group_id": self.group_id,  # NEW
             "status": "running",  # NEW
             "started_at": datetime.now().isoformat(),  # NEW
-            "runs_total": repetitions * 2,  # linear + agentic
+            "runs_total": repetitions if workflow_mode in ("linear", "agentic") else repetitions * 2,  # linear + agentic
             "optimization_enabled": 1 if optimizer else 0,
             "hw_id": hw_id,
             "env_id": env_id,
@@ -656,6 +656,12 @@ class ExperimentRunner:
             record_run_provenance(db, linear_id, linear_result,
                       reader_mode=linear_result.get("reader_mode"))
             self._validate_run(db, linear_id, hw_id)
+            # Stub row so ETL _backfill_normalization_factors never skips this run
+            _linear_meta = linear_result.get("task_meta", {}) or {}
+            db.db.execute(
+                "INSERT OR IGNORE INTO normalization_factors (run_id, task_category, workload_type) VALUES (?, ?, ?)",
+                (linear_id, _linear_meta.get("category", "custom"), "linear"),
+            )
 
             # Linear energy samples
             if "energy_samples" in linear_result:
@@ -709,6 +715,12 @@ class ExperimentRunner:
             record_run_provenance(db, agentic_id, agentic_result,
                       reader_mode=agentic_result.get("reader_mode"))
             self._validate_run(db, agentic_id, hw_id)
+            # Stub row so ETL _backfill_normalization_factors never skips this run
+            _agentic_meta = agentic_result.get("task_meta", {}) or {}
+            db.db.execute(
+                "INSERT OR IGNORE INTO normalization_factors (run_id, task_category, workload_type) VALUES (?, ?, ?)",
+                (agentic_id, _agentic_meta.get("category", "custom"), "agentic"),
+            )
 
             # Agentic energy samples
             if "energy_samples" in agentic_result:
@@ -1067,6 +1079,12 @@ class ExperimentRunner:
                 record_run_provenance(db, run_id, result,
                                     reader_mode=result.get("reader_mode"))
                 self._validate_run(db, run_id, hw_id)
+                # Stub row so ETL _backfill_normalization_factors never skips this run
+                _meta = result.get("task_meta", {}) or {}
+                db.db.execute(
+                    "INSERT OR IGNORE INTO normalization_factors (run_id, task_category, workload_type) VALUES (?, ?, ?)",
+                    (run_id, _meta.get("category", "custom"), workflow_type),
+                )
 
                 # Energy samples — with backward compat tuple conversion
                 if "energy_samples" in result:

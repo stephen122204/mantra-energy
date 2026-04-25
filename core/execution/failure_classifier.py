@@ -77,11 +77,14 @@ class FailureClassifier:
             return "timeout"
 
         # Rate limit — provider SDKs use RateLimitError or 429-based names
-        if "RateLimit" in exc_type or "rate_limit" in str(exc).lower():
+        if "RateLimit" in exc_type or "rate_limit" in str(exc).lower() \
+                or "429" in str(exc) or "too many requests" in str(exc).lower():
             return "rate_limit"
 
         # Context length exceeded — varies across providers
-        if "ContextLength" in exc_type or "context_length" in str(exc).lower():
+        if "ContextLength" in exc_type or "context_length" in str(exc).lower() \
+                or "exceed context window" in str(exc).lower() \
+                or "context window" in str(exc).lower():
             return "context_overflow"
 
         # Connection / API infrastructure failures
@@ -98,14 +101,30 @@ class FailureClassifier:
         Checks explicit tool_error flag first, then quality score.
         """
         # Explicit tool failure flag set by harness tool execution block
+        # Explicit tool failure flag set by harness tool execution block
         if run_result.get("tool_error"):
             return "tool_error"
+
+        # Check execution.error_message — harness catches provider exceptions
+        # and stores them here rather than raising. Must check before quality_score
+        # because a rate-limited call has no quality score to evaluate.
+        exec_dict  = run_result.get("execution", {}) or {}
+        error_msg  = str(exec_dict.get("error_message", "") or "").lower()
+        if error_msg:
+            if "429" in error_msg or "too many requests" in error_msg or "rate_limit" in error_msg:
+                return "rate_limit"
+            if "context window" in error_msg or "exceed context" in error_msg or "context_length" in error_msg:
+                return "context_overflow"
+            if "timeout" in error_msg:
+                return "timeout"
+            if "connection" in error_msg or "api error" in error_msg:
+                return "api_error"
 
         # Quality score below threshold means model produced a wrong answer
         score = run_result.get("quality_score")
         if score is not None and score < WRONG_ANSWER_THRESHOLD:
             return "wrong_answer"
 
-        # Result dict present but no classifiable signal — treat as crashed
+        # Result dict present but no classifiable failure signal — treat as crashed
         logger.debug("FailureClassifier: result has no classifiable failure signal")
         return "crashed"

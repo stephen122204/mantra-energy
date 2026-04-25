@@ -185,3 +185,565 @@ tasks:
     tool_calls: 0
     prompt: "Extract the top 5 keywords from this sentence: 'Artificial intelligence and machine learning are transforming healthcare and finance.'"
     tags: ["keywords"]
+
+
+# =====================================================
+# TIER 1 — Standard Benchmarks
+# Real datasets — deterministic judge — no tools
+# Loaded from HuggingFace at runtime via BenchmarkLoader
+# =====================================================
+
+  - id: gsm8k_t1_001
+    tier: 1
+    category: reasoning
+    name: "GSM8K Sample 1"
+    description: "Real GSM8K arithmetic reasoning problem"
+    level: 1
+    tool_calls: 0
+    benchmark:
+      dataset: gsm8k
+      split: test
+      sample_id: 1
+      judge: exact_match
+    prompt: null
+
+  - id: gsm8k_t1_002
+    tier: 1
+    category: reasoning
+    name: "GSM8K Sample 2"
+    description: "Real GSM8K arithmetic reasoning problem"
+    level: 2
+    tool_calls: 0
+    benchmark:
+      dataset: gsm8k
+      split: test
+      sample_id: 2
+      judge: exact_match
+    prompt: null
+
+  - id: humaneval_t1_001
+    tier: 1
+    category: coding
+    name: "HumanEval Problem 1"
+    description: "Real HumanEval coding problem — has_close_elements"
+    level: 2
+    tool_calls: 0
+    benchmark:
+      dataset: humaneval
+      split: test
+      sample_id: 0
+      judge: unit_test
+    prompt: null
+
+  - id: humaneval_t1_002
+    tier: 1
+    category: coding
+    name: "HumanEval Problem 2"
+    description: "Real HumanEval coding problem — separate_paren_groups"
+    level: 2
+    tool_calls: 0
+    benchmark:
+      dataset: humaneval
+      split: test
+      sample_id: 1
+      judge: unit_test
+    prompt: null
+
+  - id: triviaqa_t1_001
+    tier: 1
+    category: qa
+    name: "TriviaQA Sample 1"
+    description: "Real TriviaQA factual retrieval question"
+    level: 1
+    tool_calls: 0
+    benchmark:
+      dataset: triviaqa
+      split: validation
+      sample_id: 0
+      judge: exact_match
+    prompt: null
+
+  - id: triviaqa_t1_002
+    tier: 1
+    category: qa
+    name: "TriviaQA Sample 2"
+    description: "Real TriviaQA factual retrieval question"
+    level: 1
+    tool_calls: 0
+    benchmark:
+      dataset: triviaqa
+      split: validation
+      sample_id: 1
+      judge: exact_match
+    prompt: null
+
+# =====================================================
+# TIER 2 — Controlled Tool Graph Tasks
+# Fixed graph structure — LLM generates tool args dynamically
+# Core scientific contribution of the paper
+# Parallel steps (depends_on=[]) execute sequentially for
+# instrumentation consistency — see methodology doc 24
+# =====================================================
+
+  - id: tg_single_db
+    tier: 2
+    category: data_analysis
+    name: "Single DB Query"
+    description: "One database query — baseline tool orchestration energy"
+    level: 1
+    tool_calls: 1
+    tool_graph:
+      - step: 1
+        tool: database_query
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+    prompt: |
+      Query the experiment database to find the average energy consumption
+      for linear vs agentic workflow types. Report the numbers clearly.
+    expected_answer: "comparison of linear vs agentic average energy values"
+
+  - id: tg_single_calc
+    tier: 2
+    category: orchestration
+    name: "Single Calculator"
+    description: "One calculator call — minimal tool overhead baseline"
+    level: 1
+    tool_calls: 1
+    tool_graph:
+      - step: 1
+        tool: calculator
+        depends_on: []
+        args_template:
+          expression: "{llm_generated}"
+    prompt: |
+      Calculate the orchestration tax: if linear workflow uses 1000 µJ
+      and agentic uses 4500 µJ, what is the overhead fraction?
+    expected_answer: "0.778 or 77.8%"
+
+  - id: tg_sequential_2
+    tier: 2
+    category: orchestration
+    name: "Sequential 2-Tool Chain"
+    description: "DB query then file write — sequential dependency"
+    level: 2
+    tool_calls: 2
+    tool_graph:
+      - step: 1
+        tool: database_query
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+      - step: 2
+        tool: file_processor
+        depends_on: [1]
+        args_template:
+          operation: "write"
+          filename: "query_results.txt"
+          content: "{step_1_result}"
+    prompt: |
+      Query the database for the last 5 experiment runs and their energy.
+      Save the results to query_results.txt. Report what you found.
+    expected_answer: "file written with experiment energy data"
+
+  - id: tg_sequential_3
+    tier: 2
+    category: orchestration
+    name: "Sequential 3-Tool Chain"
+    description: "DB query → file write → API query — 3-step dependency chain"
+    level: 3
+    tool_calls: 3
+    tool_graph:
+      - step: 1
+        tool: database_query
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+      - step: 2
+        tool: file_processor
+        depends_on: [1]
+        args_template:
+          operation: "write"
+          filename: "analysis.txt"
+          content: "{step_1_result}"
+      - step: 3
+        tool: api_query
+        depends_on: [2]
+        args_template:
+          endpoint: "/metrics"
+          params: {}
+    prompt: |
+      Query the database for energy trends. Save findings to analysis.txt.
+      Then fetch current system metrics from the API. Synthesize all data
+      into a final report on orchestration overhead.
+    expected_answer: "synthesis report combining database, file, and API data"
+
+  - id: tg_parallel_2
+    tier: 2
+    category: orchestration
+    name: "Parallel 2-Tool Execution"
+    description: "DB query and API query — parallel logical, sequential physical"
+    level: 2
+    tool_calls: 2
+    tool_graph:
+      - step: 1
+        tool: database_query
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+      - step: 2
+        tool: api_query
+        depends_on: []
+        args_template:
+          endpoint: "/energy_summary"
+          params: {}
+    prompt: |
+      Simultaneously query the database for experiment results and
+      fetch the API energy summary. Compare both data sources and
+      identify any discrepancies.
+    expected_answer: "comparison from two parallel data sources"
+
+  - id: tg_deep_chain_4
+    tier: 2
+    category: orchestration
+    name: "Deep 4-Tool Chain"
+    description: "Maximum depth tool graph — measures orchestration energy scaling"
+    level: 3
+    tool_calls: 4
+    tool_graph:
+      - step: 1
+        tool: database_query
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+      - step: 2
+        tool: calculator
+        depends_on: [1]
+        args_template:
+          expression: "{llm_generated_from_step_1}"
+      - step: 3
+        tool: file_processor
+        depends_on: [2]
+        args_template:
+          operation: "write"
+          filename: "deep_analysis.txt"
+          content: "{step_1_result}\nCalculated: {step_2_result}"
+      - step: 4
+        tool: api_query
+        depends_on: [3]
+        args_template:
+          endpoint: "/metrics"
+          params: {}
+    prompt: |
+      Query the database for overhead fractions. Calculate the average.
+      Save both raw data and calculated result to deep_analysis.txt.
+      Finally fetch API metrics to validate. Provide complete synthesis.
+    expected_answer: "complete analysis with database data, calculation, saved file, and API validation"
+
+  - id: tg_code_execute
+    tier: 2
+    category: coding
+    name: "Code Generation and Execution"
+    description: "Generate code then execute — tests code orchestration energy"
+    level: 2
+    tool_calls: 1
+    tool_graph:
+      - step: 1
+        tool: code_executor
+        depends_on: []
+        args_template:
+          code: "{llm_generated}"
+          test_cases: []
+    prompt: |
+      Write and execute Python code that calculates the mean and standard
+      deviation of this list: [1200, 1450, 980, 2100, 1670, 890, 1340].
+      Show the results.
+    expected_answer: "mean approximately 1375.7, std approximately 383.6"
+
+  - id: tg_search_synthesize
+    tier: 2
+    category: web_search
+    name: "Search and Synthesize"
+    description: "Single web search with synthesis"
+    level: 2
+    tool_calls: 1
+    tool_graph:
+      - step: 1
+        tool: web_search
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+    prompt: |
+      Search for information about current experiment energy consumption
+      patterns. Summarize the key findings from the search results.
+    expected_answer: "summary of experiment energy data from search results"
+
+  - id: tg_multi_search
+    tier: 2
+    category: research
+    name: "Multi-Search Research"
+    description: "Multiple searches synthesized into research summary"
+    level: 3
+    tool_calls: 3
+    tool_graph:
+      - step: 1
+        tool: web_search
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+      - step: 2
+        tool: web_search
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+      - step: 3
+        tool: file_processor
+        depends_on: [1, 2]
+        args_template:
+          operation: "write"
+          filename: "research_synthesis.txt"
+          content: "{step_1_result}\n{step_2_result}"
+    prompt: |
+      Search for orchestration overhead patterns. Search separately for
+      tool execution energy costs. Synthesize both into a research
+      summary saved to research_synthesis.txt.
+    expected_answer: "research synthesis combining two search results saved to file"
+
+  - id: tg_error_recovery
+    tier: 2
+    category: orchestration
+    name: "Tool Error Recovery"
+    description: "Intentional failure injection — measures recovery orchestration energy"
+    level: 3
+    tool_calls: 2
+    tool_graph:
+      - step: 1
+        tool: database_query
+        depends_on: []
+        args_template:
+          query: "{llm_generated}"
+      - step: 2
+        tool: database_query
+        depends_on: [1]
+        args_template:
+          query: "{llm_generated}"
+    failure_injection:
+      step: 1
+      rate: 1.0
+    prompt: |
+      Query the database for failed experiments. Then query again to get
+      the energy cost of those failures. If a query fails, retry with
+      a simpler query. Report total energy wasted.
+    expected_answer: "report of failed experiment energy with retry path documented"
+
+# =====================================================
+# TIER 3 — No-Tool Baseline Tasks
+# Pure inference — measures baseline inference energy
+# Zero tool calls — provides comparison anchor for paper
+# =====================================================
+
+  - id: t3_reasoning_hard
+    tier: 3
+    category: reasoning
+    name: "Hard Reasoning — No Tools"
+    description: "Complex multi-step reasoning without tools"
+    level: 3
+    tool_calls: 0
+    prompt: |
+      A factory produces widgets in batches. Each batch takes 4 hours.
+      In 3 days of 8-hour shifts, how many complete batches can be
+      produced? If each batch uses 450 µJ of energy, what is the total
+      energy consumption? Show your reasoning step by step.
+    expected_answer: "6 batches, 2700 µJ total"
+
+  - id: t3_translation_hi
+    tier: 3
+    category: translation
+    name: "English to Hindi"
+    description: "Technical translation — no tools"
+    level: 2
+    tool_calls: 0
+    prompt: |
+      Translate to Hindi:
+      "The orchestration overhead in agentic AI systems accounts for
+      more than 60% of total energy consumption in complex workflows."
+    expected_answer: "agentic AI प्रणालियों में orchestration overhead"
+
+  - id: t3_summarization
+    tier: 3
+    category: summarization
+    name: "Technical Summarization"
+    description: "Summarize technical content — no tools"
+    level: 2
+    tool_calls: 0
+    prompt: |
+      Summarize in 3 sentences:
+      "Recent measurements of agentic AI workloads reveal that the
+      planning phase alone consumes 35-45% of total energy, before
+      any actual computation occurs. Tool selection adds another
+      15-20%, and synthesis phases contribute 10-15%. Only 25-35%
+      of energy is spent on actual useful computation."
+    expected_answer: "3-sentence summary covering planning overhead, tool selection, and computation fraction"
+
+  - id: t3_creative
+    tier: 3
+    category: creative_writing
+    name: "Technical Abstract Writing"
+    description: "Write research abstract — no tools"
+    level: 2
+    tool_calls: 0
+    prompt: |
+      Write a 80-word abstract for a paper showing that orchestration
+      structure, not compute, drives energy in agentic AI.
+      Include: problem, method, finding, implication.
+    expected_answer: "80-word abstract with four required components"
+
+  - id: t3_debug_simple
+    tier: 3
+    category: debugging
+    name: "Simple Debug — No Tools"
+    description: "Identify bug from code only — no execution"
+    level: 1
+    tool_calls: 0
+    prompt: |
+      Find the bug:
+      def overhead_fraction(total, successful):
+          return successful / total
+      This returns wrong results when total equals successful.
+      What is the bug and what should it return?
+    expected_answer: "returns 1.0 instead of 0.0, should be (total - successful) / total"
+
+  - id: t3_planning_notools
+    tier: 3
+    category: planning
+    name: "Experiment Planning — No Tools"
+    description: "Plan experiment from memory — no data access"
+    level: 3
+    tool_calls: 0
+    prompt: |
+      Design a minimal experiment to prove that orchestration overhead
+      scales with tool-call depth. Specify: task types, tool counts,
+      repetitions needed for statistical significance at p<0.05,
+      and expected energy ratios.
+    expected_answer: "experiment design with task types, tool counts, repetitions, and statistical justification"
+
+# =====================================================
+# MEDIA TASKS — TTS, STT, Voice Cloning
+# Linear only — pure compute, no orchestration
+# Run on UBUNTU2505 only — full RAPL measurement
+# Run order: tts_en_short → tts_en_long → stt_en_short →
+#            stt_en_long → vc_en_clone (STT/VC need TTS output)
+# Paper energy ladder: media < linear < agentic
+# =====================================================
+
+  - id: tts_en_short
+    tier: 3
+    category: media
+    name: "TTS English Short"
+    description: "English TTS — single Harvard sentence"
+    level: 1
+    tool_calls: 0
+    media_task: true
+    media_type: text-to-speech
+    provider: kokoro
+    model_id: kokoro-82m
+    prompt: "The birch canoe slid on the smooth planks."
+    expected_answer: "audio_duration_ratio > 0.8"
+    output_file: "data/test_files/tts_en_short.wav"
+
+  - id: tts_en_long
+    tier: 3
+    category: media
+    name: "TTS English Long"
+    description: "English TTS — five Harvard sentences"
+    level: 2
+    tool_calls: 0
+    media_task: true
+    media_type: text-to-speech
+    provider: kokoro
+    model_id: kokoro-82m
+    prompt: |
+      The birch canoe slid on the smooth planks.
+      Glue the sheet to the dark blue background.
+      It is easy to tell the depth of a well.
+      These days a chicken leg is a rare dish.
+      Rice is often served in round bowls.
+    expected_answer: "audio_duration_ratio > 0.8"
+    output_file: "data/test_files/tts_en_long.wav"
+
+  - id: tts_hi_short
+    tier: 3
+    category: media
+    name: "TTS Hindi Short"
+    description: "Hindi TTS — single standard sentence"
+    level: 1
+    tool_calls: 0
+    media_task: true
+    media_type: text-to-speech
+    provider: indic_parler
+    model_id: indic-parler-tts
+    prompt: "आज मौसम बहुत अच्छा है।"
+    expected_answer: "audio_duration_ratio > 0.8"
+    output_file: "data/test_files/tts_hi_short.wav"
+
+  - id: tts_hi_long
+    tier: 3
+    category: media
+    name: "TTS Hindi Long"
+    description: "Hindi TTS — three standard sentences"
+    level: 2
+    tool_calls: 0
+    media_task: true
+    media_type: text-to-speech
+    provider: indic_parler
+    model_id: indic-parler-tts
+    prompt: |
+      आज मौसम बहुत अच्छा है।
+      भारत एक विविधताओं से भरा देश है।
+      तकनीक ने हमारे जीवन को बदल दिया है।
+    expected_answer: "audio_duration_ratio > 0.8"
+    output_file: "data/test_files/tts_hi_long.wav"
+
+  - id: stt_en_short
+    tier: 3
+    category: media
+    name: "STT English Short"
+    description: "English STT — transcribe short audio"
+    level: 1
+    tool_calls: 0
+    media_task: true
+    media_type: speech-to-text
+    provider: faster_whisper
+    model_id: faster-whisper-small
+    input_file: "data/test_files/tts_en_short.wav"
+    expected_answer: "The birch canoe slid on the smooth planks."
+
+  - id: stt_en_long
+    tier: 3
+    category: media
+    name: "STT English Long"
+    description: "English STT — transcribe long audio"
+    level: 2
+    tool_calls: 0
+    media_task: true
+    media_type: speech-to-text
+    provider: faster_whisper
+    model_id: faster-whisper-base
+    input_file: "data/test_files/tts_en_long.wav"
+    expected_answer: "The birch canoe slid on the smooth planks."
+
+  - id: vc_en_clone
+    tier: 3
+    category: media
+    name: "Voice Clone English"
+    description: "English voice cloning from TTS output"
+    level: 2
+    tool_calls: 0
+    media_task: true
+    media_type: voice-cloning
+    provider: indic_f5
+    model_id: indicf5
+    input_file: "data/test_files/tts_en_short.wav"
+    prompt: "The smooth planks were carefully measured and cut."
+    expected_answer: "audio_duration_ratio > 0.7"
+    output_file: "data/test_files/vc_en_clone.wav"

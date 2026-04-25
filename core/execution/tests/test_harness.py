@@ -39,6 +39,12 @@ from core.execution.optimizer_wrapper import OptimizedExecutorWrapper
 from core.utils.debug import set_debug
 from core.utils.task_loader import get_task_by_id, load_tasks
 from core.execution.experiment_config_loader import apply_config
+from core.execution.goal_execution_manager import execute_goal
+from core.execution.goal_tracker import GoalTracker
+from core.execution.retry_coordinator import RetryCoordinator
+ 
+_goal_tracker = GoalTracker()       # stateless singleton
+_retry_coordinator = RetryCoordinator()
 
 
 def get_country_from_ip():
@@ -338,29 +344,36 @@ def _run_experiment(setup: dict, args) -> tuple:
             linear_result  = None
             agentic_result = None
  
-            # Run linear side if requested
-            if workflow_mode in ("linear", "comparison"):
-                linear_result = harness.run_linear(
-                    executor=linear,
-                    prompt=task_prompt,
-                    task_id=task_id,
-                    is_cloud=not linear_config.get("is_local", False),
-                    country_code=country_code,
-                    run_number=rep + 1,
-                )
-                all_linear.append(linear_result)
+            # Normal path only — retry path skips harness here.
+            # When max_retries > 0, execute_goal() owns the full lifecycle:
+            # harness execution + persistence + goal/attempt state transitions.
+            # Running harness here AND in execute_goal() would double-execute
+            # and corrupt energy accounting and attempt numbering.
+            max_retries = getattr(args, "max_retries", 0)
+            if max_retries == 0:
+                # Run linear side if requested
+                if workflow_mode in ("linear", "comparison"):
+                    linear_result = harness.run_linear(
+                        executor=linear,
+                        prompt=task_prompt,
+                        task_id=task_id,
+                        is_cloud=not linear_config.get("is_local", False),
+                        country_code=country_code,
+                        run_number=rep + 1,
+                    )
+                    all_linear.append(linear_result)
  
-            # Run agentic side if requested
-            if workflow_mode in ("agentic", "comparison"):
-                agentic_result = harness.run_agentic(
-                    executor=agentic,
-                    task=task_prompt,
-                    task_id=task_id,
-                    is_cloud=not agentic_config.get("is_local", False),
-                    country_code=country_code,
-                    run_number=rep + 1,
-                )
-                all_agentic.append(agentic_result)
+                # Run agentic side if requested
+                if workflow_mode in ("agentic", "comparison"):
+                    agentic_result = harness.run_agentic(
+                        executor=agentic,
+                        task=task_prompt,
+                        task_id=task_id,
+                        is_cloud=not agentic_config.get("is_local", False),
+                        country_code=country_code,
+                        run_number=rep + 1,
+                    )
+                    all_agentic.append(agentic_result)
  
             # Tax only meaningful when both sides ran
             if linear_result and agentic_result:
@@ -380,24 +393,63 @@ def _run_experiment(setup: dict, args) -> tuple:
                 print(f"\n   📊 Rep {rep+1}: Agentic {energy:.4f} J")
  
             # Save — pair or single depending on workflow_mode
+            # Save — retry path when max_retries > 0, normal path otherwise.
+            # Two paths are intentionally separate — never merge them.
+            # Retry path: execute_goal() owns run + goal + attempt lifecycle.
+            # Normal path: save_pair()/save_single() unchanged — proven stable.
             if args.save_db:
-                if workflow_mode == "comparison":
-                    runner.save_pair(
-                        db, exp_id, hw_id, linear_result, agentic_result, rep + 1,
-                        task_id=task.get("id"), task_name=task.get("name"),
-                        task_meta=task.get("meta"),
+                max_retries = getattr(args, "max_retries", 0)
+                if max_retries > 0:
+                    # Retry path — execute_goal() drives harness + persistence + goal tracking
+                    policy = _retry_coordinator.load_policy(
+                        db.db.conn, getattr(args, "policy_name", "default")
                     )
-                    runs_completed += 2
-                elif workflow_mode == "linear" and linear_result:
-                    runner.save_single(
-                        db, exp_id, hw_id, linear_result, rep + 1, "linear",
-                    )
-                    runs_completed += 1
-                elif workflow_mode == "agentic" and agentic_result:
-                    runner.save_single(
-                        db, exp_id, hw_id, agentic_result, rep + 1, "agentic",
-                    )
-                    runs_completed += 1
+                    task_dict = {
+                        "id":     task.get("id"),
+                        "name":   task.get("name"),
+                        "prompt": task_prompt,
+                        "meta":   task.get("meta", {}),
+                    }
+                    # failure_injector from args (set by _apply_failure_injection_section)
+                    # Only active when experiment_type=failure_injection + enabled=true
+                    failure_injector = getattr(args, "failure_injector", None)
+                    if workflow_mode in ("linear", "comparison"):
+                        execute_goal(
+                            db=db, exp_id=exp_id, hw_id=hw_id,
+                            harness=harness, executor=linear,
+                            task=task_dict, workflow_type="linear",
+                            rep_num=rep + 1, goal_tracker=_goal_tracker,
+                            policy=policy, failure_injector=failure_injector,
+                        )
+                        runs_completed += 1
+                    if workflow_mode in ("agentic", "comparison"):
+                        execute_goal(
+                            db=db, exp_id=exp_id, hw_id=hw_id,
+                            harness=harness, executor=agentic,
+                            task=task_dict, workflow_type="agentic",
+                            rep_num=rep + 1, goal_tracker=_goal_tracker,
+                            policy=policy, failure_injector=failure_injector,
+                        )
+                        runs_completed += 1
+                else:
+                    # Normal path — save_pair()/save_single() unchanged
+                    if workflow_mode == "comparison":
+                        runner.save_pair(
+                            db, exp_id, hw_id, linear_result, agentic_result, rep + 1,
+                            task_id=task.get("id"), task_name=task.get("name"),
+                            task_meta=task.get("meta"),
+                        )
+                        runs_completed += 2
+                    elif workflow_mode == "linear" and linear_result:
+                        runner.save_single(
+                            db, exp_id, hw_id, linear_result, rep + 1, "linear",
+                        )
+                        runs_completed += 1
+                    elif workflow_mode == "agentic" and agentic_result:
+                        runner.save_single(
+                            db, exp_id, hw_id, agentic_result, rep + 1, "agentic",
+                        )
+                        runs_completed += 1
  
             if rep < repetitions - 1:
                 print(f"\n⏳ Cooling down for {cool_down}s...")

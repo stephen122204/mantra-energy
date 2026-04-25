@@ -350,3 +350,29 @@ python scripts/etl/aggregate_hardware_metrics.py --run-id $(sqlite3 data/experim
 | EnergyEstimator returns zeros | fallback/estimator.py | Chunk 1.2 |
 | synthesis_energy=0 local runs | phase_attribution_etl.py | Chunk 14 |
 | voltage_vcore=NULL ThinkPad | sensor_reader.py | Expected behavior |
+
+## 9. Experiment Integrity Compliance (EIC)
+
+### Rule EIC-1: Run Integrity Check After Every Experiment
+After any experiment that saves to DB, run:
+```bash
+python scripts/test_exp_integrity.py --latest
+```
+All checks must pass (0 failed) before declaring experiment complete.
+
+### Rule EIC-2: Run Integrity Check Before Chunk Handoff
+Before handing off to next chunk/agent, run integrity check on the last
+experiment of each type that was run:
+```bash
+python scripts/test_exp_integrity.py --latest --experiment-type failure_injection
+python scripts/test_exp_integrity.py --latest --experiment-type retry_study
+python scripts/test_exp_integrity.py --latest --experiment-type normal
+```
+
+### Rule EIC-3: Warnings Are Not Failures But Must Be Documented
+Warnings (⚠️) in integrity check must be documented in the implementation
+record with a reason. Silent warnings are not acceptable.
+
+### Rule EIC-4: New Tables Must Be Added to Integrity Checker
+Any new table added in a chunk that receives data at runtime MUST be added
+to `scripts/test_exp_integrity.py` before chunk handoff.

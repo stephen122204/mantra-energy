@@ -12,11 +12,11 @@ tasks:
   - id: gsm8k_basic
   - id: factual_qa
 providers:
-  - name: ollama_local
-    model_id: qwen2.5-coder:14b
+  - name: llama_cpp
+    model_id: tinyllama-1b-gguf
 execution:
-  repetitions: 10
-  cool_down_seconds: 30
+  repetitions: 2
+  cool_down_seconds: 10
   save_db: true
 retry_policy:
   name: "default"

@@ -74,6 +74,28 @@ def process_one(goal_id: int, conn) -> None:
         return
 
     total_energy_uj = _sum_attempt_energies(attempts)
+
+    # Failed goals — no winning attempt means all energy was wasted.
+    # overhead_fraction = 1.0 is the correct paper signal: 100% overhead, 0% productive.
+    # Must be set explicitly — NULL would be silently excluded from paper Figure 3 aggregations.
+    if not winning_attempts:
+        _update_goal_execution(
+            conn, goal_id,
+            total_energy_uj=total_energy_uj,
+            successful_energy_uj=0,
+            overhead_energy_uj=total_energy_uj,
+            overhead_fraction=1.0,
+            orchestration_fraction=None,
+        )
+        run_ids = list({a[1] for a in attempts if a[1] and a[1] != -1})
+        for run_id in run_ids:
+            _backfill_normalization_factors(conn, run_id)
+        logger.info(
+            "process_one: goal_id=%d FAILED — overhead_fraction=1.0 total=%.0f",
+            goal_id, total_energy_uj or 0,
+        )
+        return
+
     successful_energy_uj = _get_winning_energy(winning_attempts)
     overhead_energy_uj = _compute_overhead(total_energy_uj, successful_energy_uj)
     overhead_fraction = _compute_fraction(overhead_energy_uj, total_energy_uj)
@@ -83,18 +105,6 @@ def process_one(goal_id: int, conn) -> None:
         conn, goal_id,
         total_energy_uj, successful_energy_uj, overhead_energy_uj,
         overhead_fraction, orchestration_fraction,
-    )
-
-    # Backfill normalization_factors for all runs touched by this goal
-    run_ids = list({a[1] for a in attempts if a[1] and a[1] != -1})
-    for run_id in run_ids:
-        _backfill_normalization_factors(conn, run_id)
-
-    logger.info(
-        "process_one: goal_id=%d total=%.0f overhead_frac=%.3f orch_frac=%s",
-        goal_id, total_energy_uj or 0,
-        overhead_fraction or 0,
-        f"{orchestration_fraction:.3f}" if orchestration_fraction is not None else "NULL",
     )
 
 
@@ -116,6 +126,7 @@ def backfill_all(db_path: str) -> None:
             """SELECT ge.goal_id
                FROM goal_execution ge
                WHERE ge.total_energy_uj IS NULL
+                  OR (ge.success = 0 AND ge.overhead_fraction IS NULL)
                ORDER BY ge.goal_id"""
         ).fetchall()
 

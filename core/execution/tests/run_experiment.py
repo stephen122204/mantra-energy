@@ -34,6 +34,12 @@ from core.execution.linear import LinearExecutor
 from core.utils.task_loader import list_task_summary, load_tasks
 from core.utils.preflight import preflight
 from core.execution.experiment_config_loader import apply_config
+from core.execution.goal_execution_manager import execute_goal
+from core.execution.goal_tracker import GoalTracker
+from core.execution.retry_coordinator import RetryCoordinator
+ 
+_goal_tracker = GoalTracker()       # stateless singleton
+_retry_coordinator = RetryCoordinator()
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -43,7 +49,7 @@ def parse_arguments():
     parser.add_argument("--tasks", type=str, default="gsm8k_basic,factual_qa")
     parser.add_argument("--list-tasks", action="store_true")
     parser.add_argument("--no-warmup", action="store_true")
-    parser.add_argument("--provider", type=str, default="groq",
+    parser.add_argument("--provider", type=str, default="llama_cpp",
         help="Provider from models.yaml e.g. groq, llama_cpp, ollama_remote")
     parser.add_argument("--country", type=str, default="US")
     parser.add_argument("--save-db", action="store_true")
@@ -221,25 +227,60 @@ def run_provider_task(
                     print(f"         Tax: {tax:.2f}x")
 
                 # Save — pair or single depending on workflow_mode
+                # Save — retry path when max_retries > 0, normal path otherwise.
+                # Two paths intentionally separate — never merge them.
                 if args.save_db and db:
-                    if workflow_mode == 'comparison':
-                        runner.save_pair(
-                            db, exp_id, hw_id, linear_result, agentic_result, rep + 1,
-                            task_id=task.get("id"), task_name=task.get("name"),
-                            task_meta=task.get("meta"),
+                    max_retries = getattr(args, "max_retries", 0)
+                    if max_retries > 0:
+                        # Retry path — execute_goal() drives harness + persistence + goal tracking
+                        policy = _retry_coordinator.load_policy(
+                            db.db.conn, getattr(args, "policy_name", "default")
                         )
-                    elif workflow_mode == 'linear':
-                        runner.save_single(
-                            db, exp_id, hw_id, linear_result, rep + 1, 'linear',
-                        )
-                    elif workflow_mode == 'agentic':
-                        runner.save_single(
-                            db, exp_id, hw_id, agentic_result, rep + 1, 'agentic',
-                        )
-                    print(f"         ✅ Pair {rep+1}/{repetitions} saved")
-
-                    # Update progress in real-time
-                    runs_completed = (rep + 1) * 2
+                        task_dict = {
+                            "id":     task.get("id"),
+                            "name":   task.get("name"),
+                            "prompt": task["prompt"],
+                            "meta":   task.get("meta", {}),
+                        }
+                        if workflow_mode in ("linear", "comparison"):
+                            execute_goal(
+                                db=db, exp_id=exp_id, hw_id=hw_id,
+                                harness=harness, executor=linear,
+                                task=task_dict, workflow_type="linear",
+                                rep_num=rep + 1, goal_tracker=_goal_tracker,
+                                policy=policy, failure_injector=None,
+                            )
+                            runs_completed += 1
+                        if workflow_mode in ("agentic", "comparison"):
+                            execute_goal(
+                                db=db, exp_id=exp_id, hw_id=hw_id,
+                                harness=harness, executor=agentic,
+                                task=task_dict, workflow_type="agentic",
+                                rep_num=rep + 1, goal_tracker=_goal_tracker,
+                                policy=policy, failure_injector=None,
+                            )
+                            runs_completed += 1
+                    else:
+                        # Normal path — save_pair()/save_single() unchanged
+                        if workflow_mode == 'comparison':
+                            runner.save_pair(
+                                db, exp_id, hw_id, linear_result, agentic_result, rep + 1,
+                                task_id=task.get("id"), task_name=task.get("name"),
+                                task_meta=task.get("meta"),
+                            )
+                            runs_completed = (rep + 1) * 2
+                        elif workflow_mode == 'linear':
+                            runner.save_single(
+                                db, exp_id, hw_id, linear_result, rep + 1, 'linear',
+                            )
+                            runs_completed += 1
+                        elif workflow_mode == 'agentic':
+                            runner.save_single(
+                                db, exp_id, hw_id, agentic_result, rep + 1, 'agentic',
+                            )
+                            runs_completed += 1
+ 
+                    print(f"         ✅ Rep {rep+1}/{repetitions} saved")
                     runner.update_progress(db, exp_id, runs_completed)
 
                 # Cool down

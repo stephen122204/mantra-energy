@@ -54,10 +54,41 @@ def apply_config(args) -> None:
     _apply_execution_section(args, cfg.get("execution", {}))
     _apply_retry_section(args, cfg.get("retry_policy", {}))
     _apply_tasks_section(args, cfg.get("tasks", []))
-    _apply_providers_section(args, cfg.get("providers", []))    
+    _apply_providers_section(args, cfg.get("providers", []))
+    _apply_failure_injection_section(args, cfg.get("failure_injection", {}))
     logger.info("apply_config: loaded config from %s", config_path)
 
-
+def _apply_failure_injection_section(args, fi: dict) -> None:
+    """
+    Build FailureInjector from failure_injection YAML section and store on args.
+ 
+    FailureInjector is only active when enabled=true AND experiment_type=failure_injection.
+    Storing on args allows test_harness and run_experiment to pass it into execute_goal()
+    without reading YAML directly in entry points.
+ 
+    Args:
+        args: argparse.Namespace — mutated in place.
+        fi:   failure_injection section dict from YAML.
+    """
+    if not fi.get("enabled", False):
+        # Injection disabled — store None so callers can check cheaply
+        args.failure_injector = None
+        return
+ 
+    try:
+        from core.execution.failure_injector import FailureInjector
+        experiment_type = getattr(args, "experiment_type", "normal")
+        args.failure_injector = FailureInjector(fi, experiment_type)
+        logger.info(
+            "_apply_failure_injection_section: FailureInjector active "
+            "tool_rate=%.2f timeout_rate=%.2f",
+            fi.get("tool_failure_rate", 0.0),
+            fi.get("timeout_rate", 0.0),
+        )
+    except Exception as e:
+        # Never block experiment startup over injector construction failure
+        logger.warning("_apply_failure_injection_section: failed to build injector: %s", e)
+        args.failure_injector = None
 # ── Section appliers ──────────────────────────────────────────────────────────
 
 def _apply_study_section(args, study: dict) -> None:
@@ -159,6 +190,8 @@ def _apply_retry_section(args, retry: dict) -> None:
     """
     if "max_retries" in retry:
         args.max_retries = int(retry["max_retries"])
-
     if "backoff_seconds" in retry:
         args.backoff_seconds = float(retry["backoff_seconds"])
+    if "name" in retry:
+        # policy_name used by RetryCoordinator.load_policy() in test_harness/run_experiment
+        args.policy_name = str(retry["name"])
