@@ -1,0 +1,2428 @@
+llama_model_loader: loaded meta data with 23 key-value pairs and 201 tensors from /home/dpani/mydrive/models/tinyllama.gguf (version GGUF V3 (latest))
+llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+llama_model_loader: - kv   0:                       general.architecture str              = llama
+llama_model_loader: - kv   1:                               general.name str              = tinyllama_tinyllama-1.1b-chat-v1.0
+llama_model_loader: - kv   2:                       llama.context_length u32              = 2048
+llama_model_loader: - kv   3:                     llama.embedding_length u32              = 2048
+llama_model_loader: - kv   4:                          llama.block_count u32              = 22
+llama_model_loader: - kv   5:                  llama.feed_forward_length u32              = 5632
+llama_model_loader: - kv   6:                 llama.rope.dimension_count u32              = 64
+llama_model_loader: - kv   7:                 llama.attention.head_count u32              = 32
+llama_model_loader: - kv   8:              llama.attention.head_count_kv u32              = 4
+llama_model_loader: - kv   9:     llama.attention.layer_norm_rms_epsilon f32              = 0.000010
+llama_model_loader: - kv  10:                       llama.rope.freq_base f32              = 10000.000000
+llama_model_loader: - kv  11:                          general.file_type u32              = 15
+llama_model_loader: - kv  12:                       tokenizer.ggml.model str              = llama
+llama_model_loader: - kv  13:                      tokenizer.ggml.tokens arr[str,32000]   = ["<unk>", "<s>", "</s>", "<0x00>", "<...
+llama_model_loader: - kv  14:                      tokenizer.ggml.scores arr[f32,32000]   = [0.000000, 0.000000, 0.000000, 0.0000...
+llama_model_loader: - kv  15:                  tokenizer.ggml.token_type arr[i32,32000]   = [2, 3, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, ...
+llama_model_loader: - kv  16:                      tokenizer.ggml.merges arr[str,61249]   = ["▁ t", "e r", "i n", "▁ a", "e n...
+llama_model_loader: - kv  17:                tokenizer.ggml.bos_token_id u32              = 1
+llama_model_loader: - kv  18:                tokenizer.ggml.eos_token_id u32              = 2
+llama_model_loader: - kv  19:            tokenizer.ggml.unknown_token_id u32              = 0
+llama_model_loader: - kv  20:            tokenizer.ggml.padding_token_id u32              = 2
+llama_model_loader: - kv  21:                    tokenizer.chat_template str              = {% for message in messages %}\n{% if m...
+llama_model_loader: - kv  22:               general.quantization_version u32              = 2
+llama_model_loader: - type  f32:   45 tensors
+llama_model_loader: - type q4_K:  135 tensors
+llama_model_loader: - type q6_K:   21 tensors
+print_info: file format = GGUF V3 (latest)
+print_info: file type   = Q4_K - Medium
+print_info: file size   = 636.18 MiB (4.85 BPW) 
+init_tokenizer: initializing tokenizer for type 1
+load: 0 unused tokens
+load: control token:      1 '<s>' is not marked as EOG
+load: printing all EOG tokens:
+load:   - 2 ('</s>')
+load: special tokens cache size = 3
+load: token to piece cache size = 0.1684 MB
+print_info: arch                  = llama
+print_info: vocab_only            = 0
+print_info: no_alloc              = 0
+print_info: n_ctx_train           = 2048
+print_info: n_embd                = 2048
+print_info: n_embd_inp            = 2048
+print_info: n_layer               = 22
+print_info: n_head                = 32
+print_info: n_head_kv             = 4
+print_info: n_rot                 = 64
+print_info: n_swa                 = 0
+print_info: is_swa_any            = 0
+print_info: n_embd_head_k         = 64
+print_info: n_embd_head_v         = 64
+print_info: n_gqa                 = 8
+print_info: n_embd_k_gqa          = 256
+print_info: n_embd_v_gqa          = 256
+print_info: f_norm_eps            = 0.0e+00
+print_info: f_norm_rms_eps        = 1.0e-05
+print_info: f_clamp_kqv           = 0.0e+00
+print_info: f_max_alibi_bias      = 0.0e+00
+print_info: f_logit_scale         = 0.0e+00
+print_info: f_attn_scale          = 0.0e+00
+print_info: n_ff                  = 5632
+print_info: n_expert              = 0
+print_info: n_expert_used         = 0
+print_info: n_expert_groups       = 0
+print_info: n_group_used          = 0
+print_info: causal attn           = 1
+print_info: pooling type          = -1
+print_info: rope type             = 0
+print_info: rope scaling          = linear
+print_info: freq_base_train       = 10000.0
+print_info: freq_scale_train      = 1
+print_info: n_ctx_orig_yarn       = 2048
+print_info: rope_yarn_log_mul     = 0.0000
+print_info: rope_finetuned        = unknown
+print_info: model type            = 1B
+print_info: model params          = 1.10 B
+print_info: general.name          = tinyllama_tinyllama-1.1b-chat-v1.0
+print_info: vocab type            = SPM
+print_info: n_vocab               = 32000
+print_info: n_merges              = 0
+print_info: BOS token             = 1 '<s>'
+print_info: EOS token             = 2 '</s>'
+print_info: UNK token             = 0 '<unk>'
+print_info: PAD token             = 2 '</s>'
+print_info: LF token              = 13 '<0x0A>'
+print_info: EOG token             = 2 '</s>'
+print_info: max token length      = 48
+load_tensors: loading model tensors, this can take a while... (mmap = true, direct_io = false)
+load_tensors: layer   0 assigned to device CPU, is_swa = 0
+load_tensors: layer   1 assigned to device CPU, is_swa = 0
+load_tensors: layer   2 assigned to device CPU, is_swa = 0
+load_tensors: layer   3 assigned to device CPU, is_swa = 0
+load_tensors: layer   4 assigned to device CPU, is_swa = 0
+load_tensors: layer   5 assigned to device CPU, is_swa = 0
+load_tensors: layer   6 assigned to device CPU, is_swa = 0
+load_tensors: layer   7 assigned to device CPU, is_swa = 0
+load_tensors: layer   8 assigned to device CPU, is_swa = 0
+load_tensors: layer   9 assigned to device CPU, is_swa = 0
+load_tensors: layer  10 assigned to device CPU, is_swa = 0
+load_tensors: layer  11 assigned to device CPU, is_swa = 0
+load_tensors: layer  12 assigned to device CPU, is_swa = 0
+load_tensors: layer  13 assigned to device CPU, is_swa = 0
+load_tensors: layer  14 assigned to device CPU, is_swa = 0
+load_tensors: layer  15 assigned to device CPU, is_swa = 0
+load_tensors: layer  16 assigned to device CPU, is_swa = 0
+load_tensors: layer  17 assigned to device CPU, is_swa = 0
+load_tensors: layer  18 assigned to device CPU, is_swa = 0
+load_tensors: layer  19 assigned to device CPU, is_swa = 0
+load_tensors: layer  20 assigned to device CPU, is_swa = 0
+load_tensors: layer  21 assigned to device CPU, is_swa = 0
+load_tensors: layer  22 assigned to device CPU, is_swa = 0
+create_tensor: loading tensor token_embd.weight
+create_tensor: loading tensor output_norm.weight
+create_tensor: loading tensor output.weight
+create_tensor: loading tensor blk.0.attn_norm.weight
+create_tensor: loading tensor blk.0.attn_q.weight
+create_tensor: loading tensor blk.0.attn_k.weight
+create_tensor: loading tensor blk.0.attn_v.weight
+create_tensor: loading tensor blk.0.attn_output.weight
+create_tensor: loading tensor blk.0.ffn_norm.weight
+create_tensor: loading tensor blk.0.ffn_gate.weight
+create_tensor: loading tensor blk.0.ffn_down.weight
+create_tensor: loading tensor blk.0.ffn_up.weight
+create_tensor: loading tensor blk.1.attn_norm.weight
+create_tensor: loading tensor blk.1.attn_q.weight
+create_tensor: loading tensor blk.1.attn_k.weight
+create_tensor: loading tensor blk.1.attn_v.weight
+create_tensor: loading tensor blk.1.attn_output.weight
+create_tensor: loading tensor blk.1.ffn_norm.weight
+create_tensor: loading tensor blk.1.ffn_gate.weight
+create_tensor: loading tensor blk.1.ffn_down.weight
+create_tensor: loading tensor blk.1.ffn_up.weight
+create_tensor: loading tensor blk.2.attn_norm.weight
+create_tensor: loading tensor blk.2.attn_q.weight
+create_tensor: loading tensor blk.2.attn_k.weight
+create_tensor: loading tensor blk.2.attn_v.weight
+create_tensor: loading tensor blk.2.attn_output.weight
+create_tensor: loading tensor blk.2.ffn_norm.weight
+create_tensor: loading tensor blk.2.ffn_gate.weight
+create_tensor: loading tensor blk.2.ffn_down.weight
+create_tensor: loading tensor blk.2.ffn_up.weight
+create_tensor: loading tensor blk.3.attn_norm.weight
+create_tensor: loading tensor blk.3.attn_q.weight
+create_tensor: loading tensor blk.3.attn_k.weight
+create_tensor: loading tensor blk.3.attn_v.weight
+create_tensor: loading tensor blk.3.attn_output.weight
+create_tensor: loading tensor blk.3.ffn_norm.weight
+create_tensor: loading tensor blk.3.ffn_gate.weight
+create_tensor: loading tensor blk.3.ffn_down.weight
+create_tensor: loading tensor blk.3.ffn_up.weight
+create_tensor: loading tensor blk.4.attn_norm.weight
+create_tensor: loading tensor blk.4.attn_q.weight
+create_tensor: loading tensor blk.4.attn_k.weight
+create_tensor: loading tensor blk.4.attn_v.weight
+create_tensor: loading tensor blk.4.attn_output.weight
+create_tensor: loading tensor blk.4.ffn_norm.weight
+create_tensor: loading tensor blk.4.ffn_gate.weight
+create_tensor: loading tensor blk.4.ffn_down.weight
+create_tensor: loading tensor blk.4.ffn_up.weight
+create_tensor: loading tensor blk.5.attn_norm.weight
+create_tensor: loading tensor blk.5.attn_q.weight
+create_tensor: loading tensor blk.5.attn_k.weight
+create_tensor: loading tensor blk.5.attn_v.weight
+create_tensor: loading tensor blk.5.attn_output.weight
+create_tensor: loading tensor blk.5.ffn_norm.weight
+create_tensor: loading tensor blk.5.ffn_gate.weight
+create_tensor: loading tensor blk.5.ffn_down.weight
+create_tensor: loading tensor blk.5.ffn_up.weight
+create_tensor: loading tensor blk.6.attn_norm.weight
+create_tensor: loading tensor blk.6.attn_q.weight
+create_tensor: loading tensor blk.6.attn_k.weight
+create_tensor: loading tensor blk.6.attn_v.weight
+create_tensor: loading tensor blk.6.attn_output.weight
+create_tensor: loading tensor blk.6.ffn_norm.weight
+create_tensor: loading tensor blk.6.ffn_gate.weight
+create_tensor: loading tensor blk.6.ffn_down.weight
+create_tensor: loading tensor blk.6.ffn_up.weight
+create_tensor: loading tensor blk.7.attn_norm.weight
+create_tensor: loading tensor blk.7.attn_q.weight
+create_tensor: loading tensor blk.7.attn_k.weight
+create_tensor: loading tensor blk.7.attn_v.weight
+create_tensor: loading tensor blk.7.attn_output.weight
+create_tensor: loading tensor blk.7.ffn_norm.weight
+create_tensor: loading tensor blk.7.ffn_gate.weight
+create_tensor: loading tensor blk.7.ffn_down.weight
+create_tensor: loading tensor blk.7.ffn_up.weight
+create_tensor: loading tensor blk.8.attn_norm.weight
+create_tensor: loading tensor blk.8.attn_q.weight
+create_tensor: loading tensor blk.8.attn_k.weight
+create_tensor: loading tensor blk.8.attn_v.weight
+create_tensor: loading tensor blk.8.attn_output.weight
+create_tensor: loading tensor blk.8.ffn_norm.weight
+create_tensor: loading tensor blk.8.ffn_gate.weight
+create_tensor: loading tensor blk.8.ffn_down.weight
+create_tensor: loading tensor blk.8.ffn_up.weight
+create_tensor: loading tensor blk.9.attn_norm.weight
+create_tensor: loading tensor blk.9.attn_q.weight
+create_tensor: loading tensor blk.9.attn_k.weight
+create_tensor: loading tensor blk.9.attn_v.weight
+create_tensor: loading tensor blk.9.attn_output.weight
+create_tensor: loading tensor blk.9.ffn_norm.weight
+create_tensor: loading tensor blk.9.ffn_gate.weight
+create_tensor: loading tensor blk.9.ffn_down.weight
+create_tensor: loading tensor blk.9.ffn_up.weight
+create_tensor: loading tensor blk.10.attn_norm.weight
+create_tensor: loading tensor blk.10.attn_q.weight
+create_tensor: loading tensor blk.10.attn_k.weight
+create_tensor: loading tensor blk.10.attn_v.weight
+create_tensor: loading tensor blk.10.attn_output.weight
+create_tensor: loading tensor blk.10.ffn_norm.weight
+create_tensor: loading tensor blk.10.ffn_gate.weight
+create_tensor: loading tensor blk.10.ffn_down.weight
+create_tensor: loading tensor blk.10.ffn_up.weight
+create_tensor: loading tensor blk.11.attn_norm.weight
+create_tensor: loading tensor blk.11.attn_q.weight
+create_tensor: loading tensor blk.11.attn_k.weight
+create_tensor: loading tensor blk.11.attn_v.weight
+create_tensor: loading tensor blk.11.attn_output.weight
+create_tensor: loading tensor blk.11.ffn_norm.weight
+create_tensor: loading tensor blk.11.ffn_gate.weight
+create_tensor: loading tensor blk.11.ffn_down.weight
+create_tensor: loading tensor blk.11.ffn_up.weight
+create_tensor: loading tensor blk.12.attn_norm.weight
+create_tensor: loading tensor blk.12.attn_q.weight
+create_tensor: loading tensor blk.12.attn_k.weight
+create_tensor: loading tensor blk.12.attn_v.weight
+create_tensor: loading tensor blk.12.attn_output.weight
+create_tensor: loading tensor blk.12.ffn_norm.weight
+create_tensor: loading tensor blk.12.ffn_gate.weight
+create_tensor: loading tensor blk.12.ffn_down.weight
+create_tensor: loading tensor blk.12.ffn_up.weight
+create_tensor: loading tensor blk.13.attn_norm.weight
+create_tensor: loading tensor blk.13.attn_q.weight
+create_tensor: loading tensor blk.13.attn_k.weight
+create_tensor: loading tensor blk.13.attn_v.weight
+create_tensor: loading tensor blk.13.attn_output.weight
+create_tensor: loading tensor blk.13.ffn_norm.weight
+create_tensor: loading tensor blk.13.ffn_gate.weight
+create_tensor: loading tensor blk.13.ffn_down.weight
+create_tensor: loading tensor blk.13.ffn_up.weight
+create_tensor: loading tensor blk.14.attn_norm.weight
+create_tensor: loading tensor blk.14.attn_q.weight
+create_tensor: loading tensor blk.14.attn_k.weight
+create_tensor: loading tensor blk.14.attn_v.weight
+create_tensor: loading tensor blk.14.attn_output.weight
+create_tensor: loading tensor blk.14.ffn_norm.weight
+create_tensor: loading tensor blk.14.ffn_gate.weight
+create_tensor: loading tensor blk.14.ffn_down.weight
+create_tensor: loading tensor blk.14.ffn_up.weight
+create_tensor: loading tensor blk.15.attn_norm.weight
+create_tensor: loading tensor blk.15.attn_q.weight
+create_tensor: loading tensor blk.15.attn_k.weight
+create_tensor: loading tensor blk.15.attn_v.weight
+create_tensor: loading tensor blk.15.attn_output.weight
+create_tensor: loading tensor blk.15.ffn_norm.weight
+create_tensor: loading tensor blk.15.ffn_gate.weight
+create_tensor: loading tensor blk.15.ffn_down.weight
+create_tensor: loading tensor blk.15.ffn_up.weight
+create_tensor: loading tensor blk.16.attn_norm.weight
+create_tensor: loading tensor blk.16.attn_q.weight
+create_tensor: loading tensor blk.16.attn_k.weight
+create_tensor: loading tensor blk.16.attn_v.weight
+create_tensor: loading tensor blk.16.attn_output.weight
+create_tensor: loading tensor blk.16.ffn_norm.weight
+create_tensor: loading tensor blk.16.ffn_gate.weight
+create_tensor: loading tensor blk.16.ffn_down.weight
+create_tensor: loading tensor blk.16.ffn_up.weight
+create_tensor: loading tensor blk.17.attn_norm.weight
+create_tensor: loading tensor blk.17.attn_q.weight
+create_tensor: loading tensor blk.17.attn_k.weight
+create_tensor: loading tensor blk.17.attn_v.weight
+create_tensor: loading tensor blk.17.attn_output.weight
+create_tensor: loading tensor blk.17.ffn_norm.weight
+create_tensor: loading tensor blk.17.ffn_gate.weight
+create_tensor: loading tensor blk.17.ffn_down.weight
+create_tensor: loading tensor blk.17.ffn_up.weight
+create_tensor: loading tensor blk.18.attn_norm.weight
+create_tensor: loading tensor blk.18.attn_q.weight
+create_tensor: loading tensor blk.18.attn_k.weight
+create_tensor: loading tensor blk.18.attn_v.weight
+create_tensor: loading tensor blk.18.attn_output.weight
+create_tensor: loading tensor blk.18.ffn_norm.weight
+create_tensor: loading tensor blk.18.ffn_gate.weight
+create_tensor: loading tensor blk.18.ffn_down.weight
+create_tensor: loading tensor blk.18.ffn_up.weight
+create_tensor: loading tensor blk.19.attn_norm.weight
+create_tensor: loading tensor blk.19.attn_q.weight
+create_tensor: loading tensor blk.19.attn_k.weight
+create_tensor: loading tensor blk.19.attn_v.weight
+create_tensor: loading tensor blk.19.attn_output.weight
+create_tensor: loading tensor blk.19.ffn_norm.weight
+create_tensor: loading tensor blk.19.ffn_gate.weight
+create_tensor: loading tensor blk.19.ffn_down.weight
+create_tensor: loading tensor blk.19.ffn_up.weight
+create_tensor: loading tensor blk.20.attn_norm.weight
+create_tensor: loading tensor blk.20.attn_q.weight
+create_tensor: loading tensor blk.20.attn_k.weight
+create_tensor: loading tensor blk.20.attn_v.weight
+create_tensor: loading tensor blk.20.attn_output.weight
+create_tensor: loading tensor blk.20.ffn_norm.weight
+create_tensor: loading tensor blk.20.ffn_gate.weight
+create_tensor: loading tensor blk.20.ffn_down.weight
+create_tensor: loading tensor blk.20.ffn_up.weight
+create_tensor: loading tensor blk.21.attn_norm.weight
+create_tensor: loading tensor blk.21.attn_q.weight
+create_tensor: loading tensor blk.21.attn_k.weight
+create_tensor: loading tensor blk.21.attn_v.weight
+create_tensor: loading tensor blk.21.attn_output.weight
+create_tensor: loading tensor blk.21.ffn_norm.weight
+create_tensor: loading tensor blk.21.ffn_gate.weight
+create_tensor: loading tensor blk.21.ffn_down.weight
+create_tensor: loading tensor blk.21.ffn_up.weight
+done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 66 others) cannot be used with preferred buffer type CPU_REPACK, using CPU instead
+load_tensors:   CPU_Mapped model buffer size =   636.18 MiB
+load_tensors:   CPU_REPACK model buffer size =   455.06 MiB
+..............repack: repack tensor blk.0.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.0.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.0.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.0.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.0.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.1.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.1.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.1.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.1.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.1.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.2.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.2.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.2.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.2.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.2.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.2.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.2.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.3.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.3.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.3.attn_v.weight with q4_K_8x8
+.repack: repack tensor blk.3.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.3.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.3.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.3.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.4.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.4.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.4.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.4.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.4.ffn_up.weight with q4_K_8x8
+repack: repack tensor blk.5.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.5.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.5.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.5.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.5.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.5.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.5.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.6.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.6.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.6.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.6.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.6.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.6.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.6.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.7.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.7.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.7.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.7.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.7.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.8.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.8.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.8.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.8.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.8.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.9.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.9.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.9.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.9.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.9.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.10.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.10.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.10.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.10.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.10.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.10.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.10.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.11.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.11.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.11.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.11.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.11.ffn_gate.weight with q4_K_8x8
+repack: repack tensor blk.11.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.11.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.12.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.12.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.12.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.12.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.12.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.13.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.13.attn_k.weight with q4_K_8x8
+.repack: repack tensor blk.13.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.13.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.13.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.13.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.13.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.14.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.14.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.14.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.14.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.14.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.14.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.14.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.15.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.15.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.15.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.15.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.15.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.16.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.16.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.16.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.16.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.16.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.16.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.16.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.17.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.17.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.17.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.17.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.17.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.17.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.17.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.18.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.18.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.18.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.18.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.18.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.19.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.19.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.19.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.19.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.19.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.19.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.19.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.20.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.20.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.20.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.20.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.20.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.21.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.21.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.21.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.21.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.21.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.21.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.21.ffn_up.weight with q4_K_8x8
+.
+llama_context: constructing llama_context
+llama_context: n_seq_max     = 1
+llama_context: n_ctx         = 512
+llama_context: n_ctx_seq     = 512
+llama_context: n_batch       = 512
+llama_context: n_ubatch      = 512
+llama_context: causal_attn   = 1
+llama_context: flash_attn    = disabled
+llama_context: kv_unified    = false
+llama_context: freq_base     = 10000.0
+llama_context: freq_scale    = 1
+llama_context: n_ctx_seq (512) < n_ctx_train (2048) -- the full capacity of the model will not be utilized
+set_abort_callback: call
+llama_context:        CPU  output buffer size =     0.12 MiB
+llama_kv_cache: layer   0: dev = CPU
+llama_kv_cache: layer   1: dev = CPU
+llama_kv_cache: layer   2: dev = CPU
+llama_kv_cache: layer   3: dev = CPU
+llama_kv_cache: layer   4: dev = CPU
+llama_kv_cache: layer   5: dev = CPU
+llama_kv_cache: layer   6: dev = CPU
+llama_kv_cache: layer   7: dev = CPU
+llama_kv_cache: layer   8: dev = CPU
+llama_kv_cache: layer   9: dev = CPU
+llama_kv_cache: layer  10: dev = CPU
+llama_kv_cache: layer  11: dev = CPU
+llama_kv_cache: layer  12: dev = CPU
+llama_kv_cache: layer  13: dev = CPU
+llama_kv_cache: layer  14: dev = CPU
+llama_kv_cache: layer  15: dev = CPU
+llama_kv_cache: layer  16: dev = CPU
+llama_kv_cache: layer  17: dev = CPU
+llama_kv_cache: layer  18: dev = CPU
+llama_kv_cache: layer  19: dev = CPU
+llama_kv_cache: layer  20: dev = CPU
+llama_kv_cache: layer  21: dev = CPU
+llama_kv_cache:        CPU KV buffer size =    11.00 MiB
+llama_kv_cache: size =   11.00 MiB (   512 cells,  22 layers,  1/1 seqs), K (f16):    5.50 MiB, V (f16):    5.50 MiB
+llama_context: enumerating backends
+llama_context: backend_ptrs.size() = 1
+sched_reserve: reserving ...
+sched_reserve: max_nodes = 1608
+sched_reserve: reserving full memory module
+sched_reserve: worst-case: n_tokens = 512, n_seqs = 1, n_outputs = 1
+sched_reserve: resolving fused Gated Delta Net support:
+graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1
+sched_reserve: fused Gated Delta Net (autoregressive) enabled
+graph_reserve: reserving a graph for ubatch with n_tokens =   16, n_seqs =  1, n_outputs =   16
+sched_reserve: fused Gated Delta Net (chunked) enabled
+graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =  512
+graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1
+graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =  512
+sched_reserve:        CPU compute buffer size =    70.50 MiB
+sched_reserve: graph nodes  = 798
+sched_reserve: graph splits = 1
+sched_reserve: reserve took 9.85 ms, sched copies = 1
+CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | AVX512 = 1 | AVX512_VBMI = 1 | AVX512_VNNI = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+Model metadata: {'tokenizer.chat_template': "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'system' %}\n{{ '<|system|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'assistant' %}\n{{ '<|assistant|>\n'  + message['content'] + eos_token }}\n{% endif %}\n{% if loop.last and add_generation_prompt %}\n{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}", 'tokenizer.ggml.padding_token_id': '2', 'tokenizer.ggml.unknown_token_id': '0', 'tokenizer.ggml.eos_token_id': '2', 'general.architecture': 'llama', 'llama.rope.freq_base': '10000.000000', 'llama.context_length': '2048', 'general.name': 'tinyllama_tinyllama-1.1b-chat-v1.0', 'llama.embedding_length': '2048', 'llama.feed_forward_length': '5632', 'llama.attention.layer_norm_rms_epsilon': '0.000010', 'llama.rope.dimension_count': '64', 'tokenizer.ggml.bos_token_id': '1', 'llama.attention.head_count': '32', 'llama.block_count': '22', 'llama.attention.head_count_kv': '4', 'general.quantization_version': '2', 'tokenizer.ggml.model': 'llama', 'general.file_type': '15'}
+Available chat formats from metadata: chat_template.default
+Using gguf chat template: {% for message in messages %}
+{% if message['role'] == 'user' %}
+{{ '<|user|>
+' + message['content'] + eos_token }}
+{% elif message['role'] == 'system' %}
+{{ '<|system|>
+' + message['content'] + eos_token }}
+{% elif message['role'] == 'assistant' %}
+{{ '<|assistant|>
+'  + message['content'] + eos_token }}
+{% endif %}
+{% if loop.last and add_generation_prompt %}
+{{ '<|assistant|>' }}
+{% endif %}
+{% endfor %}
+Using chat eos_token: </s>
+Using chat bos_token: <s>
+llama_perf_context_print:        load time =     817.91 ms
+llama_perf_context_print: prompt eval time =     817.64 ms /   198 tokens (    4.13 ms per token,   242.16 tokens per second)
+llama_perf_context_print:        eval time =    9582.78 ms /   313 runs   (   30.62 ms per token,    32.66 tokens per second)
+llama_perf_context_print:       total time =   10501.26 ms /   511 tokens
+llama_perf_context_print:    graphs reused =        311
+Llama.generate: 3 prefix-match hit, remaining 68 prompt tokens to eval
+llama_perf_context_print:        load time =     817.91 ms
+llama_perf_context_print: prompt eval time =     304.74 ms /    68 tokens (    4.48 ms per token,   223.14 tokens per second)
+llama_perf_context_print:        eval time =   13400.18 ms /   440 runs   (   30.45 ms per token,    32.84 tokens per second)
+llama_perf_context_print:       total time =   13889.18 ms /   508 tokens
+llama_perf_context_print:    graphs reused =        438
+LlamaCpp inference failed: Requested tokens (673) exceed context window of 512
+EOF reached on turbostat stdout
+📁 Config directory: /home/dpani/mydrive/alems-platform/config
+📁 Loading /home/dpani/mydrive/alems-platform/config/models.json
+✅ Successfully loaded models.json
+✅ Loaded models config: ['version', 'providers', 'legacy']
+📁 Loading /home/dpani/mydrive/alems-platform/config/hw_config.json
+✅ Successfully loaded hw_config.json
+✅ Loaded hardware config: ['metadata', 'rapl', 'thermal', 'msr', 'cpufreq', 'cpu', 'ring_bus', 'turbostat', 'cpu_flags', 'cpu_details', 'gpu', 'system', 'cpu_model', 'cpu_cores', 'ram_gb', 'gpu_model', 'system_manufacturer', 'system_product', 'system_type', 'virtualization_type', 'cpu_vendor', 'microcode_version', 'hardware_hash', 'config_version']
+📁 Loading /home/dpani/mydrive/alems-platform/config/grid_intensity_2026.json
+✅ Successfully loaded grid_intensity_2026.json
+✅ Loaded grid intensity data for 31 countries
+🔍 RAW grid data keys: ['metadata', 'US', 'CA', 'GB', 'DE', 'FR', 'IT', 'ES', 'NL', 'SE', 'NO', 'CH', 'PL', 'CZ', 'RU', 'CN', 'IN', 'JP', 'KR', 'AU', 'NZ', 'ZA', 'BR', 'AR', 'MX', 'SA', 'AE', 'EG', 'NG', 'ID', 'TH', 'VN']
+✅ India data found in config loader!
+   Carbon: 0.708
+
+======================================================================
+📊 A-LEMS REAL EXPERIMENT
+======================================================================
+📁 Config directory: /home/dpani/mydrive/alems-platform/config
+📁 Loading /home/dpani/mydrive/alems-platform/config/models.json
+✅ Successfully loaded models.json
+✅ Loaded models config: ['version', 'providers', 'legacy']
+📁 Loading /home/dpani/mydrive/alems-platform/config/hw_config.json
+✅ Successfully loaded hw_config.json
+✅ Loaded hardware config: ['metadata', 'rapl', 'thermal', 'msr', 'cpufreq', 'cpu', 'ring_bus', 'turbostat', 'cpu_flags', 'cpu_details', 'gpu', 'system', 'cpu_model', 'cpu_cores', 'ram_gb', 'gpu_model', 'system_manufacturer', 'system_product', 'system_type', 'virtualization_type', 'cpu_vendor', 'microcode_version', 'hardware_hash', 'config_version']
+📁 Loading /home/dpani/mydrive/alems-platform/config/grid_intensity_2026.json
+✅ Successfully loaded grid_intensity_2026.json
+✅ Loaded grid intensity data for 31 countries
+🔍 RAW grid data keys: ['metadata', 'US', 'CA', 'GB', 'DE', 'FR', 'IT', 'ES', 'NL', 'SE', 'NO', 'CH', 'PL', 'CZ', 'RU', 'CN', 'IN', 'JP', 'KR', 'AU', 'NZ', 'ZA', 'BR', 'AR', 'MX', 'SA', 'AE', 'EG', 'NG', 'ID', 'TH', 'VN']
+✅ India data found in config loader!
+   Carbon: 0.708
+
+📋 Configuration:
+   Providers:    llama_cpp, groq
+   Tasks:        2
+   Repetitions:  2
+   Cool-down:    10s
+
+🔍 GRID MANAGER received data from config loader
+   Type: <class 'dict'>
+   Keys: ['metadata', 'US', 'CA', 'GB', 'DE', 'FR', 'IT', 'ES', 'NL', 'SE', 'NO', 'CH', 'PL', 'CZ', 'RU', 'CN', 'IN', 'JP', 'KR', 'AU', 'NZ', 'ZA', 'BR', 'AR', 'MX', 'SA', 'AE', 'EG', 'NG', 'ID', 'TH', 'VN']
+   ✅ India data in grid_data!
+      Carbon: 0.708
+📁 Config directory: /home/dpani/mydrive/alems-platform/config
+📁 Loading /home/dpani/mydrive/alems-platform/config/models.json
+✅ Successfully loaded models.json
+✅ Loaded models config: ['version', 'providers', 'legacy']
+📁 Loading /home/dpani/mydrive/alems-platform/config/hw_config.json
+✅ Successfully loaded hw_config.json
+✅ Loaded hardware config: ['metadata', 'rapl', 'thermal', 'msr', 'cpufreq', 'cpu', 'ring_bus', 'turbostat', 'cpu_flags', 'cpu_details', 'gpu', 'system', 'cpu_model', 'cpu_cores', 'ram_gb', 'gpu_model', 'system_manufacturer', 'system_product', 'system_type', 'virtualization_type', 'cpu_vendor', 'microcode_version', 'hardware_hash', 'config_version']
+📁 Loading /home/dpani/mydrive/alems-platform/config/grid_intensity_2026.json
+✅ Successfully loaded grid_intensity_2026.json
+✅ Loaded grid intensity data for 31 countries
+🔍 RAW grid data keys: ['metadata', 'US', 'CA', 'GB', 'DE', 'FR', 'IT', 'ES', 'NL', 'SE', 'NO', 'CH', 'PL', 'CZ', 'RU', 'CN', 'IN', 'JP', 'KR', 'AU', 'NZ', 'ZA', 'BR', 'AR', 'MX', 'SA', 'AE', 'EG', 'NG', 'ID', 'TH', 'VN']
+✅ India data found in config loader!
+   Carbon: 0.708
+
+📏 Using existing baseline: baseline_1774363927_217401
+
+======================================================================
+📋 TASK: GSM8K Arithmetic (Level 1)
+======================================================================
+
+   ============================================================
+   📋 llama_cpp | GSM8K Arithmetic
+   ============================================================
+
+🔍 Pre-flight checks:
+
+✅ MSR helper: OK
+✅ Config files: OK
+✅ llama-cpp-python: OK
+✅ Model file: /home/dpani/mydrive/models/tinyllama.gguf
+
+✅ All checks passed! Ready to run experiments.
+
+   Optimizer:    No
+   ✅ Using existing environment: 37 (hash: b719365ff056f1d2)
+✅ Synced 45 task categories from YAML
+   Categories:
+      • reasoning: 7
+      • media: 7
+      • orchestration: 6
+      • coding: 6
+      • qa: 5
+      • summarization: 3
+      • extraction: 2
+      • classification: 2
+      • web_search: 1
+      • translation: 1
+      • research: 1
+      • planning: 1
+      • debugging: 1
+      • data_analysis: 1
+      • custom: 1
+      • creative_writing: 1
+
+      ──────────────────────────────────────────────────
+      Repetition 1/2
+      ──────────────────────────────────────────────────
+   Raw value: 2284978176 (hex: 0x88320000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - START:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔔 EVENT CREATED: planning.planning
+🔍 DEBUG - added prompt: 70, now tokens[prompt] = 70
+🔍 DEBUG - added completion: 441, now tokens[completion] = 441
+🔍 DEBUG - added total: 511, now tokens[total] = 511
+🔔 EVENT CREATED: execution.execution
+🔍 DEBUG - accumulated tokens: {'prompt': 70, 'completion': 441, 'total': 511}
+🔍 DEBUG - tokens keys: dict_keys(['prompt', 'completion', 'total'])
+🔔 EVENT CREATED: synthesis.synthesis
+🔍 DEBUG - Number of samples: 2634
+🔍 DEBUG - First sample type: <class 'dict'>
+🔍 DEBUG - First sample length: 16
+🔍 DEBUG - First sample content: {'timestamp_ns': 1777205803497635270, 'sample_start_ns': 1777205803487563096, 'sample_end_ns': 1777205803497635270, 'interval_ns': 10072174, 'pkg_start_uj': 12522876449, 'pkg_end_uj': 12522934982, 'core_start_uj': 7686153419, 'core_end_uj': 7686194312, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 559516878, 'uncore_end_uj': 559516878, 'pkg_energy_uj': 58533, 'core_energy_uj': 40893, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+🔍 DEBUG - Second sample content: {'timestamp_ns': 1777205803507628781, 'sample_start_ns': 1777205803497945000, 'sample_end_ns': 1777205803507628781, 'interval_ns': 9683781, 'pkg_start_uj': 12522934982, 'pkg_end_uj': 12522992721, 'core_start_uj': 7686194312, 'core_end_uj': 7686233985, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 559516878, 'uncore_end_uj': 559516878, 'pkg_energy_uj': 57739, 'core_energy_uj': 39673, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+
+🔍 RAW TURBOSTAT LINES (515 total):
+   Line  0: 'Avg_MHz	Busy%	Bzy_MHz	TSC_MHz	IPC	IRQ	C1ACPI%	C2ACPI%	C3ACPI%	CPU%c6	CPU%c7	PkgTmp	GFX%rc6	GFXMHz	Pkg%pc8	Pkg%pc9	Pk%pc10	PkgWatt	CorWatt	GFXWatt	RAMWatt'
+   Line  1: '503	14.74	3420	2800	1.56	1751	24.96	14.98	45.49	0.00	21.59	50	82.08	400	0.00	0.00	0.00	12.52	10.24	0.34	0.00'
+   Line  2: '772	19.75	3942	2781	1.41	19794	29.08	9.11	42.01	0.00	15.84	64	98.61	400	0.00	0.00	0.00	15.35	13.34	0.00	0.00'
+   Line  3: '1188	29.55	4008	2813	1.71	23747	37.53	18.41	15.23	0.00	0.23	67	96.88	400	0.00	0.00	0.00	20.61	18.53	0.05	0.00'
+   Line  4: '1097	27.04	4033	2819	1.83	43815	38.28	10.36	25.73	0.00	0.23	69	102.10	400	0.00	0.00	0.00	20.80	18.77	0.00	0.00'
+   Line  5: '1136	28.16	4036	2803	1.86	45596	41.01	8.09	23.79	0.00	0.02	69	100.05	400	0.00	0.00	0.00	20.98	18.99	0.00	0.00'
+   Line  6: '1200	29.64	4051	2801	1.86	62039	43.65	9.15	18.79	0.00	0.02	70	99.84	400	0.00	0.00	0.00	21.48	19.54	0.00	0.00'
+   Line  7: '1201	29.70	4042	2805	1.94	53687	38.53	11.69	21.48	0.00	0.00	71	100.04	400	0.00	0.00	0.00	21.53	19.61	0.00	0.00'
+   Line  8: '1258	31.10	4048	2800	1.81	58192	39.41	6.85	24.11	0.00	0.00	70	96.74	383	0.00	0.00	0.00	21.66	19.69	0.07	0.00'
+   Line  9: '1208	29.86	4042	2806	1.92	52791	37.29	11.43	22.73	0.00	0.01	72	98.02	400	0.00	0.00	0.00	21.97	19.96	0.06	0.00'
+📋 Header detected: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC', 'IRQ', 'C1ACPI%', 'C2ACPI%', 'C3ACPI%', 'CPU%c6', 'CPU%c7', 'PkgTmp', 'GFX%rc6', 'GFXMHz', 'Pkg%pc8', 'Pkg%pc9', 'Pk%pc10', 'PkgWatt', 'CorWatt', 'GFXWatt', 'RAMWatt']
+✅ Found 514 data rows
+✅ Parsed 514 rows with columns: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC']...
+   Raw value: 2284847104 (hex: 0x88300000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - END:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔍 DEBUG scheduler_delta keys: ['voluntary_switches', 'involuntary_switches', 'user_time', 'system_time', 'load1', 'load5', 'load15', 'runnable', 'total_tasks', 'last_pid', 'swap']
+🔍 DEBUG run queue value: 1
+🔵 MSR_READER - _cstate_start exists: True
+🔵 MSR_READER - _cstate_start: {'timestamp': 1777205803.4857795, 'counters': {'c2': 3737523213782, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER - current_cstates: {'timestamp': 1777205856.3890395, 'counters': {'c2': 3743459799644, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER_ID: 123747073605504
+🔵 MSR_READER_VALUE: c2=2.120s
+🔵 MSR_READER_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds']
+   Raw value: 2284847104 (hex: 0x88300000)
+   Decoded: now=0, log=0
+   Raw value: 2284781568 (hex: 0x882f0000)
+   Decoded: now=0, log=0
+🟢 ENGINE_ID: 123747073605504
+🟢 ENGINE_VALUE: c2=2.120s
+🟢 ENGINE_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+🔥 THERMAL DERIVED:
+   during_experiment: 0
+   now_active: 0
+   since_boot: 0
+🟡 RAW_ID: 123747073605504
+🟡 RAW_VALUE: c2=2.120s
+🟡 RAW_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+======================================================================
+📊 ENERGY ENGINE COMPLETE SUMMARY
+======================================================================
+
+⏱️  Duration: 52.934s
+   Start: 1777205803.469, End: 1777205856.403
+
+⚡ RAPL Energy (µJ):
+   uncore:      2204584 µJ (2.204584 J)
+   core:    804116716 µJ (804.116716 J)
+   package-0:    918254425 µJ (918.254425 J)
+
+📈 Performance Counters:
+   Instructions: 3,198,203,527
+   Cycles:       7,977,153,107
+   IPC:          0.40
+   Cache Refs:   224,532,544
+   Cache Misses: 55,171,291
+   Miss Rate:    24.57%
+   Page Faults:  2415 (major=0, minor=2415)
+   Ctx Switches: vol=29423, invol=0
+   Migrations:   2,324
+
+🌡️ Turbostat Summary (over 52.74s, 514 samples):
+   Package Temp (°C): mean=68.7
+
+   First 3 turbostat samples:
+      Sample 1: {'Avg_MHz': 503.0, 'Busy%': 14.74, 'Bzy_MHz': 3420.0, 'TSC_MHz': 2800.0, 'IPC': 1.56, 'IRQ': 1751.0, 'C1ACPI%': 24.96, 'C2ACPI%': 14.98, 'C3ACPI%': 45.49, 'CPU%c6': 0.0, 'CPU%c7': 21.59, 'PkgTmp': 50.0, 'GFX%rc6': 82.08, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 12.52, 'CorWatt': 10.24, 'GFXWatt': 0.34, 'RAMWatt': 0.0}
+      Sample 2: {'Avg_MHz': 772.0, 'Busy%': 19.75, 'Bzy_MHz': 3942.0, 'TSC_MHz': 2781.0, 'IPC': 1.41, 'IRQ': 19794.0, 'C1ACPI%': 29.08, 'C2ACPI%': 9.11, 'C3ACPI%': 42.01, 'CPU%c6': 0.0, 'CPU%c7': 15.84, 'PkgTmp': 64.0, 'GFX%rc6': 98.61, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 15.35, 'CorWatt': 13.34, 'GFXWatt': 0.0, 'RAMWatt': 0.0}
+      Sample 3: {'Avg_MHz': 1188.0, 'Busy%': 29.55, 'Bzy_MHz': 4008.0, 'TSC_MHz': 2813.0, 'IPC': 1.71, 'IRQ': 23747.0, 'C1ACPI%': 37.53, 'C2ACPI%': 18.41, 'C3ACPI%': 15.23, 'CPU%c6': 0.0, 'CPU%c7': 0.23, 'PkgTmp': 67.0, 'GFX%rc6': 96.88, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 20.61, 'CorWatt': 18.53, 'GFXWatt': 0.05, 'RAMWatt': 0.0}
+
+🔧 MSR Metrics:
+
+🔄 Scheduler Metrics:
+   Voluntary Ctx Sw:   1122
+   Involuntary Ctx Sw: 626
+   Thread Migrations:  0
+   Run Queue Length:    1.00
+   Kernel Time:         444.00 ms
+   User Time:           10342.00 ms
+
+📊 High‑Frequency Samples: 2634 collected
+   First sample: {'timestamp_ns': 1777205803497635270, 'sample_start_ns': 1777205803487563096, 'sample_end_ns': 1777205803497635270, 'interval_ns': 10072174, 'pkg_start_uj': 12522876449, 'pkg_end_uj': 12522934982, 'core_start_uj': 7686153419, 'core_end_uj': 7686194312, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 559516878, 'uncore_end_uj': 559516878, 'pkg_energy_uj': 58533, 'core_energy_uj': 40893, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+
+======================================================================
+🔍 First 3 CPU samples:
+   Sample 0: {'timestamp_ns': 1777205803568967936, 'sample_start_ns': 1777205803468968192, 'sample_end_ns': 1777205803568967936, 'interval_ns': 100000000, 'cpu_util_percent': 14.74, 'cpu_busy_mhz': 3420.0, 'cpu_avg_mhz': 503.0, 'c1_residency': 0.24960000000000002, 'c2_residency': 0.14980000000000002, 'c3_residency': 0.4549, 'c6_residency': 0.0, 'c7_residency': 0.2159, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 12.52, 'dram_power': 0.0, 'gpu_rc6': 0.8208, 'package_temp': 50.0, 'ipc': 1.56, 'extra_metrics_json': '{"TSC_MHz": 2800.0, "IRQ": 1751.0, "GFXMHz": 400.0, "CorWatt": 10.24, "GFXWatt": 0.34}', 'l1d_cache_misses': 0, 'l2_cache_misses': 485832, 'l3_cache_hits': 436833, 'l3_cache_misses': 107337}
+   Sample 1: {'timestamp_ns': 1777205803668968192, 'sample_start_ns': 1777205803568967936, 'sample_end_ns': 1777205803668968192, 'interval_ns': 100000000, 'cpu_util_percent': 19.75, 'cpu_busy_mhz': 3942.0, 'cpu_avg_mhz': 772.0, 'c1_residency': 0.2908, 'c2_residency': 0.0911, 'c3_residency': 0.4201, 'c6_residency': 0.0, 'c7_residency': 0.15839999999999999, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 15.35, 'dram_power': 0.0, 'gpu_rc6': 0.9861, 'package_temp': 64.0, 'ipc': 1.41, 'extra_metrics_json': '{"TSC_MHz": 2781.0, "IRQ": 19794.0, "GFXMHz": 400.0, "CorWatt": 13.34, "GFXWatt": 0.0}', 'l1d_cache_misses': 0, 'l2_cache_misses': 485832, 'l3_cache_hits': 436833, 'l3_cache_misses': 107337}
+   Sample 2: {'timestamp_ns': 1777205803768968192, 'sample_start_ns': 1777205803668968192, 'sample_end_ns': 1777205803768968192, 'interval_ns': 100000000, 'cpu_util_percent': 29.55, 'cpu_busy_mhz': 4008.0, 'cpu_avg_mhz': 1188.0, 'c1_residency': 0.3753, 'c2_residency': 0.1841, 'c3_residency': 0.1523, 'c6_residency': 0.0, 'c7_residency': 0.0023, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 20.61, 'dram_power': 0.0, 'gpu_rc6': 0.9688, 'package_temp': 67.0, 'ipc': 1.71, 'extra_metrics_json': '{"TSC_MHz": 2813.0, "IRQ": 23747.0, "GFXMHz": 400.0, "CorWatt": 18.53, "GFXWatt": 0.05}', 'l1d_cache_misses': 0, 'l2_cache_misses': 485832, 'l3_cache_hits': 436833, 'l3_cache_misses': 107337}
+🔍 DEBUG - Using MIN baseline: idle_uj=93.370J, idle_core=25.123J, idle_uncore=68.248J
+🔍 DEBUG - Page faults extracted: major=0, minor=2415, total=2415
+🔴 ANALYZER_VALUE: c2=2.120s, c3=0.000s
+🔴 ANALYZER_KEYS: c2=2.1202092364285714, c3=0.0
+🔍 DEBUG - Captured 3 orchestration events from executor
+🔍 DEBUG HARNESS - orchestration_events in result: True
+🔍 DEBUG HARNESS - Number of events: 3
+🔍 DEBUG HARNESS - First event keys: dict_keys(['phase', 'event_type', 'start_time_ns', 'end_time_ns', 'duration_ns', 'metadata'])
+✅ Harness complete: 824.8842J workload energy
+🔍 RUNS DEBUG - pkg_raw_uj: 918254425, baseline_energy_uj: 93370246
+🔍 RUNS DEBUG - dynamic will be: 824884179
+         ✅ Rep 1/2 saved
+   📊 Progress: 1/2 runs
+
+         ⏳ Cooling down 10s...
+
+      ──────────────────────────────────────────────────Llama.generate: 3 prefix-match hit, remaining 195 prompt tokens to eval
+llama_perf_context_print:        load time =     817.91 ms
+llama_perf_context_print: prompt eval time =     794.22 ms /   195 tokens (    4.07 ms per token,   245.52 tokens per second)
+llama_perf_context_print:        eval time =    9569.67 ms /   313 runs   (   30.57 ms per token,    32.71 tokens per second)
+llama_perf_context_print:       total time =   10468.15 ms /   508 tokens
+llama_perf_context_print:    graphs reused =        311
+Llama.generate: 3 prefix-match hit, remaining 68 prompt tokens to eval
+llama_perf_context_print:        load time =     817.91 ms
+llama_perf_context_print: prompt eval time =     300.82 ms /    68 tokens (    4.42 ms per token,   226.05 tokens per second)
+llama_perf_context_print:        eval time =    7880.93 ms /   252 runs   (   31.27 ms per token,    31.98 tokens per second)
+llama_perf_context_print:       total time =    8261.19 ms /   320 tokens
+llama_perf_context_print:    graphs reused =        250
+Llama.generate: 1 prefix-match hit, remaining 478 prompt tokens to eval
+llama_perf_context_print:        load time =     817.91 ms
+llama_perf_context_print: prompt eval time =    2390.71 ms /   478 tokens (    5.00 ms per token,   199.94 tokens per second)
+llama_perf_context_print:        eval time =      63.23 ms /     2 runs   (   31.61 ms per token,    31.63 tokens per second)
+llama_perf_context_print:       total time =    2455.00 ms /   480 tokens
+llama_perf_context_print:    graphs reused =          1
+EOF reached on turbostat stdout
+
+      Repetition 2/2
+      ──────────────────────────────────────────────────
+   Raw value: 2285043712 (hex: 0x88330000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - START:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔔 EVENT CREATED: planning.planning
+🔍 DEBUG - added prompt: 71, now tokens[prompt] = 71
+🔍 DEBUG - added completion: 252, now tokens[completion] = 252
+🔍 DEBUG - added total: 323, now tokens[total] = 323
+🔔 EVENT CREATED: execution.execution
+🔍 DEBUG - accumulated tokens: {'prompt': 71, 'completion': 252, 'total': 323}
+🔍 DEBUG - tokens keys: dict_keys(['prompt', 'completion', 'total'])
+🔔 EVENT CREATED: synthesis.synthesis
+🔍 DEBUG - Number of samples: 2119
+🔍 DEBUG - First sample type: <class 'dict'>
+🔍 DEBUG - First sample length: 16
+🔍 DEBUG - First sample content: {'timestamp_ns': 1777205866672855836, 'sample_start_ns': 1777205866662493059, 'sample_end_ns': 1777205866672855836, 'interval_ns': 10362777, 'pkg_start_uj': 13460928064, 'pkg_end_uj': 13460995385, 'core_start_uj': 8496594825, 'core_end_uj': 8496635780, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 562484033, 'uncore_end_uj': 562489648, 'pkg_energy_uj': 67321, 'core_energy_uj': 40955, 'dram_energy_uj': 0, 'uncore_energy_uj': 5615}
+🔍 DEBUG - Second sample content: {'timestamp_ns': 1777205866682571596, 'sample_start_ns': 1777205866674521614, 'sample_end_ns': 1777205866682571596, 'interval_ns': 8049982, 'pkg_start_uj': 13461007653, 'pkg_end_uj': 13461260644, 'core_start_uj': 8496646095, 'core_end_uj': 8496873877, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 562489648, 'uncore_end_uj': 562497339, 'pkg_energy_uj': 252991, 'core_energy_uj': 227782, 'dram_energy_uj': 0, 'uncore_energy_uj': 7691}
+
+🔍 RAW TURBOSTAT LINES (414 total):
+   Line  0: 'Avg_MHz	Busy%	Bzy_MHz	TSC_MHz	IPC	IRQ	C1ACPI%	C2ACPI%	C3ACPI%	CPU%c6	CPU%c7	PkgTmp	GFX%rc6	GFXMHz	Pkg%pc8	Pkg%pc9	Pk%pc10	PkgWatt	CorWatt	GFXWatt	RAMWatt'
+   Line  1: '4000	99.77	4023	2794	1.35	1188	0.00	0.00	0.00	0.00	0.00	83	71.55	400	0.00	0.00	0.00	46.71	43.98	0.81	0.00'
+   Line  2: '4061	99.77	4076	2799	1.28	1118	0.00	0.00	0.00	0.00	0.00	87	74.56	400	0.00	0.00	0.00	50.82	48.11	0.72	0.00'
+   Line  3: '4001	99.77	4003	2809	1.32	1092	0.00	0.00	0.00	0.00	0.00	84	77.35	400	0.00	0.00	0.00	49.36	46.64	0.72	0.00'
+   Line  4: '4022	99.77	4011	2818	1.39	1278	0.00	0.00	0.00	0.00	0.00	86	74.35	400	0.00	0.00	0.00	49.97	47.10	0.83	0.00'
+   Line  5: '3963	99.77	3972	2803	1.28	1209	0.00	0.00	0.00	0.00	0.00	89	73.23	400	0.00	0.00	0.00	47.51	44.77	0.72	0.00'
+   Line  6: '3940	99.77	3949	2803	1.31	1089	0.00	0.00	0.00	0.00	0.00	89	80.19	400	0.00	0.00	0.00	47.38	44.73	0.62	0.00'
+   Line  7: '3924	99.77	3935	2801	1.32	1113	0.00	0.00	0.00	0.00	0.00	89	83.73	400	0.00	0.00	0.00	47.02	44.57	0.43	0.00'
+   Line  8: '3430	86.85	3960	2796	1.26	1040	2.88	2.80	7.24	0.00	0.00	74	97.12	400	0.00	0.00	0.00	42.01	39.80	0.10	0.00'
+   Line  9: '2082	50.78	4100	2803	0.92	599	0.90	3.10	45.11	0.00	0.00	70	100.01	400	0.00	0.00	0.00	30.48	28.10	0.00	0.00'
+📋 Header detected: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC', 'IRQ', 'C1ACPI%', 'C2ACPI%', 'C3ACPI%', 'CPU%c6', 'CPU%c7', 'PkgTmp', 'GFX%rc6', 'GFXMHz', 'Pkg%pc8', 'Pkg%pc9', 'Pk%pc10', 'PkgWatt', 'CorWatt', 'GFXWatt', 'RAMWatt']
+✅ Found 413 data rows
+✅ Parsed 413 rows with columns: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC']...
+   Raw value: 2284650496 (hex: 0x882d0000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - END:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔍 DEBUG scheduler_delta keys: ['voluntary_switches', 'involuntary_switches', 'user_time', 'system_time', 'load1', 'load5', 'load15', 'runnable', 'total_tasks', 'last_pid', 'swap']
+🔍 DEBUG run queue value: 0
+🔵 MSR_READER - _cstate_start exists: True
+🔵 MSR_READER - _cstate_start: {'timestamp': 1777205866.6527007, 'counters': {'c2': 3763335087266, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER - current_cstates: {'timestamp': 1777205909.224343, 'counters': {'c2': 3768455102136, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER_ID: 123747072136832
+🔵 MSR_READER_VALUE: c2=1.829s
+🔵 MSR_READER_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds']
+   Raw value: 2284519424 (hex: 0x882b0000)
+   Decoded: now=0, log=0
+   Raw value: 2284453888 (hex: 0x882a0000)
+   Decoded: now=0, log=0
+🟢 ENGINE_ID: 123747072136832
+🟢 ENGINE_VALUE: c2=1.829s
+🟢 ENGINE_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+🔥 THERMAL DERIVED:
+   during_experiment: 0
+   now_active: 0
+   since_boot: 0
+🟡 RAW_ID: 123747072136832
+🟡 RAW_VALUE: c2=1.829s
+🟡 RAW_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+======================================================================
+📊 ENERGY ENGINE COMPLETE SUMMARY
+======================================================================
+
+⏱️  Duration: 42.598s
+   Start: 1777205866.637, End: 1777205909.235
+
+⚡ RAPL Energy (µJ):
+   uncore:      2519891 µJ (2.519891 J)
+   core:    671897084 µJ (671.897084 J)
+   package-0:    763719908 µJ (763.719908 J)
+
+📈 Performance Counters:
+   Instructions: 2,626,032,008
+   Cycles:       6,528,571,823
+   IPC:          0.40
+   Cache Refs:   184,833,119
+   Cache Misses: 46,740,354
+   Miss Rate:    25.29%
+   Page Faults:  2655 (major=0, minor=2655)
+   Ctx Switches: vol=24865, invol=0
+   Migrations:   1,896
+
+🌡️ Turbostat Summary (over 42.45s, 413 samples):
+   Package Temp (°C): mean=68.5
+
+   First 3 turbostat samples:
+      Sample 1: {'Avg_MHz': 4000.0, 'Busy%': 99.77, 'Bzy_MHz': 4023.0, 'TSC_MHz': 2794.0, 'IPC': 1.35, 'IRQ': 1188.0, 'C1ACPI%': 0.0, 'C2ACPI%': 0.0, 'C3ACPI%': 0.0, 'CPU%c6': 0.0, 'CPU%c7': 0.0, 'PkgTmp': 83.0, 'GFX%rc6': 71.55, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 46.71, 'CorWatt': 43.98, 'GFXWatt': 0.81, 'RAMWatt': 0.0}
+      Sample 2: {'Avg_MHz': 4061.0, 'Busy%': 99.77, 'Bzy_MHz': 4076.0, 'TSC_MHz': 2799.0, 'IPC': 1.28, 'IRQ': 1118.0, 'C1ACPI%': 0.0, 'C2ACPI%': 0.0, 'C3ACPI%': 0.0, 'CPU%c6': 0.0, 'CPU%c7': 0.0, 'PkgTmp': 87.0, 'GFX%rc6': 74.56, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 50.82, 'CorWatt': 48.11, 'GFXWatt': 0.72, 'RAMWatt': 0.0}
+      Sample 3: {'Avg_MHz': 4001.0, 'Busy%': 99.77, 'Bzy_MHz': 4003.0, 'TSC_MHz': 2809.0, 'IPC': 1.32, 'IRQ': 1092.0, 'C1ACPI%': 0.0, 'C2ACPI%': 0.0, 'C3ACPI%': 0.0, 'CPU%c6': 0.0, 'CPU%c7': 0.0, 'PkgTmp': 84.0, 'GFX%rc6': 77.35, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 49.36, 'CorWatt': 46.64, 'GFXWatt': 0.72, 'RAMWatt': 0.0}
+
+🔧 MSR Metrics:
+
+🔄 Scheduler Metrics:
+   Voluntary Ctx Sw:   331
+   Involuntary Ctx Sw: 694
+   Thread Migrations:  0
+   Run Queue Length:    0.00
+   Kernel Time:         123.00 ms
+   User Time:           10230.00 ms
+
+📊 High‑Frequency Samples: 2119 collected
+   First sample: {'timestamp_ns': 1777205866672855836, 'sample_start_ns': 1777205866662493059, 'sample_end_ns': 1777205866672855836, 'interval_ns': 10362777, 'pkg_start_uj': 13460928064, 'pkg_end_uj': 13460995385, 'core_start_uj': 8496594825, 'core_end_uj': 8496635780, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 562484033, 'uncore_end_uj': 562489648, 'pkg_energy_uj': 67321, 'core_energy_uj': 40955, 'dram_energy_uj': 0, 'uncore_energy_uj': 5615}
+
+======================================================================
+🔍 First 3 CPU samples:
+   Sample 0: {'timestamp_ns': 1777205866736966400, 'sample_start_ns': 1777205866636966400, 'sample_end_ns': 1777205866736966400, 'interval_ns': 100000000, 'cpu_util_percent': 99.77, 'cpu_busy_mhz': 4023.0, 'cpu_avg_mhz': 4000.0, 'c1_residency': 0.0, 'c2_residency': 0.0, 'c3_residency': 0.0, 'c6_residency': 0.0, 'c7_residency': 0.0, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 46.71, 'dram_power': 0.0, 'gpu_rc6': 0.7155, 'package_temp': 83.0, 'ipc': 1.35, 'extra_metrics_json': '{"TSC_MHz": 2794.0, "IRQ": 1188.0, "GFXMHz": 400.0, "CorWatt": 43.98, "GFXWatt": 0.81}', 'l1d_cache_misses': 0, 'l2_cache_misses': 498167, 'l3_cache_hits': 447537, 'l3_cache_misses': 113172}~llama_context:        CPU compute buffer size is  70.5020 MiB, matches expectation of  70.5020 MiB
+EOF reached on turbostat stdout
+
+   Sample 1: {'timestamp_ns': 1777205866836966400, 'sample_start_ns': 1777205866736966400, 'sample_end_ns': 1777205866836966400, 'interval_ns': 100000000, 'cpu_util_percent': 99.77, 'cpu_busy_mhz': 4076.0, 'cpu_avg_mhz': 4061.0, 'c1_residency': 0.0, 'c2_residency': 0.0, 'c3_residency': 0.0, 'c6_residency': 0.0, 'c7_residency': 0.0, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 50.82, 'dram_power': 0.0, 'gpu_rc6': 0.7456, 'package_temp': 87.0, 'ipc': 1.28, 'extra_metrics_json': '{"TSC_MHz": 2799.0, "IRQ": 1118.0, "GFXMHz": 400.0, "CorWatt": 48.11, "GFXWatt": 0.72}', 'l1d_cache_misses': 0, 'l2_cache_misses': 498167, 'l3_cache_hits': 447537, 'l3_cache_misses': 113172}
+   Sample 2: {'timestamp_ns': 1777205866936966400, 'sample_start_ns': 1777205866836966400, 'sample_end_ns': 1777205866936966400, 'interval_ns': 100000000, 'cpu_util_percent': 99.77, 'cpu_busy_mhz': 4003.0, 'cpu_avg_mhz': 4001.0, 'c1_residency': 0.0, 'c2_residency': 0.0, 'c3_residency': 0.0, 'c6_residency': 0.0, 'c7_residency': 0.0, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 49.36, 'dram_power': 0.0, 'gpu_rc6': 0.7735, 'package_temp': 84.0, 'ipc': 1.32, 'extra_metrics_json': '{"TSC_MHz": 2809.0, "IRQ": 1092.0, "GFXMHz": 400.0, "CorWatt": 46.64, "GFXWatt": 0.72}', 'l1d_cache_misses': 0, 'l2_cache_misses': 498167, 'l3_cache_hits': 447537, 'l3_cache_misses': 113172}
+🔍 DEBUG - Using MIN baseline: idle_uj=75.138J, idle_core=20.217J, idle_uncore=54.921J
+🔍 DEBUG - Page faults extracted: major=0, minor=2655, total=2655
+🔴 ANALYZER_VALUE: c2=1.829s, c3=0.000s
+🔴 ANALYZER_KEYS: c2=1.8285767392857142, c3=0.0
+🔍 DEBUG - Captured 3 orchestration events from executor
+🔍 DEBUG HARNESS - orchestration_events in result: True
+🔍 DEBUG HARNESS - Number of events: 3
+🔍 DEBUG HARNESS - First event keys: dict_keys(['phase', 'event_type', 'start_time_ns', 'end_time_ns', 'duration_ns', 'metadata'])
+✅ Harness complete: 688.5819J workload energy
+🔍 RUNS DEBUG - pkg_raw_uj: 763719908, baseline_energy_uj: 75138010
+🔍 RUNS DEBUG - dynamic will be: 688581898
+         ✅ Rep 2/2 saved
+   📊 Progress: 2/2 runs
+
+   ✅ Experiment 766 completed with 2 runs
+
+   ✅ llama_cpp | GSM8K Arithmetic complete:
+      Tax: 0.00x [nan, nan]
+
+   ============================================================
+   📋 groq | GSM8K Arithmetic
+   ============================================================
+
+🔍 Pre-flight checks:
+
+✅ MSR helper: OK
+✅ Config files: OK
+✅ llama-cpp-python: OK
+✅ Model file: None
+
+✅ All checks passed! Ready to run experiments.
+
+   Optimizer:    No
+   ✅ Using existing environment: 37 (hash: b719365ff056f1d2)
+✅ Synced 45 task categories from YAML
+   Categories:
+      • reasoning: 7
+      • media: 7
+      • orchestration: 6
+      • coding: 6
+      • qa: 5
+      • summarization: 3
+      • extraction: 2
+      • classification: 2
+      • web_search: 1
+      • translation: 1
+      • research: 1
+      • planning: 1
+      • debugging: 1
+      • data_analysis: 1
+      • custom: 1
+      • creative_writing: 1
+
+      ──────────────────────────────────────────────────
+      Repetition 1/2
+      ──────────────────────────────────────────────────
+   Raw value: 2284716032 (hex: 0x882e0000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - START:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔔 EVENT CREATED: planning.planning
+🔍 DEBUG - added prompt: 41, now tokens[prompt] = 41
+🔍 DEBUG - added completion: 24, now tokens[completion] = 24
+🔍 DEBUG - added total: 65, now tokens[total] = 65
+🔍 DEBUG - added prompt: 41, now tokens[prompt] = 82
+🔍 DEBUG - added completion: 35, now tokens[completion] = 59
+🔍 DEBUG - added total: 76, now tokens[total] = 141
+🔍 DEBUG - added prompt: 87, now tokens[prompt] = 169
+🔍 DEBUG - added completion: 197, now tokens[completion] = 256
+🔍 DEBUG - added total: 284, now tokens[total] = 425
+🔍 DEBUG - added prompt: 42, now tokens[prompt] = 211
+🔍 DEBUG - added completion: 67, now tokens[completion] = 323
+🔍 DEBUG - added total: 109, now tokens[total] = 534
+🔔 EVENT CREATED: execution.execution
+🔍 DEBUG - accumulated tokens: {'prompt': 211, 'completion': 323, 'total': 534}
+🔍 DEBUG - tokens keys: dict_keys(['prompt', 'completion', 'total'])
+🔔 EVENT CREATED: synthesis.synthesis
+🔍 DEBUG - Number of samples: 378
+🔍 DEBUG - First sample type: <class 'dict'>
+🔍 DEBUG - First sample length: 16
+🔍 DEBUG - First sample content: {'timestamp_ns': 1777205909549937552, 'sample_start_ns': 1777205909539119157, 'sample_end_ns': 1777205909549937552, 'interval_ns': 10818395, 'pkg_start_uj': 14228141005, 'pkg_end_uj': 14228207960, 'core_start_uj': 9171182332, 'core_end_uj': 9171222371, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 565159197, 'uncore_end_uj': 565166338, 'pkg_energy_uj': 66955, 'core_energy_uj': 40039, 'dram_energy_uj': 0, 'uncore_energy_uj': 7141}
+🔍 DEBUG - Second sample content: {'timestamp_ns': 1777205909559201840, 'sample_start_ns': 1777205909550045345, 'sample_end_ns': 1777205909559201840, 'interval_ns': 9156495, 'pkg_start_uj': 14228218092, 'pkg_end_uj': 14228257948, 'core_start_uj': 9171230733, 'core_end_uj': 9171254475, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 565166338, 'uncore_end_uj': 565166338, 'pkg_energy_uj': 39856, 'core_energy_uj': 23742, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+
+🔍 RAW TURBOSTAT LINES (75 total):
+   Line  0: 'Avg_MHz	Busy%	Bzy_MHz	TSC_MHz	IPC	IRQ	C1ACPI%	C2ACPI%	C3ACPI%	CPU%c6	CPU%c7	PkgTmp	GFX%rc6	GFXMHz	Pkg%pc8	Pkg%pc9	Pk%pc10	PkgWatt	CorWatt	GFXWatt	RAMWatt'
+   Line  1: '109	8.74	1268	2762	0.85	692	21.89	14.70	53.59	0.00	48.56	54	73.35	383	0.00	0.00	0.00	3.67	1.60	0.33	0.00'
+   Line  2: '89	6.76	1299	2842	1.09	477	11.08	11.12	72.50	0.00	65.28	54	81.36	400	0.00	0.00	0.00	3.53	1.36	0.31	0.00'
+   Line  3: '73	6.31	1154	2803	0.57	398	8.92	9.40	75.57	0.00	68.27	54	78.32	400	0.00	0.00	0.00	3.13	1.07	0.28	0.00'
+   Line  4: '60	5.34	1123	2801	0.53	390	8.74	12.32	73.74	0.00	72.30	54	82.16	400	0.00	0.00	0.00	2.98	1.00	0.23	0.00'
+   Line  5: '42	3.91	1078	2803	0.62	253	4.27	9.63	82.34	0.00	81.83	54	98.64	400	0.00	0.00	0.00	2.45	0.86	0.02	0.00'
+   Line  6: '62	5.37	1150	2804	0.87	232	4.94	5.51	84.35	0.00	79.00	53	99.72	400	0.00	0.00	0.00	2.61	0.98	0.00	0.00'
+   Line  7: '52	4.45	1176	2795	1.16	203	5.24	4.92	85.26	0.00	78.44	54	100.09	400	0.00	0.00	0.00	2.50	0.94	0.00	0.00'
+   Line  8: '51	4.20	1213	2811	1.32	224	4.96	6.77	84.48	0.00	79.73	53	98.87	400	0.00	0.00	0.00	2.61	1.00	0.01	0.00'
+   Line  9: '43	3.85	1118	2803	0.68	230	5.51	5.65	85.12	0.00	80.07	54	100.56	400	0.00	0.00	0.00	2.48	0.89	0.02	0.00'
+📋 Header detected: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC', 'IRQ', 'C1ACPI%', 'C2ACPI%', 'C3ACPI%', 'CPU%c6', 'CPU%c7', 'PkgTmp', 'GFX%rc6', 'GFXMHz', 'Pkg%pc8', 'Pkg%pc9', 'Pk%pc10', 'PkgWatt', 'CorWatt', 'GFXWatt', 'RAMWatt']
+✅ Found 74 data rows
+✅ Parsed 74 rows with columns: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC']...
+   Raw value: 2284847104 (hex: 0x88300000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - END:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔍 DEBUG scheduler_delta keys: ['voluntary_switches', 'involuntary_switches', 'user_time', 'system_time', 'load1', 'load5', 'load15', 'runnable', 'total_tasks', 'last_pid', 'swap']
+🔍 DEBUG run queue value: -1
+🔵 MSR_READER - _cstate_start exists: True
+🔵 MSR_READER - _cstate_start: {'timestamp': 1777205909.5379016, 'counters': {'c2': 3768487499244, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER - current_cstates: {'timestamp': 1777205917.2333345, 'counters': {'c2': 3772496402430, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}Streaming failed for OpenAICompatAdapter(llama-3.3-70b-versatile @ https://api.groq.com/openai/v1), falling back to non-streaming: 429 Client Error: Too Many Requests for url: https://api.groq.com/openai/v1/chat/completions
+Streaming failed for OpenAICompatAdapter(llama-3.3-70b-versatile @ https://api.groq.com/openai/v1), falling back to non-streaming: 429 Client Error: Too Many Requests for url: https://api.groq.com/openai/v1/chat/completions
+
+🔵 MSR_READER_ID: 123747206553728
+🔵 MSR_READER_VALUE: c2=1.432s
+🔵 MSR_READER_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds']
+   Raw value: 2284847104 (hex: 0x88300000)
+   Decoded: now=0, log=0
+   Raw value: 2284847104 (hex: 0x88300000)
+   Decoded: now=0, log=0
+🟢 ENGINE_ID: 123747206553728
+🟢 ENGINE_VALUE: c2=1.432s
+🟢 ENGINE_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+🔥 THERMAL DERIVED:
+   during_experiment: 0
+   now_active: 0
+   since_boot: 0
+🟡 RAW_ID: 123747206553728
+🟡 RAW_VALUE: c2=1.432s
+🟡 RAW_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+======================================================================
+📊 ENERGY ENGINE COMPLETE SUMMARY
+======================================================================
+
+⏱️  Duration: 7.716s
+   Start: 1777205909.525, End: 1777205917.241
+
+⚡ RAPL Energy (µJ):
+   uncore:       399718 µJ (0.399718 J)
+   core:      8655068 µJ (8.655068 J)
+   package-0:     21638006 µJ (21.638006 J)
+
+📈 Performance Counters:
+   Instructions: 477,546,728
+   Cycles:       1,149,904,183
+   IPC:          0.42
+   Cache Refs:   31,786,157
+   Cache Misses: 8,380,085
+   Miss Rate:    26.36%
+   Page Faults:  808 (major=0, minor=808)
+   Ctx Switches: vol=3848, invol=0
+   Migrations:   338
+
+🌡️ Turbostat Summary (over 7.59s, 74 samples):
+   Package Temp (°C): mean=53.0
+
+   First 3 turbostat samples:
+      Sample 1: {'Avg_MHz': 109.0, 'Busy%': 8.74, 'Bzy_MHz': 1268.0, 'TSC_MHz': 2762.0, 'IPC': 0.85, 'IRQ': 692.0, 'C1ACPI%': 21.89, 'C2ACPI%': 14.7, 'C3ACPI%': 53.59, 'CPU%c6': 0.0, 'CPU%c7': 48.56, 'PkgTmp': 54.0, 'GFX%rc6': 73.35, 'GFXMHz': 383.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 3.67, 'CorWatt': 1.6, 'GFXWatt': 0.33, 'RAMWatt': 0.0}
+      Sample 2: {'Avg_MHz': 89.0, 'Busy%': 6.76, 'Bzy_MHz': 1299.0, 'TSC_MHz': 2842.0, 'IPC': 1.09, 'IRQ': 477.0, 'C1ACPI%': 11.08, 'C2ACPI%': 11.12, 'C3ACPI%': 72.5, 'CPU%c6': 0.0, 'CPU%c7': 65.28, 'PkgTmp': 54.0, 'GFX%rc6': 81.36, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 3.53, 'CorWatt': 1.36, 'GFXWatt': 0.31, 'RAMWatt': 0.0}
+      Sample 3: {'Avg_MHz': 73.0, 'Busy%': 6.31, 'Bzy_MHz': 1154.0, 'TSC_MHz': 2803.0, 'IPC': 0.57, 'IRQ': 398.0, 'C1ACPI%': 8.92, 'C2ACPI%': 9.4, 'C3ACPI%': 75.57, 'CPU%c6': 0.0, 'CPU%c7': 68.27, 'PkgTmp': 54.0, 'GFX%rc6': 78.32, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 3.13, 'CorWatt': 1.07, 'GFXWatt': 0.28, 'RAMWatt': 0.0}
+
+🔧 MSR Metrics:
+
+🔄 Scheduler Metrics:
+   Voluntary Ctx Sw:   316
+   Involuntary Ctx Sw: 4
+   Thread Migrations:  0
+   Run Queue Length:    -1.00
+   Kernel Time:         53.00 ms
+   User Time:           75.00 ms
+
+📊 High‑Frequency Samples: 378 collected
+   First sample: {'timestamp_ns': 1777205909549937552, 'sample_start_ns': 1777205909539119157, 'sample_end_ns': 1777205909549937552, 'interval_ns': 10818395, 'pkg_start_uj': 14228141005, 'pkg_end_uj': 14228207960, 'core_start_uj': 9171182332, 'core_end_uj': 9171222371, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 565159197, 'uncore_end_uj': 565166338, 'pkg_energy_uj': 66955, 'core_energy_uj': 40039, 'dram_energy_uj': 0, 'uncore_energy_uj': 7141}
+
+======================================================================
+🔍 First 3 CPU samples:
+   Sample 0: {'timestamp_ns': 1777205909624951552, 'sample_start_ns': 1777205909524951808, 'sample_end_ns': 1777205909624951552, 'interval_ns': 100000000, 'cpu_util_percent': 8.74, 'cpu_busy_mhz': 1268.0, 'cpu_avg_mhz': 109.0, 'c1_residency': 0.2189, 'c2_residency': 0.147, 'c3_residency': 0.5359, 'c6_residency': 0.0, 'c7_residency': 0.48560000000000003, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 3.67, 'dram_power': 0.0, 'gpu_rc6': 0.7334999999999999, 'package_temp': 54.0, 'ipc': 0.85, 'extra_metrics_json': '{"TSC_MHz": 2762.0, "IRQ": 692.0, "GFXMHz": 383.0, "CorWatt": 1.6, "GFXWatt": 0.33}', 'l1d_cache_misses': 0, 'l2_cache_misses': 487254, 'l3_cache_hits': 429542, 'l3_cache_misses': 113244}
+   Sample 1: {'timestamp_ns': 1777205909724951808, 'sample_start_ns': 1777205909624951552, 'sample_end_ns': 1777205909724951808, 'interval_ns': 100000000, 'cpu_util_percent': 6.76, 'cpu_busy_mhz': 1299.0, 'cpu_avg_mhz': 89.0, 'c1_residency': 0.1108, 'c2_residency': 0.1112, 'c3_residency': 0.725, 'c6_residency': 0.0, 'c7_residency': 0.6528, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 3.53, 'dram_power': 0.0, 'gpu_rc6': 0.8136, 'package_temp': 54.0, 'ipc': 1.09, 'extra_metrics_json': '{"TSC_MHz": 2842.0, "IRQ": 477.0, "GFXMHz": 400.0, "CorWatt": 1.36, "GFXWatt": 0.31}', 'l1d_cache_misses': 0, 'l2_cache_misses': 487254, 'l3_cache_hits': 429542, 'l3_cache_misses': 113244}
+   Sample 2: {'timestamp_ns': 1777205909824951552, 'sample_start_ns': 1777205909724951808, 'sample_end_ns': 1777205909824951552, 'interval_ns': 100000000, 'cpu_util_percent': 6.31, 'cpu_busy_mhz': 1154.0, 'cpu_avg_mhz': 73.0, 'c1_residency': 0.0892, 'c2_residency': 0.094, 'c3_residency': 0.7556999999999999, 'c6_residency': 0.0, 'c7_residency': 0.6827, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 3.13, 'dram_power': 0.0, 'gpu_rc6': 0.7831999999999999, 'package_temp': 54.0, 'ipc': 0.57, 'extra_metrics_json': '{"TSC_MHz": 2803.0, "IRQ": 398.0, "GFXMHz": 400.0, "CorWatt": 1.07, "GFXWatt": 0.28}', 'l1d_cache_misses': 0, 'l2_cache_misses': 487254, 'l3_cache_hits': 429542, 'l3_cache_misses': 113244}
+🔍 DEBUG - Using MIN baseline: idle_uj=13.610J, idle_core=3.662J, idle_uncore=9.948J
+🔍 DEBUG - Page faults extracted: major=0, minor=808, total=808
+🔴 ANALYZER_VALUE: c2=1.432s, c3=0.000s
+🔴 ANALYZER_KEYS: c2=1.4317511378571428, c3=0.0
+🔍 DEBUG - Captured 3 orchestration events from executor
+🔍 DEBUG HARNESS - orchestration_events in result: True
+🔍 DEBUG HARNESS - Number of events: 3
+🔍 DEBUG HARNESS - First event keys: dict_keys(['phase', 'event_type', 'start_time_ns', 'end_time_ns', 'duration_ns', 'metadata'])
+✅ Harness complete: 8.0278J workload energy
+🔍 RUNS DEBUG - pkg_raw_uj: 21638006, baseline_energy_uj: 13610224
+🔍 RUNS DEBUG - dynamic will be: 8027782
+         ✅ Rep 1/2 saved
+   📊 Progress: 1/2 runs
+
+         ⏳ Cooling down 10s...
+
+      ──────────────────────────────────────────────────
+      Repetition 2/2
+      ──────────────────────────────────────────────────
+   Raw value: 2285043712 (hex: 0x88330000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - START:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔔 EVENT CREATED: planning.planning
+🔍 DEBUG - added prompt: 41, now tokens[prompt] = 41
+🔍 DEBUG - added completion: 26, now tokens[completion] = 26
+🔍 DEBUG - added total: 67, now tokens[total] = 67
+🔍 DEBUG - added prompt: 41, now tokens[prompt] = 82
+🔍 DEBUG - added completion: 71, now tokens[completion] = 97
+🔍 DEBUG - added total: 112, now tokens[total] = 179
+🔍 DEBUG - added prompt: 87, now tokens[prompt] = 169
+🔍 DEBUG - added completion: 140, now tokens[completion] = 237
+🔍 DEBUG - added total: 227, now tokens[total] = 406
+🔍 DEBUG - added prompt: 48, now tokens[prompt] = 217
+🔍 DEBUG - added completion: 50, now tokens[completion] = 287
+🔍 DEBUG - added total: 98, now tokens[total] = 504
+🔔 EVENT CREATED: execution.execution
+🔍 DEBUG - accumulated tokens: {'prompt': 217, 'completion': 287, 'total': 504}
+🔍 DEBUG - tokens keys: dict_keys(['prompt', 'completion', 'total'])
+🔔 EVENT CREATED: synthesis.synthesis
+🔍 DEBUG - Number of samples: 358
+🔍 DEBUG - First sample type: <class 'dict'>
+🔍 DEBUG - First sample length: 16EOF reached on turbostat stdout
+
+🔍 DEBUG - First sample content: {'timestamp_ns': 1777205927426860842, 'sample_start_ns': 1777205927416774230, 'sample_end_ns': 1777205927426860842, 'interval_ns': 10086612, 'pkg_start_uj': 14268273531, 'pkg_end_uj': 14268312166, 'core_start_uj': 9185233504, 'core_end_uj': 9185260177, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 566250015, 'uncore_end_uj': 566250015, 'pkg_energy_uj': 38635, 'core_energy_uj': 26673, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+🔍 DEBUG - Second sample content: {'timestamp_ns': 1777205927436882350, 'sample_start_ns': 1777205927426927698, 'sample_end_ns': 1777205927436882350, 'interval_ns': 9954652, 'pkg_start_uj': 14268312166, 'pkg_end_uj': 14268343172, 'core_start_uj': 9185260177, 'core_end_uj': 9185273726, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 566250015, 'uncore_end_uj': 566250015, 'pkg_energy_uj': 31006, 'core_energy_uj': 13549, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+
+🔍 RAW TURBOSTAT LINES (71 total):
+   Line  0: 'Avg_MHz	Busy%	Bzy_MHz	TSC_MHz	IPC	IRQ	C1ACPI%	C2ACPI%	C3ACPI%	CPU%c6	CPU%c7	PkgTmp	GFX%rc6	GFXMHz	Pkg%pc8	Pkg%pc9	Pk%pc10	PkgWatt	CorWatt	GFXWatt	RAMWatt'
+   Line  1: '55	4.45	1242	2796	1.70	271	7.63	9.40	78.41	0.00	77.64	50	99.84	400	0.00	0.00	0.00	2.58	1.06	0.00	0.00'
+   Line  2: '29	2.64	1115	2802	0.63	111	1.61	2.61	93.19	0.00	90.24	49	99.79	400	0.00	0.00	0.00	1.95	0.62	0.02	0.00'
+   Line  3: '26	2.42	1078	2803	0.64	118	1.30	3.98	92.40	0.00	91.03	50	100.53	400	0.00	0.00	0.00	2.02	0.64	0.02	0.00'
+   Line  4: '26	2.41	1079	2803	0.65	100	0.58	2.67	94.44	0.00	92.38	50	99.62	400	0.00	0.00	0.00	1.91	0.61	0.02	0.00'
+   Line  5: '27	2.54	1058	2803	0.62	112	0.55	2.76	94.28	0.00	92.22	49	99.55	400	0.00	0.00	0.00	1.92	0.63	0.01	0.00'
+   Line  6: '27	2.46	1102	2803	0.75	108	1.30	3.33	92.98	0.00	91.37	49	100.58	400	0.00	0.00	0.00	1.91	0.63	0.00	0.00'
+   Line  7: '69	5.44	1266	2805	1.55	207	4.37	8.97	81.38	0.00	80.07	49	99.73	400	0.00	0.00	0.00	2.56	1.03	0.01	0.00'
+   Line  8: '18	1.59	1110	2802	0.69	80	0.65	1.90	95.89	0.00	94.44	49	100.73	400	0.00	0.00	0.00	1.76	0.55	0.00	0.00'
+   Line  9: '16	1.51	1094	2803	0.77	55	0.22	1.17	97.15	0.00	95.76	50	99.55	400	0.00	0.00	0.00	1.69	0.50	0.01	0.00'
+📋 Header detected: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC', 'IRQ', 'C1ACPI%', 'C2ACPI%', 'C3ACPI%', 'CPU%c6', 'CPU%c7', 'PkgTmp', 'GFX%rc6', 'GFXMHz', 'Pkg%pc8', 'Pkg%pc9', 'Pk%pc10', 'PkgWatt', 'CorWatt', 'GFXWatt', 'RAMWatt']
+✅ Found 70 data rows
+✅ Parsed 70 rows with columns: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC']...
+   Raw value: 2285043712 (hex: 0x88330000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - END:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔍 DEBUG scheduler_delta keys: ['voluntary_switches', 'involuntary_switches', 'user_time', 'system_time', 'load1', 'load5', 'load15', 'runnable', 'total_tasks', 'last_pid', 'swap']
+🔍 DEBUG run queue value: 0
+🔵 MSR_READER - _cstate_start exists: True
+🔵 MSR_READER - _cstate_start: {'timestamp': 1777205927.4152422, 'counters': {'c2': 3793052150719, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER - current_cstates: {'timestamp': 1777205934.710175, 'counters': {'c2': 3797660365874, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER_ID: 123747073595712
+🔵 MSR_READER_VALUE: c2=1.646s
+🔵 MSR_READER_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds']
+   Raw value: 2285043712 (hex: 0x88330000)
+   Decoded: now=0, log=0
+   Raw value: 2285043712 (hex: 0x88330000)
+   Decoded: now=0, log=0
+🟢 ENGINE_ID: 123747073595712
+🟢 ENGINE_VALUE: c2=1.646s
+🟢 ENGINE_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+🔥 THERMAL DERIVED:
+   during_experiment: 0
+   now_active: 0
+   since_boot: 0
+🟡 RAW_ID: 123747073595712
+🟡 RAW_VALUE: c2=1.646s
+🟡 RAW_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+======================================================================
+📊 ENERGY ENGINE COMPLETE SUMMARY
+======================================================================
+
+⏱️  Duration: 7.328s
+   Start: 1777205927.398, End: 1777205934.726
+
+⚡ RAPL Energy (µJ):
+   uncore:       534056 µJ (0.534056 J)
+   core:      7913981 µJ (7.913981 J)
+   package-0:     19767466 µJ (19.767466 J)
+
+📈 Performance Counters:
+   Instructions: 1,173,252,025
+   Cycles:       1,583,750,965
+   IPC:          0.74
+   Cache Refs:   41,935,541
+   Cache Misses: 9,770,406
+   Miss Rate:    23.30%
+   Page Faults:  16789 (major=0, minor=16789)
+   Ctx Switches: vol=6864, invol=0
+   Migrations:   410
+
+🌡️ Turbostat Summary (over 7.19s, 70 samples):
+   Package Temp (°C): mean=49.0
+
+   First 3 turbostat samples:
+      Sample 1: {'Avg_MHz': 55.0, 'Busy%': 4.45, 'Bzy_MHz': 1242.0, 'TSC_MHz': 2796.0, 'IPC': 1.7, 'IRQ': 271.0, 'C1ACPI%': 7.63, 'C2ACPI%': 9.4, 'C3ACPI%': 78.41, 'CPU%c6': 0.0, 'CPU%c7': 77.64, 'PkgTmp': 50.0, 'GFX%rc6': 99.84, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 2.58, 'CorWatt': 1.06, 'GFXWatt': 0.0, 'RAMWatt': 0.0}
+      Sample 2: {'Avg_MHz': 29.0, 'Busy%': 2.64, 'Bzy_MHz': 1115.0, 'TSC_MHz': 2802.0, 'IPC': 0.63, 'IRQ': 111.0, 'C1ACPI%': 1.61, 'C2ACPI%': 2.61, 'C3ACPI%': 93.19, 'CPU%c6': 0.0, 'CPU%c7': 90.24, 'PkgTmp': 49.0, 'GFX%rc6': 99.79, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 1.95, 'CorWatt': 0.62, 'GFXWatt': 0.02, 'RAMWatt': 0.0}
+      Sample 3: {'Avg_MHz': 26.0, 'Busy%': 2.42, 'Bzy_MHz': 1078.0, 'TSC_MHz': 2803.0, 'IPC': 0.64, 'IRQ': 118.0, 'C1ACPI%': 1.3, 'C2ACPI%': 3.98, 'C3ACPI%': 92.4, 'CPU%c6': 0.0, 'CPU%c7': 91.03, 'PkgTmp': 50.0, 'GFX%rc6': 100.53, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 2.02, 'CorWatt': 0.64, 'GFXWatt': 0.02, 'RAMWatt': 0.0}
+
+🔧 MSR Metrics:
+
+🔄 Scheduler Metrics:
+   Voluntary Ctx Sw:   294
+   Involuntary Ctx Sw: 20
+   Thread Migrations:  0
+   Run Queue Length:    0.00
+   Kernel Time:         47.00 ms
+   User Time:           85.00 ms
+
+📊 High‑Frequency Samples: 358 collected
+   First sample: {'timestamp_ns': 1777205927426860842, 'sample_start_ns': 1777205927416774230, 'sample_end_ns': 1777205927426860842, 'interval_ns': 10086612, 'pkg_start_uj': 14268273531, 'pkg_end_uj': 14268312166, 'core_start_uj': 9185233504, 'core_end_uj': 9185260177, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 566250015, 'uncore_end_uj': 566250015, 'pkg_energy_uj': 38635, 'core_energy_uj': 26673, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+
+======================================================================
+🔍 First 3 CPU samples:
+   Sample 0: {'timestamp_ns': 1777205927497824512, 'sample_start_ns': 1777205927397824512, 'sample_end_ns': 1777205927497824512, 'interval_ns': 100000000, 'cpu_util_percent': 4.45, 'cpu_busy_mhz': 1242.0, 'cpu_avg_mhz': 55.0, 'c1_residency': 0.07629999999999999, 'c2_residency': 0.094, 'c3_residency': 0.7841, 'c6_residency': 0.0, 'c7_residency': 0.7764, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 2.58, 'dram_power': 0.0, 'gpu_rc6': 0.9984000000000001, 'package_temp': 50.0, 'ipc': 1.7, 'extra_metrics_json': '{"TSC_MHz": 2796.0, "IRQ": 271.0, "GFXMHz": 400.0, "CorWatt": 1.06, "GFXWatt": 0.0}', 'l1d_cache_misses': 0, 'l2_cache_misses': 664326, 'l3_cache_hits': 599079, 'l3_cache_misses': 139577}
+   Sample 1: {'timestamp_ns': 1777205927597824512, 'sample_start_ns': 1777205927497824512, 'sample_end_ns': 1777205927597824512, 'interval_ns': 100000000, 'cpu_util_percent': 2.64, 'cpu_busy_mhz': 1115.0, 'cpu_avg_mhz': 29.0, 'c1_residency': 0.0161, 'c2_residency': 0.026099999999999998, 'c3_residency': 0.9319, 'c6_residency': 0.0, 'c7_residency': 0.9024, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 1.95, 'dram_power': 0.0, 'gpu_rc6': 0.9979, 'package_temp': 49.0, 'ipc': 0.63, 'extra_metrics_json': '{"TSC_MHz": 2802.0, "IRQ": 111.0, "GFXMHz": 400.0, "CorWatt": 0.62, "GFXWatt": 0.02}', 'l1d_cache_misses': 0, 'l2_cache_misses': 664326, 'l3_cache_hits': 599079, 'l3_cache_misses': 139577}llama_model_loader: loaded meta data with 23 key-value pairs and 201 tensors from /home/dpani/mydrive/models/tinyllama.gguf (version GGUF V3 (latest))
+llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+llama_model_loader: - kv   0:                       general.architecture str              = llama
+llama_model_loader: - kv   1:                               general.name str              = tinyllama_tinyllama-1.1b-chat-v1.0
+llama_model_loader: - kv   2:                       llama.context_length u32              = 2048
+llama_model_loader: - kv   3:                     llama.embedding_length u32              = 2048
+llama_model_loader: - kv   4:                          llama.block_count u32              = 22
+llama_model_loader: - kv   5:                  llama.feed_forward_length u32              = 5632
+llama_model_loader: - kv   6:                 llama.rope.dimension_count u32              = 64
+llama_model_loader: - kv   7:                 llama.attention.head_count u32              = 32
+llama_model_loader: - kv   8:              llama.attention.head_count_kv u32              = 4
+llama_model_loader: - kv   9:     llama.attention.layer_norm_rms_epsilon f32              = 0.000010
+llama_model_loader: - kv  10:                       llama.rope.freq_base f32              = 10000.000000
+llama_model_loader: - kv  11:                          general.file_type u32              = 15
+llama_model_loader: - kv  12:                       tokenizer.ggml.model str              = llama
+llama_model_loader: - kv  13:                      tokenizer.ggml.tokens arr[str,32000]   = ["<unk>", "<s>", "</s>", "<0x00>", "<...
+llama_model_loader: - kv  14:                      tokenizer.ggml.scores arr[f32,32000]   = [0.000000, 0.000000, 0.000000, 0.0000...
+llama_model_loader: - kv  15:                  tokenizer.ggml.token_type arr[i32,32000]   = [2, 3, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, ...
+llama_model_loader: - kv  16:                      tokenizer.ggml.merges arr[str,61249]   = ["▁ t", "e r", "i n", "▁ a", "e n...
+llama_model_loader: - kv  17:                tokenizer.ggml.bos_token_id u32              = 1
+llama_model_loader: - kv  18:                tokenizer.ggml.eos_token_id u32              = 2
+llama_model_loader: - kv  19:            tokenizer.ggml.unknown_token_id u32              = 0
+llama_model_loader: - kv  20:            tokenizer.ggml.padding_token_id u32              = 2
+llama_model_loader: - kv  21:                    tokenizer.chat_template str              = {% for message in messages %}\n{% if m...
+llama_model_loader: - kv  22:               general.quantization_version u32              = 2
+llama_model_loader: - type  f32:   45 tensors
+llama_model_loader: - type q4_K:  135 tensors
+llama_model_loader: - type q6_K:   21 tensors
+print_info: file format = GGUF V3 (latest)
+print_info: file type   = Q4_K - Medium
+print_info: file size   = 636.18 MiB (4.85 BPW) 
+init_tokenizer: initializing tokenizer for type 1
+load: 0 unused tokens
+load: control token:      1 '<s>' is not marked as EOG
+load: printing all EOG tokens:
+load:   - 2 ('</s>')
+load: special tokens cache size = 3
+load: token to piece cache size = 0.1684 MB
+print_info: arch                  = llama
+print_info: vocab_only            = 0
+print_info: no_alloc              = 0
+print_info: n_ctx_train           = 2048
+print_info: n_embd                = 2048
+print_info: n_embd_inp            = 2048
+print_info: n_layer               = 22
+print_info: n_head                = 32
+print_info: n_head_kv             = 4
+print_info: n_rot                 = 64
+print_info: n_swa                 = 0
+print_info: is_swa_any            = 0
+print_info: n_embd_head_k         = 64
+print_info: n_embd_head_v         = 64
+print_info: n_gqa                 = 8
+print_info: n_embd_k_gqa          = 256
+print_info: n_embd_v_gqa          = 256
+print_info: f_norm_eps            = 0.0e+00
+print_info: f_norm_rms_eps        = 1.0e-05
+print_info: f_clamp_kqv           = 0.0e+00
+print_info: f_max_alibi_bias      = 0.0e+00
+print_info: f_logit_scale         = 0.0e+00
+print_info: f_attn_scale          = 0.0e+00
+print_info: n_ff                  = 5632
+print_info: n_expert              = 0
+print_info: n_expert_used         = 0
+print_info: n_expert_groups       = 0
+print_info: n_group_used          = 0
+print_info: causal attn           = 1
+print_info: pooling type          = -1
+print_info: rope type             = 0
+print_info: rope scaling          = linear
+print_info: freq_base_train       = 10000.0
+print_info: freq_scale_train      = 1
+print_info: n_ctx_orig_yarn       = 2048
+print_info: rope_yarn_log_mul     = 0.0000
+print_info: rope_finetuned        = unknown
+print_info: model type            = 1B
+print_info: model params          = 1.10 B
+print_info: general.name          = tinyllama_tinyllama-1.1b-chat-v1.0
+print_info: vocab type            = SPM
+print_info: n_vocab               = 32000
+print_info: n_merges              = 0
+print_info: BOS token             = 1 '<s>'
+print_info: EOS token             = 2 '</s>'
+print_info: UNK token             = 0 '<unk>'
+print_info: PAD token             = 2 '</s>'
+print_info: LF token              = 13 '<0x0A>'
+print_info: EOG token             = 2 '</s>'
+print_info: max token length      = 48
+load_tensors: loading model tensors, this can take a while... (mmap = true, direct_io = false)
+load_tensors: layer   0 assigned to device CPU, is_swa = 0
+load_tensors: layer   1 assigned to device CPU, is_swa = 0
+load_tensors: layer   2 assigned to device CPU, is_swa = 0
+load_tensors: layer   3 assigned to device CPU, is_swa = 0
+load_tensors: layer   4 assigned to device CPU, is_swa = 0
+load_tensors: layer   5 assigned to device CPU, is_swa = 0
+load_tensors: layer   6 assigned to device CPU, is_swa = 0
+load_tensors: layer   7 assigned to device CPU, is_swa = 0
+load_tensors: layer   8 assigned to device CPU, is_swa = 0
+load_tensors: layer   9 assigned to device CPU, is_swa = 0
+load_tensors: layer  10 assigned to device CPU, is_swa = 0
+load_tensors: layer  11 assigned to device CPU, is_swa = 0
+load_tensors: layer  12 assigned to device CPU, is_swa = 0
+load_tensors: layer  13 assigned to device CPU, is_swa = 0
+load_tensors: layer  14 assigned to device CPU, is_swa = 0
+load_tensors: layer  15 assigned to device CPU, is_swa = 0
+load_tensors: layer  16 assigned to device CPU, is_swa = 0
+load_tensors: layer  17 assigned to device CPU, is_swa = 0
+load_tensors: layer  18 assigned to device CPU, is_swa = 0
+load_tensors: layer  19 assigned to device CPU, is_swa = 0
+load_tensors: layer  20 assigned to device CPU, is_swa = 0
+load_tensors: layer  21 assigned to device CPU, is_swa = 0
+load_tensors: layer  22 assigned to device CPU, is_swa = 0
+create_tensor: loading tensor token_embd.weight
+create_tensor: loading tensor output_norm.weight
+create_tensor: loading tensor output.weight
+create_tensor: loading tensor blk.0.attn_norm.weight
+create_tensor: loading tensor blk.0.attn_q.weight
+create_tensor: loading tensor blk.0.attn_k.weight
+create_tensor: loading tensor blk.0.attn_v.weight
+create_tensor: loading tensor blk.0.attn_output.weight
+create_tensor: loading tensor blk.0.ffn_norm.weight
+create_tensor: loading tensor blk.0.ffn_gate.weight
+create_tensor: loading tensor blk.0.ffn_down.weight
+create_tensor: loading tensor blk.0.ffn_up.weight
+create_tensor: loading tensor blk.1.attn_norm.weight
+create_tensor: loading tensor blk.1.attn_q.weight
+create_tensor: loading tensor blk.1.attn_k.weight
+create_tensor: loading tensor blk.1.attn_v.weight
+create_tensor: loading tensor blk.1.attn_output.weight
+create_tensor: loading tensor blk.1.ffn_norm.weight
+create_tensor: loading tensor blk.1.ffn_gate.weight
+create_tensor: loading tensor blk.1.ffn_down.weight
+create_tensor: loading tensor blk.1.ffn_up.weight
+create_tensor: loading tensor blk.2.attn_norm.weight
+create_tensor: loading tensor blk.2.attn_q.weight
+create_tensor: loading tensor blk.2.attn_k.weight
+create_tensor: loading tensor blk.2.attn_v.weight
+create_tensor: loading tensor blk.2.attn_output.weight
+create_tensor: loading tensor blk.2.ffn_norm.weight
+create_tensor: loading tensor blk.2.ffn_gate.weight
+create_tensor: loading tensor blk.2.ffn_down.weight
+create_tensor: loading tensor blk.2.ffn_up.weight
+create_tensor: loading tensor blk.3.attn_norm.weight
+create_tensor: loading tensor blk.3.attn_q.weight
+create_tensor: loading tensor blk.3.attn_k.weight
+create_tensor: loading tensor blk.3.attn_v.weight
+create_tensor: loading tensor blk.3.attn_output.weight
+create_tensor: loading tensor blk.3.ffn_norm.weight
+create_tensor: loading tensor blk.3.ffn_gate.weight
+create_tensor: loading tensor blk.3.ffn_down.weight
+create_tensor: loading tensor blk.3.ffn_up.weight
+create_tensor: loading tensor blk.4.attn_norm.weight
+create_tensor: loading tensor blk.4.attn_q.weight
+create_tensor: loading tensor blk.4.attn_k.weight
+create_tensor: loading tensor blk.4.attn_v.weight
+create_tensor: loading tensor blk.4.attn_output.weight
+create_tensor: loading tensor blk.4.ffn_norm.weight
+create_tensor: loading tensor blk.4.ffn_gate.weight
+create_tensor: loading tensor blk.4.ffn_down.weight
+create_tensor: loading tensor blk.4.ffn_up.weight
+create_tensor: loading tensor blk.5.attn_norm.weight
+create_tensor: loading tensor blk.5.attn_q.weight
+create_tensor: loading tensor blk.5.attn_k.weight
+create_tensor: loading tensor blk.5.attn_v.weight
+create_tensor: loading tensor blk.5.attn_output.weight
+create_tensor: loading tensor blk.5.ffn_norm.weight
+create_tensor: loading tensor blk.5.ffn_gate.weight
+create_tensor: loading tensor blk.5.ffn_down.weight
+create_tensor: loading tensor blk.5.ffn_up.weight
+create_tensor: loading tensor blk.6.attn_norm.weight
+create_tensor: loading tensor blk.6.attn_q.weight
+create_tensor: loading tensor blk.6.attn_k.weight
+create_tensor: loading tensor blk.6.attn_v.weight
+create_tensor: loading tensor blk.6.attn_output.weight
+create_tensor: loading tensor blk.6.ffn_norm.weight
+create_tensor: loading tensor blk.6.ffn_gate.weight
+create_tensor: loading tensor blk.6.ffn_down.weight
+create_tensor: loading tensor blk.6.ffn_up.weight
+create_tensor: loading tensor blk.7.attn_norm.weight
+create_tensor: loading tensor blk.7.attn_q.weight
+create_tensor: loading tensor blk.7.attn_k.weight
+create_tensor: loading tensor blk.7.attn_v.weight
+create_tensor: loading tensor blk.7.attn_output.weight
+create_tensor: loading tensor blk.7.ffn_norm.weight
+create_tensor: loading tensor blk.7.ffn_gate.weight
+create_tensor: loading tensor blk.7.ffn_down.weight
+create_tensor: loading tensor blk.7.ffn_up.weight
+create_tensor: loading tensor blk.8.attn_norm.weight
+create_tensor: loading tensor blk.8.attn_q.weight
+create_tensor: loading tensor blk.8.attn_k.weight
+create_tensor: loading tensor blk.8.attn_v.weight
+create_tensor: loading tensor blk.8.attn_output.weight
+create_tensor: loading tensor blk.8.ffn_norm.weight
+create_tensor: loading tensor blk.8.ffn_gate.weight
+create_tensor: loading tensor blk.8.ffn_down.weight
+create_tensor: loading tensor blk.8.ffn_up.weight
+create_tensor: loading tensor blk.9.attn_norm.weight
+create_tensor: loading tensor blk.9.attn_q.weight
+create_tensor: loading tensor blk.9.attn_k.weight
+create_tensor: loading tensor blk.9.attn_v.weight
+create_tensor: loading tensor blk.9.attn_output.weight
+create_tensor: loading tensor blk.9.ffn_norm.weight
+create_tensor: loading tensor blk.9.ffn_gate.weight
+create_tensor: loading tensor blk.9.ffn_down.weight
+create_tensor: loading tensor blk.9.ffn_up.weight
+create_tensor: loading tensor blk.10.attn_norm.weight
+create_tensor: loading tensor blk.10.attn_q.weight
+create_tensor: loading tensor blk.10.attn_k.weight
+create_tensor: loading tensor blk.10.attn_v.weight
+create_tensor: loading tensor blk.10.attn_output.weight
+create_tensor: loading tensor blk.10.ffn_norm.weight
+create_tensor: loading tensor blk.10.ffn_gate.weight
+create_tensor: loading tensor blk.10.ffn_down.weight
+create_tensor: loading tensor blk.10.ffn_up.weight
+create_tensor: loading tensor blk.11.attn_norm.weight
+create_tensor: loading tensor blk.11.attn_q.weight
+create_tensor: loading tensor blk.11.attn_k.weight
+create_tensor: loading tensor blk.11.attn_v.weight
+create_tensor: loading tensor blk.11.attn_output.weight
+create_tensor: loading tensor blk.11.ffn_norm.weight
+create_tensor: loading tensor blk.11.ffn_gate.weight
+create_tensor: loading tensor blk.11.ffn_down.weight
+create_tensor: loading tensor blk.11.ffn_up.weight
+create_tensor: loading tensor blk.12.attn_norm.weight
+create_tensor: loading tensor blk.12.attn_q.weight
+create_tensor: loading tensor blk.12.attn_k.weight
+create_tensor: loading tensor blk.12.attn_v.weight
+create_tensor: loading tensor blk.12.attn_output.weight
+create_tensor: loading tensor blk.12.ffn_norm.weight
+create_tensor: loading tensor blk.12.ffn_gate.weight
+create_tensor: loading tensor blk.12.ffn_down.weight
+create_tensor: loading tensor blk.12.ffn_up.weight
+create_tensor: loading tensor blk.13.attn_norm.weight
+create_tensor: loading tensor blk.13.attn_q.weight
+create_tensor: loading tensor blk.13.attn_k.weight
+create_tensor: loading tensor blk.13.attn_v.weight
+create_tensor: loading tensor blk.13.attn_output.weight
+create_tensor: loading tensor blk.13.ffn_norm.weight
+create_tensor: loading tensor blk.13.ffn_gate.weight
+create_tensor: loading tensor blk.13.ffn_down.weight
+create_tensor: loading tensor blk.13.ffn_up.weight
+create_tensor: loading tensor blk.14.attn_norm.weight
+create_tensor: loading tensor blk.14.attn_q.weight
+create_tensor: loading tensor blk.14.attn_k.weight
+create_tensor: loading tensor blk.14.attn_v.weight
+create_tensor: loading tensor blk.14.attn_output.weight
+create_tensor: loading tensor blk.14.ffn_norm.weight
+create_tensor: loading tensor blk.14.ffn_gate.weight
+create_tensor: loading tensor blk.14.ffn_down.weight
+create_tensor: loading tensor blk.14.ffn_up.weight
+create_tensor: loading tensor blk.15.attn_norm.weight
+create_tensor: loading tensor blk.15.attn_q.weight
+create_tensor: loading tensor blk.15.attn_k.weight
+create_tensor: loading tensor blk.15.attn_v.weight
+create_tensor: loading tensor blk.15.attn_output.weight
+create_tensor: loading tensor blk.15.ffn_norm.weight
+create_tensor: loading tensor blk.15.ffn_gate.weight
+create_tensor: loading tensor blk.15.ffn_down.weight
+create_tensor: loading tensor blk.15.ffn_up.weight
+create_tensor: loading tensor blk.16.attn_norm.weight
+create_tensor: loading tensor blk.16.attn_q.weight
+create_tensor: loading tensor blk.16.attn_k.weight
+create_tensor: loading tensor blk.16.attn_v.weight
+create_tensor: loading tensor blk.16.attn_output.weight
+create_tensor: loading tensor blk.16.ffn_norm.weight
+create_tensor: loading tensor blk.16.ffn_gate.weight
+create_tensor: loading tensor blk.16.ffn_down.weight
+create_tensor: loading tensor blk.16.ffn_up.weight
+create_tensor: loading tensor blk.17.attn_norm.weight
+create_tensor: loading tensor blk.17.attn_q.weight
+create_tensor: loading tensor blk.17.attn_k.weight
+create_tensor: loading tensor blk.17.attn_v.weight
+create_tensor: loading tensor blk.17.attn_output.weight
+create_tensor: loading tensor blk.17.ffn_norm.weight
+create_tensor: loading tensor blk.17.ffn_gate.weight
+create_tensor: loading tensor blk.17.ffn_down.weight
+create_tensor: loading tensor blk.17.ffn_up.weight
+create_tensor: loading tensor blk.18.attn_norm.weight
+create_tensor: loading tensor blk.18.attn_q.weight
+create_tensor: loading tensor blk.18.attn_k.weight
+create_tensor: loading tensor blk.18.attn_v.weight
+create_tensor: loading tensor blk.18.attn_output.weight
+create_tensor: loading tensor blk.18.ffn_norm.weight
+create_tensor: loading tensor blk.18.ffn_gate.weight
+create_tensor: loading tensor blk.18.ffn_down.weight
+create_tensor: loading tensor blk.18.ffn_up.weight
+create_tensor: loading tensor blk.19.attn_norm.weight
+create_tensor: loading tensor blk.19.attn_q.weight
+create_tensor: loading tensor blk.19.attn_k.weight
+create_tensor: loading tensor blk.19.attn_v.weight
+create_tensor: loading tensor blk.19.attn_output.weight
+create_tensor: loading tensor blk.19.ffn_norm.weight
+create_tensor: loading tensor blk.19.ffn_gate.weight
+create_tensor: loading tensor blk.19.ffn_down.weight
+create_tensor: loading tensor blk.19.ffn_up.weight
+create_tensor: loading tensor blk.20.attn_norm.weight
+create_tensor: loading tensor blk.20.attn_q.weight
+create_tensor: loading tensor blk.20.attn_k.weight
+create_tensor: loading tensor blk.20.attn_v.weight
+create_tensor: loading tensor blk.20.attn_output.weight
+create_tensor: loading tensor blk.20.ffn_norm.weight
+create_tensor: loading tensor blk.20.ffn_gate.weight
+create_tensor: loading tensor blk.20.ffn_down.weight
+create_tensor: loading tensor blk.20.ffn_up.weight
+create_tensor: loading tensor blk.21.attn_norm.weight
+create_tensor: loading tensor blk.21.attn_q.weight
+create_tensor: loading tensor blk.21.attn_k.weight
+create_tensor: loading tensor blk.21.attn_v.weight
+create_tensor: loading tensor blk.21.attn_output.weight
+create_tensor: loading tensor blk.21.ffn_norm.weight
+create_tensor: loading tensor blk.21.ffn_gate.weight
+create_tensor: loading tensor blk.21.ffn_down.weight
+create_tensor: loading tensor blk.21.ffn_up.weight
+done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 66 others) cannot be used with preferred buffer type CPU_REPACK, using CPU instead
+load_tensors:   CPU_Mapped model buffer size =   636.18 MiB
+load_tensors:   CPU_REPACK model buffer size =   455.06 MiB
+..............repack: repack tensor blk.0.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.0.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.0.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.0.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.0.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.1.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.1.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.1.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.1.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.1.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.2.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.2.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.2.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.2.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.2.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.2.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.2.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.3.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.3.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.3.attn_v.weight with q4_K_8x8
+.repack: repack tensor blk.3.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.3.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.3.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.3.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.4.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.4.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.4.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.4.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.4.ffn_up.weight with q4_K_8x8
+repack: repack tensor blk.5.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.5.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.5.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.5.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.5.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.5.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.5.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.6.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.6.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.6.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.6.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.6.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.6.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.6.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.7.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.7.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.7.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.7.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.7.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.8.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.8.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.8.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.8.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.8.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.9.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.9.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.9.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.9.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.9.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.10.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.10.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.10.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.10.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.10.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.10.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.10.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.11.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.11.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.11.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.11.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.11.ffn_gate.weight with q4_K_8x8
+repack: repack tensor blk.11.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.11.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.12.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.12.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.12.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.12.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.12.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.13.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.13.attn_k.weight with q4_K_8x8
+.repack: repack tensor blk.13.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.13.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.13.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.13.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.13.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.14.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.14.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.14.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.14.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.14.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.14.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.14.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.15.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.15.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.15.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.15.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.15.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.16.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.16.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.16.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.16.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.16.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.16.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.16.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.17.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.17.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.17.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.17.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.17.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.17.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.17.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.18.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.18.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.18.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.18.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.18.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.19.attn_q.weight with q4_K_8x8
+.repack: repack tensor blk.19.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.19.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.19.attn_output.weight with q4_K_8x8
+repack: repack tensor blk.19.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.19.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.19.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.20.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.20.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.20.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.20.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.20.ffn_up.weight with q4_K_8x8
+.repack: repack tensor blk.21.attn_q.weight with q4_K_8x8
+repack: repack tensor blk.21.attn_k.weight with q4_K_8x8
+repack: repack tensor blk.21.attn_v.weight with q4_K_8x8
+repack: repack tensor blk.21.attn_output.weight with q4_K_8x8
+.repack: repack tensor blk.21.ffn_gate.weight with q4_K_8x8
+.repack: repack tensor blk.21.ffn_down.weight with q4_K_8x8
+.repack: repack tensor blk.21.ffn_up.weight with q4_K_8x8
+.
+llama_context: constructing llama_context
+llama_context: n_seq_max     = 1
+llama_context: n_ctx         = 512
+llama_context: n_ctx_seq     = 512
+llama_context: n_batch       = 512
+llama_context: n_ubatch      = 512
+llama_context: causal_attn   = 1
+llama_context: flash_attn    = disabled
+llama_context: kv_unified    = false
+llama_context: freq_base     = 10000.0
+llama_context: freq_scale    = 1
+llama_context: n_ctx_seq (512) < n_ctx_train (2048) -- the full capacity of the model will not be utilized
+set_abort_callback: call
+llama_context:        CPU  output buffer size =     0.12 MiB
+llama_kv_cache: layer   0: dev = CPU
+llama_kv_cache: layer   1: dev = CPU
+llama_kv_cache: layer   2: dev = CPU
+llama_kv_cache: layer   3: dev = CPU
+llama_kv_cache: layer   4: dev = CPU
+llama_kv_cache: layer   5: dev = CPU
+llama_kv_cache: layer   6: dev = CPU
+llama_kv_cache: layer   7: dev = CPU
+llama_kv_cache: layer   8: dev = CPU
+llama_kv_cache: layer   9: dev = CPU
+llama_kv_cache: layer  10: dev = CPU
+llama_kv_cache: layer  11: dev = CPU
+llama_kv_cache: layer  12: dev = CPU
+llama_kv_cache: layer  13: dev = CPU
+llama_kv_cache: layer  14: dev = CPU
+llama_kv_cache: layer  15: dev = CPU
+llama_kv_cache: layer  16: dev = CPU
+llama_kv_cache: layer  17: dev = CPU
+llama_kv_cache: layer  18: dev = CPU
+llama_kv_cache: layer  19: dev = CPU
+llama_kv_cache: layer  20: dev = CPU
+llama_kv_cache: layer  21: dev = CPU
+llama_kv_cache:        CPU KV buffer size =    11.00 MiB
+llama_kv_cache: size =   11.00 MiB (   512 cells,  22 layers,  1/1 seqs), K (f16):    5.50 MiB, V (f16):    5.50 MiB
+llama_context: enumerating backends
+llama_context: backend_ptrs.size() = 1
+sched_reserve: reserving ...
+sched_reserve: max_nodes = 1608
+sched_reserve: reserving full memory module
+sched_reserve: worst-case: n_tokens = 512, n_seqs = 1, n_outputs = 1
+sched_reserve: resolving fused Gated Delta Net support:
+graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1
+sched_reserve: fused Gated Delta Net (autoregressive) enabled
+graph_reserve: reserving a graph for ubatch with n_tokens =   16, n_seqs =  1, n_outputs =   16
+sched_reserve: fused Gated Delta Net (chunked) enabled
+graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =  512
+graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1
+graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =  512
+sched_reserve:        CPU compute buffer size =    70.50 MiB
+sched_reserve: graph nodes  = 798
+sched_reserve: graph splits = 1
+sched_reserve: reserve took 1.50 ms, sched copies = 1
+CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | AVX512 = 1 | AVX512_VBMI = 1 | AVX512_VNNI = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+Model metadata: {'tokenizer.chat_template': "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'system' %}\n{{ '<|system|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'assistant' %}\n{{ '<|assistant|>\n'  + message['content'] + eos_token }}\n{% endif %}\n{% if loop.last and add_generation_prompt %}\n{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}", 'tokenizer.ggml.padding_token_id': '2', 'tokenizer.ggml.unknown_token_id': '0', 'tokenizer.ggml.eos_token_id': '2', 'general.architecture': 'llama', 'llama.rope.freq_base': '10000.000000', 'llama.context_length': '2048', 'general.name': 'tinyllama_tinyllama-1.1b-chat-v1.0', 'llama.embedding_length': '2048', 'llama.feed_forward_length': '5632', 'llama.attention.layer_norm_rms_epsilon': '0.000010', 'llama.rope.dimension_count': '64', 'tokenizer.ggml.bos_token_id': '1', 'llama.attention.head_count': '32', 'llama.block_count': '22', 'llama.attention.head_count_kv': '4', 'general.quantization_version': '2', 'tokenizer.ggml.model': 'llama', 'general.file_type': '15'}
+Available chat formats from metadata: chat_template.default
+Using gguf chat template: {% for message in messages %}
+{% if message['role'] == 'user' %}
+{{ '<|user|>
+' + message['content'] + eos_token }}
+{% elif message['role'] == 'system' %}
+{{ '<|system|>
+' + message['content'] + eos_token }}
+{% elif message['role'] == 'assistant' %}
+{{ '<|assistant|>
+'  + message['content'] + eos_token }}
+{% endif %}
+{% if loop.last and add_generation_prompt %}
+{{ '<|assistant|>' }}
+{% endif %}
+{% endfor %}
+Using chat eos_token: </s>
+Using chat bos_token: <s>
+llama_perf_context_print:        load time =     741.54 ms
+llama_perf_context_print: prompt eval time =     741.34 ms /   186 tokens (    3.99 ms per token,   250.90 tokens per second)
+llama_perf_context_print:        eval time =    9935.07 ms /   325 runs   (   30.57 ms per token,    32.71 tokens per second)
+llama_perf_context_print:       total time =   10787.73 ms /   511 tokens
+llama_perf_context_print:    graphs reused =        323
+Llama.generate: 3 prefix-match hit, remaining 56 prompt tokens to eval
+llama_perf_context_print:        load time =     741.54 ms
+llama_perf_context_print: prompt eval time =     254.98 ms /    56 tokens (    4.55 ms per token,   219.62 tokens per second)
+llama_perf_context_print:        eval time =    7622.83 ms /   252 runs   (   30.25 ms per token,    33.06 tokens per second)
+llama_perf_context_print:       total time =    7953.71 ms /   308 tokens
+llama_perf_context_print:    graphs reused =        250
+Llama.generate: 1 prefix-match hit, remaining 463 prompt tokens to eval
+llama_perf_context_print:        load time =     741.54 ms
+llama_perf_context_print: prompt eval time =    2297.70 ms /   463 tokens (    4.96 ms per token,   201.51 tokens per second)
+llama_perf_context_print:        eval time =     870.86 ms /    28 runs   (   31.10 ms per token,    32.15 tokens per second)
+llama_perf_context_print:       total time =    3173.47 ms /   491 tokens
+llama_perf_context_print:    graphs reused =         27
+EOF reached on turbostat stdout
+
+   Sample 2: {'timestamp_ns': 1777205927697824512, 'sample_start_ns': 1777205927597824512, 'sample_end_ns': 1777205927697824512, 'interval_ns': 100000000, 'cpu_util_percent': 2.42, 'cpu_busy_mhz': 1078.0, 'cpu_avg_mhz': 26.0, 'c1_residency': 0.013000000000000001, 'c2_residency': 0.0398, 'c3_residency': 0.924, 'c6_residency': 0.0, 'c7_residency': 0.9103, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 2.02, 'dram_power': 0.0, 'gpu_rc6': 1.0053, 'package_temp': 50.0, 'ipc': 0.64, 'extra_metrics_json': '{"TSC_MHz": 2803.0, "IRQ": 118.0, "GFXMHz": 400.0, "CorWatt": 0.64, "GFXWatt": 0.02}', 'l1d_cache_misses': 0, 'l2_cache_misses': 664326, 'l3_cache_hits': 599079, 'l3_cache_misses': 139577}
+🔍 DEBUG - Using MIN baseline: idle_uj=12.926J, idle_core=3.478J, idle_uncore=9.448J
+🔍 DEBUG - Page faults extracted: major=0, minor=16789, total=16789
+🔴 ANALYZER_VALUE: c2=1.646s, c3=0.000s
+🔴 ANALYZER_KEYS: c2=1.6457911267857144, c3=0.0
+🔍 DEBUG - Captured 3 orchestration events from executor
+🔍 DEBUG HARNESS - orchestration_events in result: True
+🔍 DEBUG HARNESS - Number of events: 3
+🔍 DEBUG HARNESS - First event keys: dict_keys(['phase', 'event_type', 'start_time_ns', 'end_time_ns', 'duration_ns', 'metadata'])
+✅ Harness complete: 6.8415J workload energy
+🔍 RUNS DEBUG - pkg_raw_uj: 19767466, baseline_energy_uj: 12926011
+🔍 RUNS DEBUG - dynamic will be: 6841455
+         ✅ Rep 2/2 saved
+   📊 Progress: 2/2 runs
+
+   ✅ Experiment 767 completed with 2 runs
+
+   ✅ groq | GSM8K Arithmetic complete:
+      Tax: 0.00x [nan, nan]
+
+======================================================================
+📋 TASK: Factual Question (Level 1)
+======================================================================
+
+   ============================================================
+   📋 llama_cpp | Factual Question
+   ============================================================
+
+🔍 Pre-flight checks:
+
+✅ MSR helper: OK
+✅ Config files: OK
+✅ llama-cpp-python: OK
+✅ Model file: /home/dpani/mydrive/models/tinyllama.gguf
+
+✅ All checks passed! Ready to run experiments.
+
+   Optimizer:    No
+   ✅ Using existing environment: 37 (hash: b719365ff056f1d2)
+✅ Synced 45 task categories from YAML
+   Categories:
+      • reasoning: 7
+      • media: 7
+      • orchestration: 6
+      • coding: 6
+      • qa: 5
+      • summarization: 3
+      • extraction: 2
+      • classification: 2
+      • web_search: 1
+      • translation: 1
+      • research: 1
+      • planning: 1
+      • debugging: 1
+      • data_analysis: 1
+      • custom: 1
+      • creative_writing: 1
+
+      ──────────────────────────────────────────────────
+      Repetition 1/2
+      ──────────────────────────────────────────────────
+   Raw value: 2284978176 (hex: 0x88320000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - START:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔔 EVENT CREATED: planning.planning
+🔍 DEBUG - added prompt: 59, now tokens[prompt] = 59
+🔍 DEBUG - added completion: 252, now tokens[completion] = 252
+🔍 DEBUG - added total: 311, now tokens[total] = 311
+🔔 EVENT CREATED: execution.execution
+🔍 DEBUG - accumulated tokens: {'prompt': 59, 'completion': 252, 'total': 311}
+🔍 DEBUG - tokens keys: dict_keys(['prompt', 'completion', 'total'])
+🔔 EVENT CREATED: synthesis.synthesis
+🔍 DEBUG - Number of samples: 2219
+🔍 DEBUG - First sample type: <class 'dict'>
+🔍 DEBUG - First sample length: 16
+🔍 DEBUG - First sample content: {'timestamp_ns': 1777205934931810387, 'sample_start_ns': 1777205934921741913, 'sample_end_ns': 1777205934931810387, 'interval_ns': 10068474, 'pkg_start_uj': 14290024513, 'pkg_end_uj': 14290084816, 'core_start_uj': 9194493551, 'core_end_uj': 9194526999, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 566930616, 'uncore_end_uj': 566938306, 'pkg_energy_uj': 60303, 'core_energy_uj': 33448, 'dram_energy_uj': 0, 'uncore_energy_uj': 7690}
+🔍 DEBUG - Second sample content: {'timestamp_ns': 1777205934941827815, 'sample_start_ns': 1777205934931980502, 'sample_end_ns': 1777205934941827815, 'interval_ns': 9847313, 'pkg_start_uj': 14290084816, 'pkg_end_uj': 14290218849, 'core_start_uj': 9194526999, 'core_end_uj': 9194637960, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 566938306, 'uncore_end_uj': 566943067, 'pkg_energy_uj': 134033, 'core_energy_uj': 110961, 'dram_energy_uj': 0, 'uncore_energy_uj': 4761}
+
+🔍 RAW TURBOSTAT LINES (433 total):
+   Line  0: 'Avg_MHz	Busy%	Bzy_MHz	TSC_MHz	IPC	IRQ	C1ACPI%	C2ACPI%	C3ACPI%	CPU%c6	CPU%c7	PkgTmp	GFX%rc6	GFXMHz	Pkg%pc8	Pkg%pc9	Pk%pc10	PkgWatt	CorWatt	GFXWatt	RAMWatt'
+   Line  1: '723	18.48	3905	2808	1.66	805	28.80	14.73	38.35	0.00	29.12	62	70.30	400	0.00	0.00	0.00	15.87	13.14	0.76	0.00'
+   Line  2: '696	17.35	4011	2803	1.29	614	17.40	15.34	50.08	0.00	41.20	61	70.29	400	0.00	0.00	0.00	15.42	12.69	0.74	0.00'
+   Line  3: '2284	56.21	4064	2803	1.34	845	10.94	5.84	27.00	0.00	16.69	79	70.62	400	0.00	0.00	0.00	30.44	27.55	0.93	0.00'
+   Line  4: '4076	99.77	4082	2805	1.27	1036	0.00	0.00	0.00	0.00	0.00	89	76.41	400	0.00	0.00	0.00	50.86	48.10	0.78	0.00'
+   Line  5: '4020	99.77	4035	2799	1.29	1072	0.00	0.00	0.00	0.00	0.00	85	80.42	400	0.00	0.00	0.00	49.73	47.08	0.68	0.00'
+   Line  6: '4003	99.77	4026	2794	1.44	1084	0.00	0.00	0.00	0.00	0.00	86	93.30	400	0.00	0.00	0.00	49.39	47.26	0.15	0.00'
+   Line  7: '3978	99.77	3968	2817	1.36	965	0.00	0.00	0.00	0.00	0.00	88	102.97	400	0.00	0.00	0.00	49.75	47.71	0.00	0.00'
+   Line  8: '3952	99.77	3960	2803	1.38	922	0.00	0.00	0.00	0.00	0.00	90	99.12	400	0.00	0.00	0.00	48.78	46.79	0.00	0.00'
+   Line  9: '3932	99.77	3950	2797	1.37	983	0.00	0.00	0.00	0.00	0.00	90	100.06	400	0.00	0.00	0.00	47.86	45.89	0.00	0.00'
+📋 Header detected: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC', 'IRQ', 'C1ACPI%', 'C2ACPI%', 'C3ACPI%', 'CPU%c6', 'CPU%c7', 'PkgTmp', 'GFX%rc6', 'GFXMHz', 'Pkg%pc8', 'Pkg%pc9', 'Pk%pc10', 'PkgWatt', 'CorWatt', 'GFXWatt', 'RAMWatt']
+✅ Found 432 data rows
+✅ Parsed 432 rows with columns: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC']...
+   Raw value: 2284716032 (hex: 0x882e0000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - END:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔍 DEBUG scheduler_delta keys: ['voluntary_switches', 'involuntary_switches', 'user_time', 'system_time', 'load1', 'load5', 'load15', 'runnable', 'total_tasks', 'last_pid', 'swap']
+🔍 DEBUG run queue value: 0
+🔵 MSR_READER - _cstate_start exists: True
+🔵 MSR_READER - _cstate_start: {'timestamp': 1777205934.9205055, 'counters': {'c2': 3797723210917, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER - current_cstates: {'timestamp': 1777205979.52877, 'counters': {'c2': 3802973532174, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER_ID: 123747072387456
+🔵 MSR_READER_VALUE: c2=1.875s
+🔵 MSR_READER_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds']
+   Raw value: 2284650496 (hex: 0x882d0000)
+   Decoded: now=0, log=0
+   Raw value: 2284716032 (hex: 0x882e0000)
+   Decoded: now=0, log=0
+🟢 ENGINE_ID: 123747072387456
+🟢 ENGINE_VALUE: c2=1.875s
+🟢 ENGINE_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+🔥 THERMAL DERIVED:
+   during_experiment: 0
+   now_active: 0
+   since_boot: 0
+🟡 RAW_ID: 123747072387456
+🟡 RAW_VALUE: c2=1.875s
+🟡 RAW_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+======================================================================Llama.generate: 1 prefix-match hit, remaining 185 prompt tokens to eval
+llama_perf_context_print:        load time =     741.54 ms
+llama_perf_context_print: prompt eval time =     786.71 ms /   185 tokens (    4.25 ms per token,   235.16 tokens per second)
+llama_perf_context_print:        eval time =    9954.16 ms /   325 runs   (   30.63 ms per token,    32.65 tokens per second)
+llama_perf_context_print:       total time =   10855.05 ms /   510 tokens
+llama_perf_context_print:    graphs reused =        323
+Llama.generate: 3 prefix-match hit, remaining 56 prompt tokens to eval
+llama_perf_context_print:        load time =     741.54 ms
+llama_perf_context_print: prompt eval time =     263.56 ms /    56 tokens (    4.71 ms per token,   212.47 tokens per second)
+llama_perf_context_print:        eval time =   10910.42 ms /   359 runs   (   30.39 ms per token,    32.90 tokens per second)
+llama_perf_context_print:       total time =   11307.87 ms /   415 tokens
+llama_perf_context_print:    graphs reused =        357
+LlamaCpp inference failed: Requested tokens (588) exceed context window of 512
+EOF reached on turbostat stdout
+
+📊 ENERGY ENGINE COMPLETE SUMMARY
+======================================================================
+
+⏱️  Duration: 44.637s
+   Start: 1777205934.905, End: 1777205979.542
+
+⚡ RAPL Energy (µJ):
+   uncore:      3430167 µJ (3.430167 J)
+   core:    695352041 µJ (695.352041 J)
+   package-0:    792224351 µJ (792.224351 J)
+
+📈 Performance Counters:
+   Instructions: 2,804,416,108
+   Cycles:       6,922,150,222
+   IPC:          0.41
+   Cache Refs:   196,296,443
+   Cache Misses: 49,782,288
+   Miss Rate:    25.36%
+   Page Faults:  2230 (major=0, minor=2230)
+   Ctx Switches: vol=26807, invol=0
+   Migrations:   2,092
+
+🌡️ Turbostat Summary (over 44.42s, 432 samples):
+   Package Temp (°C): mean=68.1
+
+   First 3 turbostat samples:
+      Sample 1: {'Avg_MHz': 723.0, 'Busy%': 18.48, 'Bzy_MHz': 3905.0, 'TSC_MHz': 2808.0, 'IPC': 1.66, 'IRQ': 805.0, 'C1ACPI%': 28.8, 'C2ACPI%': 14.73, 'C3ACPI%': 38.35, 'CPU%c6': 0.0, 'CPU%c7': 29.12, 'PkgTmp': 62.0, 'GFX%rc6': 70.3, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 15.87, 'CorWatt': 13.14, 'GFXWatt': 0.76, 'RAMWatt': 0.0}
+      Sample 2: {'Avg_MHz': 696.0, 'Busy%': 17.35, 'Bzy_MHz': 4011.0, 'TSC_MHz': 2803.0, 'IPC': 1.29, 'IRQ': 614.0, 'C1ACPI%': 17.4, 'C2ACPI%': 15.34, 'C3ACPI%': 50.08, 'CPU%c6': 0.0, 'CPU%c7': 41.2, 'PkgTmp': 61.0, 'GFX%rc6': 70.29, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 15.42, 'CorWatt': 12.69, 'GFXWatt': 0.74, 'RAMWatt': 0.0}
+      Sample 3: {'Avg_MHz': 2284.0, 'Busy%': 56.21, 'Bzy_MHz': 4064.0, 'TSC_MHz': 2803.0, 'IPC': 1.34, 'IRQ': 845.0, 'C1ACPI%': 10.94, 'C2ACPI%': 5.84, 'C3ACPI%': 27.0, 'CPU%c6': 0.0, 'CPU%c7': 16.69, 'PkgTmp': 79.0, 'GFX%rc6': 70.62, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 30.44, 'CorWatt': 27.55, 'GFXWatt': 0.93, 'RAMWatt': 0.0}
+
+🔧 MSR Metrics:
+
+🔄 Scheduler Metrics:
+   Voluntary Ctx Sw:   378
+   Involuntary Ctx Sw: 733
+   Thread Migrations:  0
+   Run Queue Length:    0.00
+   Kernel Time:         139.00 ms
+   User Time:           10192.00 ms
+
+📊 High‑Frequency Samples: 2219 collected
+   First sample: {'timestamp_ns': 1777205934931810387, 'sample_start_ns': 1777205934921741913, 'sample_end_ns': 1777205934931810387, 'interval_ns': 10068474, 'pkg_start_uj': 14290024513, 'pkg_end_uj': 14290084816, 'core_start_uj': 9194493551, 'core_end_uj': 9194526999, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 566930616, 'uncore_end_uj': 566938306, 'pkg_energy_uj': 60303, 'core_energy_uj': 33448, 'dram_energy_uj': 0, 'uncore_energy_uj': 7690}
+
+======================================================================
+🔍 First 3 CPU samples:
+   Sample 0: {'timestamp_ns': 1777205935005091072, 'sample_start_ns': 1777205934905091072, 'sample_end_ns': 1777205935005091072, 'interval_ns': 100000000, 'cpu_util_percent': 18.48, 'cpu_busy_mhz': 3905.0, 'cpu_avg_mhz': 723.0, 'c1_residency': 0.28800000000000003, 'c2_residency': 0.14730000000000001, 'c3_residency': 0.3835, 'c6_residency': 0.0, 'c7_residency': 0.2912, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 15.87, 'dram_power': 0.0, 'gpu_rc6': 0.703, 'package_temp': 62.0, 'ipc': 1.66, 'extra_metrics_json': '{"TSC_MHz": 2808.0, "IRQ": 805.0, "GFXMHz": 400.0, "CorWatt": 13.14, "GFXWatt": 0.76}', 'l1d_cache_misses': 0, 'l2_cache_misses': 506976, 'l3_cache_hits': 454389, 'l3_cache_misses': 115236}
+   Sample 1: {'timestamp_ns': 1777205935105091072, 'sample_start_ns': 1777205935005091072, 'sample_end_ns': 1777205935105091072, 'interval_ns': 100000000, 'cpu_util_percent': 17.35, 'cpu_busy_mhz': 4011.0, 'cpu_avg_mhz': 696.0, 'c1_residency': 0.174, 'c2_residency': 0.1534, 'c3_residency': 0.5008, 'c6_residency': 0.0, 'c7_residency': 0.41200000000000003, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 15.42, 'dram_power': 0.0, 'gpu_rc6': 0.7029000000000001, 'package_temp': 61.0, 'ipc': 1.29, 'extra_metrics_json': '{"TSC_MHz": 2803.0, "IRQ": 614.0, "GFXMHz": 400.0, "CorWatt": 12.69, "GFXWatt": 0.74}', 'l1d_cache_misses': 0, 'l2_cache_misses': 506976, 'l3_cache_hits': 454389, 'l3_cache_misses': 115236}
+   Sample 2: {'timestamp_ns': 1777205935205091072, 'sample_start_ns': 1777205935105091072, 'sample_end_ns': 1777205935205091072, 'interval_ns': 100000000, 'cpu_util_percent': 56.21, 'cpu_busy_mhz': 4064.0, 'cpu_avg_mhz': 2284.0, 'c1_residency': 0.1094, 'c2_residency': 0.0584, 'c3_residency': 0.27, 'c6_residency': 0.0, 'c7_residency': 0.16690000000000002, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 30.44, 'dram_power': 0.0, 'gpu_rc6': 0.7062, 'package_temp': 79.0, 'ipc': 1.34, 'extra_metrics_json': '{"TSC_MHz": 2803.0, "IRQ": 845.0, "GFXMHz": 400.0, "CorWatt": 27.55, "GFXWatt": 0.93}', 'l1d_cache_misses': 0, 'l2_cache_misses': 506976, 'l3_cache_hits': 454389, 'l3_cache_misses': 115236}
+🔍 DEBUG - Using MIN baseline: idle_uj=78.735J, idle_core=21.185J, idle_uncore=57.550J
+🔍 DEBUG - Page faults extracted: major=0, minor=2230, total=2230
+🔴 ANALYZER_VALUE: c2=1.875s, c3=0.000s
+🔴 ANALYZER_KEYS: c2=1.8751147346428572, c3=0.0
+🔍 DEBUG - Captured 3 orchestration events from executor
+🔍 DEBUG HARNESS - orchestration_events in result: True
+🔍 DEBUG HARNESS - Number of events: 3
+🔍 DEBUG HARNESS - First event keys: dict_keys(['phase', 'event_type', 'start_time_ns', 'end_time_ns', 'duration_ns', 'metadata'])
+✅ Harness complete: 713.4890J workload energy
+🔍 RUNS DEBUG - pkg_raw_uj: 792224351, baseline_energy_uj: 78735352
+🔍 RUNS DEBUG - dynamic will be: 713488999
+         ✅ Rep 1/2 saved
+   📊 Progress: 1/2 runs
+
+         ⏳ Cooling down 10s...
+
+      ──────────────────────────────────────────────────
+      Repetition 2/2
+      ──────────────────────────────────────────────────
+   Raw value: 2284912640 (hex: 0x88310000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - START:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔔 EVENT CREATED: planning.planning
+🔍 DEBUG - added prompt: 59, now tokens[prompt] = 59
+🔍 DEBUG - added completion: 359, now tokens[completion] = 359
+🔍 DEBUG - added total: 418, now tokens[total] = 418
+🔔 EVENT CREATED: execution.execution
+🔍 DEBUG - accumulated tokens: {'prompt': 59, 'completion': 359, 'total': 418}
+🔍 DEBUG - tokens keys: dict_keys(['prompt', 'completion', 'total'])
+🔔 EVENT CREATED: synthesis.synthesis
+🔍 DEBUG - Number of samples: 2217
+🔍 DEBUG - First sample type: <class 'dict'>
+🔍 DEBUG - First sample length: 16
+🔍 DEBUG - First sample content: {'timestamp_ns': 1777205989763582440, 'sample_start_ns': 1777205989753520770, 'sample_end_ns': 1777205989763582440, 'interval_ns': 10061670, 'pkg_start_uj': 15101927830, 'pkg_end_uj': 15102008335, 'core_start_uj': 9895920223, 'core_end_uj': 9895977962, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 571110598, 'uncore_end_uj': 571114199, 'pkg_energy_uj': 80505, 'core_energy_uj': 57739, 'dram_energy_uj': 0, 'uncore_energy_uj': 3601}
+🔍 DEBUG - Second sample content: {'timestamp_ns': 1777205989773581939, 'sample_start_ns': 1777205989763750573, 'sample_end_ns': 1777205989773581939, 'interval_ns': 9831366, 'pkg_start_uj': 15102008335, 'pkg_end_uj': 15102108555, 'core_start_uj': 9895977962, 'core_end_uj': 9896059077, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 571114199, 'uncore_end_uj': 571115847, 'pkg_energy_uj': 100220, 'core_energy_uj': 81115, 'dram_energy_uj': 0, 'uncore_energy_uj': 1648}
+
+🔍 RAW TURBOSTAT LINES (432 total):
+   Line  0: 'Avg_MHz	Busy%	Bzy_MHz	TSC_MHz	IPC	IRQ	C1ACPI%	C2ACPI%	C3ACPI%	CPU%c6	CPU%c7	PkgTmp	GFX%rc6	GFXMHz	Pkg%pc8	Pkg%pc9	Pk%pc10	PkgWatt	CorWatt	GFXWatt	RAMWatt'
+   Line  1: '3748	96.84	3869	2804	1.19	1139	1.23	1.46	0.24	0.00	0.00	85	78.49	400	0.00	0.00	0.00	39.77	37.29	0.56	0.00'
+   Line  2: '4029	99.77	4057	2790	1.28	1117	0.00	0.00	0.00	0.00	0.00	88	75.65	400	0.00	0.00	0.00	49.72	46.91	0.82	0.00'
+   Line  3: '3979	99.65	3987	2807	1.29	1158	0.12	0.00	0.00	0.00	0.00	90	78.37	400	0.00	0.00	0.00	48.77	46.05	0.67	0.00'
+   Line  4: '3963	99.77	3969	2806	1.39	1228	0.00	0.00	0.00	0.00	0.00	90	79.92	400	0.00	0.00	0.00	47.57	44.75	0.78	0.00'
+   Line  5: '3933	99.77	3929	2813	1.27	1292	0.00	0.00	0.00	0.00	0.00	89	80.73	400	0.00	0.00	0.00	46.91	44.13	0.69	0.00'
+   Line  6: '3900	99.77	3909	2803	1.29	1196	0.00	0.00	0.00	0.00	0.00	88	79.22	400	0.00	0.00	0.00	46.40	43.70	0.64	0.00'
+   Line  7: '3864	99.77	3889	2791	1.30	1176	0.00	0.00	0.00	0.00	0.00	88	79.15	400	0.00	0.00	0.00	45.46	42.70	0.72	0.00'
+   Line  8: '3213	82.18	3961	2767	1.19	1100	4.90	7.60	4.92	0.00	0.00	74	80.79	400	0.00	0.00	0.00	39.29	36.53	0.58	0.00'
+   Line  9: '2115	51.40	4100	2813	0.91	656	2.89	8.28	37.51	0.00	0.00	72	93.27	400	0.00	0.00	0.00	30.84	28.25	0.16	0.00'
+📋 Header detected: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC', 'IRQ', 'C1ACPI%', 'C2ACPI%', 'C3ACPI%', 'CPU%c6', 'CPU%c7', 'PkgTmp', 'GFX%rc6', 'GFXMHz', 'Pkg%pc8', 'Pkg%pc9', 'Pk%pc10', 'PkgWatt', 'CorWatt', 'GFXWatt', 'RAMWatt']
+✅ Found 431 data rows
+✅ Parsed 431 rows with columns: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC']...
+   Raw value: 2284650496 (hex: 0x882d0000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - END:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔍 DEBUG scheduler_delta keys: ['voluntary_switches', 'involuntary_switches', 'user_time', 'system_time', 'load1', 'load5', 'load15', 'runnable', 'total_tasks', 'last_pid', 'swap']
+🔍 DEBUG run queue value: 0
+🔵 MSR_READER - _cstate_start exists: True
+🔵 MSR_READER - _cstate_start: {'timestamp': 1777205989.7529233, 'counters': {'c2': 3823015832043, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER - current_cstates: {'timestamp': 1777206034.2573936, 'counters': {'c2': 3827794527018, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER_ID: 123747203040320
+🔵 MSR_READER_VALUE: c2=1.707s
+🔵 MSR_READER_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds']
+   Raw value: 2284584960 (hex: 0x882c0000)
+   Decoded: now=0, log=0
+   Raw value: 2284650496 (hex: 0x882d0000)
+   Decoded: now=0, log=0
+🟢 ENGINE_ID: 123747203040320
+🟢 ENGINE_VALUE: c2=1.707s
+🟢 ENGINE_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+🔥 THERMAL DERIVED:
+   during_experiment: 0
+   now_active: 0
+   since_boot: 0
+🟡 RAW_ID: 123747203040320
+🟡 RAW_VALUE: c2=1.707s
+🟡 RAW_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+======================================================================
+📊 ENERGY ENGINE COMPLETE SUMMARY
+======================================================================
+
+⏱️  Duration: 44.532s
+   Start: 1777205989.738, End: 1777206034.270
+
+⚡ RAPL Energy (µJ):
+   uncore:      2567132 µJ (2.567132 J)
+   core:    696547900 µJ (696.547900 J)
+   package-0:    794733501 µJ (794.733501 J)
+
+📈 Performance Counters:
+   Instructions: 4,602,802,843
+   Cycles:       8,240,348,012
+   IPC:          0.56
+   Cache Refs:   218,147,377
+   Cache Misses: 54,999,348
+   Miss Rate:    25.21%
+   Page Faults:  31734 (major=0, minor=31734)
+   Ctx Switches: vol=32734, invol=0
+   Migrations:   2,410
+
+🌡️ Turbostat Summary (over 44.38s, 431 samples):
+   Package Temp (°C): mean=69.8
+
+   First 3 turbostat samples:
+      Sample 1: {'Avg_MHz': 3748.0, 'Busy%': 96.84, 'Bzy_MHz': 3869.0, 'TSC_MHz': 2804.0, 'IPC': 1.19, 'IRQ': 1139.0, 'C1ACPI%': 1.23, 'C2ACPI%': 1.46, 'C3ACPI%': 0.24, 'CPU%c6': 0.0, 'CPU%c7': 0.0, 'PkgTmp': 85.0, 'GFX%rc6': 78.49, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 39.77, 'CorWatt': 37.29, 'GFXWatt': 0.56, 'RAMWatt': 0.0}
+      Sample 2: {'Avg_MHz': 4029.0, 'Busy%': 99.77, 'Bzy_MHz': 4057.0, 'TSC_MHz': 2790.0, 'IPC': 1.28, 'IRQ': 1117.0, 'C1ACPI%': 0.0, 'C2ACPI%': 0.0, 'C3ACPI%': 0.0, 'CPU%c6': 0.0, 'CPU%c7': 0.0, 'PkgTmp': 88.0, 'GFX%rc6': 75.65, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 49.72, 'CorWatt': 46.91, 'GFXWatt': 0.82, 'RAMWatt': 0.0}
+      Sample 3: {'Avg_MHz': 3979.0, 'Busy%': 99.65, 'Bzy_MHz': 3987.0, 'TSC_MHz': 2807.0, 'IPC': 1.29, 'IRQ': 1158.0, 'C1ACPI%': 0.12, 'C2ACPI%': 0.0, 'C3ACPI%': 0.0, 'CPU%c6': 0.0, 'CPU%c7': 0.0, 'PkgTmp': 90.0, 'GFX%rc6': 78.37, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 48.77, 'CorWatt': 46.05, 'GFXWatt': 0.67, 'RAMWatt': 0.0}
+
+🔧 MSR Metrics:
+
+🔄 Scheduler Metrics:
+   Voluntary Ctx Sw:   386
+   Involuntary Ctx Sw: 541
+   Thread Migrations:  0
+   Run Queue Length:    0.00
+   Kernel Time:         131.00 ms
+   User Time:           9428.00 ms
+
+📊 High‑Frequency Samples: 2217 collected
+   First sample: {'timestamp_ns': 1777205989763582440, 'sample_start_ns': 1777205989753520770, 'sample_end_ns': 1777205989763582440, 'interval_ns': 10061670, 'pkg_start_uj': 15101927830, 'pkg_end_uj': 15102008335, 'core_start_uj': 9895920223, 'core_end_uj': 9895977962, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 571110598, 'uncore_end_uj': 571114199, 'pkg_energy_uj': 80505, 'core_energy_uj': 57739, 'dram_energy_uj': 0, 'uncore_energy_uj': 3601}
+
+======================================================================
+🔍 First 3 CPU samples:
+   Sample 0: {'timestamp_ns': 1777205989838415616, 'sample_start_ns': 1777205989738415616, 'sample_end_ns': 1777205989838415616, 'interval_ns': 100000000, 'cpu_util_percent': 96.84, 'cpu_busy_mhz': 3869.0, 'cpu_avg_mhz': 3748.0, 'c1_residency': 0.0123, 'c2_residency': 0.0146, 'c3_residency': 0.0024, 'c6_residency': 0.0, 'c7_residency': 0.0, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 39.77, 'dram_power': 0.0, 'gpu_rc6': 0.7848999999999999, 'package_temp': 85.0, 'ipc': 1.19, 'extra_metrics_json': '{"TSC_MHz": 2804.0, "IRQ": 1139.0, "GFXMHz": 400.0, "CorWatt": 37.29, "GFXWatt": 0.56}', 'l1d_cache_misses': 0, 'l2_cache_misses': 565977, 'l3_cache_hits': 506142, 'l3_cache_misses': 127608}
+   Sample 1: {'timestamp_ns': 1777205989938415872, 'sample_start_ns': 1777205989838415616, 'sample_end_ns': 1777205989938415872, 'interval_ns': 100000000, 'cpu_util_percent': 99.77, 'cpu_busy_mhz': 4057.0, 'cpu_avg_mhz': 4029.0, 'c1_residency': 0.0, 'c2_residency': 0.0, 'c3_residency': 0.0, 'c6_residency': 0.0, 'c7_residency': 0.0, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 49.72, 'dram_power': 0.0, 'gpu_rc6': 0.7565000000000001, 'package_temp': 88.0, 'ipc': 1.28, 'extra_metrics_json': '{"TSC_MHz": 2790.0, "IRQ": 1117.0, "GFXMHz": 400.0, "CorWatt": 46.91, "GFXWatt": 0.82}', 'l1d_cache_misses': 0, 'l2_cache_misses': 565977, 'l3_cache_hits': 506142, 'l3_cache_misses': 127608}
+   Sample 2: {'timestamp_ns': 1777205990038415616, 'sample_start_ns': 1777205989938415872, 'sample_end_ns': 1777205990038415616, 'interval_ns': 100000000, 'cpu_util_percent': 99.65, 'cpu_busy_mhz': 3987.0, 'cpu_avg_mhz': 3979.0, 'c1_residency': 0.0012, 'c2_residency': 0.0, 'c3_residency': 0.0, 'c6_residency': 0.0, 'c7_residency': 0.0, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 48.77, 'dram_power': 0.0, 'gpu_rc6': 0.7837000000000001, 'package_temp': 90.0, 'ipc': 1.29, 'extra_metrics_json': '{"TSC_MHz": 2807.0, "IRQ": 1158.0, "GFXMHz": 400.0, "CorWatt": 46.05, "GFXWatt": 0.67}', 'l1d_cache_misses': 0, 'l2_cache_misses': 565977, 'l3_cache_hits': 506142, 'l3_cache_misses': 127608}
+🔍 DEBUG - Using MIN baseline: idle_uj=78.549J, idle_core=21.135J, idle_uncore=57.414J
+🔍 DEBUG - Page faults extracted: major=0, minor=31734, total=31734
+🔴 ANALYZER_VALUE: c2=1.707s, c3=0.000s
+🔴 ANALYZER_KEYS: c2=1.7066767767857143, c3=0.0
+🔍 DEBUG - Captured 3 orchestration events from executor~llama_context:        CPU compute buffer size is  70.5020 MiB, matches expectation of  70.5020 MiB
+EOF reached on turbostat stdout
+
+🔍 DEBUG HARNESS - orchestration_events in result: True
+🔍 DEBUG HARNESS - Number of events: 3
+🔍 DEBUG HARNESS - First event keys: dict_keys(['phase', 'event_type', 'start_time_ns', 'end_time_ns', 'duration_ns', 'metadata'])
+✅ Harness complete: 716.1843J workload energy
+🔍 RUNS DEBUG - pkg_raw_uj: 794733501, baseline_energy_uj: 78549222
+🔍 RUNS DEBUG - dynamic will be: 716184279
+         ✅ Rep 2/2 saved
+   📊 Progress: 2/2 runs
+
+   ✅ Experiment 768 completed with 2 runs
+
+   ✅ llama_cpp | Factual Question complete:
+      Tax: 0.00x [nan, nan]
+
+   ============================================================
+   📋 groq | Factual Question
+   ============================================================
+
+🔍 Pre-flight checks:
+
+✅ MSR helper: OK
+✅ Config files: OK
+✅ llama-cpp-python: OK
+✅ Model file: None
+
+✅ All checks passed! Ready to run experiments.
+
+   Optimizer:    No
+   ✅ Using existing environment: 37 (hash: b719365ff056f1d2)
+✅ Synced 45 task categories from YAML
+   Categories:
+      • reasoning: 7
+      • media: 7
+      • orchestration: 6
+      • coding: 6
+      • qa: 5
+      • summarization: 3
+      • extraction: 2
+      • classification: 2
+      • web_search: 1
+      • translation: 1
+      • research: 1
+      • planning: 1
+      • debugging: 1
+      • data_analysis: 1
+      • custom: 1
+      • creative_writing: 1
+
+      ──────────────────────────────────────────────────
+      Repetition 1/2
+      ──────────────────────────────────────────────────
+   Raw value: 2284650496 (hex: 0x882d0000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - START:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔔 EVENT CREATED: planning.planning
+🔍 DEBUG - added prompt: 45, now tokens[prompt] = 45
+🔍 DEBUG - added completion: 93, now tokens[completion] = 93
+🔍 DEBUG - added total: 138, now tokens[total] = 138
+🔔 EVENT CREATED: execution.execution
+🔍 DEBUG - accumulated tokens: {'prompt': 45, 'completion': 93, 'total': 138}
+🔍 DEBUG - tokens keys: dict_keys(['prompt', 'completion', 'total'])
+🔔 EVENT CREATED: synthesis.synthesis
+🔍 DEBUG - Number of samples: 218
+🔍 DEBUG - First sample type: <class 'dict'>
+🔍 DEBUG - First sample length: 16
+🔍 DEBUG - First sample content: {'timestamp_ns': 1777206034567695941, 'sample_start_ns': 1777206034557631931, 'sample_end_ns': 1777206034567695941, 'interval_ns': 10064010, 'pkg_start_uj': 15900055792, 'pkg_end_uj': 15900132635, 'core_start_uj': 10594948218, 'core_end_uj': 10594998511, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 573881709, 'uncore_end_uj': 573886348, 'pkg_energy_uj': 76843, 'core_energy_uj': 50293, 'dram_energy_uj': 0, 'uncore_energy_uj': 4639}
+🔍 DEBUG - Second sample content: {'timestamp_ns': 1777206034577711322, 'sample_start_ns': 1777206034567871792, 'sample_end_ns': 1777206034577711322, 'interval_ns': 9839530, 'pkg_start_uj': 15900132635, 'pkg_end_uj': 15900219244, 'core_start_uj': 10594998511, 'core_end_uj': 10595058447, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 573886348, 'uncore_end_uj': 573894465, 'pkg_energy_uj': 86609, 'core_energy_uj': 59936, 'dram_energy_uj': 0, 'uncore_energy_uj': 8117}
+
+🔍 RAW TURBOSTAT LINES (43 total):
+   Line  0: 'Avg_MHz	Busy%	Bzy_MHz	TSC_MHz	IPC	IRQ	C1ACPI%	C2ACPI%	C3ACPI%	CPU%c6	CPU%c7	PkgTmp	GFX%rc6	GFXMHz	Pkg%pc8	Pkg%pc9	Pk%pc10	PkgWatt	CorWatt	GFXWatt	RAMWatt'
+   Line  1: '143	8.70	1651	2796	1.20	623	18.01	13.87	59.43	0.00	54.86	56	79.32	400	0.00	0.00	0.00	4.22	2.11	0.32	0.00'
+   Line  2: '79	6.70	1173	2802	0.73	434	9.22	12.51	71.75	0.00	67.65	56	76.33	400	0.00	0.00	0.00	3.24	1.14	0.30	0.00'
+   Line  3: '69	5.94	1160	2802	0.55	374	7.18	10.32	76.73	0.00	72.95	55	80.01	400	0.00	0.00	0.00	3.07	1.03	0.27	0.00'
+   Line  4: '62	5.53	1121	2804	0.54	350	8.60	9.99	76.13	0.00	69.91	55	79.39	400	0.00	0.00	0.00	3.09	1.06	0.26	0.00'
+   Line  5: '47	4.29	1089	2802	0.64	300	6.35	11.87	77.67	0.00	76.62	55	94.84	400	0.00	0.00	0.00	2.74	0.97	0.07	0.00'
+   Line  6: '62	5.19	1193	2804	1.60	231	4.53	7.96	82.48	0.00	80.29	55	99.85	400	0.00	0.00	0.00	2.65	1.02	0.00	0.00'
+   Line  7: '28	2.57	1086	2803	0.64	168	4.00	5.72	87.84	0.00	85.84	55	100.70	400	0.00	0.00	0.00	2.25	0.74	0.01	0.00'
+   Line  8: '26	2.38	1109	2802	0.81	129	1.69	2.09	93.89	0.00	90.64	55	97.80	400	0.00	0.00	0.00	2.06	0.67	0.01	0.00'
+   Line  9: '30	2.66	1121	2803	0.66	177	3.99	4.16	89.31	0.00	84.83	54	100.68	400	0.00	0.00	0.00	2.28	0.78	0.00	0.00'
+📋 Header detected: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC', 'IRQ', 'C1ACPI%', 'C2ACPI%', 'C3ACPI%', 'CPU%c6', 'CPU%c7', 'PkgTmp', 'GFX%rc6', 'GFXMHz', 'Pkg%pc8', 'Pkg%pc9', 'Pk%pc10', 'PkgWatt', 'CorWatt', 'GFXWatt', 'RAMWatt']
+✅ Found 42 data rows
+✅ Parsed 42 rows with columns: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC']...
+   Raw value: 2284716032 (hex: 0x882e0000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - END:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔍 DEBUG scheduler_delta keys: ['voluntary_switches', 'involuntary_switches', 'user_time', 'system_time', 'load1', 'load5', 'load15', 'runnable', 'total_tasks', 'last_pid', 'swap']
+🔍 DEBUG run queue value: -1
+🔵 MSR_READER - _cstate_start exists: True
+🔵 MSR_READER - _cstate_start: {'timestamp': 1777206034.5561213, 'counters': {'c2': 3827847707810, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER - current_cstates: {'timestamp': 1777206039.0574305, 'counters': {'c2': 3830344443590, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER_ID: 123747203339840
+🔵 MSR_READER_VALUE: c2=0.892s
+🔵 MSR_READER_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds']
+   Raw value: 2284650496 (hex: 0x882d0000)
+   Decoded: now=0, log=0
+   Raw value: 2284716032 (hex: 0x882e0000)
+   Decoded: now=0, log=0
+🟢 ENGINE_ID: 123747203339840
+🟢 ENGINE_VALUE: c2=0.892s
+🟢 ENGINE_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+🔥 THERMAL DERIVED:
+   during_experiment: 0
+   now_active: 0
+   since_boot: 0
+🟡 RAW_ID: 123747203339840
+🟡 RAW_VALUE: c2=0.892s
+🟡 RAW_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+======================================================================
+📊 ENERGY ENGINE COMPLETE SUMMARY
+======================================================================
+
+⏱️  Duration: 4.526s
+   Start: 1777206034.540, End: 1777206039.066
+
+⚡ RAPL Energy (µJ):
+   uncore:       448668 µJ (0.448668 J)
+   core:      5121325 µJ (5.121325 J)
+   package-0:     12892484 µJ (12.892484 J)
+
+📈 Performance Counters:
+   Instructions: 337,139,208
+   Cycles:       779,088,707
+   IPC:          0.43
+   Cache Refs:   23,519,071
+   Cache Misses: 4,911,230
+   Miss Rate:    20.88%
+   Page Faults:  56 (major=0, minor=56)
+   Ctx Switches: vol=3969, invol=0
+   Migrations:   211
+
+🌡️ Turbostat Summary (over 4.38s, 42 samples):
+   Package Temp (°C): mean=54.4
+
+   First 3 turbostat samples:
+      Sample 1: {'Avg_MHz': 143.0, 'Busy%': 8.7, 'Bzy_MHz': 1651.0, 'TSC_MHz': 2796.0, 'IPC': 1.2, 'IRQ': 623.0, 'C1ACPI%': 18.01, 'C2ACPI%': 13.87, 'C3ACPI%': 59.43, 'CPU%c6': 0.0, 'CPU%c7': 54.86, 'PkgTmp': 56.0, 'GFX%rc6': 79.32, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 4.22, 'CorWatt': 2.11, 'GFXWatt': 0.32, 'RAMWatt': 0.0}
+      Sample 2: {'Avg_MHz': 79.0, 'Busy%': 6.7, 'Bzy_MHz': 1173.0, 'TSC_MHz': 2802.0, 'IPC': 0.73, 'IRQ': 434.0, 'C1ACPI%': 9.22, 'C2ACPI%': 12.51, 'C3ACPI%': 71.75, 'CPU%c6': 0.0, 'CPU%c7': 67.65, 'PkgTmp': 56.0, 'GFX%rc6': 76.33, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 3.24, 'CorWatt': 1.14, 'GFXWatt': 0.3, 'RAMWatt': 0.0}EOF reached on turbostat stdout
+
+      Sample 3: {'Avg_MHz': 69.0, 'Busy%': 5.94, 'Bzy_MHz': 1160.0, 'TSC_MHz': 2802.0, 'IPC': 0.55, 'IRQ': 374.0, 'C1ACPI%': 7.18, 'C2ACPI%': 10.32, 'C3ACPI%': 76.73, 'CPU%c6': 0.0, 'CPU%c7': 72.95, 'PkgTmp': 55.0, 'GFX%rc6': 80.01, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 3.07, 'CorWatt': 1.03, 'GFXWatt': 0.27, 'RAMWatt': 0.0}
+
+🔧 MSR Metrics:
+
+🔄 Scheduler Metrics:
+   Voluntary Ctx Sw:   244
+   Involuntary Ctx Sw: 34
+   Thread Migrations:  0
+   Run Queue Length:    -1.00
+   Kernel Time:         25.00 ms
+   User Time:           36.00 ms
+
+📊 High‑Frequency Samples: 218 collected
+   First sample: {'timestamp_ns': 1777206034567695941, 'sample_start_ns': 1777206034557631931, 'sample_end_ns': 1777206034567695941, 'interval_ns': 10064010, 'pkg_start_uj': 15900055792, 'pkg_end_uj': 15900132635, 'core_start_uj': 10594948218, 'core_end_uj': 10594998511, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 573881709, 'uncore_end_uj': 573886348, 'pkg_energy_uj': 76843, 'core_energy_uj': 50293, 'dram_energy_uj': 0, 'uncore_energy_uj': 4639}
+
+======================================================================
+🔍 First 3 CPU samples:
+   Sample 0: {'timestamp_ns': 1777206034640352256, 'sample_start_ns': 1777206034540352256, 'sample_end_ns': 1777206034640352256, 'interval_ns': 100000000, 'cpu_util_percent': 8.7, 'cpu_busy_mhz': 1651.0, 'cpu_avg_mhz': 143.0, 'c1_residency': 0.1801, 'c2_residency': 0.1387, 'c3_residency': 0.5943, 'c6_residency': 0.0, 'c7_residency': 0.5486, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 4.22, 'dram_power': 0.0, 'gpu_rc6': 0.7931999999999999, 'package_temp': 56.0, 'ipc': 1.2, 'extra_metrics_json': '{"TSC_MHz": 2796.0, "IRQ": 623.0, "GFXMHz": 400.0, "CorWatt": 2.11, "GFXWatt": 0.32}', 'l1d_cache_misses': 0, 'l2_cache_misses': 605799, 'l3_cache_hits': 559977, 'l3_cache_misses': 116934}
+   Sample 1: {'timestamp_ns': 1777206034740352512, 'sample_start_ns': 1777206034640352256, 'sample_end_ns': 1777206034740352512, 'interval_ns': 100000000, 'cpu_util_percent': 6.7, 'cpu_busy_mhz': 1173.0, 'cpu_avg_mhz': 79.0, 'c1_residency': 0.0922, 'c2_residency': 0.1251, 'c3_residency': 0.7175, 'c6_residency': 0.0, 'c7_residency': 0.6765000000000001, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 3.24, 'dram_power': 0.0, 'gpu_rc6': 0.7633, 'package_temp': 56.0, 'ipc': 0.73, 'extra_metrics_json': '{"TSC_MHz": 2802.0, "IRQ": 434.0, "GFXMHz": 400.0, "CorWatt": 1.14, "GFXWatt": 0.3}', 'l1d_cache_misses': 0, 'l2_cache_misses': 605799, 'l3_cache_hits': 559977, 'l3_cache_misses': 116934}
+   Sample 2: {'timestamp_ns': 1777206034840352256, 'sample_start_ns': 1777206034740352512, 'sample_end_ns': 1777206034840352256, 'interval_ns': 100000000, 'cpu_util_percent': 5.94, 'cpu_busy_mhz': 1160.0, 'cpu_avg_mhz': 69.0, 'c1_residency': 0.0718, 'c2_residency': 0.1032, 'c3_residency': 0.7673000000000001, 'c6_residency': 0.0, 'c7_residency': 0.7295, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 3.07, 'dram_power': 0.0, 'gpu_rc6': 0.8001, 'package_temp': 55.0, 'ipc': 0.55, 'extra_metrics_json': '{"TSC_MHz": 2802.0, "IRQ": 374.0, "GFXMHz": 400.0, "CorWatt": 1.03, "GFXWatt": 0.27}', 'l1d_cache_misses': 0, 'l2_cache_misses': 605799, 'l3_cache_hits': 559977, 'l3_cache_misses': 116934}
+🔍 DEBUG - Using MIN baseline: idle_uj=7.983J, idle_core=2.148J, idle_uncore=5.835J
+🔍 DEBUG - Page faults extracted: major=0, minor=56, total=56
+🔴 ANALYZER_VALUE: c2=0.892s, c3=0.000s
+🔴 ANALYZER_KEYS: c2=0.89169135, c3=0.0
+🔍 DEBUG - Captured 3 orchestration events from executor
+🔍 DEBUG HARNESS - orchestration_events in result: True
+🔍 DEBUG HARNESS - Number of events: 3
+🔍 DEBUG HARNESS - First event keys: dict_keys(['phase', 'event_type', 'start_time_ns', 'end_time_ns', 'duration_ns', 'metadata'])
+✅ Harness complete: 4.9099J workload energy
+🔍 RUNS DEBUG - pkg_raw_uj: 12892484, baseline_energy_uj: 7982588
+🔍 RUNS DEBUG - dynamic will be: 4909896
+         ✅ Rep 1/2 saved
+   📊 Progress: 1/2 runs
+
+         ⏳ Cooling down 10s...
+
+      ──────────────────────────────────────────────────
+      Repetition 2/2
+      ──────────────────────────────────────────────────
+   Raw value: 2284912640 (hex: 0x88310000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - START:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔔 EVENT CREATED: planning.planning
+🔍 DEBUG - added prompt: 45, now tokens[prompt] = 45
+🔍 DEBUG - added completion: 86, now tokens[completion] = 86
+🔍 DEBUG - added total: 131, now tokens[total] = 131
+🔔 EVENT CREATED: execution.execution
+🔍 DEBUG - accumulated tokens: {'prompt': 45, 'completion': 86, 'total': 131}
+🔍 DEBUG - tokens keys: dict_keys(['prompt', 'completion', 'total'])
+🔔 EVENT CREATED: synthesis.synthesis
+🔍 DEBUG - Number of samples: 152
+🔍 DEBUG - First sample type: <class 'dict'>
+🔍 DEBUG - First sample length: 16
+🔍 DEBUG - First sample content: {'timestamp_ns': 1777206049250040732, 'sample_start_ns': 1777206049239945724, 'sample_end_ns': 1777206049250040732, 'interval_ns': 10095008, 'pkg_start_uj': 15932397079, 'pkg_end_uj': 15932441329, 'core_start_uj': 10606001535, 'core_end_uj': 10606027169, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 575041618, 'uncore_end_uj': 575041618, 'pkg_energy_uj': 44250, 'core_energy_uj': 25634, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+🔍 DEBUG - Second sample content: {'timestamp_ns': 1777206049260054410, 'sample_start_ns': 1777206049250133376, 'sample_end_ns': 1777206049260054410, 'interval_ns': 9921034, 'pkg_start_uj': 15932441329, 'pkg_end_uj': 15932476912, 'core_start_uj': 10606027169, 'core_end_uj': 10606045053, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 575041618, 'uncore_end_uj': 575041618, 'pkg_energy_uj': 35583, 'core_energy_uj': 17884, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+
+🔍 RAW TURBOSTAT LINES (30 total):
+   Line  0: 'Avg_MHz	Busy%	Bzy_MHz	TSC_MHz	IPC	IRQ	C1ACPI%	C2ACPI%	C3ACPI%	CPU%c6	CPU%c7	PkgTmp	GFX%rc6	GFXMHz	Pkg%pc8	Pkg%pc9	Pk%pc10	PkgWatt	CorWatt	GFXWatt	RAMWatt'
+   Line  1: '110	8.33	1328	2798	1.39	480	10.71	9.60	71.34	0.00	68.62	51	99.84	400	0.00	0.00	0.00	3.01	1.44	0.01	0.00'
+   Line  2: '72	4.93	1466	2788	1.48	469	2.75	4.99	86.92	0.00	83.58	51	99.10	400	0.00	0.00	0.00	2.56	1.06	0.01	0.00'
+   Line  3: '23	2.21	1052	2817	0.70	124	2.11	4.36	91.89	0.00	90.13	51	100.52	400	0.00	0.00	0.00	1.98	0.64	0.01	0.00'
+   Line  4: '18	1.62	1104	2804	0.72	61	0.46	0.84	97.18	0.00	94.84	51	99.72	400	0.00	0.00	0.00	1.76	0.53	0.01	0.00'
+   Line  5: '32	2.97	1095	2803	0.79	131	1.63	4.03	91.46	0.00	89.72	51	100.54	400	0.00	0.00	0.00	2.06	0.69	0.00	0.00'
+   Line  6: '54	3.39	1597	2802	1.76	106	1.69	2.83	92.14	0.00	89.07	51	99.65	400	0.00	0.00	0.00	2.62	1.21	0.00	0.00'
+   Line  7: '28	2.54	1089	2804	0.65	127	1.27	4.18	92.13	0.00	90.64	51	100.59	400	0.00	0.00	0.00	2.00	0.64	0.01	0.00'
+   Line  8: '31	2.88	1088	2802	0.57	129	0.84	4.08	92.29	0.00	90.62	51	99.66	400	0.00	0.00	0.00	2.07	0.67	0.02	0.00'
+   Line  9: '45	4.02	1121	2777	1.05	148	2.99	4.58	87.63	0.00	85.46	51	97.32	400	0.00	0.00	0.00	2.16	0.75	0.01	0.00'
+📋 Header detected: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC', 'IRQ', 'C1ACPI%', 'C2ACPI%', 'C3ACPI%', 'CPU%c6', 'CPU%c7', 'PkgTmp', 'GFX%rc6', 'GFXMHz', 'Pkg%pc8', 'Pkg%pc9', 'Pk%pc10', 'PkgWatt', 'CorWatt', 'GFXWatt', 'RAMWatt']
+✅ Found 29 data rows
+✅ Parsed 29 rows with columns: ['Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz', 'IPC']...
+   Raw value: 2284912640 (hex: 0x88310000)
+   Decoded: now=0, log=0
+
+🔥 THERMAL SNAPSHOT - END:
+   Package: {'thermal_now': 0, 'thermal_log': 0}
+   Core: {'thermal_now': 0, 'thermal_log': 0}
+🔍 DEBUG scheduler_delta keys: ['voluntary_switches', 'involuntary_switches', 'user_time', 'system_time', 'load1', 'load5', 'load15', 'runnable', 'total_tasks', 'last_pid', 'swap']
+🔍 DEBUG run queue value: 0
+🔵 MSR_READER - _cstate_start exists: True
+🔵 MSR_READER - _cstate_start: {'timestamp': 1777206049.2386003, 'counters': {'c2': 3849961730670, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER - current_cstates: {'timestamp': 1777206052.442223, 'counters': {'c2': 3852265200994, 'c3': 0, 'c6': 0, 'c7': 0}, 'read_status': {'c2': True, 'c3': True, 'c6': True, 'c7': False}, 'cpu': 0, 'method': 'helper'}
+🔵 MSR_READER_ID: 123747203243008
+🔵 MSR_READER_VALUE: c2=0.823s
+🔵 MSR_READER_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds']
+   Raw value: 2284978176 (hex: 0x88320000)
+   Decoded: now=0, log=0
+   Raw value: 2284912640 (hex: 0x88310000)
+   Decoded: now=0, log=0
+🟢 ENGINE_ID: 123747203243008
+🟢 ENGINE_VALUE: c2=0.823s
+🟢 ENGINE_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+🔥 THERMAL DERIVED:
+   during_experiment: 0
+   now_active: 0
+   since_boot: 0
+🟡 RAW_ID: 123747203243008
+🟡 RAW_VALUE: c2=0.823s
+🟡 RAW_KEYS: ['baseline', 'dynamic', 'tsc_frequency_hz', 'c2_time_seconds', 'c3_time_seconds', 'c6_time_seconds', 'c7_time_seconds', 'cstate_deltas']
+
+======================================================================
+📊 ENERGY ENGINE COMPLETE SUMMARY
+======================================================================
+
+⏱️  Duration: 3.233s
+   Start: 1777206049.224, End: 1777206052.457
+
+⚡ RAPL Energy (µJ):
+   uncore:        66040 µJ (0.066040 J)
+   core:      3561820 µJ (3.561820 J)
+   package-0:      8464334 µJ (8.464334 J)
+
+📈 Performance Counters:
+   Instructions: 805,726,931
+   Cycles:       837,458,304
+   IPC:          0.96
+   Cache Refs:   17,011,180
+   Cache Misses: 5,758,478
+   Miss Rate:    33.85%
+   Page Faults:  16391 (major=0, minor=16391)
+   Ctx Switches: vol=2371, invol=0
+   Migrations:   218
+
+🌡️ Turbostat Summary (over 3.06s, 29 samples):
+   Package Temp (°C): mean=50.8
+
+   First 3 turbostat samples:
+      Sample 1: {'Avg_MHz': 110.0, 'Busy%': 8.33, 'Bzy_MHz': 1328.0, 'TSC_MHz': 2798.0, 'IPC': 1.39, 'IRQ': 480.0, 'C1ACPI%': 10.71, 'C2ACPI%': 9.6, 'C3ACPI%': 71.34, 'CPU%c6': 0.0, 'CPU%c7': 68.62, 'PkgTmp': 51.0, 'GFX%rc6': 99.84, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 3.01, 'CorWatt': 1.44, 'GFXWatt': 0.01, 'RAMWatt': 0.0}
+      Sample 2: {'Avg_MHz': 72.0, 'Busy%': 4.93, 'Bzy_MHz': 1466.0, 'TSC_MHz': 2788.0, 'IPC': 1.48, 'IRQ': 469.0, 'C1ACPI%': 2.75, 'C2ACPI%': 4.99, 'C3ACPI%': 86.92, 'CPU%c6': 0.0, 'CPU%c7': 83.58, 'PkgTmp': 51.0, 'GFX%rc6': 99.1, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 2.56, 'CorWatt': 1.06, 'GFXWatt': 0.01, 'RAMWatt': 0.0}
+      Sample 3: {'Avg_MHz': 23.0, 'Busy%': 2.21, 'Bzy_MHz': 1052.0, 'TSC_MHz': 2817.0, 'IPC': 0.7, 'IRQ': 124.0, 'C1ACPI%': 2.11, 'C2ACPI%': 4.36, 'C3ACPI%': 91.89, 'CPU%c6': 0.0, 'CPU%c7': 90.13, 'PkgTmp': 51.0, 'GFX%rc6': 100.52, 'GFXMHz': 400.0, 'Pkg%pc8': 0.0, 'Pkg%pc9': 0.0, 'Pk%pc10': 0.0, 'PkgWatt': 1.98, 'CorWatt': 0.64, 'GFXWatt': 0.01, 'RAMWatt': 0.0}
+
+🔧 MSR Metrics:
+
+🔄 Scheduler Metrics:
+   Voluntary Ctx Sw:   152
+   Involuntary Ctx Sw: 7
+   Thread Migrations:  0
+   Run Queue Length:    0.00
+   Kernel Time:         23.00 ms
+   User Time:           47.00 ms
+
+📊 High‑Frequency Samples: 152 collected
+   First sample: {'timestamp_ns': 1777206049250040732, 'sample_start_ns': 1777206049239945724, 'sample_end_ns': 1777206049250040732, 'interval_ns': 10095008, 'pkg_start_uj': 15932397079, 'pkg_end_uj': 15932441329, 'core_start_uj': 10606001535, 'core_end_uj': 10606027169, 'dram_start_uj': 0, 'dram_end_uj': 0, 'uncore_start_uj': 575041618, 'uncore_end_uj': 575041618, 'pkg_energy_uj': 44250, 'core_energy_uj': 25634, 'dram_energy_uj': 0, 'uncore_energy_uj': 0}
+
+======================================================================
+🔍 First 3 CPU samples:
+   Sample 0: {'timestamp_ns': 1777206049324150272, 'sample_start_ns': 1777206049224150528, 'sample_end_ns': 1777206049324150272, 'interval_ns': 100000000, 'cpu_util_percent': 8.33, 'cpu_busy_mhz': 1328.0, 'cpu_avg_mhz': 110.0, 'c1_residency': 0.10710000000000001, 'c2_residency': 0.096, 'c3_residency': 0.7134, 'c6_residency': 0.0, 'c7_residency': 0.6862, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 3.01, 'dram_power': 0.0, 'gpu_rc6': 0.9984000000000001, 'package_temp': 51.0, 'ipc': 1.39, 'extra_metrics_json': '{"TSC_MHz": 2798.0, "IRQ": 480.0, "GFXMHz": 400.0, "CorWatt": 1.44, "GFXWatt": 0.01}', 'l1d_cache_misses': 0, 'l2_cache_misses': 657335, 'l3_cache_hits': 586592, 'l3_cache_misses': 198568}
+   Sample 1: {'timestamp_ns': 1777206049424150528, 'sample_start_ns': 1777206049324150272, 'sample_end_ns': 1777206049424150528, 'interval_ns': 100000000, 'cpu_util_percent': 4.93, 'cpu_busy_mhz': 1466.0, 'cpu_avg_mhz': 72.0, 'c1_residency': 0.0275, 'c2_residency': 0.0499, 'c3_residency': 0.8692, 'c6_residency': 0.0, 'c7_residency': 0.8358, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 2.56, 'dram_power': 0.0, 'gpu_rc6': 0.991, 'package_temp': 51.0, 'ipc': 1.48, 'extra_metrics_json': '{"TSC_MHz": 2788.0, "IRQ": 469.0, "GFXMHz": 400.0, "CorWatt": 1.06, "GFXWatt": 0.01}', 'l1d_cache_misses': 0, 'l2_cache_misses': 657335, 'l3_cache_hits': 586592, 'l3_cache_misses': 198568}
+   Sample 2: {'timestamp_ns': 1777206049524150272, 'sample_start_ns': 1777206049424150528, 'sample_end_ns': 1777206049524150272, 'interval_ns': 100000000, 'cpu_util_percent': 2.21, 'cpu_busy_mhz': 1052.0, 'cpu_avg_mhz': 23.0, 'c1_residency': 0.021099999999999997, 'c2_residency': 0.0436, 'c3_residency': 0.9189, 'c6_residency': 0.0, 'c7_residency': 0.9013, 'pkg_c8_residency': 0.0, 'pkg_c9_residency': 0.0, 'pkg_c10_residency': 0.0, 'package_power': 1.98, 'dram_power': 0.0, 'gpu_rc6': 1.0051999999999999, 'package_temp': 51.0, 'ipc': 0.7, 'extra_metrics_json': '{"TSC_MHz": 2817.0, "IRQ": 124.0, "GFXMHz": 400.0, "CorWatt": 0.64, "GFXWatt": 0.01}', 'l1d_cache_misses': 0, 'l2_cache_misses': 657335, 'l3_cache_hits': 586592, 'l3_cache_misses': 198568}
+🔍 DEBUG - Using MIN baseline: idle_uj=5.703J, idle_core=1.534J, idle_uncore=4.168J
+🔍 DEBUG - Page faults extracted: major=0, minor=16391, total=16391
+🔴 ANALYZER_VALUE: c2=0.823s, c3=0.000s
+🔴 ANALYZER_KEYS: c2=0.8226679728571429, c3=0.0
+🔍 DEBUG - Captured 3 orchestration events from executor
+🔍 DEBUG HARNESS - orchestration_events in result: True
+🔍 DEBUG HARNESS - Number of events: 3
+🔍 DEBUG HARNESS - First event keys: dict_keys(['phase', 'event_type', 'start_time_ns', 'end_time_ns', 'duration_ns', 'metadata'])
+✅ Harness complete: 2.7617J workload energy
+🔍 RUNS DEBUG - pkg_raw_uj: 8464334, baseline_energy_uj: 5702606
+🔍 RUNS DEBUG - dynamic will be: 2761728
+         ✅ Rep 2/2 saved
+   📊 Progress: 2/2 runs
+
+   ✅ Experiment 769 completed with 2 runs
+
+   ✅ groq | Factual Question complete:
+      Tax: 0.00x [nan, nan]
+
+=====================================================================================
+📊 MASTER SUMMARY
+=====================================================================================
+Provider     Task                   Linear (J)  Agentic (J)    Tax (x)           CI Range
+-------------------------------------------------------------------------------------
+llama_cpp    GSM8K Arithmetic           0.0000       0.0000     0.00x*                N/A
+groq         GSM8K Arithmetic           0.0000       0.0000     0.00x*                N/A
+llama_cpp    Factual Question           0.0000       0.0000     0.00x*                N/A
+groq         Factual Question           0.0000       0.0000     0.00x*                N/A
+=====================================================================================
+
+💾 Results saved to: data/experiment_20260426_072052.json
+
+✅ All experiments complete!

@@ -62,7 +62,10 @@ CREATE TABLE IF NOT EXISTS experiments (
     experiment_goal TEXT,                             -- free-text description of what this experiment measures
     experiment_notes TEXT,                            -- free-text operational notes
     hw_id INTEGER REFERENCES hardware_config(hw_id),
-    env_id INTEGER REFERENCES environment_config(env_id)    
+    env_id INTEGER REFERENCES environment_config(env_id),    
+    is_valid INTEGER NOT NULL DEFAULT 1,              -- 0 = development artifact, excluded from paper queries
+    invalidation_reason TEXT,                         -- reason for invalidation if is_valid=0
+    invalidated_at TIMESTAMP                          -- when invalidated    
 );
 """
 
@@ -674,7 +677,7 @@ CREATE TABLE IF NOT EXISTS orchestration_events (
     tax_percent REAL,
     global_run_id TEXT,
     raw_energy_uj           INTEGER,            -- Chunk 5: MAX(pkg_end)-MIN(pkg_start)
-    cpu_fraction_per_phase            REAL,               -- proc_ticks_delta / total_ticks_delta
+    cpu_fraction_per_phase  REAL,               -- proc_ticks_delta / total_ticks_delta
     attributed_energy_uj    INTEGER,            -- cpu_fraction x raw_energy_uj
     attribution_method      TEXT,               -- cpu_counter_delta | fallback_run_level
     quality_score           REAL,               -- 0.0-1.0 based on sample count
@@ -682,7 +685,20 @@ CREATE TABLE IF NOT EXISTS orchestration_events (
     proc_ticks_max          INTEGER,
     total_ticks_min         INTEGER,
     total_ticks_max         INTEGER,    
-
+    created_at              TIMESTAMP,
+    tool_name               TEXT,                -- Populated by _execute_tool() via _emit_event() metadata backfill
+    io_bytes_read           INTEGER,
+    io_bytes_written        INTEGER,
+    
+    input_payload_hash      TEXT,                -- SHA-256 prefix hashes — reproducibility and dedup
+    output_payload_hash     TEXT,
+    
+    tool_success            INTEGER,             -- 1=success 0=failure — feeds v_failure_energy_taxonomy
+    
+    tool_result_rows        INTEGER,             -- Row count for database_query — correlates query size with energy
+    
+    tool_cpu_time_ns        INTEGER,             -- Per-tool CPU and memory — closes attribution black-box gap
+    tool_memory_delta_kb    INTEGER,
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
 """
@@ -1813,7 +1829,53 @@ WHERE e.experiment_type IN (
     'failure_injection','quality_sweep','ablation','pilot'
 );
 """
- 
+CREATE_VIEW_FRACTION_VERIFICATION = """
+CREATE VIEW IF NOT EXISTS v_fraction_verification AS
+SELECT
+    ge.goal_id,
+    ge.winning_run_id,
+    ea.orchestration_energy_uj          AS numerator_uj,
+    r.pkg_energy_uj                     AS denominator_uj,
+    CASE WHEN r.pkg_energy_uj > 0
+        THEN ROUND(1.0 * ea.orchestration_energy_uj / r.pkg_energy_uj, 6)
+        ELSE NULL
+    END                                 AS recomputed_fraction,
+    ge.orchestration_fraction           AS stored_fraction,
+    CASE WHEN r.pkg_energy_uj > 0
+        THEN ROUND(ABS(ge.orchestration_fraction -
+            1.0 * ea.orchestration_energy_uj / r.pkg_energy_uj), 8)
+        ELSE NULL
+    END                                 AS delta
+FROM goal_execution ge
+LEFT JOIN runs r ON r.run_id = ge.winning_run_id
+LEFT JOIN energy_attribution ea ON ea.run_id = ge.winning_run_id
+WHERE ge.orchestration_fraction IS NOT NULL;
+"""
+
+CREATE_VIEW_OUTCOME_EFFICIENCY = """
+CREATE VIEW IF NOT EXISTS v_outcome_efficiency AS
+SELECT
+    a.run_id,
+    r.workflow_type,
+    r.complexity_level,
+    a.energy_per_completion_token_uj,
+    a.energy_per_successful_step_uj,
+    a.energy_per_accepted_answer_uj,
+    a.energy_per_solved_task_uj,
+    nf.difficulty_score,
+    nf.difficulty_bucket,
+    nf.successful_goals,
+    nf.attempted_goals,
+    nf.total_retries,
+    CASE
+        WHEN nf.attempted_goals > 0 AND nf.successful_goals > 0
+        THEN CAST(nf.attempted_goals AS REAL) / nf.successful_goals
+        ELSE NULL
+    END AS attempt_efficiency_ratio
+FROM energy_attribution a
+JOIN runs r ON a.run_id = r.run_id
+LEFT JOIN normalization_factors nf ON a.run_id = nf.run_id;
+"""
 CREATE_VIEW_FAILURE_ENERGY_TAXONOMY = """
 -- Energy wasted per failure type across hallucination and tool failure events.
 -- failure_domain separates reasoning failures from execution failures —

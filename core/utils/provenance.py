@@ -290,7 +290,19 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "ea.thermal_penalty_time_ms":        ("thermal_penalty_weighted",   "MEASURED"),
     "ea.unattributed_energy_uj":         ("energy_attribution_v1",      "CALCULATED"),
     "ea.attribution_coverage_pct":       ("energy_attribution_v1",      "CALCULATED"),
- 
+    # Tool instrumentation columns — migration 035
+    # Tool instrumentation columns — migration 035
+    # Populated at tool call time by _execute_tool() → _emit_event() backfill
+    # NOT ETL-derived — MEASURED directly during tool execution
+    "oe.tool_name":            ("tool_instrumentation_v1", "MEASURED"),
+    "oe.io_bytes_read":        ("tool_instrumentation_v1", "MEASURED"),
+    "oe.io_bytes_written":     ("tool_instrumentation_v1", "MEASURED"),
+    "oe.input_payload_hash":   ("tool_instrumentation_v1", "MEASURED"),
+    "oe.output_payload_hash":  ("tool_instrumentation_v1", "MEASURED"),
+    "oe.tool_success":         ("tool_instrumentation_v1", "MEASURED"),
+    "oe.tool_result_rows":     ("tool_instrumentation_v1", "MEASURED"),
+    "oe.tool_cpu_time_ns":     ("tool_instrumentation_v1", "MEASURED"),
+    "oe.tool_memory_delta_kb": ("tool_instrumentation_v1", "MEASURED"),
     # ── normalization_factors TABLE ───────────────────────────────────────────
     # Structural factors (from task config + orchestration_events)
     "nf.difficulty_score":               ("normalization_factors_v1",   "CALCULATED"),
@@ -455,7 +467,9 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "etl_queue_management_v1":  1.0,
     "retry_policy_v1":                 0.90,  # retry loop — 0.10 uncertainty on context_overflow assumption
     "failure_classification_v1":       0.85,  # string-based exception matching
-    "failure_injection_v1":            1.0,   # deterministic arithmetic, no measurement uncertainty               
+    "failure_injection_v1":            1.0,   # deterministic arithmetic, no measurement uncertainty 
+    "failure_injection_v2":            1.0,   # SHA-256 stable seeding — no measurement uncertainty
+    "tool_instrumentation_v1":          1.0,             
 }
 
 

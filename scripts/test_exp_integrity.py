@@ -313,8 +313,167 @@ def check_expected_empty(conn) -> list:
         results.append(ok(f"{table}: {count} rows (8.5-C owns this)"))
 
     return results
+def check_etl_queue(conn, goal_ids: list) -> list:
+    """Verify etl_queue has entries for all goals and all show processed=1."""
+    results = []
+    if not goal_ids:
+        results.append(warn("etl_queue: no goals to check"))
+        return results
+    count = conn.execute("SELECT COUNT(*) FROM etl_queue WHERE entity_id IN ({})".format(
+        ",".join("?" * len(goal_ids))), goal_ids).fetchone()[0]
+    if count == 0:
+        results.append(fail("etl_queue: no entries for experiment goals"))
+        return results
+    unprocessed = conn.execute(
+        "SELECT COUNT(*) FROM etl_queue WHERE entity_id IN ({}) AND status != 'done'".format(
+        ",".join("?" * len(goal_ids))), goal_ids).fetchone()[0]
+    if unprocessed > 0:
+        results.append(warn(f"etl_queue: {unprocessed} entries not done (status != done)"))
+    else:
+        results.append(ok(f"etl_queue: {count} entries, all done"))
+    return results
 
 
+def check_retry_policy(conn) -> list:
+    """Verify retry_policy has exactly 4 rows: no_retry, default, aggressive, conservative."""
+    results = []
+    count = conn.execute("SELECT COUNT(*) FROM retry_policy").fetchone()[0]
+    if count == 4:
+        results.append(ok("retry_policy: 4 rows present"))
+    else:
+        results.append(fail(f"retry_policy: expected 4 rows, got {count}"))
+    return results
+
+
+def check_task_categories(conn) -> list:
+    """Verify task_categories populated. Warn if < 26 (8.5-C.pre not yet run)."""
+    results = []
+    count = conn.execute("SELECT COUNT(*) FROM task_categories").fetchone()[0]
+    if count == 0:
+        results.append(fail("task_categories: 0 rows — seed not run"))
+    elif count < 16:
+        results.append(fail(f"task_categories: only {count} rows — expected >= 16"))
+    elif count < 26:
+        results.append(warn(f"task_categories: {count} rows — 8.5-C.pre migration 034 not yet run"))
+    else:
+        results.append(ok(f"task_categories: {count} rows"))
+    return results
+
+
+def check_task_retry_override(conn) -> list:
+    """Verify task_retry_override rows are valid. 0 rows is acceptable."""
+    results = []
+    count = conn.execute("SELECT COUNT(*) FROM task_retry_override").fetchone()[0]
+    if count == 0:
+        results.append(ok("task_retry_override: 0 rows (no overrides configured — acceptable)"))
+        return results
+    orphans = conn.execute("""
+        SELECT COUNT(*) FROM task_retry_override t
+        WHERE NOT EXISTS (SELECT 1 FROM retry_policy p WHERE p.policy_name = t.policy_name)
+    """).fetchone()[0]
+    if orphans > 0:
+        results.append(fail(f"task_retry_override: {orphans} orphan policy_name references"))
+    else:
+        results.append(ok(f"task_retry_override: {count} overrides, all valid"))
+    return results
+
+def check_energy_conservation(conn, exp_id: int, run_ids: list, goal_ids: list) -> list:
+    results = []
+    rows = conn.execute("""
+        SELECT ge.goal_id, r.dynamic_energy_uj,
+            SUM(ga.energy_uj) AS attempt_sum,
+            ABS(r.dynamic_energy_uj - SUM(ga.energy_uj)) AS delta
+        FROM goal_execution ge
+        JOIN runs r ON r.run_id = ge.winning_run_id
+        JOIN goal_attempt ga ON ga.goal_id = ge.goal_id
+        WHERE ge.exp_id = ? AND ge.winning_run_id IS NOT NULL
+          AND ga.energy_uj IS NOT NULL
+        GROUP BY ge.goal_id
+    """, (exp_id,)).fetchall()
+    if not rows:
+        results.append(warn("energy_conservation: no successful goals to verify"))
+    else:
+        violations = [r for r in rows if r["delta"] > 1000]
+        if violations:
+            for v in violations:
+                results.append(fail(f"energy_conservation VIOLATION goal={v['goal_id']} delta={v['delta']}µJ"))
+        else:
+            results.append(ok(f"energy_conservation: {len(rows)} goals verified max_delta={max(r['delta'] for r in rows)}µJ"))
+    rows2 = conn.execute("""
+        SELECT ge.goal_id, ge.total_energy_uj, SUM(ga.energy_uj) AS attempt_sum
+        FROM goal_execution ge
+        JOIN goal_attempt ga ON ga.goal_id = ge.goal_id
+        WHERE ge.exp_id = ? AND ga.energy_uj IS NOT NULL
+        GROUP BY ge.goal_id HAVING ge.total_energy_uj IS NOT NULL
+    """, (exp_id,)).fetchall()
+    violations2 = [r for r in rows2 if abs((r["total_energy_uj"] or 0) - (r["attempt_sum"] or 0)) > 1000]
+    if violations2:
+        for v in violations2:
+            results.append(warn(f"goal_execution.total mismatch goal={v['goal_id']} stored={v['total_energy_uj']} computed={v['attempt_sum']}"))
+    elif rows2:
+        results.append(ok(f"goal_execution.total matches attempt sums: {len(rows2)} goals"))
+    return results
+
+
+def check_paper_core_query(conn) -> list:
+    results = []
+    rows = conn.execute("""
+        SELECT ge.workflow_type, COUNT(*) AS goals,
+            AVG(ge.overhead_fraction) AS avg_overhead,
+            COUNT(ge.overhead_fraction) AS has_overhead
+        FROM goal_execution ge
+        JOIN experiments e ON ge.exp_id = e.exp_id
+        WHERE e.experiment_type IN ('normal','overhead_study','retry_study',
+            'failure_injection','quality_sweep','ablation')
+        AND e.is_valid = 1
+        GROUP BY ge.workflow_type
+    """).fetchall()
+    if not rows:
+        results.append(fail("paper_core_query: 0 rows with is_valid=1 — no valid experiments"))
+    else:
+        for row in rows:
+            avg = f"{row['avg_overhead']:.3f}" if row['avg_overhead'] is not None else "NULL"
+            results.append(ok(f"paper_core_query: {row['workflow_type']} goals={row['goals']} avg_overhead={avg}"))
+    vfv = conn.execute("SELECT COUNT(*), MAX(delta) FROM v_fraction_verification").fetchone()
+    if vfv and vfv[0] > 0:
+        if vfv[1] == 0.0:
+            results.append(ok(f"v_fraction_verification: {vfv[0]} rows delta=0.0"))
+        else:
+            results.append(warn(f"v_fraction_verification: max_delta={vfv[1]}"))
+    else:
+        results.append(warn("v_fraction_verification: 0 rows"))
+    return results
+
+
+def print_energy_accounting(conn, exp_id: int, exp_type: str) -> None:
+    if exp_type not in ("failure_injection", "retry_study"):
+        return
+    rows = conn.execute("""
+        SELECT r.run_id, r.pkg_energy_uj, r.baseline_energy_uj, r.dynamic_energy_uj,
+            r.attributed_energy_uj, ea.orchestration_energy_uj,
+            ea.llm_compute_energy_uj, ea.failed_tool_energy_uj,
+            ge.total_energy_uj, ge.successful_energy_uj, ge.overhead_fraction,
+            (SELECT SUM(ga2.energy_uj) FROM goal_attempt ga2 WHERE ga2.goal_id=ge.goal_id) AS sum_attempt_energy,
+            (SELECT COUNT(*) FROM goal_attempt ga3 WHERE ga3.goal_id=ge.goal_id AND ga3.is_retry=1) AS retry_count
+        FROM runs r
+        JOIN energy_attribution ea ON ea.run_id=r.run_id
+        JOIN goal_execution ge ON ge.exp_id=r.exp_id
+        WHERE r.exp_id=? LIMIT 5
+    """, (exp_id,)).fetchall()
+    if not rows:
+        return
+    print(f"\n  📊 Energy Accounting (exp_id={exp_id}):")
+    print(f"  {'─'*60}")
+    for row in rows:
+        dyn  = row["dynamic_energy_uj"] or 0
+        asum = row["sum_attempt_energy"] or 0
+        cons = "✅" if abs(dyn - asum) < 1000 else "❌ VIOLATION"
+        print(f"  run_id={row['run_id']}  retries={row['retry_count']}  overhead={row['overhead_fraction']:.3f}" if row['overhead_fraction'] else f"  run_id={row['run_id']}  retries={row['retry_count']}")
+        print(f"    pkg={( row['pkg_energy_uj'] or 0)/1e6:.3f}J  baseline={(row['baseline_energy_uj'] or 0)/1e6:.3f}J  dynamic={dyn/1e6:.3f}J")
+        print(f"    attributed={(row['attributed_energy_uj'] or 0)/1e6:.3f}J  orch={(row['orchestration_energy_uj'] or 0)/1e6:.3f}J  llm={(row['llm_compute_energy_uj'] or 0)/1e6:.3f}J")
+        print(f"    failed_tool={(row['failed_tool_energy_uj'] or 0)/1e6:.3f}J  goal_total={(row['total_energy_uj'] or 0)/1e6:.3f}J  sum_attempts={asum/1e6:.3f}J")
+        print(f"    Conservation: dynamic={dyn/1e6:.3f}J == attempts={asum/1e6:.3f}J → {cons}")
+    print(f"  {'─'*60}")
 def main():
     parser = argparse.ArgumentParser(description="A-LEMS experiment integrity scanner")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -375,7 +534,14 @@ def main():
     all_results += check_orchestration_events(conn, run_ids, workflow)
     all_results += check_llm_interactions(conn, run_ids)
     all_results += check_expected_empty(conn)
-
+    all_results += check_etl_queue(conn, goal_ids)
+    all_results += check_retry_policy(conn)
+    all_results += check_task_categories(conn)
+    all_results += check_task_retry_override(conn)
+    all_results += check_energy_conservation(conn, exp_id, run_ids, goal_ids)
+    all_results += check_paper_core_query(conn)
+    print_energy_accounting(conn, exp_id, exp_type)    
+    
     passed = sum(1 for r in all_results if r.startswith(GREEN))
     warned = sum(1 for r in all_results if r.startswith(YELLOW))
     failed = sum(1 for r in all_results if r.startswith(RED))

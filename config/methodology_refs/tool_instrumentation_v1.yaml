@@ -1,0 +1,48 @@
+method_id: tool_instrumentation_v1
+name: "Tool Execution Instrumentation"
+provenance: MEASURED
+layer: orchestration
+confidence: 1.0
+description: >
+  Per-tool measurement of execution metadata captured synchronously during
+  tool call execution. Each tool records CPU time (resource.getrusage),
+  memory delta (VmRSS from /proc/self/status), I/O bytes, payload hashes,
+  and success/failure outcome. Metadata is emitted into orchestration_events
+  via _emit_event() backfill immediately after tool execution completes.
+  All values are direct measurements — not ETL-derived or inferred.
+formula_latex: >
+  cpu\_time\_ns = (ru\_utime + ru\_stime)_{after} - (ru\_utime + ru\_stime)_{before}
+parameters:
+  cpu_source: "resource.getrusage(RUSAGE_SELF)"
+  memory_source: "/proc/self/status VmRSS — falls back to 0 on macOS"
+  hash_algorithm: "SHA-256 truncated to 16 hex chars"
+  max_rows: 100
+  query_timeout_s: 5.0
+  code_executor_timeout_s: 10.0
+applicable_columns:
+  - orchestration_events.tool_name
+  - orchestration_events.io_bytes_read
+  - orchestration_events.io_bytes_written
+  - orchestration_events.input_payload_hash
+  - orchestration_events.output_payload_hash
+  - orchestration_events.tool_success
+  - orchestration_events.tool_result_rows
+  - orchestration_events.tool_cpu_time_ns
+  - orchestration_events.tool_memory_delta_kb
+doc_section: "docs-src/mkdocs/source/research/24-tool-instrumentation-methodology.md"
+references:
+  - title: "Python resource module — getrusage"
+    authors: "Python Software Foundation"
+    year: 2024
+    ref_type: manual
+    relevance: "CPU time measurement via RUSAGE_SELF"
+  - title: "Linux /proc/self/status — VmRSS field"
+    authors: "Linux kernel documentation"
+    year: 2024
+    ref_type: manual
+    relevance: "Resident set size memory measurement per process"
+  - title: "sqlparse — Non-validating SQL parser"
+    authors: "Andi Albrecht et al."
+    year: 2024
+    ref_type: manual
+    relevance: "AST-based SQL validation for DatabaseQueryTool guardrails"

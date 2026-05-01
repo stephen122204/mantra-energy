@@ -297,7 +297,7 @@ tasks:
         tool: database_query
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "SELECT workflow_type, AVG(pkg_energy_uj) as avg_energy_uj, COUNT(*) as runs FROM runs GROUP BY workflow_type"
     prompt: |
       Query the experiment database to find the average energy consumption
       for linear vs agentic workflow types. Report the numbers clearly.
@@ -315,7 +315,7 @@ tasks:
         tool: calculator
         depends_on: []
         args_template:
-          expression: "{llm_generated}"
+          expression: "(4500-1000)/4500"
     prompt: |
       Calculate the orchestration tax: if linear workflow uses 1000 µJ
       and agentic uses 4500 µJ, what is the overhead fraction?
@@ -333,7 +333,7 @@ tasks:
         tool: database_query
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "SELECT run_id, workflow_type, pkg_energy_uj FROM runs ORDER BY run_id DESC LIMIT 5"
       - step: 2
         tool: file_processor
         depends_on: [1]
@@ -358,7 +358,7 @@ tasks:
         tool: database_query
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "{planner.generate_sql}"
       - step: 2
         tool: file_processor
         depends_on: [1]
@@ -390,7 +390,7 @@ tasks:
         tool: database_query
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "{planner.generate_sql}"
       - step: 2
         tool: api_query
         depends_on: []
@@ -415,12 +415,12 @@ tasks:
         tool: database_query
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "{planner.generate_sql}"
       - step: 2
         tool: calculator
         depends_on: [1]
         args_template:
-          expression: "{llm_generated_from_step_1}"
+          expression: "{planner.generate_expression_from_step_1}"
       - step: 3
         tool: file_processor
         depends_on: [2]
@@ -452,7 +452,7 @@ tasks:
         tool: code_executor
         depends_on: []
         args_template:
-          code: "{llm_generated}"
+          code: "{planner.generate_code}"
           test_cases: []
     prompt: |
       Write and execute Python code that calculates the mean and standard
@@ -472,7 +472,7 @@ tasks:
         tool: web_search
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "{planner.generate_search_query}"
     prompt: |
       Search for information about current experiment energy consumption
       patterns. Summarize the key findings from the search results.
@@ -490,12 +490,12 @@ tasks:
         tool: web_search
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "{planner.generate_search_query}"
       - step: 2
         tool: web_search
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "{planner.generate_search_query}"
       - step: 3
         tool: file_processor
         depends_on: [1, 2]
@@ -521,12 +521,12 @@ tasks:
         tool: database_query
         depends_on: []
         args_template:
-          query: "{llm_generated}"
+          query: "{planner.generate_sql}"
       - step: 2
         tool: database_query
         depends_on: [1]
         args_template:
-          query: "{llm_generated}"
+          query: "{planner.generate_sql}"
     failure_injection:
       step: 1
       rate: 1.0

@@ -53,6 +53,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 _goal_tracker = GoalTracker()   # module-level singleton — stateless class
+_failure_classifier = FailureClassifier()  # stateless — classify failures on normal path
 
 class ExperimentRunner:
     """Shared experiment logic - ONLY duplicate code + new features"""
@@ -427,6 +428,47 @@ class ExperimentRunner:
         env_info = self.get_environment_info()
         return db.insert_environment_config(env_info)
 
+    def resolve_task_prompt(self, task: dict) -> dict:
+        """
+        Resolve task prompt at runtime based on tier.
+        Tier 1: load prompt and expected_answer from BenchmarkLoader using
+                task.benchmark config — prompt field in YAML is null.
+        Tier 2/3: use task.prompt directly — already set in YAML.
+        Returns enriched task dict with prompt and expected_answer populated.
+        Never modifies original task dict — returns a shallow copy.
+        """
+        task = dict(task)  # shallow copy — do not mutate caller's dict
+ 
+        tier = task.get("tier", 3)
+        if tier != 1:
+            # Tier 2 and 3 prompts are static in tasks.yaml — no resolution needed
+            return task
+ 
+        benchmark = task.get("benchmark")
+        if not benchmark:
+            logger.warning(
+                "Tier 1 task %s missing benchmark config — using prompt as-is",
+                task.get("id"),
+            )
+            return task
+ 
+        try:
+            from core.execution.benchmark_loader import BenchmarkLoader
+            loader = BenchmarkLoader()
+            sample = loader.get_task_prompt(
+                dataset=benchmark["dataset"],
+                sample_id=benchmark["sample_id"],
+            )
+            task["prompt"] = sample["prompt"]
+            task["expected_answer"] = sample["expected_answer"]
+            task["difficulty"] = sample.get("difficulty", "medium")
+        except Exception as exc:
+            logger.warning(
+                "BenchmarkLoader failed for task %s: %s — using null prompt",
+                task.get("id"), exc,
+            )
+ 
+        return task
     # ========================================================================
     # NEW FEATURE 1: Create experiment with group_id and status
     # ========================================================================
@@ -1007,6 +1049,9 @@ class ExperimentRunner:
         if attempt_id is None:
             return goal_id
  
+        # Classify failure type for non-success outcomes — prevents NULL failure_type in paper queries
+        failure_type = None if outcome == "success" else _failure_classifier.classify(run_result=None)
+
         _goal_tracker.finish_attempt(
             conn=conn,
             attempt_id=attempt_id,
@@ -1015,7 +1060,7 @@ class ExperimentRunner:
             energy_uj=energy_uj,
             orchestration_uj=orchestration_uj,
             compute_uj=compute_uj,
-            failure_type=None,
+            failure_type=failure_type,
         )
  
         success = (outcome == "success")

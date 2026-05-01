@@ -15,16 +15,10 @@ logger = logging.getLogger(__name__)
 
 # Canonical failure type set — mirrors goal_attempt.failure_type values.
 # Any new type here requires a DB migration to add it to the column docs.
-FAILURE_TYPES = frozenset({
-    "timeout",
-    "api_error",
-    "tool_error",
-    "wrong_answer",
-    "context_overflow",
-    "rate_limit",
-    "crashed",
+VALID_FAILURE_TYPES = frozenset({
+    "rate_limit", "timeout", "api_error", "context_overflow",
+    "tool_error", "wrong_answer", "crashed", "other",
 })
-
 # Quality score below this threshold is classified as wrong_answer.
 # Tied to output_quality_normalization_v1 — bump version if threshold changes.
 WRONG_ANSWER_THRESHOLD = 0.5
@@ -97,19 +91,25 @@ class FailureClassifier:
 
     def _classify_result(self, run_result: dict) -> str:
         """
-        Classify from harness result dict when no exception was raised.
-        Checks explicit tool_error flag first, then quality score.
+        4-layer structured failure detection.
+        Layer 1: explicit tool_error flag.
+        Layer 2: execution.error_type — set by agentic structured detection.
+        Layer 3: execution.error_message — set by linear harness or exception path.
+        Layer 4: scan step results for error strings — fallback for legacy results.
+        Conservative default: unknown errors → api_error not None.
         """
-        # Explicit tool failure flag set by harness tool execution block
-        # Explicit tool failure flag set by harness tool execution block
         if run_result.get("tool_error"):
             return "tool_error"
-
-        # Check execution.error_message — harness catches provider exceptions
-        # and stores them here rather than raising. Must check before quality_score
-        # because a rate-limited call has no quality score to evaluate.
-        exec_dict  = run_result.get("execution", {}) or {}
-        error_msg  = str(exec_dict.get("error_message", "") or "").lower()
+ 
+        exec_dict = run_result.get("execution", {}) or {}
+ 
+        # Layer 2 — structured error_type from agentic.py (most reliable)
+        error_type = exec_dict.get("error_type")
+        if error_type and error_type in VALID_FAILURE_TYPES:
+            return error_type
+ 
+        # Layer 3 — error_message from linear harness or exception path
+        error_msg = str(exec_dict.get("error_message", "") or "").lower()
         if error_msg:
             if "429" in error_msg or "too many requests" in error_msg or "rate_limit" in error_msg:
                 return "rate_limit"
@@ -119,12 +119,33 @@ class FailureClassifier:
                 return "timeout"
             if "connection" in error_msg or "api error" in error_msg:
                 return "api_error"
-
-        # Quality score below threshold means model produced a wrong answer
+ 
+        # Layer 4 — scan step results for error strings (legacy/fallback)
+        steps = run_result.get("step_results", []) or []
+        for step in steps:
+            content = str(step.get("result", "") or "").lower()
+            if "429" in content or "too many requests" in content:
+                return "rate_limit"
+            if "context window" in content or "context_length" in content:
+                return "context_overflow"
+            if "timeout" in content:
+                return "timeout"
+            if content.startswith("error:"):
+                return "api_error"
+ 
+        # Quality score fallback
+        # Quality score fallback
         score = run_result.get("quality_score")
-        if score is not None and score < WRONG_ANSWER_THRESHOLD:
+        if score is not None and score < 0.3:
             return "wrong_answer"
 
-        # Result dict present but no classifiable failure signal — treat as crashed
-        logger.debug("FailureClassifier: result has no classifiable failure signal")
-        return "crashed"
+        # Status fallback — execution failed but no specific error type detected.
+        # Returns api_error rather than None so goal_attempt.failure_type is always
+        # populated for failed outcomes. Never returns None for failed executions.
+        exec_dict = run_result.get("execution", {}) or {}
+        if exec_dict.get("status") in ("failure", "failed", "partial_failure"):
+            return "api_error"
+
+        return None
+ 
+

@@ -716,6 +716,7 @@ class ExperimentHarness:
         is_cloud: bool = True,
         country_code: str = "US",
         run_number: int = 1,
+        tool_graph: list = None,
     ) -> Dict[str, Any]:
         """
         Run agentic executor with synchronized energy measurement.
@@ -769,7 +770,7 @@ class ExperimentHarness:
         _total_ticks_start = read_total_cpu_ticks()
         _pid_ticks_start   = read_process_cpu_ticks(_pid)
         self.energy_engine.set_workload_pid(_pid)  # Chunk 5: pass PID to interrupt sampler        
-        exec_result = executor.execute_comparison(task)
+        exec_result = executor.execute_comparison(task, tool_graph=tool_graph)
         # t1: task boundary — agentic executor has returned, all phases complete.
         task_end_perf        = time.perf_counter()
         _total_ticks_t1      = read_total_cpu_ticks()

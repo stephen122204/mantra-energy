@@ -193,10 +193,22 @@ class LlamaCppAdapter(TextGenABC):
             non_local_ms=0.0, local_compute_ms=0.0, postprocess_ms=0.0,
             app_throughput_kbps=0.0, cpu_percent_during_wait=0.0,
         )
+        # Classify error_type here so FailureClassifier Layer 2 catches it
+        # without relying on string matching in Layer 3 against llama.cpp
+        # internal exception messages which vary across versions.
+        error_msg_lower = error_msg.lower()
+        if "too long" in error_msg_lower or "context" in error_msg_lower or "kv cache" in error_msg_lower:
+            _error_type = "context_overflow"
+        elif "timeout" in error_msg_lower:
+            _error_type = "timeout"
+        else:
+            _error_type = "crashed"
         return {
             "content": f"Error: {error_msg}",
             "tokens": {"prompt": 0, "completion": 0, "total": 0},
             "total_time_ms": preprocess_ms,
             "phase_metrics": phase_metrics,
             "bytes_sent": 0, "bytes_recv": 0, "tcp_retransmits": 0,
+            # error_type enables FailureClassifier Layer 2 — avoids brittle string matching
+            "execution": {"status": "failure", "error_type": _error_type, "error_message": error_msg},
         }

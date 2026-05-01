@@ -1,34 +1,55 @@
 # config/experiment_configs/failure_injection_study.yaml
 # Failure Injection Study — Paper Night 2.
-# Injects deterministic failures to measure recovery energy cost.
-# experiment_type: failure_injection — only type that activates FailureInjector.
+# Measures energy cost of failures and retry recovery.
+# experiment_type: failure_injection — populates tool_failure_events and retry energy.
+#
+# Two tasks: one pure LLM (rate_limit/timeout injection) and one tool graph
+# (tool_error injection). Workload-aware injection — correct failure modes
+# per workload type.
+#
+# Mode: deterministic_validation — guarantees at least min_failures per experiment.
+# Reproducibility: SHA-256 stable seeding — same results on any rerun.
+
 study:
   name: "Failure Injection Study"
   experiment_type: "failure_injection"
-  experiment_goal: "Measure energy cost of tool failure recovery under controlled injection"
-  experiment_notes: "Paper Figure 3 — failure recovery taxonomy. Agentic only."
-  workflow_modes: ["agentic"]
+  experiment_goal: "Measure energy cost of failures and retry recovery"
+  experiment_notes: "Paper Figure 3 — wasted energy taxonomy. Deterministic injection."
+  workflow_modes: ["agentic","linear"]
+
 tasks:
-  - id: gsm8k_basic
-  - id: factual_qa
+  - id: science_qa
+  - id: tg_single_db
+  - id: tg_single_calc
+  - id: gsm8k_multi_step
+
+
 providers:
+
+  - name: groq
+    model_id: llama-3.3-70b-versatile
   - name: llama_cpp
-    model_id: tinyllama-1b-gguf
+    model_id: tinyllama.gguf
+
 execution:
   repetitions: 2
-  cool_down_seconds: 10
+  cool_down_seconds: 30
   save_db: true
+
 retry_policy:
-  name: "default"
-  max_retries: 1
+  name: "aggressive"
+  max_retries: 5
   retry_on_timeout: true
   retry_on_tool_error: true
   retry_on_api_error: true
   retry_on_wrong_answer: false
-  backoff_seconds: 0.0
-quality:
-  enabled: false
+  backoff_seconds: 1.0
+
 failure_injection:
   enabled: true
-  tool_failure_rate: 0.3
-  timeout_rate: 0.1
+  mode: deterministic_validation
+  scenario_id: "failure_study_v1"
+  tool_failure_rate: 0.5
+  timeout_rate: 0.5
+  min_failures: 2
+  total_draws_estimate: 9

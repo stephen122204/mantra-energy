@@ -210,7 +210,7 @@ def _get_orchestration_fraction(conn, winning_run_id) -> float:
         return None
 
     row = conn.execute(
-        """SELECT orchestration_energy_uj, pkg_energy_uj
+        """SELECT orchestration_energy_uj, attributed_energy_uj
            FROM energy_attribution
            WHERE run_id = ?""",
         (winning_run_id,),

@@ -30,4 +30,10 @@ retry_policy:
 quality:
   enabled: false
 failure_injection:
-  enabled: false
+  enabled: true
+  mode: deterministic_validation
+  scenario_id: "retry_study_v1"
+  timeout_rate: 0.5
+  tool_failure_rate: 0.0
+  min_failures: 2
+  total_draws_estimate: 6

@@ -354,6 +354,30 @@ def _load_derived_methods() -> List[Dict]:
             "section":      "Tool Failure Wasted Energy Methodology",
         },
         {
+            "id":           "tool_instrumentation_v1",
+            "name":         "Tool Execution Instrumentation",
+            "provenance":   "MEASURED",
+            "layer":        "orchestration",
+            "confidence":   1.0,
+            "description":  (
+                "Per-tool measurement of CPU time, memory delta, I/O bytes, "
+                "payload hashes, and success/failure captured synchronously "
+                "during tool call execution. Emitted into orchestration_events "
+                "via _emit_event() backfill. Not ETL-derived."
+            ),
+            "formula_latex": (
+                r"cpu\_ns = (ru\_utime + ru\_stime)_{after} "
+                r"- (ru\_utime + ru\_stime)_{before}"
+            ),
+            "parameters": {
+                "cpu_source":    "resource.getrusage(RUSAGE_SELF)",
+                "memory_source": "/proc/self/status VmRSS",
+                "hash_algorithm": "SHA-256 truncated 16 chars",
+            },
+            "doc":          "24-tool-instrumentation-methodology.md",
+            "section":      "Tool Execution Instrumentation Methodology",
+        },        
+        {
             "id":           "attribution_etl_v1",
             "name":         "Chunk 8 Attribution ETL",
             "provenance":   "CALCULATED",
@@ -912,7 +936,29 @@ def _load_derived_methods() -> List[Dict]:
             "doc":           "22-retry-tool-failure-methodology.md",
             "section":       "Failure Injection",
             "fn":            None,
+        },  
+        {
+            "id":            "failure_injection_v2",
+            "name":          "Deterministic Failure Injector v2",
+            "provenance":    "CALCULATED",
+            "layer":         "orchestration",
+            "confidence":    1.0,
+            "output_metric": "tool_failure_events.error_message",
+            "output_unit":   "flag",
+            "applicable_on": ["tool_failure_events", "goal_attempt"],
+            "formula_latex": r"rand = \frac{\text{SHA-256}(scenario\_id:rep:attempt:kind:tool)[0:8]_{uint64}}{2^{64}}",
+            "parameters":    {
+                "version":       2,
+                "seeding":       "SHA-256 — stable across Python versions and process restarts",
+                "modes":         ["deterministic_validation", "deterministic_stress", "statistical"],
+                "slot_algorithm": "slot_i = round((i + 0.5) * N / K)",
+                "supersedes":    "failure_injection_v1",
+            },
+            "doc":           "22-retry-tool-failure-methodology.md",
+            "section":       "Failure Injection v2",
+            "fn":            None,
         },        
+
     ]
 
 

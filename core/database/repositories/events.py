@@ -53,12 +53,17 @@ class EventsRepository:
             INSERT INTO orchestration_events
             (run_id, step_index, phase, event_type, start_time_ns, end_time_ns,
              duration_ns, power_watts, cpu_util_percent, interrupt_rate,
-             event_energy_uj, tax_contribution_uj, tax_percent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             event_energy_uj, tax_contribution_uj, tax_percent,
+             tool_name, io_bytes_read, io_bytes_written,
+             input_payload_hash, output_payload_hash,
+             tool_success, tool_result_rows,
+             tool_cpu_time_ns, tool_memory_delta_kb)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-
         # No transaction wrapper - caller manages transactions
         for ev in events:
+            meta = ev.get("metadata", {})
             self.db.conn.execute(
                 query,
                 (
@@ -75,5 +80,14 @@ class EventsRepository:
                     ev.get("event_energy_uj"),
                     ev.get("tax_contribution_uj"),
                     ev.get("tax_percent"),
+                    meta.get("tool_name"),
+                    meta.get("io_bytes_read"),
+                    meta.get("io_bytes_written"),
+                    meta.get("input_payload_hash"),
+                    meta.get("output_payload_hash"),
+                    (None if meta.get("success") is None else int(meta.get("success"))),
+                    meta.get("result_rows"),
+                    meta.get("cpu_time_ns"),
+                    meta.get("memory_delta_kb"),
                 ),
             )

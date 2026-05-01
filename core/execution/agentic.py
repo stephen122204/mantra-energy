@@ -33,7 +33,15 @@ import time
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-
+from core.execution.tools.real_tools import (  # real instrumented tools
+    CalculatorTool,
+    DatabaseQueryTool,
+    FileProcessorTool,
+    WebSearchTool,
+    CodeExecutorTool,
+    APIQueryTool,
+    ToolResult,
+)
 import psutil
 import requests
 
@@ -51,7 +59,28 @@ Task: {task}
 
 Please provide a complete and thorough answer.
 """
-
+# Execution status constants — used by agentic result dict and classifier
+EXECUTION_STATUS_SUCCESS         = "success"
+EXECUTION_STATUS_FAILURE         = "failure"
+EXECUTION_STATUS_PARTIAL_FAILURE = "partial_failure"  # some steps failed, synthesis succeeded
+ 
+ 
+def _detect_error_type(msg: str) -> str:
+    """
+    Classify a provider error message into a canonical failure type.
+    Used by agentic.execute() to populate execution.error_type.
+    Order matters — more specific patterns checked first.
+    """
+    m = msg.lower()
+    if "429" in m or "too many requests" in m or "rate_limit" in m or "rate limit" in m:
+        return "rate_limit"
+    if "context window" in m or "exceed context" in m or "context_length" in m or "context window" in m:
+        return "context_overflow"
+    if "timeout" in m or "timed out" in m:
+        return "timeout"
+    if "connection" in m or "connection refused" in m or "network" in m:
+        return "api_error"
+    return "api_error"
 
 class AgenticExecutor:
     """
@@ -219,7 +248,7 @@ class AgenticExecutor:
             },
         }
 
-    def execute(self, task: str, planning_temperature: float = 0.0) -> Dict[str, Any]:
+    def execute(self, task: str, planning_temperature: float = 0.0, tool_graph: list = None) -> Dict[str, Any]:
         """
         Execute agentic workflow with phase-level timing.
 
@@ -261,10 +290,29 @@ class AgenticExecutor:
         orchestration_start = time.time()
         plan_start = time.time()
         call_counter += 1
-        plan = self._create_plan(
-            task, temperature=planning_temperature, call_counter=call_counter
-        )
-        steps = plan.get("steps", [])
+        if tool_graph:
+            self._current_task_prompt = task  # store for planner resolution
+            # Tier 2 task — use pre-defined graph, skip LLM planning
+            # Keep args_template unresolved — execute_tool_graph resolves at step time
+            steps = [
+                {
+                    "tool": s["tool"],
+                    "args_template": s.get("args_template", {}),
+                    "depends_on": s.get("depends_on", []),
+                    "step": s["step"],
+                }
+                for s in sorted(tool_graph, key=lambda x: x["step"])
+            ]
+            # Ensure all graph tools are in supported_tools
+            for s in tool_graph:
+                if s["tool"] not in self.supported_tools:
+                    self.supported_tools.append(s["tool"])
+            plan = {"steps": steps}
+        else:
+            plan = self._create_plan(
+                task, temperature=planning_temperature, call_counter=call_counter
+            )
+            steps = plan.get("steps", [])
         plan_end = time.time()
         planning_time_ms = (plan_end - plan_start) * 1000
 
@@ -296,9 +344,16 @@ class AgenticExecutor:
             step_counter += 1
             if step.get("tool") in self.supported_tools:
                 # Tool execution – external computation, no LLM call
+                # Resolve args at execution time — handles {planner.*} and {step_N_result}
+                step_results_dict = {sr["step"]: sr["result"] for sr in step_results}
+                args = self._resolve_step_args(
+                    step.get("args_template", step.get("args", {})),
+                    step_results_dict,
+                    task_prompt=getattr(self, "_current_task_prompt", None),
+                )
                 tool_start = time.time()
                 result = self._execute_tool(
-                    step["tool"], step.get("args", {}), step_counter
+                    step["tool"], args, step_counter
                 )
                 tool_end = time.time()
                 step_results.append(
@@ -322,14 +377,20 @@ class AgenticExecutor:
                     prompt, temperature=self.temperature, call_counter=call_counter
                 )
                 llm_end = time.time()
+                llm_content = llm_result.get("content", "")
                 step_results.append(
                     {
                         "step": i + 1,
                         "type": "llm",
-                        "result": llm_result.get("content", ""),
+                        "result": llm_content,
                         "time_ms": (llm_end - llm_start) * 1000,
                     }
                 )
+                if llm_content.startswith("Error:"):
+                    logger.warning(
+                        "LLM step %d returned provider error: %s",
+                        i + 1, llm_content[:120],
+                    )
 
                 # ====================================================================
                 # FIXED: Handle token counting from API response (12 spaces indentation)
@@ -461,17 +522,51 @@ class AgenticExecutor:
         
         orchestration_end = time.time()
         total_orchestration_ms = (orchestration_end - orchestration_start) * 1000
-        orchestration_cpu_ms = max(0, 
-            total_orchestration_ms 
-            - total_llm_compute_ms 
+        orchestration_cpu_ms = max(0,
+            total_orchestration_ms
+            - total_llm_compute_ms
             - total_non_local_ms
         )
+ 
+        # Scan step results for provider errors — structured failure detection.
+        # Harness always completes so energy is captured regardless of LLM errors.
+        # Sets execution.status and error_type so goal_execution_manager and
+        # classifier can route correctly without relying on exception path.
+        step_errors = [
+            sr.get("result", "")
+            for sr in step_results
+            if isinstance(sr.get("result", ""), str)
+            and sr.get("result", "").startswith("Error:")
+        ]
+        failed_steps  = len(step_errors)
+        total_steps   = len(step_results)
+ 
+        if failed_steps == 0:
+            execution_status = EXECUTION_STATUS_SUCCESS
+            execution_error_type = None
+        elif failed_steps < total_steps:
+            # Some steps failed but harness continued — partial failure
+            execution_status = EXECUTION_STATUS_PARTIAL_FAILURE
+            # Guard against empty step_errors — _detect_error_type requires a string
+            execution_error_type = _detect_error_type(step_errors[0]) if step_errors else "api_error"
+        else:
+            # All steps failed — classify from first error if available
+            execution_status = EXECUTION_STATUS_FAILURE
+            execution_error_type = _detect_error_type(step_errors[0]) if step_errors else "api_error"
 
 
 
         result = {
             "experiment_id": experiment_id,
             "response": synthesis.get("content", ""),
+            "execution": {                                        # structured failure metadata
+                "status":        execution_status,               # success|failure|partial_failure
+                "error_type":    execution_error_type,           # rate_limit|timeout|api_error|context_overflow|None
+                "completed":     True,                           # harness always completes — energy always captured
+                "error_message": step_errors[0] if step_errors else None,
+                "failed_steps":  failed_steps,
+                "total_steps":   total_steps,
+            },            
             "tokens": tokens,
             "llm_calls": final_llm_calls,  # CORRECT: planning + execution + synthesis
             "steps": len(steps),
@@ -617,7 +712,7 @@ class AgenticExecutor:
         )
         return result
 
-    def execute_comparison(self, task: str) -> Dict[str, Any]:
+    def execute_comparison(self, task: str, tool_graph: list = None) -> Dict[str, Any]:
         """
         Execute with standardized prompt for fair comparison with linear.
 
@@ -640,7 +735,7 @@ class AgenticExecutor:
 To solve this effectively, break it down into steps.
 You can use tools like calculator or web search if needed.
 """
-        return self.execute(planning_prompt)
+        return self.execute(planning_prompt, tool_graph=tool_graph)
 
     def _create_plan(
         self, task: str, temperature: float = 0.0, call_counter: int = None
@@ -736,58 +831,199 @@ You can use tools like calculator or web search if needed.
             Tool execution result (varies by tool)
         """
         tool_start = time.time()
-
-        dprint(f"🔧 Executing tool: {name} with args: {args}")
-
-        # Emit tool start event
+ 
+        # Emit start event before execution — existing pipeline pattern
         self._emit_event(
             phase="execution",
             event_type="tool_call",
             start_time=tool_start,
-            end_time=tool_start,  # Will be updated at end
-            metadata={"tool": name, "args": args, "step": step_index},
+            end_time=tool_start,
+            metadata={"tool": name, "args_keys": list(args.keys()),
+                      "step": step_index},
         )
-
-        result = None
-        if name == "calculator":
-            expr = args.get("expression", args.get("query", "")).replace(" ", "")
-
-            if expr == "2+2":
-                result = 4
-            elif expr == "3*4":
-                result = 12
-            elif expr == "10/2":
-                result = 5
-            else:
-                try:
-                    allowed = {
-                        k: v for k, v in math.__dict__.items() if not k.startswith("__")
-                    }
-                    result = eval(expr, {"__builtins__": {}}, allowed)
-                except:
-                    result = 0
-
-        elif name == "web_search":
-            time.sleep(0.3)
-            result = f"Search results for: {args.get('query', '')}"
-
+ 
+        result = self._dispatch_tool(name, args)  # never raises
+ 
         tool_end = time.time()
-        tool_latency_ms = (tool_end - tool_start) * 1000
-
-        # Update the last event with end time
+ 
+        # Backfill instrumentation metadata into the event just emitted
+        # _events is the in-flight list before DB flush — last entry is ours
         if hasattr(self, "_events") and self._events:
-            self._events[-1]["end_time_ns"] = int(tool_end * 1e9)
-            self._events[-1]["duration_ns"] = int((tool_end - tool_start) * 1e9)
-            self._events[-1]["metadata"]["result"] = str(result)[:100]
-
-        dprint(f"✅ Tool complete: {tool_latency_ms:.1f}ms")
-
-        # Store tool latency for aggregation
-        if not hasattr(self, "_tool_latencies"):
-            self._tool_latencies = []
-        self._tool_latencies.append(tool_latency_ms)
-
-        return result
+            last = self._events[-1]
+            last["end_time_ns"] = int(tool_end * 1e9)
+            last["duration_ns"] = int((tool_end - tool_start) * 1e9)
+            last["metadata"].update({
+                "tool_name":            name,
+                "success":              result.success,
+                "io_bytes_read":        result.io_bytes_read,
+                "io_bytes_written":     result.io_bytes_written,
+                "input_payload_hash":   result.input_payload_hash,
+                "output_payload_hash":  result.output_payload_hash,
+                "cpu_time_ns":          result.cpu_time_ns,
+                "memory_delta_kb":      result.memory_delta_kb,
+                "result_rows":          result.row_count,
+                "result_preview":       str(result.result)[:200],
+                "error":                result.error,
+            })
+ 
+        # Return raw result on success, None on failure so caller can handle
+        return result.result if result.success else None
+ 
+    def _dispatch_tool(self, name: str, args: Dict) -> ToolResult:
+        """
+        Route tool name to real implementation.
+        Instantiated per-call — tools are stateless execution primitives.
+        Never raises — returns ToolResult(success=False) on unknown tool.
+        db_path passed to DatabaseQueryTool so it queries live experiments DB.
+        """
+        db_path = getattr(self, "db_path", "data/experiments.db")
+        tool_map = {
+            "calculator":     CalculatorTool(),
+            "database_query": DatabaseQueryTool(db_path),
+            "file_processor": FileProcessorTool(),
+            "web_search":     WebSearchTool(),
+            "code_executor":  CodeExecutorTool(),
+            "api_query":      APIQueryTool(),
+        }
+        tool = tool_map.get(name)
+        if not tool:
+            logger.warning("Unknown tool requested: %s", name)
+            return ToolResult(
+                success=False, result=None,
+                tool_name=name, duration_ns=0,
+                error=f"Unknown tool: {name}",
+            )
+ 
+        # Tool failure injection — fires after harness starts so energy is captured.
+        # failure_injector is passed into AgenticExecutor at construction time
+        # when experiment_type is failure_injection or retry_study.
+        # maybe_inject_tool_failure() requires tool_name for deterministic seeding.
+        _injector = getattr(self, "failure_injector", None)
+        if _injector and _injector.is_active():
+            if _injector.maybe_inject_tool_failure(
+                tool_name=name,
+                rep_num=getattr(self, "_current_run_id", 1),
+                attempt_num=getattr(self, "_current_attempt", 1),
+            ):
+                logger.info("FailureInjector: tool failure injected for %s", name)
+                return ToolResult(
+                    success=False, result=None,
+                    tool_name=name, duration_ns=0,
+                    error=f"INJECTED: simulated tool failure for {name}",
+                )
+ 
+        try:
+            return tool.execute(**args)
+        except Exception as exc:
+            logger.warning("Tool %s raised unexpectedly: %s", name, exc)
+            return ToolResult(
+                success=False, result=None,
+                tool_name=name, duration_ns=0,
+                error=str(exc),
+            )
+ 
+    def execute_tool_graph(
+        self,
+        graph: list,
+        step_results: dict,
+        failure_injector=None,
+    ) -> dict:
+        """
+        Execute tool graph respecting dependency order.
+ 
+        PAPER JUSTIFICATION: Steps declared as parallel (depends_on=[])
+        execute sequentially in our instrumentation environment. This design
+        ensures precise per-tool energy attribution without interference
+        between concurrent processes. We model and report this as sequential
+        orchestration overhead — conservative, because real parallel execution
+        would show lower wall-clock time but identical per-tool energy.
+ 
+        Args:
+            graph: list of step dicts from task tool_graph config
+            step_results: dict to accumulate {step_N: result} — modified in place
+            failure_injector: optional FailureInjector instance for tg_error_recovery
+ 
+        Returns:
+            step_results dict with all completed step outputs.
+        """
+        # Sort by step number so dependency order is always respected
+        sorted_steps = sorted(graph, key=lambda s: s["step"])
+ 
+        for step in sorted_steps:
+            step_num = step["step"]
+            tool_name = step["tool"]
+            deps = step.get("depends_on", [])
+ 
+            # All dependencies must be completed before this step runs
+            for dep in deps:
+                if dep not in step_results:
+                    logger.warning(
+                        "Step %d dependency step_%d not in results — skipping",
+                        step_num, dep,
+                    )
+                    step_results[step_num] = None
+                    continue
+ 
+            # Resolve args — substitute step results into template placeholders
+            args = self._resolve_step_args(
+                step.get("args_template", {}), step_results,
+                task_prompt=getattr(self, "_current_task_prompt", None)
+            )
+ 
+            # Optional failure injection for tg_error_recovery task
+            if failure_injector is not None:
+                inj = step.get("failure_injection", {})
+                if inj.get("step") == step_num:
+                    import random
+                    if random.random() < inj.get("rate", 0.0):
+                        logger.info(
+                            "Failure injected at step %d per task config", step_num
+                        )
+                        step_results[step_num] = None
+                        continue
+ 
+            result = self._execute_tool(tool_name, args, step_index=step_num)
+            step_results[step_num] = result
+ 
+        return step_results
+ 
+    def _resolve_step_args(self, template: dict, step_results: dict,
+                           task_prompt: str = None) -> dict:
+        """
+        Substitute placeholders in args template.
+        Three placeholder types:
+          {step_N_result}           — prior tool output (pipeline chaining)
+          {planner.generate_*}      — LLM generates value from task prompt
+          static values             — used as-is (deterministic benchmark mode)
+        """
+        resolved = {}
+        for key, val in template.items():
+            if isinstance(val, str):
+                # Step result chaining
+                for step_num, step_result in step_results.items():
+                    placeholder = f"{{step_{step_num}_result}}"
+                    if placeholder in val and step_result is not None:
+                        val = val.replace(placeholder, str(step_result))
+                # Planner placeholder — call LLM to generate value
+                if "{planner." in val and task_prompt:
+                    planner_prompt = (
+                        f"Generate ONLY a raw {key} value for this task:\n"
+                        f"{task_prompt}\n\n"
+                        f"Rules:\n"
+                        f"- No explanation, no markdown, no code fences\n"
+                        f"- Raw value only — one line\n"
+                        f"- For SQL: use only these tables: runs, experiments, goal_execution, goal_attempt\n"
+                        f"- For SQL: energy column is pkg_energy_uj, workflow type is workflow_type\n"
+                    )
+                    llm_result = self._call_llm(planner_prompt, temperature=0.0)
+                    raw = llm_result.get("content", "").strip()
+                    import re as _re
+                    generated = _re.sub(r"```[a-z]*\n?", "", raw).replace("```", "").strip()
+                    generated = generated.split("\n")[0].strip()
+                    logger.debug("Planner resolved %s=%r for key=%s", val, generated, key)
+                    val = generated
+            resolved[key] = val
+        return resolved
 
     def _call_llm(
         self, prompt: str, temperature: Optional[float] = None, call_counter: int = None
@@ -933,9 +1169,9 @@ You can use tools like calculator or web search if needed.
                 "streaming_enabled":   0,
                 "first_token_time_ns": None,
                 "last_token_time_ns":  None,
-                "error_message":        str(e),                
                 "error_message":        str(e),
-                "status":               "failed",
+                "error_type":           _detect_error_type(str(e)),
+                "status":               "failure",
             }
             self.pending_interactions.append(interaction)
             return {

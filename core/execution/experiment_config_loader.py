@@ -50,13 +50,12 @@ def apply_config(args) -> None:
         logger.warning("apply_config: config is not a dict — using CLI args")
         return
 
-    _apply_study_section(args, cfg.get("study", {}))
+    _apply_study_section(args, cfg.get("study", {}))        # sets experiment_type first
     _apply_execution_section(args, cfg.get("execution", {}))
     _apply_retry_section(args, cfg.get("retry_policy", {}))
     _apply_tasks_section(args, cfg.get("tasks", []))
     _apply_providers_section(args, cfg.get("providers", []))
-    _apply_failure_injection_section(args, cfg.get("failure_injection", {}))
-    logger.info("apply_config: loaded config from %s", config_path)
+    _apply_failure_injection_section(args, cfg.get("failure_injection", {}))  # reads experiment_type after study
 
 def _apply_failure_injection_section(args, fi: dict) -> None:
     """
@@ -146,6 +145,11 @@ def _apply_execution_section(args, execution: dict) -> None:
         args.cool_down = val
         logger.debug("apply_config: cool_down = %d", val)
 
+    if "save_db" in execution:
+        # YAML save_db:true mirrors --save-db CLI flag (store_true, default False)
+        args.save_db = bool(execution["save_db"])
+        logger.debug("apply_config: save_db = %s", args.save_db)
+
 def _apply_tasks_section(args, tasks: list) -> None:
     """
     Override task_id and task_ids from top-level tasks list in config.
@@ -168,16 +172,25 @@ def _apply_tasks_section(args, tasks: list) -> None:
         
 def _apply_providers_section(args, providers: list) -> None:
     """
-    Override provider and model from top-level providers list.
-    Takes first provider only — test_harness is single-provider.
-    run_experiment.py loops over full list itself.
+    Override provider args from top-level providers list.
+    args.provider  = first entry (single-provider entry points).
+    args.providers = comma-separated all names so run_experiment.py
+                     multi-provider loop iterates every provider.
     """
     if not providers:
         return
+    names = []
+    for p in providers:
+        entry = p if isinstance(p, dict) else {}
+        if "name" in entry:
+            names.append(entry["name"])
+    if not names:
+        return
+    args.provider = names[0]
+    logger.debug("apply_config: provider = %s", args.provider)
+    args.providers = ",".join(names)
+    logger.debug("apply_config: providers = %s", args.providers)
     first = providers[0] if isinstance(providers[0], dict) else {}
-    if "name" in first:
-        args.provider = first["name"]
-        logger.debug("apply_config: provider = %s", args.provider)
     if "model_id" in first:
         args.model = first["model_id"]
         logger.debug("apply_config: model = %s", args.model)

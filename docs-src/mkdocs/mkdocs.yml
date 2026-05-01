@@ -86,7 +86,7 @@ nav:
     - Tool Failure and Attribution ETL Methodology: research/20-tool-failure-methodology.md
     - Goal Tracking Runtime Methodology: research/21-goal-tracking-runtime.md
     - Retry and Tool Failure Methodology: research/22-retry-tool-failure-methodology.md
-    - Goal Retry Study Researcher Guide: research/23-researcher-guide.md
+    - Tool instrumentation Methodology:   research/24-tool-instrumentation-methodology.md
   
   - API Reference: 
     - Overview: api/reference.md

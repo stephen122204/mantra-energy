@@ -372,6 +372,7 @@ def _run_experiment(setup: dict, args) -> tuple:
                         is_cloud=not agentic_config.get("is_local", False),
                         country_code=country_code,
                         run_number=rep + 1,
+                        tool_graph=task.get("tool_graph"),
                     )
                     all_agentic.append(agentic_result)
  

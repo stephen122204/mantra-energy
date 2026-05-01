@@ -189,31 +189,35 @@ def run_provider_task(
                 # Run linear
                 workflow_mode = getattr(args, 'workflow_mode', 'comparison')
 
-                # Run linear side if requested
+                # Normal path only — retry path skips harness here.
+                # When max_retries > 0, execute_goal() owns the full lifecycle.
                 linear_result = None
-                if workflow_mode in ('linear', 'comparison'):
-                    linear_result = harness.run_linear(
-                        executor=linear,
-                        prompt=task["prompt"],
-                        task_id=task["id"],
-                        is_cloud=not linear_config.get("is_local", False),
-                        country_code=args.country,
-                        run_number=rep + 1,
-                    )
-                    linear_results.append(linear_result)
-
-                # Run agentic side if requested
                 agentic_result = None
-                if workflow_mode in ('agentic', 'comparison'):
-                    agentic_result = harness.run_agentic(
-                        executor=agentic,
-                        task=task["prompt"],
-                        task_id=task["id"],
-                        is_cloud=not linear_config.get("is_local", False),
-                        country_code=args.country,
-                        run_number=rep + 1,
-                    )
-                    agentic_results.append(agentic_result)
+                max_retries = getattr(args, "max_retries", 0)
+                print(f"DEBUG max_retries={max_retries} workflow_mode={workflow_mode}")
+                if max_retries == 0:
+                    if workflow_mode in ('linear', 'comparison'):
+                        linear_result = harness.run_linear(
+                            executor=linear,
+                            prompt=task["prompt"],
+                            task_id=task["id"],
+                            is_cloud=not linear_config.get("is_local", False),
+                            country_code=args.country,
+                            run_number=rep + 1,
+                        )
+                        linear_results.append(linear_result)
+
+                    if workflow_mode in ('agentic', 'comparison'):
+                        agentic_result = harness.run_agentic(
+                            executor=agentic,
+                            task=task["prompt"],
+                            task_id=task["id"],
+                            is_cloud=not linear_config.get("is_local", False),
+                            country_code=args.country,
+                            run_number=rep + 1,
+                            tool_graph=task.get("tool_graph"),
+                        )
+                        agentic_results.append(agentic_result)
 
 
                 # Tax only meaningful when both sides ran
@@ -248,7 +252,7 @@ def run_provider_task(
                                 harness=harness, executor=linear,
                                 task=task_dict, workflow_type="linear",
                                 rep_num=rep + 1, goal_tracker=_goal_tracker,
-                                policy=policy, failure_injector=None,
+                                policy=policy, failure_injector=getattr(args, "failure_injector", None),
                             )
                             runs_completed += 1
                         if workflow_mode in ("agentic", "comparison"):
@@ -257,7 +261,7 @@ def run_provider_task(
                                 harness=harness, executor=agentic,
                                 task=task_dict, workflow_type="agentic",
                                 rep_num=rep + 1, goal_tracker=_goal_tracker,
-                                policy=policy, failure_injector=None,
+                                policy=policy, failure_injector=getattr(args, "failure_injector", None),
                             )
                             runs_completed += 1
                     else:
@@ -309,9 +313,11 @@ def run_provider_task(
         # UPDATE EXPERIMENT STATUS - SUCCESS
         # ========================================================================
         if db:
-            runs_completed = len(linear_results) + len(agentic_results)
-            runner.update_status(db, exp_id, "completed", runs_completed)
-            print(f"\n   ✅ Experiment {exp_id} completed with {runs_completed} runs")
+            final_runs = runs_completed if runs_completed > 0 else (
+                len(linear_results) + len(agentic_results)
+            )
+            runner.update_status(db, exp_id, "completed", final_runs)
+            print(f"\n   ✅ Experiment {exp_id} completed with {final_runs} runs")
 
         # ========================================================================
         # DISPLAY HARDWARE PARAMETERS (verbose mode only)

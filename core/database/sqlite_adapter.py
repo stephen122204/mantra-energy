@@ -65,7 +65,9 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,CREATE_RUN_QUALIT
                      CREATE_NORMALIZATION_VIEWS,
                      CREATE_VIEW_GOAL_ENERGY_DECOMPOSITION,
                      CREATE_VIEW_FAILURE_ENERGY_TAXONOMY,
-                     CREATE_VIEW_QUALITY_ENERGY_FRONTIER,                     
+                     CREATE_VIEW_QUALITY_ENERGY_FRONTIER,
+                     CREATE_VIEW_FRACTION_VERIFICATION,
+                     CREATE_VIEW_OUTCOME_EFFICIENCY,                     
                      )
 
 
@@ -307,7 +309,8 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_VIEW_GOAL_ENERGY_DECOMPOSITION)
         self.conn.executescript(CREATE_VIEW_FAILURE_ENERGY_TAXONOMY)
         self.conn.executescript(CREATE_VIEW_QUALITY_ENERGY_FRONTIER)        
-
+        self.conn.executescript(CREATE_VIEW_OUTCOME_EFFICIENCY)
+        self.conn.executescript(CREATE_VIEW_FRACTION_VERIFICATION)
 
         # Commit explicitly (DDL should be committed)
         self.conn.commit()
@@ -688,8 +691,13 @@ class SQLiteAdapter(DatabaseInterface):
                 INSERT INTO orchestration_events
                 (run_id, step_index, phase, event_type, start_time_ns, end_time_ns,
                  duration_ns, power_watts, cpu_util_percent, interrupt_rate,
-                 event_energy_uj, tax_contribution_uj, tax_percent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 event_energy_uj, tax_contribution_uj, tax_percent,
+                 tool_name, io_bytes_read, io_bytes_written,
+                 input_payload_hash, output_payload_hash,
+                 tool_success, tool_result_rows,
+                 tool_cpu_time_ns, tool_memory_delta_kb)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     run_id,
@@ -705,6 +713,15 @@ class SQLiteAdapter(DatabaseInterface):
                     ev.get("event_energy_uj"),
                     ev.get("tax_contribution_uj"),
                     ev.get("tax_percent"),
+                    ev.get("metadata", {}).get("tool_name"),
+                    ev.get("metadata", {}).get("io_bytes_read"),
+                    ev.get("metadata", {}).get("io_bytes_written"),
+                    ev.get("metadata", {}).get("input_payload_hash"),
+                    ev.get("metadata", {}).get("output_payload_hash"),
+                    (None if ev.get("metadata", {}).get("success") is None else int(ev.get("metadata", {}).get("success"))),
+                    ev.get("metadata", {}).get("result_rows"),
+                    ev.get("metadata", {}).get("cpu_time_ns"),
+                    ev.get("metadata", {}).get("memory_delta_kb"),                    
                 ),
             )
 

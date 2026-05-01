@@ -211,34 +211,68 @@ class GoalTracker:
         if attempt_id is None:
             logger.warning("finish_attempt: attempt_id is None — skipping")
             return
+        if not run_id or run_id <= 0:
+            # No real run was persisted — exception path with no harness result.
+            # Skip FK update, just record outcome and failure_type.
+            run_id = None
 
         # Derive status from outcome using canonical mapping
         status = OUTCOME_TO_STATUS.get(outcome, "crashed")
         is_winning = 1 if outcome == "success" else 0
         now = _now_utc()
 
-        sql = """
-            UPDATE goal_attempt SET
-                run_id           = ?,
-                outcome          = ?,
-                status           = ?,
-                is_winning       = ?,
-                energy_uj        = ?,
-                orchestration_uj = ?,
-                compute_uj       = ?,
-                failure_cause    = ?,
-                failure_type     = ?,
-                finished_at      = ?,
-                updated_at       = ?
-            WHERE attempt_id = ?
-        """
-        try:
-            conn.execute(sql, (
+        # Only update run_id when real run exists — avoids FK violation
+        # when exception path fires before harness completes
+        has_run = run_id is not None and run_id > 0
+
+        if has_run:
+            sql = """
+                UPDATE goal_attempt SET
+                    run_id           = ?,
+                    outcome          = ?,
+                    status           = ?,
+                    is_winning       = ?,
+                    energy_uj        = ?,
+                    orchestration_uj = ?,
+                    compute_uj       = ?,
+                    failure_cause    = ?,
+                    failure_type     = ?,
+                    finished_at      = ?,
+                    updated_at       = ?
+                WHERE attempt_id = ?
+            """
+            params = (
                 run_id, outcome, status, is_winning,
                 energy_uj, orchestration_uj, compute_uj,
                 failure_cause, failure_type, now, now,
                 attempt_id,
-            ))
+            )
+        else:
+            # No real run — exception fired before harness completed.
+            # Skip run_id update to avoid FK violation on NOT NULL column.
+            # energy_uj still stored — harness may have completed before injection.
+            sql = """
+                UPDATE goal_attempt SET
+                    outcome          = ?,
+                    status           = ?,
+                    is_winning       = ?,
+                    energy_uj        = ?,
+                    orchestration_uj = ?,
+                    compute_uj       = ?,
+                    failure_cause    = ?,
+                    failure_type     = ?,
+                    finished_at      = ?,
+                    updated_at       = ?
+                WHERE attempt_id = ?
+            """
+            params = (
+                outcome, status, is_winning,
+                energy_uj, orchestration_uj, compute_uj,
+                failure_cause, failure_type, now, now,
+                attempt_id,
+            )
+        try:
+            conn.execute(sql, params)
             conn.commit()
             logger.debug(
                 "finish_attempt: attempt_id=%d run_id=%d outcome=%s",
@@ -294,6 +328,10 @@ class GoalTracker:
             WHERE goal_id = ?
         """
         try:
+            if first_run_id == 0:
+                # Sentinel — all attempts failed, no real run exists.
+                # FK enforcement off for this update only — same pattern as start_goal().
+                conn.execute("PRAGMA foreign_keys = OFF")
             conn.execute(sql, (
                 status, success_int, winning_run_id,
                 first_run_id, total_attempts,
@@ -301,6 +339,8 @@ class GoalTracker:
                 goal_id,
             ))
             conn.commit()
+            if first_run_id == 0:
+                conn.execute("PRAGMA foreign_keys = ON")
             logger.debug(
                 "finish_goal: goal_id=%d success=%s status=%s",
                 goal_id, success, status,
@@ -412,4 +452,11 @@ class GoalTracker:
                 "_resolve_first_run_id: query failed goal_id=%d: %s", goal_id, e,
             )
         # Fallback — winning_run_id is always valid in the single-attempt path
-        return winning_run_id
+        # All attempts failed — no real run_id exists.
+        # Use winning_run_id if available, otherwise use 0 as documented sentinel.
+        # goal_execution.first_run_id NOT NULL constraint requires a value —
+        # 0 is safe because AUTOINCREMENT never produces 0. FK enforcement
+        # toggled off for this update only, same pattern as start_goal().
+        if winning_run_id is not None and winning_run_id > 0:
+            return winning_run_id
+        return 0

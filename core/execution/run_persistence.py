@@ -23,7 +23,7 @@ from typing import Optional
 from core.utils.provenance import record_run_provenance
 from scripts.etl.phase_attribution_etl import compute_phase_attribution
 from scripts.etl.aggregate_hardware_metrics import aggregate_hardware_metrics
-from scripts.etl.energy_attribution_etl import compute_energy_attribution
+from scripts.etl.energy_attribution_etl import compute_energy_attribution, populate_tool_failure_wasted_energy
 from scripts.etl.duration_fix_etl import fix_run, fix_run_with_pretask
 from scripts.etl.ttft_tpot_etl import populate_run as populate_ttft_tpot
 
@@ -213,10 +213,11 @@ class RunPersistenceService:
         All ETL functions are idempotent — safe to rerun on same run_id.
         Sync only — no async, no threads (confirmed: experiment_runner has zero async).
         """
-        compute_phase_attribution(run_id)
-        aggregate_hardware_metrics(run_id)
-        compute_energy_attribution(run_id)
-        populate_ttft_tpot(run_id)
+        compute_phase_attribution(run_id)       # step 1: event_energy_uj on orchestration_events
+        aggregate_hardware_metrics(run_id)      # step 2: run aggregate columns
+        populate_tool_failure_wasted_energy(run_id)  # step 3: copy event_energy_uj → tfe.wasted_energy_uj
+        compute_energy_attribution(run_id)      # step 4: reads tfe for failed_tool_energy_uj
+        populate_ttft_tpot(run_id)              # step 5: token timing metrics
 
     def _apply_duration_fix(self, run_id: int, result: dict) -> None:
         """

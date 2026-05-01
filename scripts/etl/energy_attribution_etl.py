@@ -307,7 +307,7 @@ def _get_phase_energy(cursor: sqlite3.Cursor, run_id: int) -> dict:
     Falls back to runs.planning_energy_uj etc. if events table is empty.
     """
     cursor.execute("""
-        SELECT phase, SUM(event_energy_uj) AS energy
+        SELECT phase, SUM(attributed_energy_uj) AS energy
         FROM orchestration_events
         WHERE run_id = ?
         GROUP BY phase
@@ -609,7 +609,78 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
         "updated_at":                      datetime.now().isoformat(),
     }
 
+def populate_tool_failure_wasted_energy(run_id: int, db_path: Path = DEFAULT_DB) -> None:
+    """
+    Populate tool_failure_events.wasted_energy_uj from orchestration_events.
+    Two strategies:
+      1. Via orchestration_event_id FK if set (preferred)
+      2. Via run_id join on goal_attempt — fallback when FK not set
+    Must run after phase_attribution_etl so attributed_energy_uj is populated.
+    Idempotent — safe to rerun.
+    """
+    if not db_path.exists():
+        return
+    conn = sqlite3.connect(str(db_path))
+    try:
+        # Strategy 1: via orchestration_event_id FK
+        conn.execute("""
+            UPDATE tool_failure_events
+            SET wasted_energy_uj = (
+                SELECT oe.attributed_energy_uj
+                FROM orchestration_events oe
+                WHERE oe.event_id = tool_failure_events.orchestration_event_id
+            )
+            WHERE orchestration_event_id IS NOT NULL
+              AND wasted_energy_uj IS NULL
+              AND attempt_id IN (
+                SELECT ga.attempt_id FROM goal_attempt ga
+                JOIN goal_execution ge ON ga.goal_id = ge.goal_id
+                JOIN runs r ON r.run_id = ?
+                WHERE ga.goal_id = ge.goal_id
+              )
+        """, (run_id,))
 
+        # Strategy 2: via run_id — when orchestration_event_id not set
+        # Use execution phase attributed_energy_uj as proxy for tool failure cost
+        # This is conservative — attributes full execution phase energy to failure
+        conn.execute("""
+            UPDATE tool_failure_events
+            SET wasted_energy_uj = (
+                SELECT COALESCE(SUM(oe.attributed_energy_uj), 0)
+                FROM orchestration_events oe
+                JOIN goal_attempt ga ON ga.run_id = oe.run_id
+                WHERE ga.attempt_id = tool_failure_events.attempt_id
+                  AND oe.phase = 'execution'
+            )
+            WHERE orchestration_event_id IS NULL
+              AND wasted_energy_uj IS NULL
+              AND attempt_id IN (
+                SELECT ga.attempt_id FROM goal_attempt ga
+                WHERE ga.run_id = ?
+              )
+        """, (run_id,))
+        # Strategy 3: use goal_attempt.energy_uj directly when run_id=-1
+        # Injected failures abort before producing a run row — energy still captured in attempt
+        conn.execute("""
+            UPDATE tool_failure_events
+            SET wasted_energy_uj = (
+                SELECT ga.energy_uj
+                FROM goal_attempt ga
+                WHERE ga.attempt_id = tool_failure_events.attempt_id
+                  AND ga.run_id = -1
+                  AND ga.energy_uj IS NOT NULL
+            )
+            WHERE wasted_energy_uj IS NULL
+              AND attempt_id IN (
+                SELECT attempt_id FROM goal_attempt WHERE run_id = -1
+              )
+        """)
+        conn.commit()
+        logger.debug("populate_tool_failure_wasted_energy: run_id=%d done", run_id)
+    except Exception as e:
+        logger.warning("populate_tool_failure_wasted_energy failed run_id=%d: %s", run_id, e)
+    finally:
+        conn.close()
 # =============================================================================
 # PUBLIC API
 # =============================================================================

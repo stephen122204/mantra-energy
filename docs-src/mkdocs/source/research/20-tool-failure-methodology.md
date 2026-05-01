@@ -1,45 +1,53 @@
-# Tool Failure and Attribution ETL Methodology
-*Chunk 8.4 | Schema Revision: 029–030*
+# Tool Failure and Energy Attribution Methodology
+
+## Scope
+
+This document covers energy attribution for failed tool calls and the ETL
+pipeline that computes goal-level energy rollup. For failure injection design
+see `22-retry-tool-failure-methodology.md`. For tool execution instrumentation
+see `24-tool-instrumentation-methodology.md`.
 
 ---
 
-## Overview
-
-Chunk 8.4 completes the Chunk 8 research schema by adding:
-
-- `tool_failure_events` — energy cost of failed tool calls per attempt
-- Three research views — aggregation layer for paper queries
-- `goal_execution_etl.py` — goal-level energy rollup
-- Extended `energy_attribution_etl.py` — populates 5 attribution stubs
-
----
-
-## Tool Failure Wasted Energy Methodology
+## Tool Failure Wasted Energy
 *method_id: `tool_failure_wasted_energy_v1` | confidence: 0.90*
 
 ### Definition
 
 Energy consumed by a failed tool call from call initiation to failure detection.
 
-Primary source: `orchestration_events.event_energy_uj` where `orchestration_event_id` is set.
+Primary source: `orchestration_events.event_energy_uj` linked via
+`tool_failure_events.orchestration_event_id`.
 Fallback: inferred from attempt energy fraction when no orchestration event is linked.
 
-### `failure_phase` Field
+### failure_phase Field
 
 Records where in the orchestration pipeline the failure occurred:
 
-| Phase | Meaning |
-|---|---|
-| `selection` | Agent chose wrong tool for the task |
-| `execution` | Tool call was made but failed during execution |
-| `parsing` | Tool returned output but agent could not parse it |
-| `post_processing` | Parsing succeeded but downstream processing failed |
+| Phase | Meaning | Energy Signal |
+|---|---|---|
+| `selection` | Agent chose wrong tool | Planning energy wasted |
+| `execution` | Tool call made but failed | Full execution energy wasted |
+| `parsing` | Tool returned output but agent could not parse | Parsing overhead wasted |
+| `post_processing` | Downstream processing failed | Integration energy wasted |
 
-This field enables future papers to answer: "which pipeline stage wastes the most energy?"
+This field enables paper analysis: "which pipeline stage wastes the most energy?"
+
+### Table Scope
+
+`tool_failure_events` covers infrastructure failures only:
+`timeout`, `api_error`, `rate_limit`, `context_overflow`, `tool_error`.
+
+Quality failures go to separate tables:
+- `output_quality` — normalized quality scores
+- `hallucination_events` — hallucination classification
+
+This separation keeps paper Figure 3 taxonomy clean: infrastructure waste
+vs quality waste are distinct energy cost categories.
 
 ---
 
-## Goal Execution ETL Methodology
+## Goal Execution ETL
 *method_id: `goal_execution_rollup_v1` | confidence: 1.0*
 *method_id: `goal_overhead_fraction_v1` | confidence: 1.0*
 
@@ -51,63 +59,78 @@ $$E_{overhead} = E_{total} - E_{successful}$$
 
 $$f_{overhead} = \frac{E_{overhead}}{E_{total}}$$
 
-$$f_{orchestration} = \frac{E_{orchestration}}{E_{pkg}} \text{ (from winning run only)}$$
+$$f_{orchestration} = \frac{E_{orchestration}}{E_{pkg}} \text{ (winning run only)}$$
+
+For fully failed goals (no successful attempt): `overhead_fraction = 1.0`.
 
 ### Invariants
 
-- Exactly one `is_winning = 1` per `goal_id` in `goal_attempt`. Violation → skip goal, log error.
-- `energy_attribution` row must exist for `winning_run_id` before `orchestration_fraction` can be set.
-- `COUNT(DISTINCT goal_id)` used for `normalization_factors.attempted_goals` — not `SUM(total_attempts)`.
+- Exactly one `is_winning = 1` per `goal_id`. Violation → skip, log error.
+- `energy_attribution` must exist for `winning_run_id` before `orchestration_fraction`.
+- `COUNT(DISTINCT goal_id)` for `normalization_factors.attempted_goals` — not `SUM`.
+
+### Runs Architecture
+
+`runs` = one row per workflow episode. `goal_attempt.energy_uj` holds per-attempt
+snapshots. ETL sums `goal_attempt.energy_uj` for `goal_execution.total_energy_uj`.
+Never recompute from `runs` — `runs.pkg_energy_uj` = terminal episode only.
 
 ---
 
-## Attribution ETL Methodology
+## Attribution ETL
 *method_id: `attribution_etl_v1` | confidence: 0.90*
 
-### Five Stub Columns Populated
+### Five Stub Columns
 
 | Column | Formula |
 |---|---|
-| `retry_energy_uj` | SUM of attempt energy where attempt_number > 1 |
-| `failed_tool_energy_uj` | SUM of tool_failure_events.wasted_energy_uj per run |
-| `rejected_generation_energy_uj` | SUM of hallucination_events.wasted_energy_uj_real per run |
-| `energy_per_accepted_answer_uj` | pkg_energy / COUNT(accepted answers) |
-| `energy_per_solved_task_uj` | SUM(successful_energy) / COUNT(solved goals) |
+| `retry_energy_uj` | SUM of attempt energy where `attempt_number > 1` |
+| `failed_tool_energy_uj` | SUM of `tool_failure_events.wasted_energy_uj` per run |
+| `rejected_generation_energy_uj` | SUM of `hallucination_events.wasted_energy_uj_real` per run |
+| `energy_per_accepted_answer_uj` | `pkg_energy / COUNT(accepted answers)` |
+| `energy_per_solved_task_uj` | `SUM(successful_energy) / COUNT(solved goals)` |
 
 ### Accepted Answer Threshold
 
-An answer is "accepted" when `normalized_score >= 0.7` and `score_method != 'needs_review'`.
+Accepted when `normalized_score >= 0.7` and `score_method != 'needs_review'`.
+`ACCEPTANCE_THRESHOLD = 0.7` — tied to `output_quality_normalization_v1`.
+Override by creating `attribution_etl_v2` with new threshold.
 
-Threshold value: **0.7** — documented as `ACCEPTANCE_THRESHOLD` in `energy_attribution_etl.py`, tied to `output_quality_normalization_v1`.
+### ETL Chain Order
 
-Different domains may require different thresholds. Override by creating `attribution_etl_v2` with the new threshold and registering a new `method_id`.
+Phase attribution must run before energy attribution:
+```
+phase_attribution_etl → event_energy_uj per orchestration_event
+energy_attribution_etl → reads event_energy_uj for tool_failure wasted energy
+goal_execution_etl → reads energy_attribution for overhead_fraction
+```
+Running out of order produces NULL columns in downstream tables.
 
 ### ETL Invariant
 
-`energy_attribution` row must exist for `run_id` before any stub can be populated. Missing row → log warning, skip run, continue. Never silently propagate NULL.
+`energy_attribution` row must exist for `run_id` before population.
+Missing → log warning, skip, continue. Never silently propagate NULL.
 
 ---
 
 ## Research Views
 
 ### v_goal_energy_decomposition
-Primary paper view. Energy breakdown per goal by workflow type.
-- `ge.total_energy_uj` is authoritative ground truth (ETL-populated, not recomputed in view)
-- Orchestration fraction from winning run only (rate metric, not summed)
-- Positive inclusion filter on `experiment_type`
+Primary paper view — energy breakdown per goal by workflow type.
+- `ge.total_energy_uj` is authoritative ground truth (ETL-populated)
+- Orchestration fraction from winning run only
+- Positive inclusion filter on `experiment_type` — never exclusion
 - `had_retry` flag for stratified analysis
 
 ### v_failure_energy_taxonomy
-Energy wasted per failure type, unified across hallucination and tool failure events.
-- `failure_domain` separates reasoning failures (`hallucination`) from execution failures (`tool_failure`)
-- Required for cross-category paper comparisons
-- `corrected_by_retry` derived inline from `goal_attempt` — not stored
+Energy wasted per failure type across hallucination and tool failure events.
+- `failure_domain` separates reasoning vs execution failures
+- `corrected_by_retry` derived inline — not stored
 
 ### v_quality_energy_frontier
-Quality vs energy per goal. Supports quality-energy tradeoff figure.
-- Uses `ge.total_energy_uj` (total goal cost including retries) not `ga.energy_uj` (single attempt)
+Quality vs energy per goal — supports quality-energy tradeoff figure.
+- Uses `ge.total_energy_uj` (total including retries), not single attempt
 - Excludes `needs_review` scores
-- `energy_per_quality_point_uj` = total_energy / normalized_score
 
 ---
 

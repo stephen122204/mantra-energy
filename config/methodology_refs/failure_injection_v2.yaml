@@ -1,0 +1,42 @@
+method_id: failure_injection_v2
+name: "Deterministic Failure Injector v2"
+provenance: CALCULATED
+layer: orchestration
+confidence: 1.0
+description: >
+  Controlled failure injection using SHA-256-stable seeding. Three modes:
+  deterministic_validation (exact N failures at evenly-spaced slots),
+  deterministic_stress (every attempt fails), statistical (Bernoulli draws).
+  Replaces v1 which used Python hash() — unstable across processes since Python 3.3.
+  scenario_id enables shared fault schedule across providers for fair comparison.
+formula_latex: >
+  rand = \frac{\text{SHA-256}(scenario\_id:rep:attempt:kind:tool)[0:8]_{uint64}}{2^{64}}
+parameters:
+  seeding: "SHA-256 — stable across Python versions, platforms, process restarts"
+  slot_algorithm: "slot_i = round((i + 0.5) * N / K) for i in 0..K-1"
+  modes: ["deterministic_validation", "deterministic_stress", "statistical"]
+  scenario_id: "Shared across providers for cross-provider fairness"
+supersedes: failure_injection_v1
+applicable_columns:
+  - tool_failure_events.error_message
+  - tool_failure_events.failure_type
+  - goal_attempt.failure_type
+  - goal_attempt.is_retry
+doc_section: "docs-src/mkdocs/source/research/22-retry-tool-failure-methodology.md"
+references:
+  - title: "Chaos Engineering: Building Confidence in System Behaviour"
+    authors: "Rosenthal, C. et al."
+    year: 2020
+    ref_type: paper
+    relevance: "Deterministic failure injection principle — reproducible seeds ensure replay gives identical failure patterns"
+  - title: "Python Documentation — object.__hash__() and PYTHONHASHSEED"
+    authors: "Python Software Foundation"
+    year: 2024
+    ref_type: manual
+    url: "https://docs.python.org/3/reference/datamodel.html#object.__hash__"
+    relevance: "Hash randomisation enabled by default since Python 3.3 — hash() output differs per process. SHA-256 required for cross-process stable seeding."
+  - title: "A-LEMS Failure Injection Design v2"
+    authors: "A-LEMS Team"
+    year: 2026
+    ref_type: internal
+    relevance: "SHA-256(scenario_id:rep:attempt:kind:tool) — independent draws per tool, shared schedule per scenario"
