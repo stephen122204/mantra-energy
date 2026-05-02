@@ -87,6 +87,7 @@ nav:
     - Goal Tracking Runtime Methodology: research/21-goal-tracking-runtime.md
     - Retry and Tool Failure Methodology: research/22-retry-tool-failure-methodology.md
     - Tool instrumentation Methodology:   research/24-tool-instrumentation-methodology.md
+    - Energy Attribution Guide:           research/25-energy-attribution-guide.md
   
   - API Reference: 
     - Overview: api/reference.md

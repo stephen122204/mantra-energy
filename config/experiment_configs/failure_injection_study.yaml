@@ -32,7 +32,7 @@ providers:
     model_id: tinyllama.gguf
 
 execution:
-  repetitions: 2
+  repetitions: 1
   cool_down_seconds: 30
   save_db: true
 

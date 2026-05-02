@@ -50,6 +50,13 @@ import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
+import importlib.util as _ilu
+import os as _os
+_llm_helper_path = _os.path.join(_os.path.dirname(__file__), "_llm_energy_from_samples.py")
+_llm_spec = _ilu.spec_from_file_location("_llm_energy_from_samples", _llm_helper_path)
+_llm_mod  = _ilu.module_from_spec(_llm_spec)
+_llm_spec.loader.exec_module(_llm_mod)
+get_llm_energy_from_samples = _llm_mod.get_llm_energy_from_samples
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +71,7 @@ THERMAL_PENALTY_FRACTION = 0.20
 
 # Attribution model version — bump when formula changes
 # Attribution model version — bump when formula changes
-ATTRIBUTION_MODEL_VERSION = "v1"
+ATTRIBUTION_MODEL_VERSION = "v2"
  
 # Minimum normalized score to count as an accepted answer
 # Documented in: 19-hallucination-output-quality-methodology.md
@@ -460,20 +467,29 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
     # api_latency_ms = total time blocked waiting for LLM API responses
     # This energy is real (process alive, ~12.9W) but not CPU compute
     # Provision: attribution_method field allows future ML model override
+    # ── L4/L5: LLM energy from RAPL samples (v2 — MEASURED not INFERRED) ────
+    # Uses llm_interactions.first_token_time_ns and last_token_time_ns to
+    # slice energy_samples into prefill (compute) and decode (wait) windows.
+    # For local models: api_latency_ms=0 but timestamps exist — correctly
+    # measures decode energy that time-fraction missed entirely.
+    # Fallback to time-fraction when timestamps NULL (older runs).
     api_latency_ms = _get_api_latency_ms(cursor, run_id)
-    llm_wait_frac  = min(1.0, api_latency_ms / duration_ms) if duration_ms > 0 else 0.0
-    compute_frac   = min(1.0, compute_ms / duration_ms)     if duration_ms > 0 else 0.0
-    # Clamp so fractions don't exceed 1.0 together
-    if llm_wait_frac + compute_frac > 1.0:
-        compute_frac = max(0.0, 1.0 - llm_wait_frac)
- 
-    llm_wait_uj    = int(attributed * llm_wait_frac)   # L4a: LLM API blocked
-    application_uj = int(attributed * compute_frac)    # L4b: active CPU compute
-
-    # ── L3: Orchestration — everything attributed but not pure compute ────────
-    # ── L3: Orchestration — attributed energy minus LLM wait and compute ──────
-    # Represents pure framework overhead: tool dispatch, planning, synthesis
-    orchestration_uj = max(0, attributed - llm_wait_uj - application_uj)
+    provider       = run.get("provider")
+    llm_energy = get_llm_energy_from_samples(
+        cursor         = cursor,
+        run_id         = run_id,
+        attributed     = attributed,
+        cpu_fraction   = cpu_fraction,
+        duration_ms    = duration_ms,
+        api_latency_ms = api_latency_ms,
+        compute_ms     = compute_ms,
+        provider       = provider,
+    )
+    llm_wait_uj       = llm_energy["llm_wait_uj"]
+    application_uj    = llm_energy["llm_compute_uj"]
+    orchestration_uj  = llm_energy["orchestration_uj"]
+    inter_phase_uj        = int(run.get("inter_phase_energy_uj") or 0)
+    attribution_method_v2 = llm_energy["attribution_method"]
 
     # ── L2: Resource contention (time-fraction INFERRED) ─────────────────────
     network_wait_ms = _get_network_wait_ms(cursor, run_id)
@@ -563,6 +579,8 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
 
     return {
         "run_id":                          run_id,
+        "attribution_method":              attribution_method_v2,
+        "inter_phase_energy_uj":           inter_phase_uj,
         # L0
         "pkg_energy_uj":                   pkg,
         "core_energy_uj":                  core,
@@ -590,7 +608,6 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
         # L4
         "llm_wait_energy_uj":              llm_wait_uj,
         "llm_compute_energy_uj":           application_uj,
-        "attribution_method":              "cpu_fraction_v1",
         "ml_model_version":                None,   # Chunk 1.2: ARM ML estimator        
         "prefill_energy_uj":               None,   # Chunk 4 TTFT
         "decode_energy_uj":                None,   # Chunk 4 TTFT
@@ -720,14 +737,14 @@ def compute_energy_attribution(run_id: int, db_path: Path = DEFAULT_DB) -> bool:
                 llm_wait_energy_uj, network_wait_energy_uj, io_wait_energy_uj, disk_energy_uj,
                 memory_pressure_energy_uj, cache_dram_energy_uj,
                 orchestration_energy_uj, planning_energy_uj, execution_energy_uj,
-                synthesis_energy_uj, tool_energy_uj, retry_energy_uj,
+                synthesis_energy_uj, inter_phase_energy_uj, tool_energy_uj, retry_energy_uj,
                 failed_tool_energy_uj, rejected_generation_energy_uj,
                 llm_compute_energy_uj, prefill_energy_uj, decode_energy_uj,
                 energy_per_completion_token_uj, energy_per_successful_step_uj,
                 energy_per_accepted_answer_uj, energy_per_solved_task_uj,
                 thermal_penalty_energy_uj, thermal_penalty_time_ms,
                 unattributed_energy_uj, attribution_coverage_pct,
-                attribution_model_version, updated_at
+                attribution_method, attribution_model_version, updated_at
             ) VALUES (
                 :run_id,
                 :pkg_energy_uj, :core_energy_uj, :dram_energy_uj, :uncore_energy_uj,
@@ -735,21 +752,21 @@ def compute_energy_attribution(run_id: int, db_path: Path = DEFAULT_DB) -> bool:
                 :llm_wait_energy_uj, :network_wait_energy_uj, :io_wait_energy_uj, :disk_energy_uj,
                 :memory_pressure_energy_uj, :cache_dram_energy_uj,
                 :orchestration_energy_uj, :planning_energy_uj, :execution_energy_uj,
-                :synthesis_energy_uj, :tool_energy_uj, :retry_energy_uj,
+                :synthesis_energy_uj, :inter_phase_energy_uj, :tool_energy_uj, :retry_energy_uj,
                 :failed_tool_energy_uj, :rejected_generation_energy_uj,
                 :llm_compute_energy_uj, :prefill_energy_uj, :decode_energy_uj,
                 :energy_per_completion_token_uj, :energy_per_successful_step_uj,
                 :energy_per_accepted_answer_uj, :energy_per_solved_task_uj,
                 :thermal_penalty_energy_uj, :thermal_penalty_time_ms,
                 :unattributed_energy_uj, :attribution_coverage_pct,
-                :attribution_model_version, :updated_at
+                :attribution_method, :attribution_model_version, :updated_at
             )
         """, data)
-
         conn.commit()
         logger.info(
-            "Attribution v1 complete — run %d | coverage=%.1f%% | unattributed=%d µJ",
+            "Attribution complete — run %d | method=%s | coverage=%.1f%% | unattributed=%d µJ",
             run_id,
+            data["attribution_method"],
             data["attribution_coverage_pct"],
             data["unattributed_energy_uj"],
         )

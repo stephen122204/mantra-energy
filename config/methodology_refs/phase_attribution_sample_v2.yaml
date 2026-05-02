@@ -1,0 +1,25 @@
+method_id: phase_attribution_sample_v2
+references:
+  - title: "proc(5) — Linux Programmer's Manual"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Defines /proc/[pid]/stat utime+stime fields used as process tick numerator for per-phase cpu_fraction."
+
+  - title: "proc_stat(5) — Linux Programmer's Manual"
+    authors: "kernel.org"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Defines /proc/stat aggregate CPU line — sum(all fields) used as total tick denominator."
+
+  - title: "Intel 64 and IA-32 Architectures Software Developer Manual — RAPL"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: "RAPL MSR registers provide pkg_start_uj and pkg_end_uj per sample interval used for direct phase energy measurement."
+
+  - title: "A-LEMS: Attribution-Layer Energy Measurement System"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: "Section 4.1 — Phase Energy Attribution v2. Direct sample measurement replaces weighted allocation. inter_phase_energy_uj captures honest residual."

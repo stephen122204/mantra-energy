@@ -138,7 +138,9 @@ def execute_goal(
     attempts_made   = 0
     winning_result  = None
     last_result     = None
-    # runs.pkg_energy_uj = SUM(goal_attempt.energy_uj) when max_retries > 0
+    # goal_attempt.energy_uj = E_attributed per attempt (process share of workload)
+    # goal_execution.total_energy_uj = SUM(E_attributed across all attempts)
+    # This is the paper unit of analysis — not E_dynamic which includes background
     _acc_keys = [
         "pkg_energy_uj", "core_energy_uj", "uncore_energy_uj",
         "dram_energy_uj", "dynamic_energy_uj", "idle_energy_uj",
@@ -424,20 +426,32 @@ def _record_attempt_failure(
 
 def _extract_energy(result: dict) -> tuple[int, int]:
     """
-    Extract workload and orchestration energy from harness result dict.
+    Extract attributed and orchestration energy from harness result dict.
+
+    Uses attributed_energy_uj (cpu_fraction x dynamic) as the paper unit
+    of analysis — not dynamic_energy_uj which includes background processes.
+
+    goal_attempt.energy_uj = E_attributed of this attempt.
+    goal_execution.total_energy_uj = SUM(E_attributed across all attempts).
+    This is the correct denominator for all paper fractions.
 
     Returns (energy_uj, orchestration_uj) as integers.
     Returns (0, 0) if result is None or keys missing — never raises.
-    Denormalised into goal_attempt for fast paper queries without ETL joins.
     """
     if result is None:
         return 0, 0
     try:
-        energy_uj        = result["layer3_derived"]["energy_uj"]["workload"]
+        # Use attributed_energy_uj — process share of workload energy
+        # attributed = cpu_fraction x dynamic, stored in ml_features by harness
+        ml = result.get("ml_features", {}) or {}
+        energy_uj = ml.get("attributed_energy_uj") or 0
+        if not energy_uj:
+            # Fallback: dynamic if attributed not available (older runs)
+            energy_uj = result["layer3_derived"]["energy_uj"]["workload"]
         orchestration_uj = result["layer3_derived"]["energy_uj"].get(
             "orchestration_tax", 0
         )
         return int(energy_uj or 0), int(orchestration_uj or 0)
     except (KeyError, TypeError):
-        logger.debug("_extract_energy: result missing layer3_derived — returning zeros")
+        logger.debug("_extract_energy: result missing energy data — returning zeros")
         return 0, 0

@@ -108,27 +108,37 @@ def process_one(goal_id: int, conn) -> None:
     )
 
 
-def backfill_all(db_path: str) -> None:
+def backfill_all(db_path: str, force: bool = False) -> None:
     """
-    Process all goal_execution rows where total_energy_uj IS NULL.
+    Process all goal_execution rows.
 
-    Idempotent — rows already populated are skipped automatically.
-    Processes one goal at a time to limit transaction scope.
+    force=True reprocesses all goals — use after ETL formula changes
+    (e.g. orchestration_fraction denominator fix).
+    force=False (default) only processes NULL rows — idempotent.
 
     Args:
         db_path: Filesystem path to the SQLite experiments DB.
+        force:   Reprocess all goals regardless of existing values.
     """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        # Only process goals with NULL ETL columns and at least one attempt
-        pending = conn.execute(
-            """SELECT ge.goal_id
-               FROM goal_execution ge
-               WHERE ge.total_energy_uj IS NULL
-                  OR (ge.success = 0 AND ge.overhead_fraction IS NULL)
-               ORDER BY ge.goal_id"""
-        ).fetchall()
+        if force:
+            # Reprocess all goals — needed after formula changes
+            pending = conn.execute(
+                """SELECT ge.goal_id
+                   FROM goal_execution ge
+                   ORDER BY ge.goal_id"""
+            ).fetchall()
+        else:
+            # Only process goals with NULL ETL columns and at least one attempt
+            pending = conn.execute(
+                """SELECT ge.goal_id
+                   FROM goal_execution ge
+                   WHERE ge.total_energy_uj IS NULL
+                      OR (ge.success = 0 AND ge.overhead_fraction IS NULL)
+                   ORDER BY ge.goal_id"""
+            ).fetchall()
 
         logger.info("backfill_all: %d goals pending ETL", len(pending))
 
@@ -209,24 +219,28 @@ def _get_orchestration_fraction(conn, winning_run_id) -> float:
     if winning_run_id is None or winning_run_id == -1:
         return None
 
+    # Read attributed_energy_uj from runs — not stored in energy_attribution.
+    # Formula: f_orch = E_orch / E_attributed
+    # E_attributed = cpu_fraction x E_dynamic (process share of workload)
+    # Correct denominator: attributed not pkg — orch is derived from attributed.
+    # Using pkg understates f_orch by including idle + background process energy.
     row = conn.execute(
-        """SELECT orchestration_energy_uj, attributed_energy_uj
-           FROM energy_attribution
-           WHERE run_id = ?""",
+        """SELECT ea.orchestration_energy_uj, r.attributed_energy_uj
+           FROM energy_attribution ea
+           JOIN runs r ON r.run_id = ea.run_id
+           WHERE ea.run_id = ?""",
         (winning_run_id,),
     ).fetchone()
 
     if row is None:
-        # energy_attribution row missing — ETL has not run yet for this run
         logger.warning(
             "_get_orchestration_fraction: energy_attribution missing run_id=%d",
             winning_run_id,
         )
         return None
 
-    orch_uj, pkg_uj = row[0], row[1]
-    return _compute_fraction(orch_uj, pkg_uj)
-
+    orch_uj, attributed_uj = row[0], row[1]
+    return _compute_fraction(orch_uj, attributed_uj)
 
 def _update_goal_execution(
     conn, goal_id: int,
@@ -323,6 +337,11 @@ def main() -> None:
         help="Process a single goal_execution row by goal_id.",
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Reprocess all goals regardless of existing values. Use after formula changes.",
+    )    
+    parser.add_argument(
         "--db-path",
         default=DEFAULT_DB_PATH,
         help=f"Path to experiments SQLite DB (default: {DEFAULT_DB_PATH}).",
@@ -335,7 +354,7 @@ def main() -> None:
     )
 
     if args.backfill_all:
-        backfill_all(args.db_path)
+        backfill_all(args.db_path, force=getattr(args, "force", False))
     elif args.goal_id is not None:
         conn = sqlite3.connect(args.db_path)
         conn.row_factory = sqlite3.Row

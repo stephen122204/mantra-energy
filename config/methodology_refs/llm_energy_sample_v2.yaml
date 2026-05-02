@@ -1,0 +1,19 @@
+method_id: llm_energy_sample_v2
+references:
+  - title: "Intel 64 and IA-32 Architectures Software Developer Manual — RAPL"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: "RAPL MSR pkg_start_uj/pkg_end_uj per 100Hz sample interval. Summing intervals within llm_interactions timestamp windows gives direct LLM energy measurement."
+
+  - title: "llama.cpp — Local LLM Inference"
+    authors: "Gerganov, G. et al."
+    year: 2024
+    ref_type: "paper"
+    relevance: "first_token_time_ns marks end of prefill phase. last_token_time_ns marks end of decode phase. These timestamps define the measurement windows for E_llm_compute and E_llm_wait."
+
+  - title: "A-LEMS: Attribution-Layer Energy Measurement System"
+    authors: "Panigrahy, D."
+    year: 2026
+    ref_type: "internal"
+    relevance: "Section 4.2 — LLM Energy Attribution v2. Novel finding: decode phase draws ~12.9W above idle during token streaming. Direct sample measurement replaces time-fraction estimation. Fixes local model api_latency=0 undercount."

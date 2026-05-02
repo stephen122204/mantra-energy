@@ -609,6 +609,8 @@ CREATE TABLE IF NOT EXISTS runs (
     planning_energy_uj      INTEGER,            -- Chunk 5: attributed phase energy
     execution_energy_uj     INTEGER,
     synthesis_energy_uj     INTEGER,  
+    inter_phase_energy_uj     INTEGER,          -- Phase v2: E_attributed - SUM(phases) — honest residual
+    phase_sample_coverage_pct REAL,             -- Phase v2: % of run samples inside phase windows
     l1d_cache_misses_total  BIGINT,  -- Chunk 12: SUM from cpu_samples
     l2_cache_misses_total   BIGINT,
     l3_cache_hits_total     BIGINT,
@@ -1331,6 +1333,7 @@ CREATE TABLE IF NOT EXISTS energy_attribution (
     planning_energy_uj              BIGINT,
     execution_energy_uj             BIGINT,
     synthesis_energy_uj             BIGINT,
+    inter_phase_energy_uj           BIGINT,
     tool_energy_uj                  BIGINT,
     retry_energy_uj                 BIGINT,
     failed_tool_energy_uj           BIGINT,
@@ -1834,18 +1837,19 @@ CREATE VIEW IF NOT EXISTS v_fraction_verification AS
 SELECT
     ge.goal_id,
     ge.winning_run_id,
-    ea.orchestration_energy_uj          AS numerator_uj,
-    r.pkg_energy_uj                     AS denominator_uj,
-    CASE WHEN r.pkg_energy_uj > 0
-        THEN ROUND(1.0 * ea.orchestration_energy_uj / r.pkg_energy_uj, 6)
+    ea.orchestration_energy_uj              AS numerator_uj,
+    r.attributed_energy_uj                  AS denominator_uj,
+    'E_orch / E_attributed'                 AS formula,
+    CASE WHEN r.attributed_energy_uj > 0
+        THEN ROUND(1.0 * ea.orchestration_energy_uj / r.attributed_energy_uj, 6)
         ELSE NULL
-    END                                 AS recomputed_fraction,
-    ge.orchestration_fraction           AS stored_fraction,
-    CASE WHEN r.pkg_energy_uj > 0
+    END                                     AS recomputed_fraction,
+    ge.orchestration_fraction               AS stored_fraction,
+    CASE WHEN r.attributed_energy_uj > 0
         THEN ROUND(ABS(ge.orchestration_fraction -
-            1.0 * ea.orchestration_energy_uj / r.pkg_energy_uj), 8)
+            1.0 * ea.orchestration_energy_uj / r.attributed_energy_uj), 8)
         ELSE NULL
-    END                                 AS delta
+    END                                     AS delta
 FROM goal_execution ge
 LEFT JOIN runs r ON r.run_id = ge.winning_run_id
 LEFT JOIN energy_attribution ea ON ea.run_id = ge.winning_run_id

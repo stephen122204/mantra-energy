@@ -454,9 +454,92 @@ and `cpu_fraction_per_phase = runs.cpu_fraction`. Normalization still applies.
 - Only top-level PID tracked — spawned subprocesses excluded
 
 ### References
-
+ 
 See `config/methodology_refs/phase_attribution.yaml`.
+ 
+## Phase Energy Attribution v2
+ 
+**Method ID:** `phase_attribution_sample_v2`
+**Layer:** orchestration
+**Provenance:** MEASURED
+**Confidence:** 0.98
+**Supersedes:** `phase_attribution_cpu_v1`
+ 
+### Why v2
+ 
+v1 normalized phase energies to sum exactly to `attributed_energy_uj` by
+weighted allocation. This forced `inter_phase_energy_uj = 0` by construction —
+hiding real energy consumed between phase boundaries (Python interpreter,
+tool dispatch, framework calls). Reviewers would correctly challenge this as
+circular: "your phase sums equal attributed because you made them equal."
+ 
+v2 measures each phase independently from RAPL samples. The residual is
+honest and non-zero.
+ 
+### Formula
+ 
+**Step 1 — Direct phase energy from RAPL samples:**
+$$E_{phase,i} = \sum_{s \in W_i} (pkg\_end_s - pkg\_start_s) \times f_{cpu,i}$$
+ 
+where $W_i$ = samples where `sample_start_ns >= phase.start_time_ns`
+AND `sample_end_ns <= phase.end_time_ns`.
+ 
+**Step 2 — Phase CPU fraction (unchanged from v1):**
+$$f_{cpu,i} = \frac{\max(proc\_ticks\_end) - \min(proc\_ticks\_start)}{\max(total\_ticks\_end) - \min(total\_ticks\_start)}$$
+ 
+**Step 3 — Inter-phase residual (new in v2):**
+$$E_{inter\_phase} = E_{attributed} - \sum_i E_{phase,i}$$
+ 
+$E_{inter\_phase}$ represents energy between phase boundaries:
+Python interpreter overhead, tool dispatch latency, retry coordination,
+framework calls not inside any named phase window.
+ 
+**Conservation invariant (D2):**
+$$E_{orchestration} = E_{planning} + E_{execution} + E_{synthesis} + E_{inter\_phase}$$
+ 
+This must sum to 100%. Validated by `scripts/validate_energy_chain.py`.
+ 
+### Data Sources
+ 
+| Variable | Table | Column |
+|---|---|---|
+| `pkg_start_uj`, `pkg_end_uj` | `energy_samples` | RAPL interval deltas |
+| `sample_start_ns`, `sample_end_ns` | `energy_samples` | Measurement window |
+| `proc_ticks_start/end` | `interrupt_samples` | `/proc/[pid]/stat` |
+| `total_ticks_start/end` | `interrupt_samples` | `/proc/stat` |
+| Phase window | `orchestration_events` | `start_time_ns`, `end_time_ns` |
+| Run total | `runs` | `attributed_energy_uj` |
+ 
+### Output Columns
+ 
+| Column | Table | Type | Formula |
+|---|---|---|---|
+| `planning_energy_uj` | `runs` | MEASURED | samples in planning window × f_cpu |
+| `execution_energy_uj` | `runs` | MEASURED | samples in execution window × f_cpu |
+| `synthesis_energy_uj` | `runs` | MEASURED | samples in synthesis window × f_cpu |
+| `inter_phase_energy_uj` | `runs` | CALCULATED | E_attr - plan - exec - synth |
+| `phase_sample_coverage_pct` | `runs` | CALCULATED | samples_in_phases / total_samples × 100 |
+ 
+### Fallback
+ 
+When phase-level proc ticks unavailable:
+`attribution_method = fallback_run_level_v2`
+`cpu_fraction_per_phase = runs.cpu_fraction`
+Provenance degrades to INFERRED, confidence = 0.70.
+ 
+### Known Limitations
+ 
+- `synthesis_energy = 0` for runs where synthesis < 10ms (below 100Hz resolution)
+- `phase_sample_coverage_pct < 100%` means some phase energy falls outside sample windows
+- Only top-level PID tracked — spawned subprocesses excluded
+- `inter_phase_energy_uj` may be negative if sample windows overlap phase boundaries — clamped to 0 and logged as warning
+ 
+### References
+ 
+See `config/methodology_refs/phase_attribution_sample_v2.yaml`.
+ 
 ## Hardware Telemetry Metrics (Chunk 12)
+
 
 ### L1d / L2 / L3 Cache Counters
 

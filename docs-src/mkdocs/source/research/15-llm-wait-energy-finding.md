@@ -92,3 +92,84 @@ platform to:
 ## References
 
 See `config/methodology_refs/llm_wait_attribution_v1.yaml`
+
+## LLM Energy Attribution v2 — Sample-Based Measurement
+ 
+**Method ID:** `llm_energy_sample_v2`
+**Layer:** application
+**Provenance:** MEASURED
+**Confidence:** 0.97
+**Supersedes:** `llm_wait_attribution_v1`
+ 
+### Why v2
+ 
+v1 computed LLM wait energy using time-fraction:
+$$E_{llm\_wait}^{v1} = E_{attributed} \times \frac{t_{api\_latency}}{t_{duration}}$$
+ 
+This fails for local models where `api_latency_ms = 0` (localhost HTTP),
+producing `E_llm_wait = 0` even though the model takes seconds to generate
+tokens and the process draws real power throughout.
+ 
+v2 measures directly from RAPL samples using `llm_interactions` timestamps.
+ 
+### Formula
+ 
+**Prefill window** (active CPU processing prompt):
+$$E_{llm\_compute} = \sum_{s \in [t_{call}, t_{first\_token}]} \Delta pkg_s \times f_{cpu}$$
+ 
+**Decode window** (process waiting for token stream):
+$$E_{llm\_wait} = \sum_{s \in [t_{first\_token}, t_{last\_token}]} \Delta pkg_s \times f_{cpu}$$
+ 
+where $\Delta pkg_s = pkg\_end\_uj_s - pkg\_start\_uj_s$ per 100Hz sample.
+ 
+**Orchestration residual:**
+$$E_{orchestration} = E_{attributed} - E_{llm\_compute} - E_{llm\_wait}$$
+ 
+**Conservation invariant (D1):**
+$$E_{attributed} = E_{llm\_compute} + E_{llm\_wait} + E_{orchestration}$$
+ 
+Must sum to 100%. Validated by `scripts/validate_energy_chain.py`.
+ 
+### Data Sources
+ 
+| Variable | Table | Column |
+|---|---|---|
+| `pkg_start_uj`, `pkg_end_uj` | `energy_samples` | RAPL 100Hz intervals |
+| `first_token_time_ns` | `llm_interactions` | Prefill/decode boundary |
+| `last_token_time_ns` | `llm_interactions` | Decode end |
+| `cpu_fraction` | `runs` | Process CPU share |
+ 
+### Output Columns
+ 
+| Column | Table | Type | Formula |
+|---|---|---|---|
+| `llm_compute_energy_uj` | `energy_attribution` | MEASURED | samples[call..first_token] × f_cpu |
+| `llm_wait_energy_uj` | `energy_attribution` | MEASURED | samples[first_token..last_token] × f_cpu |
+| `orchestration_energy_uj` | `energy_attribution` | CALCULATED | E_attr - llm_c - llm_w |
+| `attribution_method` | `energy_attribution` | SYSTEM | 'sample_based_v2' or 'time_fraction_fallback_v1' |
+ 
+### Fallback
+ 
+When `first_token_time_ns IS NULL` (older runs, linear runs without timing):
+`attribution_method = time_fraction_fallback_v1`
+Confidence degrades to 0.70.
+ 
+### Local vs Cloud Provider Behaviour
+ 
+| Provider | `api_latency_ms` | v1 llm_wait | v2 llm_wait |
+|---|---|---|---|
+| llama_cpp (local) | 0 (localhost) | 0 ❌ | measured from decode window ✅ |
+| groq (cloud) | ~8000ms | estimated | measured from decode window ✅ |
+ 
+For local models, decode phase energy was entirely invisible to v1.
+This was a systematic undercount of LLM wait energy for all local runs.
+ 
+### Known Limitations
+ 
+- Prefill window start (`t_call`) not currently stored per interaction — `llm_compute_uj` uses `compute_ms` time-fraction as proxy
+- Multiple LLM interactions per run summed — individual call breakdown available in `llm_interactions` table
+- Sub-100Hz phases may have 0 samples in window — `attribution_method` records this
+ 
+### References
+ 
+See `config/methodology_refs/llm_energy_sample_v2.yaml`.

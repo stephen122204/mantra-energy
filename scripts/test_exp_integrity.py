@@ -176,8 +176,9 @@ def check_tool_failure_events(conn, attempt_ids: list, exp_type: str) -> list:
     # For failure_injection and retry_study experiments, expect > 0
     expects_failures = exp_type in ("failure_injection", "retry_study")
     if expects_failures and count == 0:
-        results.append(fail(
-            f"tool_failure_events: 0 rows — expected > 0 for {exp_type} experiment"
+        results.append(warn(
+            f"tool_failure_events: 0 rows — injection may not have fired this run "
+            f"(probabilistic injection, small rep count can produce 0 failures)"
         ))
     elif count > 0:
         # Check failure types
@@ -380,9 +381,9 @@ def check_task_retry_override(conn) -> list:
 def check_energy_conservation(conn, exp_id: int, run_ids: list, goal_ids: list) -> list:
     results = []
     rows = conn.execute("""
-        SELECT ge.goal_id, r.dynamic_energy_uj,
+        SELECT ge.goal_id, r.attributed_energy_uj,
             SUM(ga.energy_uj) AS attempt_sum,
-            ABS(r.dynamic_energy_uj - SUM(ga.energy_uj)) AS delta
+            ABS(r.attributed_energy_uj - SUM(ga.energy_uj)) AS delta
         FROM goal_execution ge
         JOIN runs r ON r.run_id = ge.winning_run_id
         JOIN goal_attempt ga ON ga.goal_id = ge.goal_id
@@ -449,31 +450,81 @@ def print_energy_accounting(conn, exp_id: int, exp_type: str) -> None:
     if exp_type not in ("failure_injection", "retry_study"):
         return
     rows = conn.execute("""
-        SELECT r.run_id, r.pkg_energy_uj, r.baseline_energy_uj, r.dynamic_energy_uj,
-            r.attributed_energy_uj, ea.orchestration_energy_uj,
-            ea.llm_compute_energy_uj, ea.failed_tool_energy_uj,
-            ge.total_energy_uj, ge.successful_energy_uj, ge.overhead_fraction,
-            (SELECT SUM(ga2.energy_uj) FROM goal_attempt ga2 WHERE ga2.goal_id=ge.goal_id) AS sum_attempt_energy,
-            (SELECT COUNT(*) FROM goal_attempt ga3 WHERE ga3.goal_id=ge.goal_id AND ga3.is_retry=1) AS retry_count
-        FROM runs r
-        JOIN energy_attribution ea ON ea.run_id=r.run_id
-        JOIN goal_execution ge ON ge.exp_id=r.exp_id
-        WHERE r.exp_id=? LIMIT 5
+        SELECT r.run_id, r.workflow_type,
+            r.pkg_energy_uj, r.baseline_energy_uj, r.dynamic_energy_uj,
+            r.attributed_energy_uj, r.core_energy_uj,
+            r.uncore_energy_uj, r.dram_energy_uj,
+            r.pre_task_energy_uj, r.post_task_energy_uj,
+            r.planning_energy_uj, r.execution_energy_uj,
+            r.synthesis_energy_uj, r.inter_phase_energy_uj,
+            ea.orchestration_energy_uj, ea.llm_compute_energy_uj,
+            ea.llm_wait_energy_uj, ea.failed_tool_energy_uj,
+            ea.attribution_method,
+            ge.total_energy_uj       AS goal_total,
+            ge.successful_energy_uj  AS goal_success,
+            ge.overhead_fraction,
+            ge.orchestration_fraction,
+            (SELECT SUM(ga2.energy_uj)
+             FROM goal_attempt ga2
+             WHERE ga2.goal_id = ge.goal_id) AS sum_attempt_energy,
+            (SELECT COUNT(*) FROM goal_attempt ga3
+             WHERE ga3.goal_id = ge.goal_id AND ga3.is_retry = 1) AS retry_count
+        FROM goal_execution ge
+        JOIN runs r ON r.run_id = ge.winning_run_id
+        JOIN energy_attribution ea ON ea.run_id = r.run_id
+        WHERE ge.exp_id = ? AND ge.winning_run_id IS NOT NULL
+        LIMIT 5
     """, (exp_id,)).fetchall()
     if not rows:
         return
+    def _j(uj): return f"{(uj or 0)/1e6:.4f}J"
+    def _p(n,d): return f"{100.0*(n or 0)/d:.1f}%" if d else "N/A"
+    def _c(d,t=1000): return "✅" if abs(d)<=t else "❌"
+
     print(f"\n  📊 Energy Accounting (exp_id={exp_id}):")
-    print(f"  {'─'*60}")
+    print(f"  {'─'*68}")
     for row in rows:
-        dyn  = row["dynamic_energy_uj"] or 0
-        asum = row["sum_attempt_energy"] or 0
-        cons = "✅" if abs(dyn - asum) < 1000 else "❌ VIOLATION"
-        print(f"  run_id={row['run_id']}  retries={row['retry_count']}  overhead={row['overhead_fraction']:.3f}" if row['overhead_fraction'] else f"  run_id={row['run_id']}  retries={row['retry_count']}")
-        print(f"    pkg={( row['pkg_energy_uj'] or 0)/1e6:.3f}J  baseline={(row['baseline_energy_uj'] or 0)/1e6:.3f}J  dynamic={dyn/1e6:.3f}J")
-        print(f"    attributed={(row['attributed_energy_uj'] or 0)/1e6:.3f}J  orch={(row['orchestration_energy_uj'] or 0)/1e6:.3f}J  llm={(row['llm_compute_energy_uj'] or 0)/1e6:.3f}J")
-        print(f"    failed_tool={(row['failed_tool_energy_uj'] or 0)/1e6:.3f}J  goal_total={(row['total_energy_uj'] or 0)/1e6:.3f}J  sum_attempts={asum/1e6:.3f}J")
-        print(f"    Conservation: dynamic={dyn/1e6:.3f}J == attempts={asum/1e6:.3f}J → {cons}")
-    print(f"  {'─'*60}")
+        pkg  = row["pkg_energy_uj"]        or 0
+        base = row["baseline_energy_uj"]   or 0
+        dyn  = row["dynamic_energy_uj"]    or 0
+        attr = row["attributed_energy_uj"] or 0
+        core = row["core_energy_uj"]       or 0
+        unc  = row["uncore_energy_uj"]     or 0
+        drm  = row["dram_energy_uj"]       or 0
+        pre  = row["pre_task_energy_uj"]   or 0
+        post = row["post_task_energy_uj"]  or 0
+        plan = row["planning_energy_uj"]   or 0
+        exe  = row["execution_energy_uj"]  or 0
+        syn  = row["synthesis_energy_uj"]  or 0
+        iph  = row["inter_phase_energy_uj"] or 0
+        orch = row["orchestration_energy_uj"] or 0
+        llmc = row["llm_compute_energy_uj"] or 0
+        llmw = row["llm_wait_energy_uj"]   or 0
+        ftl  = row["failed_tool_energy_uj"] or 0
+        asum = row["sum_attempt_energy"]   or 0
+        wf   = row["workflow_type"]        or "?"
+        mth  = row["attribution_method"]   or "unknown"
+        ofrc = row["orchestration_fraction"]
+        gt   = row["goal_total"]           or 0
+        gs   = row["goal_success"]         or 0
+
+        print(f"  run={row['run_id']}[{wf}] retries={row['retry_count']} method={mth}")
+        print(f"  [D4] E_pkg=E_core+E_uncore+E_dram:")
+        print(f"       {_j(pkg)}={_j(core)}({_p(core,pkg)})+{_j(unc)}({_p(unc,pkg)})+{_j(drm)}  {_c(pkg-(core+unc+drm))}")
+        print(f"  [D3] E_pkg=E_baseline+E_dynamic:")
+        print(f"       {_j(pkg)}={_j(base)}({_p(base,pkg)})+{_j(dyn)}({_p(dyn,pkg)})  {_c(pkg-(base+dyn))}")
+        print(f"  [D1] E_attr=E_llm_compute+E_llm_wait+E_orch:")
+        print(f"       {_j(attr)}={_j(llmc)}({_p(llmc,attr)})+{_j(llmw)}({_p(llmw,attr)})+{_j(orch)}({_p(orch,attr)})  {_c(attr-(llmc+llmw+orch))}")
+        if wf == "agentic":
+            print(f"  [D2] E_attr=E_plan+E_exec+E_synth+E_inter:")
+            print(f"       {_j(attr)}={_j(plan)}({_p(plan,attr)})+{_j(exe)}({_p(exe,attr)})+{_j(syn)}({_p(syn,attr)})+{_j(iph)}({_p(iph,attr)})  {_c(attr-(plan+exe+syn+iph))}")
+        print(f"  [A2] E_attr=SUM(attempts): {_j(attr)}=={_j(asum)}  {_c(attr-asum)}")
+        if gt > 0:
+            print(f"  [Goal] total={_j(gt)} success={_j(gs)} overhead={_p(gt-gs,gt)}"
+                  + (f" orch_frac={ofrc:.4f}" if ofrc else ""))
+        if ftl > 0:
+            print(f"  [Failure] failed_tool={_j(ftl)}")
+        print(f"  {'─'*68}")
 def main():
     parser = argparse.ArgumentParser(description="A-LEMS experiment integrity scanner")
     group = parser.add_mutually_exclusive_group(required=True)

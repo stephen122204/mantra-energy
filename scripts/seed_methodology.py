@@ -599,6 +599,38 @@ def _load_derived_methods() -> List[Dict]:
             "doc":     "09-derived-metrics-methodology.md",
             "section": "Phase Energy Attribution",
         },
+        {
+            "id":           "phase_attribution_sample_v2",
+            "name":         "Phase Attribution v2 (Direct RAPL Sample Measurement)",
+            "provenance":   "MEASURED",
+            "layer":        "orchestration",
+            "confidence":   0.98,
+            "description":  (
+                "Per-phase energy measured directly from 100Hz RAPL energy_samples "
+                "within orchestration_events phase timestamp windows. "
+                "E_phase_i = SUM(pkg_end_uj - pkg_start_uj) x cpu_frac_i "
+                "for samples where sample_start_ns >= phase.start AND sample_end_ns <= phase.end. "
+                "inter_phase_energy_uj = E_attributed - SUM(E_phase_i) captures honest residual: "
+                "Python interpreter overhead, tool dispatch, framework calls between phases. "
+                "Replaces v1 weighted allocation which forced SUM=attributed by construction. "
+                "phase_sample_coverage_pct documents what fraction of run samples fell in phase windows."
+            ),
+            "formula_latex": (
+                r"E_{phase,i} = \sum_{s \in W_i} (pkg\_end_s - pkg\_start_s) \times f_{cpu,i}"
+                r",\quad E_{inter} = E_{attr} - \sum_i E_{phase,i}"
+            ),
+            "parameters": {
+                "energy_sample_rate_hz":  100,
+                "cpu_sample_rate_hz":     10,
+                "window_match":           "sample_start_ns >= phase.start AND sample_end_ns <= phase.end",
+                "fallback":               "run_level_cpu_fraction when phase ticks unavailable",
+                "residual_policy":        "inter_phase_energy_uj — honest residual, not forced to 0",
+            },
+            "fn":      "phase_attribution_etl.compute_phase_attribution",
+            "doc":     "09-derived-metrics-methodology.md",
+            "section": "Phase Energy Attribution v2",
+        },
+
         # ── Chunk 6: Energy Attribution ───────────────────────────────────────────
         {
             "id":            "energy_attribution_v1",
@@ -831,6 +863,41 @@ def _load_derived_methods() -> List[Dict]:
             "doc":           "15-llm-wait-energy-finding.md",
             "section":       "LLM Wait Energy Attribution Formula",
         },
+        {
+            "id":            "llm_energy_sample_v2",
+            "name":          "LLM Energy Attribution v2 (Direct RAPL Sample Measurement)",
+            "provenance":    "MEASURED",
+            "layer":         "application",
+            "confidence":    0.97,
+            "description":   (
+                "LLM compute and wait energy measured directly from 100Hz RAPL samples "
+                "using llm_interactions timestamp windows. "
+                "E_llm_compute = SUM(samples in [call_start..first_token_time_ns]) x cpu_frac "
+                "= energy during active prompt prefill (CPU computing). "
+                "E_llm_wait = SUM(samples in [first_token_time_ns..last_token_time_ns]) x cpu_frac "
+                "= energy while process blocked waiting for token stream. "
+                "Novel finding: local models (api_latency=0) still draw ~12.9W during decode — "
+                "v1 time-fraction missed this entirely. "
+                "E_orchestration = E_attributed - E_llm_compute - E_llm_wait (CALCULATED residual). "
+                "Fallback: time_fraction_fallback_v1 when timestamps NULL (confidence 0.70)."
+            ),
+            "formula_latex": (
+                r"E_{llm\_compute} = \sum_{s \in [t_{call}, t_{first\_token}]} \Delta pkg_s \times f_{cpu}"
+                r",\quad E_{llm\_wait} = \sum_{s \in [t_{first\_token}, t_{last\_token}]} \Delta pkg_s \times f_{cpu}"
+                r",\quad E_{orch} = E_{attr} - E_{llm\_compute} - E_{llm\_wait}"
+            ),
+            "parameters":    {
+                "source_timestamps":  "llm_interactions.first_token_time_ns, last_token_time_ns",
+                "energy_source":      "energy_samples.pkg_end_uj - pkg_start_uj per interval",
+                "cpu_attribution":    "runs.cpu_fraction applied to raw window energy",
+                "fallback_method":    "time_fraction_fallback_v1 (confidence=0.70)",
+                "local_model_note":   "api_latency_ms=0 for local — timestamps still exist",
+                "novel_finding":      "decode phase draws ~12.9W above idle, not idle power",
+            },
+            "doc":           "15-llm-wait-energy-finding.md",
+            "section":       "LLM Energy Attribution v2 — Sample-Based Measurement",
+        },
+
         # ── v10: ML Energy Estimator Provision ───────────────────────────────────
         {
             "id":            "ml_energy_estimator_v1",
