@@ -6,11 +6,14 @@ Shows complete energy tree per run with inline equations and percentages.
 Every conservation level must sum to 100%. Violations shown immediately.
 
 Conservation Dimensions:
-  D4 Hardware: E_pkg = E_core + E_uncore + E_dram
-  D3 System:   E_pkg = E_baseline + E_dynamic
-               E_dynamic = E_attributed + E_background
-  D1 Time:     E_attributed = E_llm_compute + E_llm_wait + E_orchestration
-  D2 Phase:    E_orchestration = E_plan + E_exec + E_synth + E_inter_phase
+  D4 Hardware Domain Partition: E_pkg = E_core + E_uncore + E_dram
+  D3a Idle Subtraction:   E_pkg = E_baseline + E_dynamic
+  D3b Process Attribution E_dynamic = E_attributed + E_background
+  D1 Activity Partition: E_attributed = E_llm_window + E_orchestration
+               E_llm_window = llm_compute_energy_uj (inference window energy)
+               E_orchestration = all non-LLM-inference workload energy (residual)
+  D2 Workflow Phase Partition:    E_attributed = E_planning + E_execution + E_synthesis + E_inter_phase
+               (parallel view — D1 and D2 are orthogonal cuts of E_attributed)
   Boundary:    E_dynamic = E_pre + E_workload_pure + E_post
   Approach-2:  E_dynamic(run) = SUM(goal_attempt.energy_uj)
   f_orch:      stored = E_orch / E_attributed
@@ -183,20 +186,32 @@ def print_tree(r):
     else:
         print(f"\n  [Boundary] ⚠️  pre/post NULL — not recorded")
 
-    # D1
+    # D1 Activity Partition
     d = abs(attr-(llmc+llmw+orch))
     is_sample = "sample_based" in mth
     ml = "MEASURED" if is_sample else "INFERRED(time-frac)"
-    print(f"\n  [Energy Type Breakdown] E_process = E_llm_prefill + E_llm_token_wait + E_framework_overhead  [{ml}]")
+    # D1 conservation line — two-term partition (exact)
+    print(f"\n  [D1 Activity] E_attributed = E_llm_window + E_orchestration  [{ml}]")
     print(f"       {_j(attr)} = {_j(llmc)}({_pct(llmc,attr):.1f}%)"
-          f" + {_j(llmw)}({_pct(llmw,attr):.1f}%)"
           f" + {_j(orch)}({_pct(orch,attr):.1f}%)"
           f"  {_chk(d)} Δ={d}µJ")
+    # Granular sub-components — shown for insight, not conservation
+    pre  = r.get("prefill_energy_uj") or 0
+    dec  = r.get("decode_energy_uj")  or 0
+    print(f"       [D1 detail] E_llm_window breakdown:")
+    if pre > 0 or dec > 0:
+        print(f"         E_prefill={_j(pre)}({_pct(pre,attr):.1f}%)"
+              f"  E_decode={_j(dec)}({_pct(dec,attr):.1f}%)"
+              f"  [MEASURED — conditional on timestamps]")
+    else:
+        print(f"         E_prefill=NULL  E_decode=NULL"
+              f"  [timestamps unavailable — window unsplit]")
+    print(f"       [D1 diagnostic] E_llm_wait={_j(llmw)}({_pct(llmw,attr):.1f}%)"
+          f"  [MODELED — subset of E_orchestration, not a partition]")
     if not is_sample and "llama" in prv.lower():
-        print(f"       ⚠️  Local: api_latency=0 → time-frac wrong for llm_wait")
-        print(f"          Fix: python scripts/etl/energy_attribution_etl.py --run-id {r['run_id']}")
+        print(f"       ⚠️  Local: non_local_ms=0 → llm_wait MODELED not MEASURED")
 
-    # D2
+    # D2 Workflow Phase Partition
     if wf == "agentic":
         d = abs(attr-(plan+exe+syn+iph))
         print(f"\n  [Time Phase Breakdown] E_process = E_planning + E_execution + E_synthesis + E_between_phases")
@@ -304,7 +319,7 @@ def validate_run(conn, run_id):
     mth  = r["attribution_method"]   or "unknown"
     ofrc = r["orchestration_fraction"]
 
-    # D4
+    # D4 — Hardware domain partition (conservation)
     d = abs(pkg-(core+unc+dram))
     results.append(ok(f"{p} D4 Δ={d}µJ") if core > 0 and d <= TOL_UJ
                    else (fail(f"{p} D4 VIOLATION Δ={d}µJ") if core > 0
@@ -332,18 +347,18 @@ def validate_run(conn, run_id):
     else:
         results.append(warn(f"{p} Boundary pre/post NULL"))
 
-    # D1
+    # D1 Activity Partition
     if attr > 0:
         d = abs(attr-(llmc+llmw+orch))
         is_s = "sample_based" in mth
-        results.append(ok(f"{p} D1 [{'MEASURED' if is_s else 'INFERRED'}] Δ={d}µJ")
-                       if d <= TOL_UJ else fail(f"{p} D1 VIOLATION Δ={d}µJ"))
+        results.append(ok(f"{p} D1 Activity Partition [{'MEASURED' if is_s else 'INFERRED'}] Δ={d}µJ")
+                       if d <= TOL_UJ else fail(f"{p} D1 Activity Partition VIOLATION Δ={d}µJ"))
         if not is_s and "llama" in prv.lower():
-            results.append(warn(f"{p} D1 llm_wait time-frac wrong for local provider"))
+            results.append(warn(f"{p} D1 Activity Partition llm_wait time-frac wrong for local provider"))
     else:
-        results.append(warn(f"{p} D1 attr NULL"))
+        results.append(warn(f"{p} D1 Activity Partition attr NULL"))
 
-    # D2
+    # D2 Workflow Phase Partition
     if wf == "agentic":
         if plan > 0 or exe > 0 or syn > 0:
             d = abs(attr-(plan+exe+syn+iph))

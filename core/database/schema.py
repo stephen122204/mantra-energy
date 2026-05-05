@@ -1281,6 +1281,7 @@ CREATE TABLE IF NOT EXISTS llm_interactions (
     streaming_enabled INTEGER DEFAULT 0, -- 1 if streaming was used (SYSTEM)
     first_token_time_ns INTEGER,         -- epoch ns of first token arrival (MEASURED)
     last_token_time_ns INTEGER,          -- epoch ns of last token arrival (MEASURED)
+    request_start_ns    INTEGER,         -- LLM call start — enables prefill window [request_start..first_token]
     prefill_energy_uj INTEGER,           -- RAPL energy during prefill phase (CALCULATED)    
     bytes_sent_approx INTEGER,
     bytes_recv_approx INTEGER,

@@ -396,7 +396,8 @@ class LinearExecutor:
             'token_throughput':    phase_metrics.get('token_throughput'),
             'streaming_enabled':   phase_metrics.get('streaming_enabled', 0),
             'first_token_time_ns': phase_metrics.get('first_token_time_ns'),
-            'last_token_time_ns':  phase_metrics.get('last_token_time_ns'),            
+            'last_token_time_ns':  phase_metrics.get('last_token_time_ns'),
+            'request_start_ns':    phase_metrics.get('request_start_ns'),            
         }
 
     def _build_result(self, experiment_id: str, start_time: float, end_time: float,

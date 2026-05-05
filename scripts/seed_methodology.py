@@ -652,16 +652,23 @@ def _load_derived_methods() -> List[Dict]:
                 "Unattributed residual = pkg − Σ all layers."
             ),
             "formula_latex": (
-                r"E_{total} = E_{core} + E_{dram} + E_{uncore} + E_{background}"
-                r" + E_{network} + E_{io} + E_{orchestration} + E_{application}"
-                r" + E_{thermal} + E_{unattributed}"
+                r"\text{AXIS 1A: } E_{pkg} = E_{core} + E_{uncore} + E_{dram}"
+                r",\quad E_{dynamic} = E_{pkg} - E_{baseline}"
+                r",\quad E_{attributed} = \alpha_{cpu} \times E_{dynamic}"
+                r",\quad E_{background} = E_{dynamic} - E_{attributed}"
+                r"\\\text{AXIS 2A: } E_{attributed} = E_{llm\_window} + E_{orch}"
+                r"\\\text{AXIS 2B: } E_{attributed} = E_{plan} + E_{exec} + E_{synth} + E_{inter}"
+                r"\\\text{AXIS 3 signals (non-conserved): } \{E_{network}, E_{io}, E_{cache}, E_{interrupt}, ...\}"
             ),
             "parameters":    {
-                "ucr_formula":          "compute_time_ms / duration_ms",
-                "application_formula":  "attributed_energy × ucr",
-                "background_formula":   "max(0, pkg - core - dram - orchestration - application - network - io)",
-                "unattributed_formula": "max(0, pkg - Σ_all_layers)",
-                "model_version":        "v1",
+                "axis_1a":           "Hardware domain partition: pkg=core+uncore+dram",
+                "axis_1b":           "Process attribution: attributed=alpha_cpu×dynamic",
+                "axis_2a":           "Functional partition: attributed=llm_window+orchestration (TWO-TERM)",
+                "axis_2b":           "Phase partition: attributed=planning+execution+synthesis+inter_phase",
+                "axis_3":            "Resource signals: MODELED proxies, NOT conservation partitions",
+                "unattributed":      "max(0, pkg - Σ conservation layers)",
+                "model_version":     "v1",
+                "framework":         "A-LEMS Four-Axis Energy Attribution Framework",
             },
             "doc":           "12-energy-attribution-methodology.md",
             "section":       "Attribution Model v1",
@@ -836,32 +843,70 @@ def _load_derived_methods() -> List[Dict]:
             "doc":           "14-measurement-boundary-methodology.md",
             "section":       "Measurement Coverage Validation",
         },
-
+        {
+            "id":            "network_wait_energy_v1",
+            "name":          "Network Wait Energy Attribution v1 (RAPL Slice)",
+            "provenance":    "MEASURED",
+            "layer":         "application",
+            "confidence":    0.95,
+            "description":   (
+                "Energy during network IO blocking periods measured via direct RAPL "
+                "sample slice over [request_start_ns → first_token_time_ns] windows "
+                "from llm_interactions. "
+                "This is an AXIS 3A physical observable — NOT a conservation partition. "
+                "Key finding: energy is NON-ZERO even when cpu_percent_during_wait≈0 "
+                "because DRAM and uncore remain active for streaming buffer management. "
+                "Explains why E_orchestration is non-trivial for remote providers. "
+                "Falls back to time-fraction when timestamps unavailable (pre-migration-038). "
+                "Fallback: (non_local_ms / task_duration_ms) × attributed_energy_uj."
+            ),
+            "formula_latex": (
+                r"E_{network} = \sum_{i \in \text{interactions}}"
+                r"\sum_{s \in [t^i_{req}, t^i_{first}]} \Delta pkg_s \times \alpha_{cpu}"
+                r"\quad \text{(AXIS 3A signal — not a conservation partition)}"
+            ),
+            "parameters":    {
+                "primary_source":   "RAPL energy_samples sliced by request_start_ns→first_token_time_ns",
+                "fallback":         "(non_local_ms / task_duration_ms) × attributed_energy_uj",
+                "fallback_trigger": "request_start_ns IS NULL (pre-migration-038 runs)",
+                "axis":             "AXIS 3A — Physical Observable",
+                "conservation_role": "NONE — diagnostic signal, not part of D1 partition",
+                "literature":       "Hähnel et al. 2012 — RAPL accuracy for short windows",
+            },
+            "doc":           "25-energy-attribution-guide.md",
+            "section":       "Section 11.1 — network_wait_energy_uj",
+        },
 # ── v10: LLM Wait Energy Attribution ─────────────────────────────────────
         {
             "id":            "llm_wait_attribution_v1",
-            "name":          "LLM API Wait Energy Attribution",
-            "provenance":    "CALCULATED",
+            "name":          "LLM Wait Energy — AXIS 3 Diagnostic Signal",
+            "provenance":    "MODELED",
             "layer":         "application",
             "confidence":    0.85,
             "description":   (
-                "Energy consumed during LLM API blocking wait. "
-                "Computed as attributed_energy × (api_latency_ms / task_duration_ms). "
-                "Novel metric: prior tools miss this energy since process is not CPU-active. "
-                "During API wait, process power ~12.9W (sub-active), above idle (3-5W) "
-                "but below active compute (33W). Empirically ~48% of agentic run time."
+                "Energy during LLM interaction windows that is wait-dominated. "
+                "This is an AXIS 3 diagnostic signal — a named subset of "
+                "E_orchestration for insight analysis only. "
+                "It is NOT a conservation partition. It is NOT subtracted from "
+                "E_attributed in D1. It is already inside E_orchestration. "
+                "Key finding: this value is NON-ZERO even when cpu_percent_during_wait≈0 "
+                "because DRAM and uncore remain active during remote API blocking. "
+                "Formula: time-fraction proxy against attributed_energy_uj. "
+                "Use for: AXIS 3B regression input, provider comparison, physics explanation."
             ),
             "formula_latex": (
-                r"E_{llm\_wait} = E_{attr} \times \frac{t_{api}}{t_{task}}"
+                r"E_{llm\_wait} = E_{attr} \times \frac{t_{non\_local}}{t_{task}}"
+                r"\quad \text{(AXIS 3 diagnostic — subset of } E_{orch} \text{, not a partition)}"
             ),
             "parameters":    {
-                "source_column":    "llm_interactions.api_latency_ms",
+                "source_column":    "llm_interactions.non_local_ms",
                 "base_energy":      "attributed_energy_uj",
-                "confidence_note":  "INFERRED time-fraction; power assumed constant during wait",
-                "typical_fraction": "~48% agentic, ~49% linear",
+                "axis":             "AXIS 3A — System Dynamics Signal",
+                "conservation_role": "NONE — diagnostic only, already inside E_orchestration",
+                "key_insight":      "Non-zero at CPU≈0: DRAM/uncore active during remote blocking",
             },
-            "doc":           "15-llm-wait-energy-finding.md",
-            "section":       "LLM Wait Energy Attribution Formula",
+            "doc":           "25-energy-attribution-guide.md",
+            "section":       "Section 8.3 — llm_wait_energy_uj Diagnostic Subset",
         },
         {
             "id":            "llm_energy_sample_v2",
@@ -870,29 +915,34 @@ def _load_derived_methods() -> List[Dict]:
             "layer":         "application",
             "confidence":    0.97,
             "description":   (
-                "LLM compute and wait energy measured directly from 100Hz RAPL samples "
+                "LLM inference window energy measured directly from 100Hz RAPL samples "
                 "using llm_interactions timestamp windows. "
-                "E_llm_compute = SUM(samples in [call_start..first_token_time_ns]) x cpu_frac "
-                "= energy during active prompt prefill (CPU computing). "
-                "E_llm_wait = SUM(samples in [first_token_time_ns..last_token_time_ns]) x cpu_frac "
-                "= energy while process blocked waiting for token stream. "
-                "Novel finding: local models (api_latency=0) still draw ~12.9W during decode — "
-                "v1 time-fraction missed this entirely. "
-                "E_orchestration = E_attributed - E_llm_compute - E_llm_wait (CALCULATED residual). "
+                "E_llm_window = E_prefill + E_decode (two-term, AXIS 2A functional partition). "
+                "E_prefill = SUM(samples in [request_start_ns..first_token_time_ns]) x cpu_frac "
+                "= energy during prompt encoding (compute-dominated for local models). "
+                "E_decode = SUM(samples in [first_token_time_ns..last_token_time_ns]) x cpu_frac "
+                "= energy during token generation window. "
+                "E_orchestration = E_attributed - E_llm_window (TWO-TERM residual — exact by construction). "
+                "E_llm_wait stored separately as AXIS 3 diagnostic signal only — "
+                "it is a subset of E_orchestration, NOT a conservation partition. "
+                "Novel finding: DRAM and uncore remain active during remote API wait "
+                "even when CPU≈0 — E_orchestration is non-trivial for remote providers. "
                 "Fallback: time_fraction_fallback_v1 when timestamps NULL (confidence 0.70)."
             ),
             "formula_latex": (
-                r"E_{llm\_compute} = \sum_{s \in [t_{call}, t_{first\_token}]} \Delta pkg_s \times f_{cpu}"
-                r",\quad E_{llm\_wait} = \sum_{s \in [t_{first\_token}, t_{last\_token}]} \Delta pkg_s \times f_{cpu}"
-                r",\quad E_{orch} = E_{attr} - E_{llm\_compute} - E_{llm\_wait}"
+                r"E_{prefill} = \sum_{s \in [t_{req}, t_{first}]} \Delta pkg_s \times \alpha_{cpu}"
+                r",\quad E_{decode} = \sum_{s \in [t_{first}, t_{last}]} \Delta pkg_s \times \alpha_{cpu}"
+                r",\quad E_{llm\_window} = E_{prefill} + E_{decode}"
+                r",\quad E_{orch} = E_{attr} - E_{llm\_window}"
             ),
             "parameters":    {
-                "source_timestamps":  "llm_interactions.first_token_time_ns, last_token_time_ns",
-                "energy_source":      "energy_samples.pkg_end_uj - pkg_start_uj per interval",
+                "source_timestamps":  "llm_interactions.request_start_ns, first_token_time_ns, last_token_time_ns",
+                "energy_source":      "energy_samples.pkg_energy_uj delta per 100Hz interval",
                 "cpu_attribution":    "runs.cpu_fraction applied to raw window energy",
                 "fallback_method":    "time_fraction_fallback_v1 (confidence=0.70)",
-                "local_model_note":   "api_latency_ms=0 for local — timestamps still exist",
-                "novel_finding":      "decode phase draws ~12.9W above idle, not idle power",
+                "d1_partition":       "TWO-TERM: E_attributed = E_llm_window + E_orchestration",
+                "llm_wait_note":      "llm_wait_energy_uj = AXIS 3 diagnostic subset of E_orchestration",
+                "novel_finding":      "DRAM/uncore non-zero during remote wait — E_orchestration non-trivial at CPU≈0",
             },
             "doc":           "15-llm-wait-energy-finding.md",
             "section":       "LLM Energy Attribution v2 — Sample-Based Measurement",

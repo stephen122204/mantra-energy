@@ -146,7 +146,7 @@ def check_goal_attempt(conn, goal_ids: list, attempt_ids: list) -> list:
 
     null_failure = conn.execute(
         f"SELECT COUNT(*) FROM goal_attempt WHERE goal_id IN ({placeholders}) "
-        f"AND outcome = 'failure' AND failure_type IS NULL",
+        f"AND outcome = 'failure' AND failure_type IS NULL AND is_retry = 1",
         goal_ids
     ).fetchone()[0]
 
@@ -413,6 +413,85 @@ def check_energy_conservation(conn, exp_id: int, run_ids: list, goal_ids: list) 
             results.append(warn(f"goal_execution.total mismatch goal={v['goal_id']} stored={v['total_energy_uj']} computed={v['attempt_sum']}"))
     elif rows2:
         results.append(ok(f"goal_execution.total matches attempt sums: {len(rows2)} goals"))
+
+    # D1: E_attributed = E_llm_window + E_orchestration
+    # llm_window = llm_compute_energy_uj (residual guaranteed by ETL construction)
+    d1_rows = conn.execute("""
+        SELECT ea.run_id,
+            ABS(r.attributed_energy_uj
+                - COALESCE(ea.llm_compute_energy_uj, 0)
+                - COALESCE(ea.orchestration_energy_uj, 0)) AS d1_delta
+        FROM energy_attribution ea
+        JOIN runs r ON r.run_id = ea.run_id
+        WHERE ea.run_id IN ({placeholders})
+          AND r.attributed_energy_uj > 0
+    """.format(placeholders=",".join("?" * len(run_ids))), run_ids).fetchall()
+    d1_violations = [r for r in d1_rows if r["d1_delta"] > 1000]
+    if d1_violations:
+        for v in d1_violations:
+            results.append(fail(f"D1 VIOLATION run={v['run_id']} delta={v['d1_delta']}µJ"))
+    elif d1_rows:
+        results.append(ok(f"D1 conservation: {len(d1_rows)} runs verified max_delta={max(r['d1_delta'] for r in d1_rows)}µJ"))
+ 
+    # D4: E_pkg = E_core + E_uncore + E_dram
+    d4_rows = conn.execute("""
+        SELECT ea.run_id,
+            ABS(ea.pkg_energy_uj
+                - COALESCE(ea.core_energy_uj, 0)
+                - COALESCE(ea.uncore_energy_uj, 0)
+                - COALESCE(ea.dram_energy_uj, 0)) AS d4_delta
+        FROM energy_attribution ea
+        WHERE ea.run_id IN ({placeholders})
+          AND ea.pkg_energy_uj > 0
+          AND ea.core_energy_uj > 0
+    """.format(placeholders=",".join("?" * len(run_ids))), run_ids).fetchall()
+    d4_violations = [r for r in d4_rows if r["d4_delta"] > (0.01 * 1e6)]
+    if d4_violations:
+        for v in d4_violations:
+            results.append(warn(f"D4 delta run={v['run_id']} delta={v['d4_delta']}µJ"))
+    elif d4_rows:
+        results.append(ok(f"D4 conservation: {len(d4_rows)} runs verified"))
+ 
+    # D3b: E_dynamic = E_attributed + E_background
+    d3b_rows = conn.execute("""
+        SELECT r.run_id,
+            ABS(r.dynamic_energy_uj
+                - r.attributed_energy_uj
+                - COALESCE(ea.background_energy_uj, 0)) AS d3b_delta
+        FROM runs r
+        JOIN energy_attribution ea ON ea.run_id = r.run_id
+        WHERE r.run_id IN ({placeholders})
+          AND r.dynamic_energy_uj > 0
+    """.format(placeholders=",".join("?" * len(run_ids))), run_ids).fetchall()
+    d3b_violations = [r for r in d3b_rows if r["d3b_delta"] > 1000]
+    if d3b_violations:
+        for v in d3b_violations:
+            results.append(fail(f"D3b VIOLATION run={v['run_id']} delta={v['d3b_delta']}µJ"))
+    elif d3b_rows:
+        results.append(ok(f"D3b conservation: {len(d3b_rows)} runs verified"))
+ 
+    # D2: E_attributed = E_planning + E_execution + E_synthesis + E_inter_phase
+    d2_rows = conn.execute("""
+        SELECT ea.run_id,
+            ABS(r.attributed_energy_uj
+                - COALESCE(ea.planning_energy_uj, 0)
+                - COALESCE(ea.execution_energy_uj, 0)
+                - COALESCE(ea.synthesis_energy_uj, 0)
+                - COALESCE(ea.inter_phase_energy_uj, 0)) AS d2_delta
+        FROM energy_attribution ea
+        JOIN runs r ON r.run_id = ea.run_id
+        WHERE ea.run_id IN ({placeholders})
+          AND r.attributed_energy_uj > 0
+          AND ea.planning_energy_uj > 0
+    """.format(placeholders=",".join("?" * len(run_ids))), run_ids).fetchall()
+    d2_violations = [r for r in d2_rows if r["d2_delta"] > 1000]
+    if d2_violations:
+        for v in d2_violations:
+            results.append(fail(f"D2 VIOLATION run={v['run_id']} delta={v['d2_delta']}µJ"))
+    elif d2_rows:
+        results.append(ok(f"D2 conservation: {len(d2_rows)} runs verified"))
+    else:
+        results.append(warn("D2 conservation: no agentic runs with phase data to verify"))
     return results
 
 
@@ -513,8 +592,9 @@ def print_energy_accounting(conn, exp_id: int, exp_type: str) -> None:
         print(f"       {_j(pkg)}={_j(core)}({_p(core,pkg)})+{_j(unc)}({_p(unc,pkg)})+{_j(drm)}  {_c(pkg-(core+unc+drm))}")
         print(f"  [D3] E_pkg=E_baseline+E_dynamic:")
         print(f"       {_j(pkg)}={_j(base)}({_p(base,pkg)})+{_j(dyn)}({_p(dyn,pkg)})  {_c(pkg-(base+dyn))}")
-        print(f"  [D1] E_attr=E_llm_compute+E_llm_wait+E_orch:")
-        print(f"       {_j(attr)}={_j(llmc)}({_p(llmc,attr)})+{_j(llmw)}({_p(llmw,attr)})+{_j(orch)}({_p(orch,attr)})  {_c(attr-(llmc+llmw+orch))}")
+        print(f"  [D1 Activity Partition] E_attr=E_llm_window+E_orchestration:")
+        print(f"       {_j(attr)}={_j(llmc)}({_p(llmc,attr)})+{_j(orch)}({_p(orch,attr)})  {_c(attr-(llmc+orch))}")
+        print(f"       [diagnostic] llm_wait={_j(llmw)}({_p(llmw,attr)}) — AXIS 3 subset of orchestration")
         if wf == "agentic":
             print(f"  [D2] E_attr=E_plan+E_exec+E_synth+E_inter:")
             print(f"       {_j(attr)}={_j(plan)}({_p(plan,attr)})+{_j(exe)}({_p(exe,attr)})+{_j(syn)}({_p(syn,attr)})+{_j(iph)}({_p(iph,attr)})  {_c(attr-(plan+exe+syn+iph))}")

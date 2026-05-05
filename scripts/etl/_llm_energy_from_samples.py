@@ -33,8 +33,11 @@ PROVENANCE:
   llm_prefill_uj  MEASURED   energy_samples × cpu_fraction in prefill window
   llm_decode_uj   MEASURED   energy_samples × cpu_fraction in decode window
   llm_compute_uj  MEASURED   = llm_prefill_uj (active CPU prompt processing)
-  llm_wait_uj     MEASURED   = llm_decode_uj  (token generation phase)
-  orchestration_uj CALCULATED = attributed - llm_wait_uj - llm_compute_uj
+  llm_wait_uj     MODELED    = diagnostic subset of orchestration_uj
+                               (non_local_ms fraction — AXIS 3 signal only)
+    orchestration_uj CALCULATED = attributed - llm_window_uj
+                               (llm_wait is diagnostic subset of orchestration,
+                                not a separate conservation partition)
 
 FALLBACK (when timestamps NULL):
   Falls back to time-fraction with attribution_method='time_fraction_fallback_v1'
@@ -152,6 +155,7 @@ def get_llm_energy_from_samples(
         SELECT interaction_id,
                first_token_time_ns,
                last_token_time_ns,
+               request_start_ns,
                api_latency_ms,
                local_compute_ms,
                non_local_ms
@@ -183,11 +187,11 @@ def get_llm_energy_from_samples(
     n_measured       = 0
 
     for row in interactions:
-        first_token_ns = row[1]
-        last_token_ns  = row[2]
+        first_token_ns  = row[1]
+        last_token_ns   = row[2]
+        request_start_ns = row[3]  # prefill window start — added in migration 038
 
         if first_token_ns >= last_token_ns:
-            # Degenerate window — skip (streaming not captured or sub-ms model)
             logger.debug(
                 "get_llm_energy: run=%d interaction=%d degenerate window "
                 "[%d..%d] — skipping",
@@ -196,29 +200,37 @@ def get_llm_energy_from_samples(
             continue
 
         # Decode window: first_token_ns → last_token_ns
-        # = energy while model streams tokens to caller
-        # Novel finding: process is alive and drawing power during this window
+        # = energy while model generates output tokens
+        # Novel finding: process draws significant power (~12.9W) during decode
         decode_uj = _sum_samples_in_window(
             cursor, run_id, first_token_ns, last_token_ns, cpu_fraction
         )
         total_decode_uj += decode_uj
+
+        # Prefill window: request_start_ns → first_token_ns
+        # = energy while model processes input prompt (active CPU compute)
+        # MEASURED directly from RAPL samples — replaces compute_ms time-fraction
+        if request_start_ns and request_start_ns < first_token_ns:
+            prefill_uj = _sum_samples_in_window(
+                cursor, run_id, request_start_ns, first_token_ns, cpu_fraction
+            )
+            total_prefill_uj += prefill_uj
+            logger.debug(
+                "get_llm_energy: run=%d interaction=%d "
+                "prefill_uj=%d decode_uj=%d provider=%s",
+                run_id, row[0], prefill_uj, decode_uj, provider or "unknown"
+            )
+        else:
+            # No request_start_ns — fall back to compute_ms time-fraction for prefill only
+            if duration_ms > 0 and compute_ms > 0:
+                compute_frac = min(1.0, compute_ms / duration_ms)
+                total_prefill_uj += int(attributed * compute_frac)
+            logger.debug(
+                "get_llm_energy: run=%d interaction=%d no request_start_ns "
+                "— prefill time-fraction fallback", run_id, row[0]
+            )
+
         n_measured += 1
-
-        logger.debug(
-            "get_llm_energy: run=%d interaction=%d decode_uj=%d provider=%s",
-            run_id, row[0], decode_uj, provider or "unknown"
-        )
-
-    # Prefill energy: attributed - decode - orchestration
-    # We don't have precise prefill window start per interaction,
-    # but we can bound it: prefill = attributed - decode - inter_phase
-    # For paper: llm_compute = attributed × compute_frac as cross-check
-    # Use decode as the primary measurement; compute is residual attribution
-    if duration_ms > 0 and compute_ms > 0:
-        compute_frac   = min(1.0, compute_ms / duration_ms)
-        total_prefill_uj = int(attributed * compute_frac)
-    else:
-        total_prefill_uj = 0
 
     # Clamp: prefill + decode cannot exceed attributed
     if total_prefill_uj + total_decode_uj > attributed:
@@ -231,11 +243,18 @@ def get_llm_energy_from_samples(
             run_id, attributed
         )
 
-    orchestration_uj = max(0, attributed - total_prefill_uj - total_decode_uj)
+    # orchestration = everything outside LLM inference windows
+    # llm_wait is a DIAGNOSTIC SUBSET of orchestration — not a separate partition
+    # D1: E_attributed = E_llm_window + E_orchestration (two-term, exact)
+    llm_window_uj    = total_prefill_uj + total_decode_uj
+    orchestration_uj = max(0, attributed - llm_window_uj)
+    # llm_wait stored separately for AXIS 3 diagnostic insight only
+    # It is already inside orchestration_uj — do NOT subtract again
 
     return {
-        "llm_compute_uj":    total_prefill_uj,
-        "llm_wait_uj":       total_decode_uj,
+        "llm_compute_uj":    llm_window_uj,     # E_llm_window = prefill + decode
+        "llm_wait_uj":       total_decode_uj,   # AXIS 3 diagnostic — decode window
+        "llm_prefill_uj":    total_prefill_uj,  # AXIS 3 diagnostic — prefill window
         "orchestration_uj":  orchestration_uj,
         "attribution_method": ATTRIBUTION_METHOD_SAMPLE_V2,
         "n_interactions":    n_measured,
@@ -255,9 +274,11 @@ def _time_fraction_fallback(
     Confidence: 0.70 (documented in provenance.py METHOD_CONFIDENCE).
     """
     if duration_ms <= 0:
+        # No timing data — all attributed energy is orchestration
+        # D1 TWO-TERM: E_llm_window=0, E_orchestration=E_attributed
         return {
             "llm_compute_uj":    0,
-            "llm_wait_uj":       0,
+            "llm_wait_uj":       0,       # AXIS 3 diagnostic — zero when no timing
             "orchestration_uj":  attributed,
             "attribution_method": ATTRIBUTION_METHOD_FALLBACK_V1,
             "n_interactions":    0,
@@ -272,11 +293,13 @@ def _time_fraction_fallback(
 
     llm_wait_uj    = int(attributed * llm_wait_frac)
     llm_compute_uj = int(attributed * compute_frac)
-    orch_uj        = max(0, attributed - llm_wait_uj - llm_compute_uj)
-
+    # D1 TWO-TERM: E_attributed = E_llm_window + E_orchestration
+    # llm_wait is AXIS 3 diagnostic subset — NOT subtracted from attributed
+    # llm_window = llm_compute only in fallback (no decode window available)
+    orch_uj        = max(0, attributed - llm_compute_uj)
     return {
         "llm_compute_uj":    llm_compute_uj,
-        "llm_wait_uj":       llm_wait_uj,
+        "llm_wait_uj":       llm_wait_uj,       # AXIS 3 diagnostic only
         "orchestration_uj":  orch_uj,
         "attribution_method": ATTRIBUTION_METHOD_FALLBACK_V1,
         "n_interactions":    0,

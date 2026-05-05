@@ -342,6 +342,7 @@ class AgenticExecutor:
 
         for i, step in enumerate(steps):
             step_counter += 1
+            logger.warning("STEP %d: keys=%s tool=%s supported=%s", i, list(step.keys()), step.get("tool"), self.supported_tools)
             if step.get("tool") in self.supported_tools:
                 # Tool execution – external computation, no LLM call
                 # Resolve args at execution time — handles {planner.*} and {step_N_result}
@@ -352,6 +353,7 @@ class AgenticExecutor:
                     task_prompt=getattr(self, "_current_task_prompt", None),
                 )
                 tool_start = time.time()
+                logger.warning("_execute_tool CALLED: tool=%s step=%s", step.get("tool"), step_counter)
                 result = self._execute_tool(
                     step["tool"], args, step_counter
                 )
@@ -1114,7 +1116,8 @@ You can use tools like calculator or web search if needed.
                 "token_throughput":    phase_metrics.get("token_throughput"),
                 "streaming_enabled":   phase_metrics.get("streaming_enabled", 0),
                 "first_token_time_ns": phase_metrics.get("first_token_time_ns"),
-                "last_token_time_ns":  phase_metrics.get("last_token_time_ns"),                
+                "last_token_time_ns":  phase_metrics.get("last_token_time_ns"), 
+                "request_start_ns":    phase_metrics.get("request_start_ns"),               
                 "status":                   "success",
             }
  
@@ -1169,6 +1172,7 @@ You can use tools like calculator or web search if needed.
                 "streaming_enabled":   0,
                 "first_token_time_ns": None,
                 "last_token_time_ns":  None,
+                "request_start_ns":    None,
                 "error_message":        str(e),
                 "error_type":           _detect_error_type(str(e)),
                 "status":               "failure",

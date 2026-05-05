@@ -16,4 +16,4 @@ references:
     authors: "Panigrahy, D."
     year: 2026
     ref_type: "internal"
-    relevance: "Section 4.2 — LLM Energy Attribution v2. Novel finding: decode phase draws ~12.9W above idle during token streaming. Direct sample measurement replaces time-fraction estimation. Fixes local model api_latency=0 undercount."
+    relevance: "Section 7 — Functional Projection (AXIS 2A). E_llm_window = E_prefill + E_decode. E_orchestration = E_attributed - E_llm_window (TWO-TERM, exact). Novel finding: DRAM/uncore non-zero during remote wait. llm_wait is AXIS 3 diagnostic subset of E_orchestration, not a conservation partition."

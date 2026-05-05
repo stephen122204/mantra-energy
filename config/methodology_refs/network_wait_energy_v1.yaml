@@ -1,0 +1,15 @@
+method_id: network_wait_energy_v1
+references:
+  - title: "Measuring Energy Consumption for Short Code Paths Using RAPL"
+    authors: "Hähnel, Döbel, Völp, Härtig"
+    year: 2012
+    ref_type: paper
+    relevance: "Validates RAPL accuracy for short timestamp-bounded windows,
+                confirming that energy during blocking IO periods is measurable
+                and non-trivial even at low CPU utilization."
+  - title: "Intel Software Developer Manual Volume 3B"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: manual
+    relevance: "RAPL MSR 0x611 Package Energy Status — source of sample data
+                used for network wait window slicing."

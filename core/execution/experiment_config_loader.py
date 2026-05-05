@@ -139,11 +139,15 @@ def _apply_execution_section(args, execution: dict) -> None:
         args.repetitions = int(execution["repetitions"])
         logger.debug("apply_config: repetitions = %d", args.repetitions)
 
-    if "cool_down_seconds" in execution:
-        # cool_down vs cool-down naming varies across entry points — set both
-        val = int(execution["cool_down_seconds"])
-        args.cool_down = val
-        logger.debug("apply_config: cool_down = %d", val)
+        if "cool_down_seconds" in execution:
+            # cool_down vs cool-down naming varies across entry points — set both
+            val = int(execution["cool_down_seconds"])
+            args.cool_down = val
+            logger.debug("apply_config: cool_down = %d", val)
+        if "inter_task_cooldown_seconds" in execution:
+            # cooldown between tasks — prevents cloud provider rate limiting
+            args.inter_task_cooldown = int(execution["inter_task_cooldown_seconds"])
+            logger.debug("apply_config: inter_task_cooldown = %d", args.inter_task_cooldown)
 
     if "save_db" in execution:
         # YAML save_db:true mirrors --save-db CLI flag (store_true, default False)
@@ -159,12 +163,17 @@ def _apply_tasks_section(args, tasks: list) -> None:
     """
     if not tasks:
         return
-    ids = []
-    for t in tasks:
-        if isinstance(t, dict):
-            ids.append(t["id"])
-        else:
-            ids.append(str(t))
+    # "all" keyword — load every task from tasks.yaml
+    if tasks == "all" or tasks == ["all"]:
+        from core.utils.task_loader import load_tasks
+        ids = [t["id"] for t in load_tasks()]
+    else:
+        ids = []
+        for t in tasks:
+            if isinstance(t, dict):
+                ids.append(t["id"])
+            else:
+                ids.append(str(t))
     if ids:
         args.task_id  = ids[0]
         args.task_ids = ids

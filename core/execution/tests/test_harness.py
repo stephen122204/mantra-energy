@@ -410,6 +410,7 @@ def _run_experiment(setup: dict, args) -> tuple:
                         "name":   task.get("name"),
                         "prompt": task_prompt,
                         "meta":   task.get("meta", {}),
+                        "tool_graph": task.get("tool_graph"),
                     }
                     # failure_injector from args (set by _apply_failure_injection_section)
                     # Only active when experiment_type=failure_injection + enabled=true

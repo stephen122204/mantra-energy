@@ -245,6 +245,7 @@ def run_provider_task(
                             "name":   task.get("name"),
                             "prompt": task["prompt"],
                             "meta":   task.get("meta", {}),
+                            "tool_graph": task.get("tool_graph"),
                         }
                         if workflow_mode in ("linear", "comparison"):
                             execute_goal(
@@ -432,13 +433,24 @@ def run_all_experiments(args):
     else:
         providers = ["groq"]
 
-    # Load tasks
+    # Load tasks — prefer task_ids set by apply_config() from YAML,
+    # fall back to --tasks CLI arg (comma-separated string)
     all_tasks = load_tasks()
-    if args.tasks == "all":
-        selected_tasks = all_tasks
+    # CLI --tasks always wins over YAML task_ids — explicit override
+    cli_tasks_provided = "--tasks" in sys.argv
+    if cli_tasks_provided and args.tasks != "gsm8k_basic,factual_qa":
+        # Non-default CLI --tasks specified — use it
+        if args.tasks == "all":
+            task_ids = [t["id"] for t in all_tasks]
+        else:
+            task_ids = [tid.strip() for tid in args.tasks.split(",")]
+    elif hasattr(args, "task_ids") and args.task_ids:
+        task_ids = args.task_ids
+    elif args.tasks == "all":
+        task_ids = [t["id"] for t in all_tasks]
     else:
         task_ids = [tid.strip() for tid in args.tasks.split(",")]
-        selected_tasks = [t for t in all_tasks if t["id"] in task_ids]
+    selected_tasks = [t for t in all_tasks if t["id"] in task_ids]
 
     if not selected_tasks:
         print("\n❌ No valid tasks selected.")
@@ -461,7 +473,9 @@ def run_all_experiments(args):
     # Run all experiments
     all_results = []
 
-    for task in selected_tasks:
+    inter_task_cooldown = getattr(args, "inter_task_cooldown", 0)
+
+    for i, task in enumerate(selected_tasks):
         print(f"\n{'='*70}")
         print(f"📋 TASK: {task['name']} (Level {task['level']})")
         print(f"{'='*70}")
@@ -470,6 +484,11 @@ def run_all_experiments(args):
             harness, runner, task, providers, repetitions, cool_down, args, config
         )
         all_results.extend(task_results)
+
+        # Inter-task cooldown — prevents rate limiting across tasks for cloud providers
+        if inter_task_cooldown > 0 and i < len(selected_tasks) - 1:
+            print(f"\n   ⏳ Inter-task cooldown {inter_task_cooldown}s...")
+            time.sleep(inter_task_cooldown)
 
     return all_results, config, args
 

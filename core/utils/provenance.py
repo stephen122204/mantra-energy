@@ -11,6 +11,8 @@ Provenance Definitions:
     MEASURED   — direct hardware or OS read, no mathematics
     CALCULATED — deterministic formula applied to measured values
     INFERRED   — uses external constants, emission factors, or models
+    MODELED    — proportionality model applied to measured values
+                 (time-fraction or counter-fraction × total energy)    
     SYSTEM     — infrastructure metadata, no scientific meaning
 
 Scalability:
@@ -133,10 +135,6 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "tfe.recovery_strategy":     ("system_metadata_v1",             "SYSTEM"),
     "tfe.wasted_energy_uj":      ("tool_failure_wasted_energy_v1",  "CALCULATED"),
 
-    # energy_attribution stub columns — populated by attribution ETL
-    "ea.energy_per_accepted_answer_uj":  ("attribution_etl_v1",     "CALCULATED"),
-    "ea.energy_per_solved_task_uj":      ("attribution_etl_v1",     "CALCULATED"),
-
     # goal_execution ETL columns
     "ge.total_energy_uj":        ("goal_execution_rollup_v1",       "CALCULATED"),
     "ge.successful_energy_uj":   ("goal_execution_rollup_v1",       "CALCULATED"),
@@ -256,27 +254,31 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "ea.uncore_energy_uj":               ("rapl_msr_pkg_energy",        "MEASURED"),
     # L1: System
     "ea.background_energy_uj":           ("energy_attribution_v1",      "CALCULATED"),
-    "ea.interrupt_energy_uj":            ("energy_attribution_v1",      "INFERRED"),
-    "ea.scheduler_energy_uj":            ("energy_attribution_v1",      "INFERRED"),
-    # L2: Resource contention
-    "ea.network_wait_energy_uj":         ("energy_attribution_v1",      "INFERRED"),
-    "ea.io_wait_energy_uj":              ("energy_attribution_v1",      "INFERRED"),
-    "ea.disk_energy_uj":                 ("energy_attribution_v1",      "INFERRED"),
-    "ea.memory_pressure_energy_uj":      ("energy_attribution_v1",      "INFERRED"),
-    "ea.cache_dram_energy_uj":           ("energy_attribution_v1",      "INFERRED"),
+
+    "ea.interrupt_energy_uj":            ("energy_attribution_v1",      "MODELED"),
+    "ea.scheduler_energy_uj":            ("energy_attribution_v1",      "MODELED"),
+    # network_wait: MEASURED via RAPL slice when timestamps available,
+    #               MODELED (time-fraction fallback) for pre-migration-038 runs
+    # io_wait: MODELED (time-fraction against attributed — BUG-E2 fixed)
+    "ea.network_wait_energy_uj":         ("network_wait_energy_v1",     "MEASURED"),
+    "ea.io_wait_energy_uj":              ("energy_attribution_v1",      "MODELED"),
+    "ea.disk_energy_uj":                 ("energy_attribution_v1",      "MODELED"),
+    "ea.memory_pressure_energy_uj":      ("energy_attribution_v1",      "MODELED"),
+    "ea.cache_dram_energy_uj":           ("energy_attribution_v1",      "MODELED"),
+
     # L3: Workflow
     "ea.orchestration_energy_uj":        ("energy_attribution_v1",      "CALCULATED"),
     "ea.planning_energy_uj":             ("phase_attribution_sample_v2", "MEASURED"),
     "ea.execution_energy_uj":            ("phase_attribution_sample_v2", "MEASURED"),
     "ea.synthesis_energy_uj":            ("phase_attribution_sample_v2", "MEASURED"),
     "ea.inter_phase_energy_uj":          ("phase_attribution_sample_v2", "CALCULATED"),
-    "ea.tool_energy_uj":                 ("energy_attribution_v1",      "INFERRED"),
+    "ea.tool_energy_uj":                 ("energy_attribution_v1",      "MODELED"),
     "ea.retry_energy_uj":                ("attribution_etl_v1",         "CALCULATED"),
     "ea.failed_tool_energy_uj":          ("attribution_etl_v1",         "CALCULATED"),
     "ea.rejected_generation_energy_uj":  ("attribution_etl_v1",         "CALCULATED"),
     # L4: Model compute
     "ea.llm_compute_energy_uj":          ("llm_energy_sample_v2",       "MEASURED"),
-    "ea.llm_wait_energy_uj":             ("llm_energy_sample_v2",       "MEASURED"),
+    "ea.llm_wait_energy_uj":             ("energy_attribution_v1",      "MODELED"),
     "ea.attribution_method":             ("energy_attribution_v1",      "SYSTEM"),
     "ea.ml_model_version":               ("ml_energy_estimator_v1",     "SYSTEM"),
     "ea.prefill_energy_uj":              ("llm_energy_sample_v2",       "MEASURED"),
@@ -457,6 +459,7 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "measurement_boundary_v1":       1.0,    # perf_counter — monotonic, all platforms
     "measurement_coverage_v1":       1.0,    # derived from sample timestamps 
     "llm_wait_attribution_v1":  0.85,
+    "network_wait_energy_v1":   0.95,   # RAPL slice primary, time-fraction fallback
     "ml_energy_estimator_v1":   0.0,    # placeholder until Chunk 1.2   
     "ttft_measurement_v1":      1.0,    # perf_counter monotonic, exact
     "tpot_measurement_v1":      0.95,   # derived from token count estimate 

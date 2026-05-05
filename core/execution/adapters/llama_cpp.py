@@ -149,6 +149,7 @@ class LlamaCppAdapter(TextGenABC):
             streaming_enabled=1,
             first_token_time_ns=first_token_ns,
             last_token_time_ns=last_token_ns,
+            request_start_ns=request_start_ns,
         )
 
         return {
@@ -175,7 +176,7 @@ class LlamaCppAdapter(TextGenABC):
         from llama_cpp import Llama
         logger.info("Loading GGUF model: %s", self._model_path)
         
-        self._llm = Llama(model_path=self._model_path)
+        self._llm = Llama(model_path=self._model_path, n_ctx=self.model_config.get("n_ctx", 512))
 
     def _error_result(self, error_msg: str, preprocess_ms: float) -> Dict:
         """

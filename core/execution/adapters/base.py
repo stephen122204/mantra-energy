@@ -125,7 +125,8 @@ class BaseAdapterMixin:
         token_throughput: Optional[float] = None,
         streaming_enabled: int = 0,
         first_token_time_ns: Optional[int] = None,
-        last_token_time_ns: Optional[int] = None,   
+        last_token_time_ns: Optional[int] = None,
+        request_start_ns: Optional[int] = None,   
     ) -> Dict[str, Any]:
         """
         Build the standard phase_metrics dict consumed by linear.py / agentic.py.
@@ -165,7 +166,8 @@ class BaseAdapterMixin:
             "token_throughput": token_throughput,
             "streaming_enabled": streaming_enabled,
             "first_token_time_ns": first_token_time_ns,
-            "last_token_time_ns": last_token_time_ns,            
+            "last_token_time_ns": last_token_time_ns,
+            "request_start_ns": request_start_ns,            
         }
 
 

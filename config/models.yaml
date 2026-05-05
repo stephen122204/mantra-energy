@@ -269,6 +269,7 @@ providers:
         name: TinyLlama 1B GGUF
         file_params:
           model_path: /home/dpani/mydrive/models/tinyllama.gguf
+          n_ctx: 2048
       - id: phi-2-gguf
         name: Phi-2 GGUF
         file_params:

@@ -185,7 +185,8 @@ class OpenAICompatAdapter(TextGenABC):
             token_throughput=stream_metrics.get("token_throughput"),
             streaming_enabled=stream_metrics.get("streaming_enabled", 0),
             first_token_time_ns=stream_metrics.get("first_token_time_ns"),
-            last_token_time_ns=stream_metrics.get("last_token_time_ns"),            
+            last_token_time_ns=stream_metrics.get("last_token_time_ns"), 
+            request_start_ns=stream_metrics.get("request_start_ns"),           
         )
 
         return {
@@ -343,11 +344,24 @@ class OpenAICompatAdapter(TextGenABC):
                 "Streaming failed for %s, falling back to non-streaming: %s",
                 self.get_name(), e,
             )
-            self._last_stream_metrics = {"streaming_enabled": 0}
+            # Capture timing for non-streaming fallback — api_latency_ms
+            # must be non-zero for llm_wait_energy_uj to be computed correctly
+            _fallback_start_ns = time.time_ns()
             response = requests.post(
                 self._endpoint_url(), json=payload, headers=headers, timeout=120
             )
             response.raise_for_status()
+            _fallback_end_ns = time.time_ns()
+            _fallback_ms = (_fallback_end_ns - _fallback_start_ns) / 1e6
+            self._last_stream_metrics = {
+                "streaming_enabled": 0,
+                "ttft_ms": _fallback_ms,  # no TTFT distinction — full round-trip
+                "tpot_ms": 0.0,
+                "token_throughput": 0.0,
+                "first_token_time_ns": _fallback_start_ns,  # request start as proxy
+                "last_token_time_ns": _fallback_end_ns,
+                "request_start_ns": request_start_ns,
+            }
             return response.json()
  
         # Prefer API token count — providers batch tokens per chunk (Groq)

@@ -872,11 +872,11 @@ class SQLiteAdapter(DatabaseInterface):
                 api_latency_ms, compute_time_ms,
                 app_throughput_kbps,
                 total_time_ms,ttft_ms, tpot_ms, token_throughput, streaming_enabled,
-                first_token_time_ns, last_token_time_ns, prefill_energy_uj, preprocess_ms, non_local_ms, local_compute_ms, postprocess_ms,
+                first_token_time_ns, last_token_time_ns, request_start_ns, prefill_energy_uj, preprocess_ms, non_local_ms, local_compute_ms, postprocess_ms,
                 cpu_percent_during_wait,
                 bytes_sent_approx, bytes_recv_approx, tcp_retransmits,
                 error_message, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 interaction_data.get("run_id"),
@@ -900,6 +900,7 @@ class SQLiteAdapter(DatabaseInterface):
                 interaction_data.get('streaming_enabled', 0),
                 interaction_data.get('first_token_time_ns'),
                 interaction_data.get('last_token_time_ns'),
+                interaction_data.get('request_start_ns'),                
                 interaction_data.get('prefill_energy_uj'),                
                 interaction_data.get("preprocess_ms", 0),
                 interaction_data.get("non_local_ms", 0),

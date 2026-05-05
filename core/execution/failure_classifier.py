@@ -124,12 +124,15 @@ class FailureClassifier:
         steps = run_result.get("step_results", []) or []
         for step in steps:
             content = str(step.get("result", "") or "").lower()
-            if "429" in content or "too many requests" in content:
+            # Specific checks BEFORE generic "error:" — order matters
+            if "429" in content or "too many requests" in content or "rate_limit" in content:
                 return "rate_limit"
-            if "context window" in content or "context_length" in content:
+            if "context window" in content or "context_length" in content or "exceed context" in content:
                 return "context_overflow"
-            if "timeout" in content:
+            if "timeout" in content or "timed out" in content:
                 return "timeout"
+            if "tool_error" in content or "tool failed" in content:
+                return "tool_error"
             if content.startswith("error:"):
                 return "api_error"
  

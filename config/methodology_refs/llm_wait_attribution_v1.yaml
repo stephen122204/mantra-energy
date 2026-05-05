@@ -18,7 +18,9 @@ references:
     ref_type: internal
     relevance: >
       Empirical finding: LLM agentic runs spend ~48% of wall-clock time blocked
-      on API responses. During this time process power is ~12.9W (sub-active),
-      well above idle (3-5W) but below active compute (33W). This energy is
-      invisible to CPU-utilisation-based tools (perf, powerstat) but fully
-      captured by RAPL and attributable via api_latency_ms time-fraction.
+      on API responses. During this time DRAM and uncore remain active even at
+      CPU≈0 — pkg energy is NON-ZERO during blocking. This energy is captured
+      as E_orchestration (AXIS 2A residual). llm_wait_energy_uj is stored as
+      an AXIS 3A diagnostic signal — a named subset of E_orchestration for
+      insight analysis. It is NOT a conservation partition. Do NOT subtract
+      from E_attributed in D1 equations.

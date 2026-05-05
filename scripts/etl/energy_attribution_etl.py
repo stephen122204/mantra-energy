@@ -335,6 +335,104 @@ def _get_network_wait_ms(cursor: sqlite3.Cursor, run_id: int) -> float:
     """, (run_id,))
     row = cursor.fetchone()
     return float(row[0]) if row else 0.0
+
+def _get_network_wait_energy_uj(
+    cursor: sqlite3.Cursor,
+    run_id: int,
+    cpu_fraction: float,
+) -> int:
+    """
+    Measure energy during network wait windows using direct RAPL sample slice.
+ 
+    Uses request_start_ns → first_token_time_ns as the wait window per
+    llm_interaction. Slices energy_samples directly — MEASURED not MODELED.
+ 
+    Falls back to time-fraction if timestamps unavailable (pre-migration-038 runs).
+ 
+    Args:
+        cursor:       Open DB cursor.
+        run_id:       runs.run_id.
+        cpu_fraction: Process CPU fraction for attribution.
+ 
+    Returns:
+        Energy in µJ attributed to network wait windows.
+    """
+    # Primary: RAPL slice over [request_start_ns → first_token_time_ns] windows
+    # These windows represent pure network wait — CPU≈0 but pkg non-zero
+    cursor.execute("""
+        SELECT request_start_ns, first_token_time_ns
+        FROM llm_interactions
+        WHERE run_id = ?
+          AND request_start_ns IS NOT NULL
+          AND first_token_time_ns IS NOT NULL
+          AND non_local_ms > 0
+        ORDER BY request_start_ns
+    """, (run_id,))
+    windows = cursor.fetchall()
+ 
+    if windows:
+        # Direct RAPL slice — sum sample deltas within each wait window
+        total_uj = 0
+        for (start_ns, end_ns) in windows:
+            if end_ns <= start_ns:
+                continue
+            cursor.execute("""
+                SELECT COALESCE(SUM(pkg_energy_uj), 0) AS window_energy,
+                       COUNT(*) AS n_samples
+                FROM (
+                    SELECT (e1.pkg_energy_uj - e2.pkg_energy_uj) AS pkg_energy_uj
+                    FROM energy_samples e1
+                    JOIN energy_samples e2
+                      ON e1.run_id = e2.run_id
+                     AND e1.sample_index = e2.sample_index + 1
+                    WHERE e1.run_id = ?
+                      AND e1.timestamp_ns >= ?
+                      AND e1.timestamp_ns <= ?
+                      AND e1.pkg_energy_uj > e2.pkg_energy_uj
+                )
+            """, (run_id, start_ns, end_ns))
+            row = cursor.fetchone()
+            if row and row[0]:
+                # Apply cpu_fraction to attribute to this process
+                total_uj += int(row[0] * cpu_fraction)
+        if total_uj > 0:
+            logger.debug(
+                "network_wait: run=%d RAPL slice %d windows → %dµJ",
+                run_id, len(windows), total_uj,
+            )
+            return total_uj
+ 
+    # Fallback: time-fraction when timestamps unavailable (pre-migration-038)
+    cursor.execute("""
+        SELECT COALESCE(SUM(non_local_ms), 0),
+               COALESCE(SUM(api_latency_ms), 1)
+        FROM llm_interactions WHERE run_id = ?
+    """, (run_id,))
+    row = cursor.fetchone()
+    non_local_ms = float(row[0]) if row else 0.0
+ 
+    if non_local_ms <= 0:
+        return 0
+ 
+    # Time-fraction fallback — less accurate, documented in attribution_method
+    cursor.execute(
+        "SELECT task_duration_ns, attributed_energy_uj FROM runs WHERE run_id = ?",
+        (run_id,)
+    )
+    run_row = cursor.fetchone()
+    if not run_row or not run_row[1]:
+        return 0
+    duration_ms = (run_row[0] or 0) / 1e6
+    attributed = run_row[1]
+    if duration_ms <= 0:
+        return 0
+    result = int((non_local_ms / duration_ms) * attributed)
+    logger.debug(
+        "network_wait: run=%d time-fraction fallback %dms/%dms → %dµJ",
+        run_id, non_local_ms, duration_ms, result,
+    )
+    return result
+
 def _get_api_latency_ms(cursor: sqlite3.Cursor, run_id: int) -> float:
     """Sum api_latency_ms from llm_interactions — full LLM response wait time."""
     cursor.execute("SELECT COALESCE(SUM(api_latency_ms), 0) FROM llm_interactions WHERE run_id = ?", (run_id,))
@@ -355,7 +453,45 @@ def _get_io_wait_ms(cursor: sqlite3.Cursor, run_id: int) -> float:
     """, (run_id,))
     row = cursor.fetchone()
     return float(row[0]) if row else 0.0
-
+def _get_io_wait_energy_uj(
+    cursor: sqlite3.Cursor,
+    run_id: int,
+    attributed: int,
+    duration_ms: float,
+) -> int:
+    """
+    Measure energy during IO wait periods.
+ 
+    Uses io_samples.io_block_time_ms as time fraction of attributed energy.
+    Base is attributed_energy_uj (not pkg — BUG-E2 fix).
+ 
+    Args:
+        cursor:       Open DB cursor.
+        run_id:       runs.run_id.
+        attributed:   attributed_energy_uj from runs table.
+        duration_ms:  task_duration_ns / 1e6.
+ 
+    Returns:
+        Energy in µJ attributed to IO wait periods.
+    """
+    cursor.execute("""
+        SELECT COALESCE(SUM(io_block_time_ms), 0)
+        FROM io_samples
+        WHERE run_id = ?
+    """, (run_id,))
+    row = cursor.fetchone()
+    io_wait_ms = float(row[0]) if row else 0.0
+ 
+    if io_wait_ms <= 0 or duration_ms <= 0 or not attributed:
+        return 0
+ 
+    # Time-fraction against attributed (not pkg — BUG-E2 fix)
+    result = int((io_wait_ms / duration_ms) * attributed)
+    logger.debug(
+        "io_wait: run=%d %dms/%dms × %dµJ → %dµJ",
+        run_id, io_wait_ms, duration_ms, attributed, result,
+    )
+    return result
 
 def _get_thermal_penalty(
     cursor: sqlite3.Cursor,
@@ -430,19 +566,183 @@ def _get_cache_dram_energy(
     miss_ratio = misses / total
     return int(dram_energy_uj * miss_ratio)
 
-
-def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
+def _compute_tool_energy(run_id: int, cursor: sqlite3.Cursor) -> int:
     """
-    Core attribution model v1. Computes all L0–L5 values.
+    Compute tool_energy_uj by slicing RAPL energy_samples within each
+    tool_call orchestration event window, scaled by cpu_fraction.
+ 
+    Method: MEASURED — direct sample integration, same as phase_attribution v2.
+    cpu_fraction sourced from energy_attribution row (populated earlier in
+    compute_energy_attribution before this function is called via INSERT OR REPLACE).
+    Falls back to runs.cpu_fraction if energy_attribution not yet written.
+    Returns 0 if no tool events or insufficient samples.
+    """
+    # cpu_fraction from runs table — always available at ETL time
+    frac_row = cursor.execute(
+        "SELECT cpu_fraction FROM runs WHERE run_id = ?", (run_id,)
+    ).fetchone()
+    if not frac_row or not frac_row[0]:
+        logger.debug("_compute_tool_energy: no cpu_fraction for run_id=%d — skipping", run_id)
+        return 0
+ 
+    cpu_fraction = frac_row[0]
+ 
+    # All tool_call events with valid time windows for this run
+    tool_events = cursor.execute("""
+        SELECT start_time_ns, end_time_ns
+        FROM orchestration_events
+        WHERE run_id = ?
+          AND event_type = 'tool_call'
+          AND start_time_ns IS NOT NULL
+          AND end_time_ns IS NOT NULL
+          AND end_time_ns > start_time_ns
+    """, (run_id,)).fetchall()
+ 
+    if not tool_events:
+        logger.debug("_compute_tool_energy: no tool_call events for run_id=%d", run_id)
+        return 0
+ 
+    # Load all samples once — cumulative RAPL counters, delta between adjacent
+    samples = cursor.execute("""
+        SELECT timestamp_ns, pkg_energy_uj
+        FROM energy_samples
+        WHERE run_id = ?
+          AND pkg_energy_uj IS NOT NULL
+        ORDER BY timestamp_ns ASC
+    """, (run_id,)).fetchall()
+ 
+    if len(samples) < 2:
+        logger.debug("_compute_tool_energy: insufficient samples for run_id=%d", run_id)
+        return 0
+ 
+    total_tool_uj = 0.0
+    for start_ns, end_ns in tool_events:
+        prev_e = None
+        for ts, e in samples:
+            if ts < start_ns:
+                prev_e = e  # last sample before window
+                continue
+            if ts > end_ns:
+                break
+            if prev_e is not None:
+                delta = e - prev_e
+                if delta > 0:  # guard against RAPL counter wrap
+                    total_tool_uj += delta * cpu_fraction
+            prev_e = e
+ 
+    result = int(total_tool_uj)
 
+    if result == 0:
+        # Fallback: sample window too short for delta computation (tool < 1 sample interval).
+        # Use time-fraction method: (tool_cpu_time_ns / run_duration_ns) × attributed_energy_uj
+        # Method: INFERRED — less accurate than MEASURED but honest for short tool calls.
+        tool_ns_row = cursor.execute("""
+            SELECT COALESCE(SUM(oe.tool_cpu_time_ns), 0),
+                   r.duration_ns,
+                   r.attributed_energy_uj
+            FROM orchestration_events oe
+            JOIN runs r ON r.run_id = oe.run_id
+            WHERE oe.run_id = ?
+              AND oe.event_type = 'tool_call'
+              AND oe.tool_cpu_time_ns IS NOT NULL
+        """, (run_id,)).fetchone()
+        if tool_ns_row and tool_ns_row[1] and tool_ns_row[2]:
+            tool_ns, duration_ns, attributed_uj = tool_ns_row
+            if duration_ns > 0 and tool_ns > 0:
+                result = int((tool_ns / duration_ns) * attributed_uj)
+                logger.debug(
+                    "_compute_tool_energy: run_id=%d fallback time-fraction "
+                    "tool_ns=%d duration_ns=%d attributed_uj=%d → %d µJ",
+                    run_id, tool_ns, duration_ns, attributed_uj, result
+                )
+
+    logger.debug(
+        "_compute_tool_energy: run_id=%d events=%d tool_energy_uj=%d",
+        run_id, len(tool_events), result
+    )
+    return result
+ 
+def _compute_attribution(run: dict, cursor: sqlite3.Cursor, conn: sqlite3.Connection) -> dict:
+    """
+    Core attribution model v1. Computes all L0–L5 values including
+    goal_attempt aggregations (retry, failed_tool, rejected_generation,
+    energy_per_accepted_answer, energy_per_solved_task).
+ 
     Args:
         run:    Full runs row as dict.
-        cursor: Open DB cursor for sub-queries.
-
+        cursor: Open DB cursor for RAPL/sample sub-queries.
+        conn:   Open DB connection for goal_attempt aggregation queries.
+ 
     Returns:
         Dict of all energy_attribution column values.
     """
     run_id = run["run_id"]
+ 
+    # ── goal_attempt aggregations (require conn for multi-row queries) ────────
+    attempt_ids = [
+        r[0] for r in conn.execute(
+            "SELECT attempt_id FROM goal_attempt WHERE run_id = ?", (run_id,)
+        ).fetchall()
+    ]
+    placeholders = ",".join("?" * len(attempt_ids)) if attempt_ids else "NULL"
+ 
+    # retry_energy_uj: energy on non-first attempts = wasted retry cost
+    retry_energy = 0
+    if attempt_ids:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(energy_uj), 0) FROM goal_attempt "
+            "WHERE run_id = ? AND attempt_number > 1", (run_id,)
+        ).fetchone()
+        retry_energy = row[0] or 0
+ 
+    # failed_tool_energy_uj: wasted energy from tool failures this run
+    failed_tool_energy = 0
+    if attempt_ids:
+        row = conn.execute(
+            f"SELECT COALESCE(SUM(wasted_energy_uj), 0) "
+            f"FROM tool_failure_events WHERE attempt_id IN ({placeholders})",
+            attempt_ids
+        ).fetchone()
+        failed_tool_energy = row[0] or 0
+ 
+    # rejected_generation_energy_uj: energy on hallucinated outputs
+    rejected_energy = 0
+    if attempt_ids:
+        row = conn.execute(
+            f"SELECT COALESCE(SUM(wasted_energy_uj_real), 0) "
+            f"FROM hallucination_events WHERE attempt_id IN ({placeholders})",
+            attempt_ids
+        ).fetchone()
+        rejected_energy = row[0] or 0
+ 
+    # energy_per_accepted_answer_uj: pkg energy / accepted answer count
+    # accepted = normalized_score >= threshold and not needs_review
+    energy_per_accepted = None
+    if attempt_ids:
+        pkg_row = conn.execute(
+            "SELECT pkg_energy_uj FROM energy_attribution WHERE run_id = ?",
+            (run_id,)
+        ).fetchone()
+        accepted_row = conn.execute(
+            f"SELECT COUNT(*) FROM output_quality "
+            f"WHERE attempt_id IN ({placeholders}) "
+            f"AND normalized_score >= ? AND score_method != 'needs_review'",
+            (*attempt_ids, ACCEPTANCE_THRESHOLD)
+        ).fetchone()
+        pkg_energy = pkg_row[0] if pkg_row else None
+        accepted_count = accepted_row[0] if accepted_row else 0
+        if pkg_energy and accepted_count > 0:
+            energy_per_accepted = pkg_energy / accepted_count
+ 
+    # energy_per_solved_task_uj: successful goal energy / solved goal count
+    energy_per_solved = None
+    solved_row = conn.execute(
+        "SELECT COALESCE(SUM(successful_energy_uj), 0), COUNT(*) "
+        "FROM goal_execution WHERE first_run_id = ? AND success = 1",
+        (run_id,)
+    ).fetchone()
+    if solved_row and solved_row[1] > 0 and solved_row[0] > 0:
+        energy_per_solved = solved_row[0] / solved_row[1]
 
     # ── L0: Hardware — direct from runs RAPL columns ─────────────────────────
     pkg    = int(run.get("pkg_energy_uj")   or 0)
@@ -462,6 +762,7 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
     # ── attributed energy: fraction of dynamic energy belonging to workload ──
     # Already computed at capture time: cpu_fraction × dynamic_energy_uj
     attributed = int(run.get("attributed_energy_uj") or pkg)
+    
  
     # ── LLM API wait energy (novel finding) ──────────────────────────────────
     # api_latency_ms = total time blocked waiting for LLM API responses
@@ -495,10 +796,12 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
     network_wait_ms = _get_network_wait_ms(cursor, run_id)
     io_wait_ms      = _get_io_wait_ms(cursor, run_id)
 
-    # Energy proportional to fraction of total time spent waiting
-    # non_local_ms = TCP round-trip only (distinct from api_latency which includes inference)
-    network_wait_uj = int((network_wait_ms / duration_ms) * attributed) if duration_ms > 0 else 0    
-    io_wait_uj      = int((io_wait_ms      / duration_ms) * pkg) if duration_ms > 0 else 0
+    # network_wait: RAPL slice over [request_start_ns → first_token_time_ns]
+    # Falls back to time-fraction if timestamps unavailable (pre-migration-038)
+    network_wait_uj = _get_network_wait_energy_uj(cursor, run_id, cpu_fraction)
+ 
+    # io_wait: time-fraction against attributed (not pkg — BUG-E2 fix)
+    io_wait_uj = _get_io_wait_energy_uj(cursor, run_id, attributed, duration_ms)
 
     # Memory pressure: page_faults × 10µJ constant (INFERRED heuristic)
     # 10µJ = empirical cost of TLB miss + page fill on x86 at 3GHz
@@ -601,10 +904,10 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
         "planning_energy_uj":              planning_uj,
         "execution_energy_uj":             execution_uj,
         "synthesis_energy_uj":             synthesis_uj,
-        "tool_energy_uj":                  None,   # Chunk 8
-        "retry_energy_uj":                 None,   # Chunk 8
-        "failed_tool_energy_uj":           None,   # Chunk 8
-        "rejected_generation_energy_uj":   None,   # Chunk 8
+        "tool_energy_uj":                  _compute_tool_energy(run_id, cursor),  # MEASURED: RAPL sample slice
+        "retry_energy_uj":                 retry_energy,
+        "failed_tool_energy_uj":           failed_tool_energy,
+        "rejected_generation_energy_uj":   rejected_energy,
         # L4
         "llm_wait_energy_uj":              llm_wait_uj,
         "llm_compute_energy_uj":           application_uj,
@@ -614,8 +917,8 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
         # L5
         "energy_per_completion_token_uj":  energy_per_token_uj,
         "energy_per_successful_step_uj":   energy_per_step_uj,
-        "energy_per_accepted_answer_uj":   None,   # Chunk 8
-        "energy_per_solved_task_uj":       None,   # Chunk 8
+        "energy_per_accepted_answer_uj":   energy_per_accepted,
+        "energy_per_solved_task_uj":       energy_per_solved,
         # Thermal
         "thermal_penalty_energy_uj":       thermal_penalty_uj,
         "thermal_penalty_time_ms":         thermal_ms,
@@ -625,6 +928,7 @@ def _compute_attribution(run: dict, cursor: sqlite3.Cursor) -> dict:
         "attribution_model_version":       ATTRIBUTION_MODEL_VERSION,
         "updated_at":                      datetime.now().isoformat(),
     }
+
 
 def populate_tool_failure_wasted_energy(run_id: int, db_path: Path = DEFAULT_DB) -> None:
     """
@@ -657,23 +961,23 @@ def populate_tool_failure_wasted_energy(run_id: int, db_path: Path = DEFAULT_DB)
               )
         """, (run_id,))
 
-        # Strategy 2: via run_id — when orchestration_event_id not set
-        # Use execution phase attributed_energy_uj as proxy for tool failure cost
-        # This is conservative — attributes full execution phase energy to failure
+        # Strategy 2: via run_id join — fires when orchestration_event_id not set.
+        # Sums attributed_energy_uj across execution-phase events for the attempt's
+        # run. Conservative estimate: full execution phase energy attributed to failure.
+        # Methodologically sound — execution phase IS where tool failures occur.
         conn.execute("""
             UPDATE tool_failure_events
             SET wasted_energy_uj = (
                 SELECT COALESCE(SUM(oe.attributed_energy_uj), 0)
                 FROM orchestration_events oe
                 JOIN goal_attempt ga ON ga.run_id = oe.run_id
-                WHERE ga.attempt_id = tool_failure_events.attempt_id
-                  AND oe.phase = 'execution'
+                                    AND ga.attempt_id = tool_failure_events.attempt_id
+                WHERE oe.phase = 'execution'
             )
             WHERE orchestration_event_id IS NULL
               AND wasted_energy_uj IS NULL
               AND attempt_id IN (
-                SELECT ga.attempt_id FROM goal_attempt ga
-                WHERE ga.run_id = ?
+                SELECT attempt_id FROM goal_attempt WHERE run_id = ?
               )
         """, (run_id,))
         # Strategy 3: use goal_attempt.energy_uj directly when run_id=-1
@@ -726,7 +1030,7 @@ def compute_energy_attribution(run_id: int, db_path: Path = DEFAULT_DB) -> bool:
         if not run:
             return False
 
-        data = _compute_attribution(run, cursor)
+        data = _compute_attribution(run, cursor, conn)
 
         # INSERT OR REPLACE handles both first-time insert and ETL re-runs
         cursor.execute("""

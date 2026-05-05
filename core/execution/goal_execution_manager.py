@@ -83,7 +83,7 @@ def execute_goal(
         hw_id:            Hardware profile ID.
         harness:          ExperimentHarness instance.
         executor:         LinearExecutor or AgenticExecutor.
-        task:             Task dict — keys: id, name, prompt, meta.
+        task:             Task dict — keys: id, name, prompt, meta, tool_graph.
         workflow_type:    'linear' or 'agentic' — never 'comparison'.
         rep_num:          Repetition number (1-indexed) for run_number field.
         goal_tracker:     GoalTracker instance — owns all DB state transitions.
@@ -198,6 +198,7 @@ def execute_goal(
                     task_id=task_id,
                     is_cloud=is_cloud,
                     run_number=rep_num,
+                    tool_graph=task.get("tool_graph"),
                 )
 
         except Exception as exc:
@@ -384,13 +385,13 @@ def execute_goal(
 
     # ETL — goal energy rollup after all attempts recorded
     goal_execution_etl.process_one(goal_id, conn)
-    goal_tracker.queue_etl(conn, "goal_execution", goal_id, "goal_execution_etl")
-
+    # ETL runs synchronously above — queue_etl removed to prevent
+    # pending entries that never get marked done (N40 fix)
+ 
     # Attribution stubs on ALL runs — failed retry runs contain wasted energy signal
     # Paper thesis: overhead_energy_uj sums across all failed attempts per goal
     for rid in all_run_ids:
         energy_attribution_etl.populate_attribution_stubs(rid, conn)
-        goal_tracker.queue_etl(conn, "run", rid, "energy_attribution_etl")
 
     return goal_id
 
@@ -441,13 +442,33 @@ def _extract_energy(result: dict) -> tuple[int, int]:
     if result is None:
         return 0, 0
     try:
-        # Use attributed_energy_uj — process share of workload energy
-        # attributed = cpu_fraction x dynamic, stored in ml_features by harness
         ml = result.get("ml_features", {}) or {}
-        energy_uj = ml.get("attributed_energy_uj") or 0
+ 
+        # Primary: attributed_energy_uj set by both linear (line 550) and
+        # agentic (line 1053) harness paths via cpu_fraction x dynamic
+        energy_uj = ml.get("attributed_energy_uj")
+ 
         if not energy_uj:
-            # Fallback: dynamic if attributed not available (older runs)
+            # Secondary: recompute from ml_features fields — handles case where
+            # attributed key present but zero due to cpu_fraction timing edge
+            dyn  = ml.get("dynamic_energy_uj") or 0
+            frac = ml.get("cpu_fraction") or 0.0
+            if dyn and frac:
+                energy_uj = int(dyn * frac)
+                logger.warning(
+                    "_extract_energy: attributed_energy_uj missing/zero — "
+                    "recomputed from dynamic×cpu_fraction: %d µJ", energy_uj
+                )
+ 
+        if not energy_uj:
+            # Last resort: dynamic is less accurate (includes background processes)
+            # Logged as warning so fallback frequency is visible in paper review
             energy_uj = result["layer3_derived"]["energy_uj"]["workload"]
+            logger.warning(
+                "_extract_energy: falling back to dynamic_energy_uj — "
+                "ml_features.attributed_energy_uj and cpu_fraction both absent"
+            )
+ 
         orchestration_uj = result["layer3_derived"]["energy_uj"].get(
             "orchestration_tax", 0
         )

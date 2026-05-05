@@ -12,7 +12,20 @@
 docs_base: "docs-src/mkdocs/source/research"
 
 methods:
-
+  # ── Four-Axis Energy Attribution Framework ───────────────────────────────────
+  energy_attribution_v1:
+    doc: "12-energy-attribution-methodology.md"
+    section: "Attribution Model v1"
+  llm_wait_attribution_v1:
+    doc: "15-llm-wait-energy-finding.md"
+    section: "LLM Wait Energy Attribution"
+  network_wait_energy_v1:
+    doc: "26-network-wait-energy-methodology.md"
+    section: "Network Wait Energy Attribution"
+  llm_energy_sample_v2:
+    doc: "27-llm-energy-sample-methodology.md"
+    section: "LLM Energy Attribution v2"
+    
   # ── Energy Readers ──────────────────────────────────────────────────────────
 
   rapl_msr_pkg_energy:
