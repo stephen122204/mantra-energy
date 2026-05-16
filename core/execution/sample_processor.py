@@ -124,7 +124,14 @@ def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list
                 # Extract canonical metrics
                 for our_name, turbostat_col in canonical_metrics.items():
                     try:
-                        val = float(row.get(turbostat_col, 0.0))
+                        # MIC-1: missing column -> NULL, not 0.0
+                        # row.get returns None when column absent in this kernel version
+                        raw = row.get(turbostat_col)
+                        if raw is None or (hasattr(raw, '__class__') and raw.__class__.__name__ == 'float' and raw != raw):
+                            # None or NaN -> NULL in DB (missing measurement)
+                            sample[our_name] = None
+                            continue
+                        val = float(raw)                        
 
                         # Scale percentages (C-states, GPU RC6)
                         if our_name in [
@@ -146,7 +153,7 @@ def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list
 
                         sample[our_name] = val
                     except (TypeError, ValueError):
-                        sample[our_name] = 0.0
+                        sample[our_name] = None
 
                 # Store all other columns in JSON
                 if store_extra:
@@ -196,7 +203,8 @@ def calculate_thermal_metrics(cpu_samples) -> tuple:
     """
     if cpu_samples and len(cpu_samples) > 0:
         temps = [
-            s.get("package_temp") for s in cpu_samples if s.get("package_temp", 0) > 10
+            s.get("package_temp") for s in cpu_samples
+            if s.get("package_temp") is not None and s.get("package_temp") > 10
         ]
         if temps:
             start_temp_c = temps[0]  # First sample

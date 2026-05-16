@@ -202,7 +202,41 @@ class ReaderFactory:
     # Each helper isolates the import so unneeded readers are never
     # imported on platforms where they would crash at import time.
     # ------------------------------------------------------------------
-
+    @classmethod
+    def get_turbostat_reader(
+        cls,
+        config=None,  # type: Optional[dict]
+        caps=None,    # type: Optional[PlatformCapabilities]
+    ):
+        """
+        Return correct turbostat reader for current platform.
+ 
+        Linux x86  -> TurbostatReader (real turbostat via dynamic resolution)
+        macOS      -> DummyTurbostatReader (LIMITED — no MSR access)
+        Other      -> DummyTurbostatReader (LIMITED)
+ 
+        PAC-2: only platform-conditional imports here — never in TurbostatReader.
+        Binary path resolution via turbostat_resolver — never from hw_config.json.
+ 
+        Args:
+            config: hw_config dict.
+            caps:   PlatformCapabilities override for testing.
+        """
+        caps   = caps or get_platform_capabilities()
+        config = config or {}
+ 
+        if caps.os == "Linux" and caps.arch == "x86_64":
+            # Real turbostat — MSR access available, binary resolved at runtime
+            from core.readers.turbostat_reader import TurbostatReader
+            return TurbostatReader(config)
+ 
+        # macOS, ARM, Windows, unknown — no turbostat/MSR access
+        from core.readers.fallback.dummy_turbostat_reader import DummyTurbostatReader
+        logger.info(
+            "get_turbostat_reader: platform=%s arch=%s -> DummyTurbostatReader (LIMITED)",
+            caps.os, caps.arch,
+        )
+        return DummyTurbostatReader()
     @staticmethod
     def _make_rapl_reader(config: dict):
         """Import and instantiate RAPLReader (Linux x86_64 MEASURED)."""

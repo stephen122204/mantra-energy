@@ -568,14 +568,17 @@ def detect_turbostat_columns() -> Dict[str, Any]:
         "error": None,
     }
 
-    turbostat_path = shutil.which("turbostat")
+    # Use find_real_turbostat() — kernel-versioned binary, not the wrapper.
+    # fix_permissions.sh already granted sudo-less access permanently.
+    turbostat_path = find_real_turbostat()
     if not turbostat_path:
         turbostat_config["error"] = "turbostat not installed"
         return turbostat_config
-
+ 
     try:
-        # Run turbostat with sudo
-        cmd = ["sudo", "-n", turbostat_path, "--quiet", "--show", "all", "sleep", "0.1"]
+        # --select not --show, --Summary for clean single-row output
+        cmd = [turbostat_path, "--Summary", "--quiet", "--select", "all",
+               "--interval", "1", "--num_iterations", "1"]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
 
         if result.returncode != 0:
@@ -602,7 +605,9 @@ def detect_turbostat_columns() -> Dict[str, Any]:
         turbostat_config["raw_columns"] = available_columns
         turbostat_config["available"] = True
         turbostat_config["msr_access"] = True
-        turbostat_config["real_binary"] = find_real_turbostat()
+        # real_binary intentionally NOT written to hw_config.json.
+        # TurbostatReader resolves binary dynamically via platform.release()
+        # at runtime — a static path breaks on every kernel upgrade (Bug 5).
 
         # Define what we're looking for
         wanted_metrics = {

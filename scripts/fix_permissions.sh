@@ -193,32 +193,16 @@ echo "  ✅ perf_event_paranoid set to -1"
 # ============================================================================
 echo -e "\n[4/4] Setting turbostat capabilities on REAL binary..."
 
+# Always resolve via running kernel — never from hw_config.json.
+# hw_config.json real_binary is stale after kernel upgrade (Bug 5).
+KERNEL=$(uname -r)
 REAL_TURBOSTAT=""
-
-# Try to read from config first
-if [ -f "config/hw_config.json" ]; then
-    REAL_TURBOSTAT=$(python3 -c "
-import json
-try:
-    with open('config/hw_config.json') as f:
-        config = json.load(f)
-        print(config.get('turbostat', {}).get('real_binary', ''))
-except:
-    print('')
-" 2>/dev/null)
-fi
-
-# If not found in config, try to auto-detect
-if [ -z "$REAL_TURBOSTAT" ] || [ ! -f "$REAL_TURBOSTAT" ]; then
-    KERNEL=$(uname -r)
-    if [ -f "/usr/lib/linux-tools/$KERNEL/turbostat" ]; then
-        REAL_TURBOSTAT="/usr/lib/linux-tools/$KERNEL/turbostat"
-    else
-        # Try to follow symlinks from wrapper
-        WRAPPER=$(which turbostat 2>/dev/null)
-        if [ -L "$WRAPPER" ]; then
-            REAL_TURBOSTAT=$(readlink -f "$WRAPPER")
-        fi
+if [ -f "/usr/lib/linux-tools/$KERNEL/turbostat" ]; then
+    REAL_TURBOSTAT="/usr/lib/linux-tools/$KERNEL/turbostat"
+else
+    WRAPPER=$(which turbostat 2>/dev/null)
+    if [ -L "$WRAPPER" ]; then
+        REAL_TURBOSTAT=$(readlink -f "$WRAPPER")
     fi
 fi
 
@@ -233,6 +217,36 @@ if [ -n "$REAL_TURBOSTAT" ] && [ -f "$REAL_TURBOSTAT" ]; then
 else
     echo "  ⚠️ Could not find real turbostat binary"
 fi
+
+# Create systemd service — sets capabilities on boot after kernel upgrade.
+# Same pattern as rapl-permissions.service — root sets once, runs forever.
+# No password needed after initial fix_permissions.sh run.
+cat > /tmp/alems-turbostat-caps.service << 'SVCEOF'
+[Unit]
+Description=A-LEMS Turbostat Capabilities Fix
+After=sysinit.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '\
+  KERNEL=$(uname -r); \
+  REAL=$(find /usr/lib/linux-tools/$KERNEL -name turbostat 2>/dev/null | head -1); \
+  if [ -z "$REAL" ]; then REAL=$(which turbostat 2>/dev/null); fi; \
+  if [ -n "$REAL" ] && [ -f "$REAL" ]; then \
+    setcap cap_sys_rawio=ep "$REAL" && \
+    echo "alems-turbostat-caps: setcap OK on $REAL"; \
+  else \
+    echo "alems-turbostat-caps: turbostat not found"; \
+  fi'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+sudo mv /tmp/alems-turbostat-caps.service /etc/systemd/system/
+sudo systemctl enable alems-turbostat-caps.service
+sudo systemctl start alems-turbostat-caps.service
+echo "  ✅ turbostat capabilities systemd service created — survives kernel upgrades"
 
 # ============================================================================
 # 2.5 MSR HELPER BINARY - COMPILE AND SET SUID

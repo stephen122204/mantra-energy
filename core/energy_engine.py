@@ -75,7 +75,7 @@ from core.readers.rapl_reader import RAPLReader
 from core.readers.scheduler_monitor import SchedulerMonitor
 from core.readers.factory import ReaderFactory as _ReaderFactory
 from core.readers.sensor_reader import SensorReader
-from core.readers.turbostat_reader import TurbostatReader
+# TurbostatReader now via ReaderFactory.get_turbostat_reader() — PAC-2 compliant
 from core.utils.core_pinner import CorePinner
 # Import utilities
 from core.utils.debug import dprint, init_debug_from_env
@@ -170,7 +170,9 @@ class EnergyEngine:
         self.rapl      = self.energy_reader          # alias: existing code uses self.rapl
         self.perf      = self.cpu_reader             # alias: existing code uses self.perf
         self.sensor    = self.thermal_reader         # alias: existing code uses self.sensor
-        self.turbostat = TurbostatReader(config)     # not yet factorised (Chunk 7)
+        # PAC-2 compliant: TurbostatReader now via factory (Chunk 7 factorisation)
+        # Linux x86 -> TurbostatReader, macOS/other -> DummyTurbostatReader
+        self.turbostat = _ReaderFactory.get_turbostat_reader(config)    # not yet factorised (Chunk 7)
         self.msr       = MSRReader(config)           # not yet factorised (Chunk 7)
         self.scheduler = SchedulerMonitor(config)    # always available via /proc
         self.disk_reader = _ReaderFactory.get_disk_reader(config)         # pid set later via set_workload_pid

@@ -275,6 +275,44 @@ class ThermalReaderABC(BaseReader):
                 Returns empty dict if no sensors available.
         """
         ...
+class TurbostatReaderABC(BaseReader):
+    """
+    ABC for turbostat-based CPU C-state and power metrics reader.
+ 
+    Implementations:
+      Linux x86  → TurbostatReader (real turbostat binary via factory)
+      macOS      → DummyTurbostatReader (returns empty DataFrame, never raises)
+      Other      → DummyTurbostatReader
+ 
+    C-state residency (C1/C3/C6/C10) is the primary ALEOE training signal.
+    These metrics are only accessible via turbostat/MSR — not via /proc or /sys.
+    """
+ 
+    @abstractmethod
+    def start_monitoring(self, interval_ms: int = 100) -> None:
+        """Start continuous turbostat monitoring in background."""
+        ...
+ 
+    @abstractmethod
+    def stop_monitoring(self) -> dict:
+        """
+        Stop monitoring and return results dict.
+ 
+        Returns:
+            {
+                'dataframe': pd.DataFrame | None,
+                'num_samples': int,
+                'duration_seconds': float,
+                'summary': dict,
+            }
+        """
+        ...
+ 
+    @abstractmethod
+    def get_column_mapping(self) -> dict:
+        """Return mapping of internal metric names to turbostat column names."""
+        ...
+
 class DiskReaderABC(ABC):
     """ABC for disk I/O readers — Linux/macOS implementations."""
     @abstractmethod

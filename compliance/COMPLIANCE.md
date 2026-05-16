@@ -376,3 +376,278 @@ record with a reason. Silent warnings are not acceptable.
 ### Rule EIC-4: New Tables Must Be Added to Integrity Checker
 Any new table added in a chunk that receives data at runtime MUST be added
 to `scripts/test_exp_integrity.py` before chunk handoff.
+---
+
+## 10. Turbostat Compliance (TC)
+*Added after Bug 5: kernel upgrade regression, env_id 39->40, 2026-05-08*
+
+### Rule TC-1: No Hardcoded Turbostat Binary Path
+NEVER write or read `real_binary` in hw_config.json.
+TurbostatReader resolves binary at runtime via `platform.release()`.
+A static path breaks silently on every kernel upgrade.
+
+```python
+# WRONG — breaks on kernel upgrade
+self.turbostat_path = config["turbostat"]["real_binary"]
+
+# RIGHT — self-healing, always current kernel
+self.turbostat_path = self._find_turbostat()  # uses platform.release()
+```
+
+### Rule TC-2: TURBOSTAT_COLUMNS is Single Source of Truth
+Column mappings live ONLY in `core/readers/turbostat_resolver.py`.
+Never in hw_config.json, turbostat_override.yaml, or any other file.
+Changing a mapping = bump version suffix in downstream method_id.
+
+```python
+# WRONG — columns from config file, can drift
+self.column_map = config.get("turbostat", {}).get("columns", {})
+
+# RIGHT — from code constant, versioned in git
+from core.readers.turbostat_resolver import TURBOSTAT_COLUMNS
+self.column_map = TURBOSTAT_COLUMNS
+```
+
+### Rule TC-3: Always --select, Never --show
+`--select` filters turbostat output to exactly the requested columns.
+`--show` returns all columns — format varies across kernel versions.
+Always use `--select` with `get_select_string()` from turbostat_resolver.
+
+```bash
+# WRONG — format varies across kernel versions
+turbostat --show all
+
+# RIGHT — deterministic output format
+turbostat --Summary --select Busy%,PkgTmp,CPU%c6,...
+```
+
+### Rule TC-4: TurbostatReader via Factory Only (PAC-2)
+TurbostatReader must only be instantiated via `ReaderFactory.get_turbostat_reader()`.
+Never directly in energy_engine.py or anywhere else.
+Factory handles platform conditional (Linux x86 vs macOS vs other).
+
+```python
+# WRONG — direct instantiation, PAC-2 violation
+self.turbostat = TurbostatReader(config)
+
+# RIGHT — factory, platform-aware
+self.turbostat = ReaderFactory.get_turbostat_reader(config)
+```
+
+### Rule TC-5: detect_hardware.py Must Not Write real_binary
+detect_hardware.py runs once at setup. It must not write `real_binary`
+to hw_config.json — that path becomes stale on kernel upgrade.
+detect_hardware.py writes hardware topology only (RAPL paths, CPU flags, etc).
+
+---
+
+## 11. Python Version Compatibility (PVC)
+*Added after turbostat fix session — reproducibility requires broad Python compat*
+
+### Rule PVC-1: Minimum Python Version is 3.9
+All code must run on Python 3.9+.
+Target: any machine a reviewer might use to reproduce results.
+
+### Rule PVC-2: No 3.10+ Type Hint Syntax
+```python
+# WRONG — Python 3.10+ only
+def foo(x: int | None) -> tuple[str, int]: ...
+
+# RIGHT — Python 3.9 compatible
+from typing import Optional, Tuple
+def foo(x: Optional[int]) -> Tuple[str, int]: ...
+```
+
+### Rule PVC-3: Use # type: comments for inline hints in complex functions
+```python
+def resolve():
+    # type: () -> Tuple[Optional[str], str]
+    ...
+```
+
+### Rule PVC-4: No match/case Statements
+`match/case` is Python 3.10+. Use `if/elif/else`.
+
+### Rule PVC-5: Test on Python 3.9 Before Handoff
+```bash
+python3.9 -c "import core.readers.turbostat_resolver; print('OK')"
+python3.9 -m core.execution.tests.test_harness \
+  --task-id gsm8k_basic --repetitions 1 --provider local
+```
+
+---
+
+## 12. Forensic Audit Design (FAD)
+*Added after Bug 5 discovery — environment_config forensic tracing*
+
+### Rule FAD-1: environment_config is the Forensic Anchor
+Every experiment records kernel_version + git_commit + env_id.
+When a measurement anomaly is detected, first query:
+```sql
+SELECT e.exp_id, ec.kernel_version, ec.git_commit, ec.created_at
+FROM experiments e
+JOIN environment_config ec ON ec.env_id = e.env_id
+WHERE e.exp_id BETWEEN X AND Y
+ORDER BY e.exp_id;
+```
+This identifies the exact infrastructure change that caused the anomaly.
+
+### Rule FAD-2: Silent Zeros Are Bugs
+Any measurement column returning 0.0 for ALL runs after a certain
+experiment ID must be treated as a measurement bug, not a hardware result.
+0.0 package_temp is thermally impossible. 0.0 C-state residency is
+operationally impossible. Investigate immediately.
+
+### Rule FAD-3: New Measurement Columns Must Have Sentinel Detection
+Any new measurement column added to runs or cpu_samples must have a
+corresponding check in `scripts/test_exp_integrity.py` that flags
+all-zero values as a WARNING after 10+ consecutive runs.
+
+---
+
+## 10. Turbostat Compliance (TC)
+*Added after Bug 5: kernel upgrade regression, env_id 39->40, 2026-05-08*
+
+### Rule TC-1: No Hardcoded Turbostat Binary Path
+NEVER write or read `real_binary` in hw_config.json.
+TurbostatReader resolves binary at runtime via `platform.release()`.
+A static path breaks silently on every kernel upgrade.
+
+```python
+# WRONG — breaks on kernel upgrade
+self.turbostat_path = config["turbostat"]["real_binary"]
+
+# RIGHT — self-healing, always current kernel
+self.turbostat_path = self._find_turbostat()  # uses platform.release()
+```
+
+### Rule TC-2: TURBOSTAT_COLUMNS is Single Source of Truth
+Column mappings live ONLY in `core/readers/turbostat_resolver.py`.
+Never in hw_config.json, turbostat_override.yaml, or any other file.
+Changing a mapping = bump version suffix in downstream method_id.
+
+```python
+# WRONG — columns from config file, can drift
+self.column_map = config.get("turbostat", {}).get("columns", {})
+
+# RIGHT — from code constant, versioned in git
+from core.readers.turbostat_resolver import TURBOSTAT_COLUMNS
+self.column_map = TURBOSTAT_COLUMNS
+```
+
+### Rule TC-3: Always --select, Never --show
+`--select` filters turbostat output to exactly the requested columns.
+`--show` returns all columns — format varies across kernel versions.
+Always use `--select` with `get_select_string()` from turbostat_resolver.
+
+```bash
+# WRONG — format varies across kernel versions
+turbostat --show all
+
+# RIGHT — deterministic output format
+turbostat --Summary --select Busy%,PkgTmp,CPU%c6,...
+```
+
+### Rule TC-4: TurbostatReader via Factory Only (PAC-2)
+TurbostatReader must only be instantiated via `ReaderFactory.get_turbostat_reader()`.
+Never directly in energy_engine.py or anywhere else.
+Factory handles platform conditional (Linux x86 vs macOS vs other).
+
+```python
+# WRONG — direct instantiation, PAC-2 violation
+self.turbostat = TurbostatReader(config)
+
+# RIGHT — factory, platform-aware
+self.turbostat = ReaderFactory.get_turbostat_reader(config)
+```
+
+### Rule TC-5: detect_hardware.py Must Not Write real_binary
+detect_hardware.py runs once at setup. It must not write `real_binary`
+to hw_config.json — that path becomes stale on kernel upgrade.
+detect_hardware.py writes hardware topology only (RAPL paths, CPU flags, etc).
+
+---
+
+## 11. Python Version Compatibility (PVC)
+*Added after turbostat fix session — reproducibility requires broad Python compat*
+
+### Rule PVC-1: Minimum Python Version is 3.9
+All code must run on Python 3.9+.
+Target: any machine a reviewer might use to reproduce results.
+
+### Rule PVC-2: No 3.10+ Type Hint Syntax
+```python
+# WRONG — Python 3.10+ only
+def foo(x: int | None) -> tuple[str, int]: ...
+
+# RIGHT — Python 3.9 compatible
+from typing import Optional, Tuple
+def foo(x: Optional[int]) -> Tuple[str, int]: ...
+```
+
+### Rule PVC-3: Use # type: comments for inline hints in complex functions
+```python
+def resolve():
+    # type: () -> Tuple[Optional[str], str]
+    ...
+```
+
+### Rule PVC-4: No match/case Statements
+`match/case` is Python 3.10+. Use `if/elif/else`.
+
+### Rule PVC-5: Test on Python 3.9 Before Handoff
+```bash
+python3.9 -c "import core.readers.turbostat_resolver; print('OK')"
+python3.9 -m core.execution.tests.test_harness \
+  --task-id gsm8k_basic --repetitions 1 --provider local
+```
+
+---
+
+## 12. Forensic Audit Design (FAD)
+*Added after Bug 5 discovery — environment_config forensic tracing*
+
+### Rule FAD-1: environment_config is the Forensic Anchor
+Every experiment records kernel_version + git_commit + env_id.
+When a measurement anomaly is detected, first query:
+```sql
+SELECT e.exp_id, ec.kernel_version, ec.git_commit, ec.created_at
+FROM experiments e
+JOIN environment_config ec ON ec.env_id = e.env_id
+WHERE e.exp_id BETWEEN X AND Y
+ORDER BY e.exp_id;
+```
+This identifies the exact infrastructure change that caused the anomaly.
+
+### Rule FAD-2: Silent Zeros Are Bugs
+Any measurement column returning 0.0 for ALL runs after a certain
+experiment ID must be treated as a measurement bug, not a hardware result.
+0.0 package_temp is thermally impossible. 0.0 C-state residency is
+operationally impossible. Investigate immediately.
+
+### Rule FAD-3: New Measurement Columns Must Have Sentinel Detection
+Any new measurement column added to runs or cpu_samples must have a
+corresponding check in `scripts/test_exp_integrity.py` that flags
+all-zero values as a WARNING after 10+ consecutive runs.
+## 13. Measurement Integrity Compliance (MIC)
+ 
+### Rule MIC-1: NULL != 0.0 — Never Store Missing as Zero
+Any measurement column that could not be read MUST be stored as NULL.
+0.0 is a valid scientific measurement. NULL means unavailable.
+Storing missing data as 0.0 corrupts averages, regressions, and plots.
+ 
+    # WRONG — silent corruption
+    sample[metric] = 0.0  # when sensor unavailable
+ 
+    # RIGHT — scientifically correct
+    sample[metric] = None  # NULL in DB, excluded from AVG() automatically
+ 
+### Rule MIC-2: ETL Must Propagate NULL
+ETL functions must never coerce NULL to 0.0.
+Use: value or None (not value or 0)
+SQLite AVG(), MIN(), MAX() exclude NULL automatically — use this.
+ 
+### Rule MIC-3: Sentinel Detection for All-Zero Columns
+Any new measurement column must have a check in test_exp_integrity.py
+that flags all-zero values as WARNING after 10+ consecutive runs.
+All-zero in a REAL measurement column = likely measurement failure.

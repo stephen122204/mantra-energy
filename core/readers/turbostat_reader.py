@@ -30,12 +30,18 @@ import platform
 import re
 import signal
 import subprocess
+from core.readers.turbostat_resolver import (  # dynamic resolution — never hw_config.json
+    TURBOSTAT_COLUMNS,
+    resolve_turbostat_binary,
+    get_select_string,
+)
 import sys
 import threading
 import time
 from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
 
 import pandas as pd
 
@@ -87,28 +93,27 @@ class TurbostatReader:
         """
         # Get turbostat section from config
         self.turbostat_config = config.get("turbostat", {})
-        self.available = self.turbostat_config.get("available", False)
-
-        # Column mappings: our metric name -> actual turbostat column name
-        # Example: {'c6_residency': 'CPU%c6', 'package_temp': 'PkgTmp'}
-        self.column_map = self.turbostat_config.get("columns", {})
-
-        # Reverse mapping: column name -> metric name (useful during parsing)
+ 
+        # Column contract from resolver — never from hw_config.json or yaml.
+        # Single source of truth, versioned in code (TURBOSTAT_COLUMNS v1).
+        self.column_map = TURBOSTAT_COLUMNS
         self.reverse_map = {v: k for k, v in self.column_map.items()}
-
-        # Find the real turbostat binary (not the wrapper script)
-        self.real_binary = self.turbostat_config.get("real_binary")
-        if self.real_binary and os.path.exists(self.real_binary):
-            self.turbostat_path = self.real_binary
-            logger.info(f"Using real turbostat binary: {self.real_binary}")
+        self._select_string = get_select_string()
+ 
+        # Dynamic binary resolution — self-healing on kernel upgrade.
+        # real_binary from hw_config.json intentionally ignored (Bug 5).
+        # _find_turbostat() uses platform.release() — always current kernel.
+        self.turbostat_path = self._find_turbostat()
+        self.available = self.turbostat_path is not None
+ 
+        if self.available:
+            logger.info("TurbostatReader: binary=%s", self.turbostat_path)
         else:
-            self.turbostat_path = self._find_turbostat()
-            logger.info(f"Using turbostat from PATH: {self.turbostat_path}")
+            logger.warning(
+                "turbostat not found — C-states and PkgTmp will be 0. "
+                "Install linux-tools-$(uname -r)."
+            )
 
-        # Mark as unavailable if binary not found
-        if not self.turbostat_path:
-            logger.warning("turbostat not found")
-            self.available = False
 
         # Record turbostat version for reproducibility
         self.turbostat_version = self._get_turbostat_version()
@@ -346,12 +351,15 @@ class TurbostatReader:
 
         interval = max(0.1, interval_ms / 1000.0)  # turbostat minimum is 0.1s
 
+        # --show not --select: --select requires exact column name match per kernel version.
+        # --show tolerates unknown/renamed columns gracefully across kernel versions.
+        # Parser extracts columns by header index mapping — not by position or name assumption.
+        # No column subset passed — let turbostat output all available columns.
+        # Parser maps TURBOSTAT_COLUMNS against whatever header this version produces.
         cmd = [
             self.turbostat_path,
             "--quiet",
             "--Summary",
-            "--show",
-            ",".join(self.column_map.values()),
             "--interval",
             str(interval),
         ]
@@ -423,84 +431,141 @@ class TurbostatReader:
             "summary": summary,
         }
 
-    def _parse_continuous_output(self, output: str) -> Optional[pd.DataFrame]:
+    def _parse_continuous_output(self, output):
+        # type: (str) -> Optional[pd.DataFrame]
         """
-        Parse continuous turbostat output.
-
-        Rules:
-        - Header: first non-numeric line (not ending with "sec")
-        - Data rows: lines starting with a digit
-        - Column order: preserved exactly as turbostat outputs
-        - NO timestamp added here - Energy Engine handles timestamps
+        Parse continuous turbostat output into a DataFrame.
+ 
+        Design principles (world-class, kernel-version-agnostic):
+        - Header mapped: extract by column name index, never by position
+        - Tab-aware: turbostat uses tabs; fallback to whitespace split
+        - NULL for missing: MIC-1 — missing metric != zero (scientific integrity)
+        - Accepts all data rows regardless of leading character
+        - Works across ALL turbostat versions and ALL kernel versions
+        - No --show/--select column name assumptions
+ 
+        Data row acceptance rules:
+        - Accept: rows where first token is numeric (e.g. "31 1.76 ...")
+        - Accept: rows where first token is "-" (Summary aggregate rows)
+        - Reject: header rows (contain column names like "Busy%")
+        - Reject: empty rows, interval lines ("sec" suffix), warning text
+ 
+        NULL semantics (MIC-1):
+        - Column absent in this turbostat version  -> NULL (not 0.0)
+        - Token present but unparseable            -> NULL (not 0.0)
+        - Token present and parseable as 0.0       -> 0.0 (valid measurement)
         """
         if not output or len(output.strip()) < 10:
-            print("⚠️ Turbostat output too short or empty")
+            logger.warning("turbostat output too short or empty — no samples collected")
             return None
-
+ 
         try:
             lines = output.strip().split("\n")
-
-            # Debug: Show first few raw lines
-            print(f"\n🔍 RAW TURBOSTAT LINES ({len(lines)} total):")
-            for i, line in enumerate(lines[:10]):
-                print(f"   Line {i:2d}: '{line}'")
-
-            header_columns = None
-            data_lines = []
-
+            logger.debug("turbostat raw output: %d lines", len(lines))
+ 
+            # ------------------------------------------------------------------
+            # Step 1: Find the best header row
+            # Best = most columns (package-level header has more than core header)
+            # turbostat with --Summary emits multiple headers — pick widest one
+            # ------------------------------------------------------------------
+            best_header = None
+            best_header_count = 0
+ 
             for line in lines:
                 line = line.strip()
-                if not line:
+                if not line or line.endswith("sec"):
                     continue
-
-                # Skip interval line (ends with "sec")
-                if line.endswith("sec"):
-                    continue
-
-                # Safer header detection using regex
-                # Header is first line that doesn't start with a digit
-                if header_columns is None and not re.match(r"^\d", line):
-                    header_columns = re.split(r"\s+", line)
-                    print(f"📋 Header detected: {header_columns}")
-                    continue
-
-                # Data rows: lines starting with a digit
-                if header_columns and re.match(r"^\d", line):
-                    parts = re.split(r"\s+", line)
-
-                    # Only take up to number of header columns
-                    if len(parts) >= len(header_columns):
-                        data_lines.append(" ".join(parts[: len(header_columns)]))
-
-            if not header_columns or not data_lines:
-                print("❌ No turbostat data detected")
+ 
+                # Header rows contain known turbostat column markers
+                # and do NOT start with a digit or "-"
+                first_token = line.split("\t")[0] if "\t" in line else line.split()[0]
+                if first_token.lstrip("-").replace("%", "").replace("_", "").isalpha():
+                    # This looks like a header row — split by tab first
+                    cols = line.split("\t") if "\t" in line else re.split(r"\s+", line)
+                    cols = [c.strip() for c in cols if c.strip()]
+                    if len(cols) > best_header_count:
+                        best_header = cols
+                        best_header_count = len(cols)
+ 
+            if not best_header:
+                logger.warning("turbostat: no header row found in output")
                 return None
-
-            print(f"✅ Found {len(data_lines)} data rows")
-
-            # ====================================================================
-            # Parse with pandas using actual header columns
-            # ====================================================================
-            from io import StringIO
-
-            data_str = "\n".join(data_lines)
-
-            df = pd.read_csv(
-                StringIO(data_str), sep=r"\s+", names=header_columns, engine="python"
+ 
+            # Build index map: turbostat_col_name -> position in row
+            # This is the key to kernel-version-agnostic parsing
+            header_index = {col: idx for idx, col in enumerate(best_header)}
+            logger.debug(
+                "turbostat header: %d columns, has PkgTmp=%s",
+                len(best_header),
+                "PkgTmp" in header_index,
             )
-
-            # Convert all columns to numeric
-            for col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-
-            print(f"✅ Parsed {len(df)} rows with columns: {list(df.columns)[:5]}...")
+ 
+            # ------------------------------------------------------------------
+            # Step 2: Extract data rows
+            # Accept numeric-leading AND "-"-leading (Summary aggregate) rows
+            # ------------------------------------------------------------------
+            records = []
+ 
+            for line in lines:
+                line = line.strip()
+                if not line or line.endswith("sec"):
+                    continue
+ 
+                # Split by tab first — turbostat uses tabs
+                tokens = line.split("\t") if "\t" in line else re.split(r"\s+", line)
+                tokens = [t.strip() for t in tokens]
+ 
+                if not tokens:
+                    continue
+ 
+                first = tokens[0]
+ 
+                # Accept numeric-leading rows (core or package rows with digits)
+                is_numeric_row = first.lstrip("-").replace(".", "").isdigit()
+                # Accept "-" summary rows (package aggregate in some versions)
+                is_summary_row = first == "-"
+ 
+                if not (is_numeric_row or is_summary_row):
+                    continue  # skip header rows and warning text
+ 
+                if len(tokens) < len(best_header) // 2:
+                    continue  # skip malformed rows with too few tokens
+ 
+                # ------------------------------------------------------------------
+                # Step 3: Map tokens to column names via header_index
+                # NULL (None) for missing or unparseable — never 0.0 (MIC-1)
+                # ------------------------------------------------------------------
+                record = {}
+                for col_name, idx in header_index.items():
+                    if idx >= len(tokens):
+                        record[col_name] = None  # column missing in this row
+                        continue
+                    try:
+                        record[col_name] = float(tokens[idx])
+                    except (ValueError, TypeError):
+                        record[col_name] = None  # unparseable — not zero (MIC-1)
+ 
+                records.append(record)
+ 
+            if not records:
+                logger.warning("turbostat: no valid data rows found")
+                return None
+ 
+            # ------------------------------------------------------------------
+            # Step 4: Build DataFrame — pandas preserves None as NaN (NULL in DB)
+            # ------------------------------------------------------------------
+            df = pd.DataFrame(records, columns=best_header)
+ 
+            logger.info(
+                "turbostat parsed: %d samples, %d columns, PkgTmp_null=%d",
+                len(df),
+                len(df.columns),
+                df["PkgTmp"].isna().sum() if "PkgTmp" in df.columns else -1,
+            )
             return df
-
-        except Exception as e:
-            print(f"❌ Turbostat parse error: {e}")
-            import traceback
-
-            traceback.print_exc()
+ 
+        except Exception as exc:
+            logger.error("turbostat parse error: %s", exc)
             return None
 
     def get_column_mapping(self) -> Dict[str, str]:
