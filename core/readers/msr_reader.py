@@ -38,6 +38,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from core.readers.interfaces import MSRReaderABC  # PAC-1 compliance
 
 # ============================================================================
 # Fix Python path
@@ -52,7 +53,7 @@ init_debug_from_env()
 logger = logging.getLogger(__name__)
 
 
-class MSRReader:
+class MSRReader(MSRReaderABC):
     """
     High-performance MSR reader using C helper binary with TSC conversion.
     """
@@ -165,7 +166,16 @@ class MSRReader:
         self._open_msr_devices()
 
         self._pinned_cpu = None
-
+    def is_available(self):
+        # type: () -> bool
+        """Return True if MSR access is available via helper or rdmsr."""
+        return self.helper_available or self.rdmsr_available
+ 
+    def get_name(self):
+        # type: () -> str
+        """Identify this reader for logging and provenance."""
+        method = "helper" if self.helper_available else ("rdmsr" if self.rdmsr_available else "none")
+        return "MSRReader(method={})".format(method)
     def __del__(self):
         """Clean up MSR file descriptors if they were opened."""
         if hasattr(self, "msr_fds") and self.msr_fds:

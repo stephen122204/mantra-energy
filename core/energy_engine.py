@@ -66,13 +66,13 @@ if str(project_root) not in sys.path:
 
 # Import the new raw measurement model (Layer 1)
 from core.models.raw_energy_measurement import RawEnergyMeasurement
-from core.readers.msr_reader import MSRReader
+# MSRReader and SchedulerMonitor now via factory — PAC-2 compliant
 from core.readers.perf_reader import PerfReader
 # ============================================================================
 # Import all readers and models
 # ============================================================================
 from core.readers.rapl_reader import RAPLReader
-from core.readers.scheduler_monitor import SchedulerMonitor
+# MSRReader and SchedulerMonitor now via factory — PAC-2 compliant
 from core.readers.factory import ReaderFactory as _ReaderFactory
 from core.readers.sensor_reader import SensorReader
 # TurbostatReader now via ReaderFactory.get_turbostat_reader() — PAC-2 compliant
@@ -173,8 +173,11 @@ class EnergyEngine:
         # PAC-2 compliant: TurbostatReader now via factory (Chunk 7 factorisation)
         # Linux x86 -> TurbostatReader, macOS/other -> DummyTurbostatReader
         self.turbostat = _ReaderFactory.get_turbostat_reader(config)    # not yet factorised (Chunk 7)
-        self.msr       = MSRReader(config)           # not yet factorised (Chunk 7)
-        self.scheduler = SchedulerMonitor(config)    # always available via /proc
+        # PAC-2 compliant: MSRReader and SchedulerMonitor via factory (Chunk 7)
+        # Linux x86 -> MSRReader, macOS/other -> DummyMSRReader
+        # Linux     -> SchedulerMonitor, macOS/other -> DummySchedulerMonitor
+        self.msr       = _ReaderFactory.get_msr_reader(config)
+        self.scheduler = _ReaderFactory.get_scheduler_monitor(config)
         self.disk_reader = _ReaderFactory.get_disk_reader(config)         # pid set later via set_workload_pid
         self._io_samples: list = []
  

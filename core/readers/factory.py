@@ -237,6 +237,67 @@ class ReaderFactory:
             caps.os, caps.arch,
         )
         return DummyTurbostatReader()
+    @classmethod
+    def get_msr_reader(
+        cls,
+        config=None,   # type: Optional[dict]
+        caps=None,     # type: Optional[PlatformCapabilities]
+    ):
+        """
+        Return correct MSR reader for current platform.
+ 
+        Linux x86  -> MSRReader (msr_read C binary, setuid — compiled by fix_permissions.sh)
+        Linux ARM  -> DummyMSRReader (LIMITED — no MSR binary for ARM)
+        macOS      -> DummyMSRReader (LIMITED — IOKit deferred Chunk 1.2)
+        Other      -> DummyMSRReader (LIMITED)
+ 
+        PAC-2: only platform-conditional imports here.
+        msr_read C binary path is fixed at core/msr_helper/msr_read — never configurable.
+        """
+        caps   = caps or get_platform_capabilities()
+        config = config or {}
+ 
+        if caps.os == "Linux" and caps.arch == "x86_64":
+            from core.readers.msr_reader import MSRReader
+            return MSRReader(config)
+ 
+        # ARM, macOS, Windows, unknown — no MSR access
+        from core.readers.fallback.dummy_msr_reader import DummyMSRReader
+        logger.info(
+            "get_msr_reader: platform=%s arch=%s -> DummyMSRReader (LIMITED)",
+            caps.os, caps.arch,
+        )
+        return DummyMSRReader(config)
+ 
+    @classmethod
+    def get_scheduler_monitor(
+        cls,
+        config=None,   # type: Optional[dict]
+        caps=None,     # type: Optional[PlatformCapabilities]
+    ):
+        """
+        Return correct scheduler monitor for current platform.
+ 
+        Linux      -> SchedulerMonitor (/proc/stat, /proc/interrupts)  MEASURED
+        macOS      -> DummySchedulerMonitor (LIMITED — sysctl deferred Chunk 1.3)
+        Other      -> DummySchedulerMonitor (LIMITED)
+ 
+        PAC-2: only platform-conditional imports here.
+        """
+        caps   = caps or get_platform_capabilities()
+        config = config or {}
+ 
+        if caps.os == "Linux":
+            from core.readers.scheduler_monitor import SchedulerMonitor
+            return SchedulerMonitor(config)
+ 
+        # macOS, Windows, unknown — no /proc
+        from core.readers.fallback.dummy_scheduler_monitor import DummySchedulerMonitor
+        logger.info(
+            "get_scheduler_monitor: platform=%s -> DummySchedulerMonitor (LIMITED)",
+            caps.os,
+        )
+        return DummySchedulerMonitor(config)    
     @staticmethod
     def _make_rapl_reader(config: dict):
         """Import and instantiate RAPLReader (Linux x86_64 MEASURED)."""

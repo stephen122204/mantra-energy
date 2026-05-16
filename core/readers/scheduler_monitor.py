@@ -29,7 +29,8 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from core.readers.interfaces import SchedulerMonitorABC  # PAC-1 compliance
 
 # ============================================================================
 # Fix Python path – ensure core modules are importable
@@ -44,7 +45,7 @@ init_debug_from_env()
 logger = logging.getLogger(__name__)
 
 
-class SchedulerMonitor:
+class SchedulerMonitor(SchedulerMonitorABC):
     """
     Reads Linux scheduler metrics from /proc filesystem.
 
@@ -75,6 +76,16 @@ class SchedulerMonitor:
         self._last_sample_time_ns = None
         self._start_epoch_ns = None
         self._start_monotonic_ns = None
+        
+    def is_available(self):
+        # type: () -> bool
+        """Return True — SchedulerMonitor always available on Linux via /proc."""
+        return True
+ 
+    def get_name(self):
+        # type: () -> str
+        """Identify this monitor for logging."""
+        return "SchedulerMonitor(/proc)"
 
     def read_context_switches(self) -> Tuple[int, int]:
         """

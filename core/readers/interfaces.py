@@ -39,7 +39,7 @@ Author: Deepak Panigrahy
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # ============================================================================
@@ -312,7 +312,82 @@ class TurbostatReaderABC(BaseReader):
     def get_column_mapping(self) -> dict:
         """Return mapping of internal metric names to turbostat column names."""
         ...
-
+class MSRReaderABC(BaseReader):
+    """
+    ABC for MSR (Model Specific Register) reader.
+ 
+    Implementations:
+      Linux x86  -> MSRReader (msr_read C binary, setuid root)   MEASURED
+      Linux ARM  -> DummyMSRReader                               LIMITED
+      macOS      -> DummyMSRReader (IOKit impl deferred Chunk 1.2) LIMITED
+      Other      -> DummyMSRReader                               LIMITED
+ 
+    MSR provides C-state counters and thermal data directly from hardware.
+    C-state counters are ALEOE's primary optimization signal.
+    msr_read C binary compiled and setuid by fix_permissions.sh — once only.
+    """
+ 
+    @abstractmethod
+    def read_msr(self, msr_addr, cpu=0, pin=True):
+        # type: (int, int, bool) -> Optional[int]
+        """Read a single MSR register. Returns None if unavailable."""
+        ...
+ 
+    @abstractmethod
+    def read_cstate_counters(self, cpu=0, pin=True):
+        # type: (int, bool) -> Dict[str, Any]
+        """Read C-state residency counters. Returns empty dict if unavailable."""
+        ...
+ 
+    @abstractmethod
+    def snapshot_cstate_counters(self):
+        # type: () -> Optional[Dict]
+        """Snapshot current C-state counters for delta computation."""
+        ...
+ 
+ 
+class SchedulerMonitorABC(BaseReader):
+    """
+    ABC for OS scheduler and interrupt monitor.
+ 
+    Implementations:
+      Linux      -> SchedulerMonitor (/proc/stat, /proc/interrupts)  MEASURED
+      macOS      -> DummySchedulerMonitor                            LIMITED
+      Other      -> DummySchedulerMonitor                            LIMITED
+ 
+    Reads context switches, CPU times, interrupt rates via /proc.
+    /proc is Linux-only — macOS uses sysctl (deferred Chunk 1.3).
+    """
+ 
+    @abstractmethod
+    def read_context_switches(self):
+        # type: () -> Tuple[int, int]
+        """Return (voluntary, involuntary) context switches."""
+        ...
+ 
+    @abstractmethod
+    def read_all(self):
+        # type: () -> Dict[str, Any]
+        """Return all scheduler metrics as dict."""
+        ...
+ 
+    @abstractmethod
+    def start_interrupt_sampling(self, pid=0):
+        # type: (int) -> None
+        """Start interrupt sampling for given pid."""
+        ...
+ 
+    @abstractmethod
+    def stop_interrupt_sampling(self):
+        # type: () -> list
+        """Stop sampling and return collected interrupt samples."""
+        ...
+ 
+    @abstractmethod
+    def sample_interrupts(self):
+        # type: () -> None
+        """Record one interrupt sample."""
+        ...
 class DiskReaderABC(ABC):
     """ABC for disk I/O readers — Linux/macOS implementations."""
     @abstractmethod
