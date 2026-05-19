@@ -384,7 +384,7 @@ def _get_network_wait_energy_uj(
                     FROM energy_samples e1
                     JOIN energy_samples e2
                       ON e1.run_id = e2.run_id
-                     AND e1.sample_index = e2.sample_index + 1
+                     AND e1.sample_id = e2.sample_id + 1
                     WHERE e1.run_id = ?
                       AND e1.timestamp_ns >= ?
                       AND e1.timestamp_ns <= ?

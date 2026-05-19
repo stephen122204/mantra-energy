@@ -275,7 +275,18 @@ class RetryCoordinator:
 
             if result is not None:
                 try:
-                    energy_uj        = result["layer3_derived"]["energy_uj"]["workload"]
+                    # Use attributed_energy_uj (cpu_fraction x dynamic) — L2 paper unit.
+                    # layer3_derived["workload"] is dynamic_energy_uj — includes background.
+                    ml = result.get("ml_features", {}) or {}
+                    energy_uj = int(ml.get("attributed_energy_uj") or 0)
+                    if not energy_uj:
+                        # Fallback: recompute from cpu_fraction x dynamic
+                        _dyn  = ml.get("dynamic_energy_uj") or 0
+                        _frac = ml.get("cpu_fraction") or 0.0
+                        energy_uj = int(_dyn * _frac)
+                    if not energy_uj:
+                        # Last resort: dynamic only
+                        energy_uj = result["layer3_derived"]["energy_uj"]["workload"]
                     orchestration_uj = result["layer3_derived"]["energy_uj"].get("orchestration_tax", 0)
                 except (KeyError, TypeError):
                     pass

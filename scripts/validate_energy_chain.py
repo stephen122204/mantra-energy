@@ -95,7 +95,7 @@ def _fetch_run(conn, run_id):
         FROM runs r
         LEFT JOIN experiments e ON e.exp_id=r.exp_id
         LEFT JOIN energy_attribution ea ON ea.run_id=r.run_id
-        LEFT JOIN goal_execution ge ON ge.winning_run_id=r.run_id
+        LEFT JOIN goal_execution ge ON COALESCE(ge.winning_run_id, ge.first_run_id)=r.run_id
         LEFT JOIN goal_attempt ga ON ga.goal_id=ge.goal_id
         WHERE r.run_id=?
         GROUP BY r.run_id
@@ -182,12 +182,12 @@ def print_tree(r):
               f" + {_j(wp)}({_pct(wp,attr):.1f}%)"
               f" + {_j(post)}({_pct(post,attr):.1f}%)"
               f"  {_chk(d)} Δ={d}µJ")
-        print(f"        framework_overhead={_j(fwoh)}")
+        print(f"        E_orchestration_overhead={_j(fwoh)}")
     else:
         print(f"\n  [Boundary] ⚠️  pre/post NULL — not recorded")
 
     # D1 Activity Partition
-    d = abs(attr-(llmc+llmw+orch))
+    d = abs(attr-(llmc+orch))
     is_sample = "sample_based" in mth
     ml = "MEASURED" if is_sample else "INFERRED(time-frac)"
     # D1 conservation line — two-term partition (exact)
@@ -349,7 +349,7 @@ def validate_run(conn, run_id):
 
     # D1 Activity Partition
     if attr > 0:
-        d = abs(attr-(llmc+llmw+orch))
+        d = abs(attr-(llmc+orch))
         is_s = "sample_based" in mth
         results.append(ok(f"{p} D1 Activity Partition [{'MEASURED' if is_s else 'INFERRED'}] Δ={d}µJ")
                        if d <= TOL_UJ else fail(f"{p} D1 Activity Partition VIOLATION Δ={d}µJ"))

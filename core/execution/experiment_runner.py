@@ -845,8 +845,20 @@ class ExperimentRunner:
                     interaction["run_id"] = agentic_id
                     db.insert_llm_interaction(interaction)
             # Tax summary for this pair
-            linear_uj = linear_result["layer3_derived"]["energy_uj"]["workload"]
-            agentic_uj = agentic_result["layer3_derived"]["energy_uj"]["workload"]
+            # Use attributed_energy_uj (L2: cpu_fraction x dynamic) — paper unit.
+            # layer3_derived["workload"] = dynamic_energy_uj — includes background.
+            def _get_attributed(result):
+                ml = result.get("ml_features", {}) or {}
+                uj = int(ml.get("attributed_energy_uj") or 0)
+                if not uj:
+                    _dyn  = ml.get("dynamic_energy_uj") or 0
+                    _frac = ml.get("cpu_fraction") or 0.0
+                    uj = int(_dyn * _frac)
+                if not uj:
+                    uj = result["layer3_derived"]["energy_uj"]["workload"]
+                return uj
+            linear_uj  = _get_attributed(linear_result)
+            agentic_uj = _get_attributed(agentic_result)
             linear_orchestration_uj = linear_result["ml_features"].get(
                 "orchestration_tax_uj", 0
             )
