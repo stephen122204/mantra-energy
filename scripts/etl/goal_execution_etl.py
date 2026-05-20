@@ -42,7 +42,7 @@ def process_one(goal_id: int, conn) -> None:
     """
     # Guard: goal must exist
     goal_row = conn.execute(
-        "SELECT goal_id, winning_run_id, success FROM goal_execution WHERE goal_id = ?",
+        "SELECT goal_id, winning_run_id, success, first_run_id FROM goal_execution WHERE goal_id = ?",
         (goal_id,),
     ).fetchone()
     if goal_row is None:
@@ -50,6 +50,7 @@ def process_one(goal_id: int, conn) -> None:
         return
 
     winning_run_id = goal_row[1]
+    first_run_id   = goal_row[3]
 
     # Load all attempts for energy summation
     attempts = conn.execute(
@@ -99,7 +100,8 @@ def process_one(goal_id: int, conn) -> None:
     successful_energy_uj = _get_winning_energy(winning_attempts)
     overhead_energy_uj = _compute_overhead(total_energy_uj, successful_energy_uj)
     overhead_fraction = _compute_fraction(overhead_energy_uj, total_energy_uj)
-    orchestration_fraction = _get_orchestration_fraction(conn, winning_run_id)
+    _orch_run_id = winning_run_id or first_run_id
+    orchestration_fraction = _get_orchestration_fraction(conn, _orch_run_id)
 
     _update_goal_execution(
         conn, goal_id,
