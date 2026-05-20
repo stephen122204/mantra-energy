@@ -1241,9 +1241,19 @@ CREATE TABLE IF NOT EXISTS environment_config (
     transformers_version TEXT,
     container_runtime TEXT,
     container_image TEXT,
+    schema_version INTEGER DEFAULT 8,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
+
+CREATE_SCHEMA_VERSION = """
+CREATE TABLE IF NOT EXISTS schema_version (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    description TEXT
+);
+"""
+
 # ========================================================================
 # Table: llm_interactions - Store prompts, responses, and per-call metrics
 # ========================================================================

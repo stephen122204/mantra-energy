@@ -67,7 +67,9 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,CREATE_RUN_QUALIT
                      CREATE_VIEW_FAILURE_ENERGY_TAXONOMY,
                      CREATE_VIEW_QUALITY_ENERGY_FRONTIER,
                      CREATE_VIEW_FRACTION_VERIFICATION,
-                     CREATE_VIEW_OUTCOME_EFFICIENCY,                     
+                     CREATE_VIEW_OUTCOME_EFFICIENCY,
+                     CREATE_SCHEMA_VERSION,
+
                      )
 
 
@@ -311,6 +313,8 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_VIEW_QUALITY_ENERGY_FRONTIER)        
         self.conn.executescript(CREATE_VIEW_OUTCOME_EFFICIENCY)
         self.conn.executescript(CREATE_VIEW_FRACTION_VERIFICATION)
+        self.conn.executescript(CREATE_SCHEMA_VERSION)
+        
 
         # Commit explicitly (DDL should be committed)
         self.conn.commit()
@@ -585,8 +589,8 @@ class SQLiteAdapter(DatabaseInterface):
                 os_name, os_version, kernel_version,
                 git_commit, git_branch, git_dirty,
                 numpy_version, torch_version, transformers_version,
-                container_runtime, container_image
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                container_runtime, container_image, schema_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 env_data.get("env_hash"),
@@ -603,6 +607,7 @@ class SQLiteAdapter(DatabaseInterface):
                 env_data.get("transformers_version"),
                 env_data.get("container_runtime"),
                 env_data.get("container_image"),
+                env_data.get("schema_version"),
             ),
         )
 

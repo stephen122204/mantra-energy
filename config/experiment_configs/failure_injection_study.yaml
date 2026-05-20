@@ -1,36 +1,23 @@
-# config/experiment_configs/failure_injection_study.yaml
-# Failure Injection Study — Paper Night 2.
-# Measures energy cost of failures and retry recovery.
-# experiment_type: failure_injection — populates tool_failure_events and retry energy.
-#
-# Two tasks: one pure LLM (rate_limit/timeout injection) and one tool graph
-# (tool_error injection). Workload-aware injection — correct failure modes
-# per workload type.
-#
-# Mode: deterministic_validation — guarantees at least min_failures per experiment.
-# Reproducibility: SHA-256 stable seeding — same results on any rerun.
-
 study:
   name: "Failure Injection Study"
   experiment_type: "failure_injection"
   experiment_goal: "Measure energy cost of failures and retry recovery"
   experiment_notes: "Paper Figure 3 — wasted energy taxonomy. Deterministic injection."
   workflow_modes: ["agentic","linear"]
-
 tasks:
+  - id: science_qa
   - id: gsm8k_multi_step
-
-
+  - id: factual_qa
+  - id: logical_reasoning
+  - id: gsm8k_basic
 providers:
   - name: llama_cpp
     model_id: tinyllama-1b-gguf
-
 execution:
-  repetitions: 1
+  repetitions: 50
   cool_down_seconds: 30
   inter_task_cooldown_seconds: 90
   save_db: true
-
 retry_policy:
   name: "aggressive"
   max_retries: 5
@@ -39,7 +26,6 @@ retry_policy:
   retry_on_api_error: true
   retry_on_wrong_answer: false
   backoff_seconds: 1.0
-
 failure_injection:
   enabled: true
   mode: deterministic_validation

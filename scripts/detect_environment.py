@@ -37,7 +37,7 @@ from pathlib import Path
 
 # Ensure project root is on the path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
+from core.config_loader import ConfigLoader
 
 # ============================================================================
 # GIT INFO
@@ -184,6 +184,33 @@ def generate_env_hash(hash_input: dict) -> str:
     hash_str = json.dumps(hash_input, sort_keys=True)
     return hashlib.sha256(hash_str.encode()).hexdigest()[:16]
 
+def get_schema_version() -> int:
+    """Get current schema version from DB via config."""
+    try:
+        cfg = ConfigLoader().get_db_config()
+        engine = cfg.get("engine", "sqlite")
+        if engine == "sqlite":
+            import sqlite3
+            db_path = cfg.get("sqlite", {}).get("path")
+            if not db_path:
+                raise ValueError("sqlite path not found in app_settings.yaml")
+            conn = sqlite3.connect(db_path)
+        else:
+            import psycopg2
+            pg = cfg.get("postgresql", {})
+            conn = psycopg2.connect(
+                host=pg["host"], port=pg["port"],
+                database=pg["database"], user=pg["user"],
+                password=pg["password"]
+            )
+        ver = conn.execute(
+            "SELECT MAX(rowid) FROM schema_version"
+        ).fetchone()[0] or 0
+        conn.close()
+        return ver
+    except Exception as e:
+        print(f"⚠️ Could not read schema_version: {e}")
+        return 0
 
 def save_with_merge(path: Path, new_data: dict) -> None:
     """
@@ -251,11 +278,15 @@ def main():
     }
 
     # Generate environment fingerprint from stable identifying fields
+    schema_ver = get_schema_version()
+    env_info["schema_version"] = schema_ver
+
     hash_input = {
         "python_version": env_info["python_version"],
         "os_name":        env_info["os_name"],
         "git_commit":     env_info["git_commit"],
         "numpy_version":  env_info["numpy_version"],
+        "schema_version": schema_ver,
     }
     env_info["env_hash"] = generate_env_hash(hash_input)
 

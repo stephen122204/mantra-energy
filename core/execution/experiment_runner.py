@@ -183,12 +183,19 @@ class ExperimentRunner:
             "framework_version": None,  # Can be filled from model config
         }
 
+        # Load schema_version from environment.json
+        try:
+            with open(Path("config/environment.json")) as f:
+                env_info["schema_version"] = json.load(f).get("schema_version", 0)
+        except Exception:
+            env_info["schema_version"] = 0
         # Generate env_hash
         hash_input = json.dumps(
             {
                 "python_version": env_info["python_version"],
                 "git_commit": env_info["git_commit"],
                 "numpy_version": env_info["numpy_version"],
+                "schema_version": env_info["schema_version"],
             },
             sort_keys=True,
         )

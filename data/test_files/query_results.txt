@@ -1,1 +1,1 @@
-{step_1_result}
+[{'run_id': 4140, 'workflow_type': 'linear', 'pkg_energy_uj': 94823976}, {'run_id': 4139, 'workflow_type': 'agentic', 'pkg_energy_uj': 196222825}, {'run_id': 4138, 'workflow_type': 'linear', 'pkg_energy_uj': 1242216485}, {'run_id': 4137, 'workflow_type': 'agentic', 'pkg_energy_uj': 157643761}, {'run_id': 4136, 'workflow_type': 'linear', 'pkg_energy_uj': 1429567935}]
