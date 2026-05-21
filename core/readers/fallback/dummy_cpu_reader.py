@@ -67,7 +67,14 @@ class DummyCPUReader(CPUReaderABC):
     def read_frequency_mhz(self) -> float:
         """Return 0.0 — frequency unavailable on this platform."""
         return 0.0
-
+    def start_process_measurement(self, pid: int = 0) -> None:
+        """Stub — no-op on unsupported platforms."""
+        logger.debug("DummyCPUReader.start_process_measurement: no-op (pid=%d)", pid)
+ 
+    def stop_process_measurement(self):
+        """Stub — returns empty counters on unsupported platforms."""
+        from core.models.performance_counters import PerformanceCounters
+        return PerformanceCounters()
     def is_available(self) -> bool:
         """Return False — no real CPU counter access on this platform."""
         return False

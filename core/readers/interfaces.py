@@ -249,7 +249,26 @@ class CPUReaderABC(BaseReader):
             float: Frequency in MHz, or 0.0 if unavailable.
         """
         ...
-
+    @abstractmethod
+    def start_process_measurement(self, pid: int = 0) -> None:
+        """
+        Start continuous counter collection attached to task process.
+ 
+        Args:
+            pid: OS pid of the task process. If 0, fall back to
+                 system-wide timed snapshot at stop().
+        """
+        ...
+ 
+    @abstractmethod
+    def stop_process_measurement(self):
+        """
+        Stop collection and return accumulated counters.
+ 
+        Returns:
+            PerformanceCounters with values measured during task window.
+        """
+        ...
 
 # ============================================================================
 # THERMAL READER INTERFACE

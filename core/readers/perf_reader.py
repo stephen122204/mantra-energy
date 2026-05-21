@@ -54,6 +54,7 @@ if str(project_root) not in sys.path:
 
 # Now import works regardless of how script is run
 from core.models.performance_counters import PerformanceCounters
+from core.readers.interfaces import CPUReaderABC
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-class PerfReader:
+class PerfReader(CPUReaderABC):
     """
     Reads hardware performance counters using Linux perf_events.
 
@@ -199,31 +200,81 @@ class PerfReader:
             logger.debug("perf check error: %s", e)
             return False
 
-    def start_process_measurement(self):
+    def start_process_measurement(self, pid: int = 0) -> None:
         """
-        Start perf monitoring - just record start time.
-        Actual measurement happens in stop().
+        Start perf monitoring attached to task process via -p <pid>.
+        Counters accumulate during actual task execution, not post-task idle.
+        Falls back to timed snapshot at stop() if pid=0 or perf unavailable.
         """
         self._measurement_start = time.time()
-        logger.debug("Perf measurement started")
+        self._perf_bg_process = None
+ 
+        if not self.perf_available or not self.perf_path or pid <= 0:
+            logger.debug("perf start: no pid or unavailable, will use timed snapshot")
+            return
+ 
+        event_str = ",".join(self.events)
+        cmd = [
+            "perf", "stat",
+            "-p", str(pid),       # attach to task pid — measures actual work
+            "-e", event_str,
+            "--field-separator=,",
+            "--no-big-num",
+        ]
+        try:
+            self._perf_bg_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            logger.debug("perf started attached to pid=%d", pid)
+        except Exception as e:
+            self._perf_bg_process = None
+            logger.warning("perf start failed (pid=%d): %s — will use timed snapshot", pid, e)
 
     def stop_process_measurement(self) -> PerformanceCounters:
         """
-        Stop perf monitoring by running a timed measurement.
-        Uses the same reliable method as the test.
+        Stop perf monitoring and return counters for the task window.
+        If background process was launched, sends SIGINT and parses
+        accumulated output — counters reflect actual task execution.
+        Falls back to timed snapshot if no background process exists.
         """
+        counters = PerformanceCounters()
+ 
+        if hasattr(self, "_perf_bg_process") and self._perf_bg_process is not None:
+            try:
+                # SIGINT flushes accumulated perf output — same as Ctrl+C
+                self._perf_bg_process.send_signal(signal.SIGINT)
+                try:
+                    _, stderr = self._perf_bg_process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self._perf_bg_process.kill()
+                    _, stderr = self._perf_bg_process.communicate()
+                    logger.warning("perf stop: communicate timed out, killed")
+                self._parse_perf_output(stderr, counters)
+                if hasattr(self, "_measurement_start"):
+                    counters.duration_ms = int((time.time() - self._measurement_start) * 1000)
+                logger.info(
+                    "perf stop (pid-attached): %d instructions, %d cycles, %.2f IPC",
+                    counters.instructions_retired,
+                    counters.cpu_cycles,
+                    counters.instructions_per_cycle(),
+                )
+            except Exception as e:
+                logger.warning("perf stop failed: %s — returning empty counters", e)
+            finally:
+                self._perf_bg_process = None
+            return counters
+ 
+        # Fallback: pid unavailable — timed snapshot on system-wide counters
         if not hasattr(self, "_measurement_start"):
-            logger.warning("No measurement start time found")
-            return PerformanceCounters()
-
+            logger.warning("perf stop: no measurement start recorded")
+            return counters
+ 
         duration_ms = int((time.time() - self._measurement_start) * 1000)
-        logger.debug(f"Measuring perf for {duration_ms}ms")
-
-        # Use the working test method
-        counters = self.read_counters(duration_ms=duration_ms)
-
-        logger.info(f"Perf collected: {counters.instructions_retired} instructions")
-        return counters
+        logger.debug("perf stop: no bg process, timed snapshot %dms", duration_ms)
+        return self.read_counters(duration_ms=duration_ms)
 
     def _drain_perf_output(self):
         """

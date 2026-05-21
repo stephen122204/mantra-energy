@@ -67,7 +67,7 @@ if str(project_root) not in sys.path:
 # Import the new raw measurement model (Layer 1)
 from core.models.raw_energy_measurement import RawEnergyMeasurement
 # MSRReader and SchedulerMonitor now via factory — PAC-2 compliant
-from core.readers.perf_reader import PerfReader
+# PerfReader via factory (self.cpu_reader) — direct import removed (PAC-2)
 # ============================================================================
 # Import all readers and models
 # ============================================================================
@@ -635,8 +635,9 @@ class EnergyEngine:
         # ====================================================================
         # STEP 2: Start continuous readers
         # ====================================================================
-        # perf: continuous counter (attaches to process)
-        self.perf.start_process_measurement()
+        # perf: attach to task process pid so counters measure actual work
+        # _workload_pid set by harness via set_workload_pid() before this call
+        self.perf.start_process_measurement(pid=self._workload_pid)
 
         # turbostat: continuous sampling at the same rate as RAPL
         # <-- NEW: Compute interval in milliseconds from sampling_rate_hz
