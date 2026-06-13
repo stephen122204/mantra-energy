@@ -39,6 +39,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from core.readers.factory import ReaderFactory
+from core.readers.gpu_collector import GPUCollector
 from core.utils.platform import get_platform_capabilities
 
 import requests
@@ -170,6 +171,8 @@ class EnergyEngine:
         self.rapl      = self.energy_reader          # alias: existing code uses self.rapl
         self.perf      = self.cpu_reader             # alias: existing code uses self.perf
         self.sensor    = self.thermal_reader         # alias: existing code uses self.sensor
+        self.gpu_collector = GPUCollector(rapl_reader=self.rapl)
+        self.last_gpu_samples = []
         # PAC-2 compliant: TurbostatReader now via factory (Chunk 7 factorisation)
         # Linux x86 -> TurbostatReader, macOS/other -> DummyTurbostatReader
         self.turbostat = _ReaderFactory.get_turbostat_reader(config)    # not yet factorised (Chunk 7)
@@ -371,6 +374,7 @@ class EnergyEngine:
         num_samples: int = 10,
         pre_wait_seconds: int = 10,
         force_remeasure: bool = False,
+        measure_gpu: bool = True,
     ) -> BaselineMeasurement:
         """
         Measure system idle energy baseline.
@@ -385,6 +389,7 @@ class EnergyEngine:
             pre_wait_seconds=pre_wait_seconds,
             pin_cores=self.pinned_cores,
             force_remeasure=force_remeasure,
+            measure_gpu=measure_gpu,
         )
 
         print(f">>> INPUT duration_seconds: {duration_seconds}")
@@ -620,11 +625,14 @@ class EnergyEngine:
                 print(f"❌ Failed to capture start MSR thermal: {e}")
                 logger.warning(f"Could not capture start MSR thermal: {e}")
 
+        # GPU PP1 start counter — None on non-Tiger-Lake platforms
+        gpu_start_uj = ReaderFactory.get_gpu_energy_uj(self.rapl)
         self.start_readings = {
-            "rapl": rapl_start,
-            "scheduler": self.scheduler_start,
-            "sensor": self.sensor.read_temperatures(),
-            "msr_thermal": msr_thermal_start,  # Store start thermal state
+            "rapl":        rapl_start,
+            "scheduler":   self.scheduler_start,
+            "sensor":      self.sensor.read_temperatures(),
+            "msr_thermal": msr_thermal_start,
+            "gpu_uj":      gpu_start_uj,   # MSR 0x641 at measurement start
         }
         # ====================================================================
         # Capture C-state counters at START
@@ -648,8 +656,12 @@ class EnergyEngine:
         self.turbostat.start_monitoring(interval_ms=interval_ms)
 
         # Start high-frequency sampling (RAPL samples)
+        # Start high-frequency sampling (RAPL samples)
         self._start_sampling()
-
+        # GPU energy sampling — runs at 10 Hz alongside RAPL sampling
+        # GPUCollector.start() is no-op if no backend available (PAC-4 compliant)
+        self.gpu_collector.start()
+        # NEW: Start interrupt sampling
         # NEW: Start interrupt sampling
         if self.collect_interrupt_samples:
             self.scheduler.start_interrupt_sampling(pid=self._workload_pid)
@@ -659,6 +671,26 @@ class EnergyEngine:
         self.disk_reader.device = self.disk_reader._detect_device()
         dprint(f"Started measurement {self.measurement_id}")
         return self.measurement_id
+
+    def _compute_gpu_total(
+            self, gpu_start: Optional[int], gpu_end: Optional[int]
+        ) -> Optional[int]:
+            """
+            Compute GPU total energy delta for a run.
+            Returns None if either counter unavailable — never returns zero for missing.
+            Args:
+                gpu_start: MSR 0x641 value in µJ at run start, or None
+                gpu_end:   MSR 0x641 value in µJ at run end, or None
+            Returns:
+                Delta in µJ as int, or None if unavailable.
+            """
+            if gpu_start is None or gpu_end is None:
+                return None
+            # Guard against counter wraparound (unlikely over a single run)
+            if gpu_end < gpu_start:
+                logger.warning("GPU MSR counter wraparound detected — returning None")
+                return None
+            return gpu_end - gpu_start
 
     def stop_measurement(self) -> RawEnergyMeasurement:
         """
@@ -703,6 +735,12 @@ class EnergyEngine:
         self.last_interrupt_samples = interrupt_samples
         self.last_io_samples        = io_samples if 'io_samples' in locals() else []
         self.last_samples = samples
+        # Stop GPU collector and store samples for harness access
+        # Returns empty list if NoneBackend or no samples collected
+        self.last_gpu_samples = self.gpu_collector.stop()
+        logger.debug("stop_measurement: %d gpu_samples collected",
+                     len(self.last_gpu_samples))
+        # Optional: separate by type if samples have type field
         # Optional: separate by type if samples have type field
         self.last_energy_samples = []
         self.last_cpu_samples = []
@@ -729,6 +767,8 @@ class EnergyEngine:
         # STEP 2: Capture snapshot readers END values
         # ====================================================================
         rapl_end = self.rapl.read_energy()
+        # GPU PP1 end counter — paired with start captured in start_measurement()
+        gpu_end_uj  = ReaderFactory.get_gpu_energy_uj(self.rapl)
         scheduler_end = self.scheduler.read_all()
 
         # ====================================================================
@@ -957,6 +997,11 @@ class EnergyEngine:
             thermal_during_experiment=thermal_during_experiment,
             thermal_now_active=thermal_now_active,
             thermal_since_boot=thermal_since_boot,
+            # GPU PP1 total energy for this run — None on non-Tiger-Lake platforms
+            gpu_total_uj=self._compute_gpu_total(
+                self.start_readings.get("gpu_uj"), gpu_end_uj
+            ),
+            # Metadata with thermal calculations
             # Metadata with thermal calculations
             metadata={
                 "hostname": platform.node(),

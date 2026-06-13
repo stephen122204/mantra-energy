@@ -50,6 +50,7 @@ import psutil
 from scipy import stats as scipy_stats
 
 from core.analysis.energy_analyzer import EnergyAnalyzer
+from core.readers.factory import ReaderFactory
 from core.config_loader import ConfigLoader
 from core.database.manager import DatabaseManager
 from core.energy_engine import EnergyEngine
@@ -246,6 +247,7 @@ class ExperimentHarness:
         # Opens the diagnostic pre-task energy window (t_before_pretask → t0).
         # read_energy() returns None on non-RAPL platforms — PAC compliant.
         _rapl_before_pretask = self.energy_engine.rapl.read_energy()
+        _gpu_before_pretask  = ReaderFactory.get_gpu_energy_uj(self.energy_engine.rapl)
         _pid_pre             = os.getpid()
         _total_ticks_pre     = read_total_cpu_ticks()
         _pid_ticks_pre       = read_process_cpu_ticks(_pid_pre)
@@ -281,6 +283,7 @@ class ExperimentHarness:
         # rapl_after_task captured AFTER stop_measurement() so MAX(pkg_end_uj)
         # from energy_samples cannot overshoot this anchor.
         _rapl_after_task     = self.energy_engine.rapl.read_energy()
+        _gpu_after_task      = ReaderFactory.get_gpu_energy_uj(self.energy_engine.rapl)
         run_end_dt           = datetime.now()   # t2: human-readable (post-framework)
         run_end_perf         = time.perf_counter()
         _total_ticks_t2      = read_total_cpu_ticks()
@@ -527,6 +530,8 @@ class ExperimentHarness:
                 "post_task_duration_sec": post_task_duration_sec,
                 "rapl_before_pretask":    _rapl_before_pretask,   # Dict or None
                 "rapl_after_task":        _rapl_after_task,        # Dict or None
+                "gpu_before_pretask":     _gpu_before_pretask,    # µJ or None
+                "gpu_after_task":         _gpu_after_task,         # µJ or None
                 "cpu_frac_pre":           compute_cpu_fraction(
                     _pid_ticks_start - _pid_ticks_pre,
                     _total_ticks_start - _total_ticks_pre,
@@ -551,6 +556,11 @@ class ExperimentHarness:
                 "baseline_energy_uj":    derived.idle_energy_uj,
                 "avg_power_watts":       derived.workload_energy_uj / max(1, derived.duration_seconds) / 1_000_000,
                 "orchestration_tax_uj": derived.orchestration_tax_uj,
+                # GPU PP1 energy — None on non-Tiger-Lake platforms
+                "gpu_total_energy_uj":    derived.gpu_total_energy_uj,
+                "gpu_baseline_energy_uj": derived.gpu_baseline_energy_uj,
+                "gpu_dynamic_energy_uj":  derived.gpu_dynamic_energy_uj,
+                "gpu_pct_of_pkg":         derived.gpu_pct_of_pkg,                
                 "cycles": derived.cycles,
                 "ipc": derived.ipc,
                 "cache_misses": derived.cache_misses,
@@ -663,6 +673,7 @@ class ExperimentHarness:
                 "duration_ms": derived.duration_seconds * 1000,
             },
             "energy_samples": energy_samples,
+            "gpu_samples":    list(self.energy_engine.last_gpu_samples),
             "cpu_samples": cpu_samples,
             "interrupt_samples": interrupt_samples,
             "io_samples":        io_samples,
@@ -691,6 +702,7 @@ class ExperimentHarness:
         # ====================================================================
         if hasattr(self.energy_engine, "last_samples"):
             result["energy_samples"] = list(self.energy_engine.last_samples)
+            result["gpu_samples"]    = list(self.energy_engine.last_gpu_samples)
             dprint(
                 f"📊 Added {len(self.energy_engine.last_samples)} energy samples to result"
             )
@@ -748,6 +760,7 @@ class ExperimentHarness:
         # This opens the diagnostic pre-task energy window.
         # rapl.read_energy() returns None on non-RAPL platforms (PAC safe).
         _rapl_before_pretask = self.energy_engine.rapl.read_energy()
+        _gpu_before_pretask  = ReaderFactory.get_gpu_energy_uj(self.energy_engine.rapl)
         _pid_pre             = os.getpid()
         _total_ticks_pre     = read_total_cpu_ticks()
         _pid_ticks_pre       = read_process_cpu_ticks(_pid_pre)
@@ -781,6 +794,7 @@ class ExperimentHarness:
         # rapl_after_task captured AFTER stop_measurement() so MAX(pkg_end_uj)
         # from energy_samples cannot overshoot this anchor.
         _rapl_after_task     = self.energy_engine.rapl.read_energy()
+        _gpu_after_task      = ReaderFactory.get_gpu_energy_uj(self.energy_engine.rapl)
         run_end_dt           = datetime.now()   # t2: human-readable (post-framework)
         run_end_perf         = time.perf_counter()
         _total_ticks_t2      = read_total_cpu_ticks()
@@ -1030,6 +1044,8 @@ class ExperimentHarness:
                 "post_task_duration_sec":  post_task_duration_sec,
                 "rapl_before_pretask":     _rapl_before_pretask,   # Dict or None
                 "rapl_after_task":         _rapl_after_task,        # Dict or None
+                "gpu_before_pretask":      _gpu_before_pretask,    # µJ or None
+                "gpu_after_task":          _gpu_after_task,         # µJ or None
                 "cpu_frac_pre":            compute_cpu_fraction(
                     _pid_ticks_start - _pid_ticks_pre,
                     _total_ticks_start - _total_ticks_pre,
@@ -1054,6 +1070,11 @@ class ExperimentHarness:
                 "baseline_energy_uj":    derived.idle_energy_uj,
                 "avg_power_watts":       derived.workload_energy_uj / max(1, derived.duration_seconds) / 1_000_000,
                 "orchestration_tax_uj": derived.orchestration_tax_uj,
+                # GPU PP1 energy — None on non-Tiger-Lake platforms
+                "gpu_total_energy_uj":    derived.gpu_total_energy_uj,
+                "gpu_baseline_energy_uj": derived.gpu_baseline_energy_uj,
+                "gpu_dynamic_energy_uj":  derived.gpu_dynamic_energy_uj,
+                "gpu_pct_of_pkg":         derived.gpu_pct_of_pkg,                
                 "cycles": derived.cycles,
                 "ipc": derived.ipc,
                 "cache_misses": derived.cache_misses,
@@ -1206,6 +1227,7 @@ class ExperimentHarness:
                 "duration_ms": derived.duration_seconds * 1000,
             },
             "energy_samples": energy_samples,
+            "gpu_samples":    list(self.energy_engine.last_gpu_samples),
             "cpu_samples": cpu_samples,
             "interrupt_samples": interrupt_samples,
             "io_samples":        io_samples,
@@ -1235,6 +1257,7 @@ class ExperimentHarness:
         # ====================================================================
         if hasattr(self.energy_engine, "last_samples"):
             result["energy_samples"] = list(self.energy_engine.last_samples)
+            result["gpu_samples"]    = list(self.energy_engine.last_gpu_samples)
             dprint(
                 f"📊 Added {len(self.energy_engine.last_samples)} energy samples to result"
             )

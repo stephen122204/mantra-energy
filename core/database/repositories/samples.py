@@ -95,8 +95,10 @@ class SamplesRepository:
                 dram_start_uj,   dram_end_uj,
                 uncore_start_uj, uncore_end_uj,
                 pkg_energy_uj,   core_energy_uj,
-                uncore_energy_uj, dram_energy_uj
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                uncore_energy_uj, dram_energy_uj,
+                gpu_start_uj,    gpu_end_uj,
+                gpu_energy_uj
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         for s in samples:
@@ -120,8 +122,71 @@ class SamplesRepository:
                     s.get("core_energy_uj"),
                     s.get("uncore_energy_uj"),
                     s.get("dram_energy_uj"),
+                    s.get("gpu_start_uj"),         # MSR 0x641 at sample start
+                    s.get("gpu_end_uj"),            # MSR 0x641 at sample end
+                    s.get("gpu_energy_uj"),         # delta * 61.0352 µJ
                 ),
             )
+
+    # =========================================================================
+    # GPU SAMPLES — per-sample energy from GPUCollector (Chunk 15-A)
+    # =========================================================================
+    def insert_gpu_samples(self, run_id: int, samples) -> None:
+        """
+        Bulk INSERT gpu_samples for a completed run.
+        samples: List[GpuSample] from GPUCollector.stop().
+        Mirrors insert_energy_samples pattern exactly.
+        GPUCollector is instantiated fresh per run so no dedup guard needed.
+ 
+        Args:
+            run_id:  Foreign key to runs table.
+            samples: List of GpuSample objects from GPUCollector.stop().
+        """
+        if not samples:
+            return
+        query = """
+            INSERT INTO gpu_samples (
+                run_id,
+                gpu_index,
+                sample_start_ns,
+                sample_end_ns,
+                interval_ns,
+                energy_start_uj,
+                energy_end_uj,
+                energy_uj,
+                power_mw,
+                util_gpu_pct,
+                util_mem_pct,
+                sm_clock_mhz,
+                mem_clock_mhz,
+                mem_used_mb,
+                temperature_c,
+                source
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """
+        rows = [
+            (
+                run_id,
+                s.gpu_index,
+                s.sample_start_ns,
+                s.sample_end_ns,
+                s.interval_ns,
+                s.energy_start_uj,
+                s.energy_end_uj,
+                s.energy_uj,
+                s.power_mw,
+                s.util_gpu_pct,
+                s.util_mem_pct,
+                s.sm_clock_mhz,
+                s.mem_clock_mhz,
+                s.mem_used_mb,
+                s.temperature_c,
+                s.source,
+            )
+            for s in samples
+        ]
+        self.db.conn.executemany(query, rows)
+        print("insert_gpu_samples: %d rows for run_id=%d", len(rows), run_id)
 
     # =========================================================================
     # CPU SAMPLES — turbostat telemetry

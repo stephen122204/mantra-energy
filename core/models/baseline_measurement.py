@@ -136,14 +136,19 @@ class BaselineMeasurement:
         # Uncore derived from package - core
         # This assumes uncore power is the remainder after core
         min_uncore = max(0, min_pkg - min_core)
-
-        return {"package-0": min_pkg, "core": min_core, "uncore": min_uncore}
+        # GPU baseline: use mean - 2*std same as pkg/core
+        gpu = self.power_watts.get("gpu", 0)
+        gpu_std = self.std_dev_watts.get("gpu", 0)
+        min_gpu = max(0, gpu - 2 * gpu_std)
+        return {"package-0": min_pkg, "core": min_core, "uncore": min_uncore, "gpu": min_gpu}
 
     def min_energy_uj(self, duration_seconds: float) -> Dict[str, int]:
         """Convert minimum observed baseline watts into µJ for duration."""
         pw = self.min_power_watts
         return {
             "package-0": int(pw["package-0"] * duration_seconds * 1_000_000),
-            "core": int(pw["core"] * duration_seconds * 1_000_000),
-            "uncore": int(pw["uncore"] * duration_seconds * 1_000_000),
+            "core":      int(pw["core"]      * duration_seconds * 1_000_000),
+            "uncore":    int(pw["uncore"]    * duration_seconds * 1_000_000),
+            # GPU baseline from MSR 0x641 idle rate — zero if not measured
+            "gpu":       int(pw.get("gpu", 0) * duration_seconds * 1_000_000),
         }

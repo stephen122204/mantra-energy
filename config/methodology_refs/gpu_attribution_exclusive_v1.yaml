@@ -1,0 +1,12 @@
+method_id: gpu_attribution_exclusive_v1
+references:
+  - title: "Running Average Power Limit (RAPL) Energy Attribution for Workload Characterization"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: "Defines dynamic energy attribution as total energy minus idle baseline energy. Exclusive workload attribution assumes single-process GPU use, yielding gpu_dynamic = gpu_total - gpu_baseline with confidence 1.0."
+  - title: "A-LEMS: Agentic LLM Energy Measurement System — GPU Energy Attribution Model"
+    authors: "Panigrahy, D. and Tyagi, A."
+    year: 2026
+    ref_type: "internal"
+    relevance: "Defines B-decision: gpu_dynamic_energy_uj is the canonical attributed GPU energy metric. gpu_attribution_method='exclusive' applies to all single-process A-LEMS experiments. D6 invariant: gpu_total = gpu_dynamic + gpu_baseline holds exactly by construction."

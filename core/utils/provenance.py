@@ -412,7 +412,26 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     # goal_attempt retry columns — migration 032
     "ga.retry_of_attempt_id": ("retry_policy_v1",          "SYSTEM"),
     "ga.failure_type":        ("failure_classification_v1", "SYSTEM"),
-    "ga.is_retry":            ("retry_policy_v1",          "SYSTEM"),    
+    "ga.is_retry":            ("retry_policy_v1",          "SYSTEM"),
+    # GPU PP1 energy columns — runs table
+    "gpu_total_energy_uj":    ("gpu_rapl_pp1_v1",          "MEASURED"),
+    "gpu_baseline_energy_uj": ("gpu_dynamic_baseline_v1",  "CALCULATED"),
+    "gpu_dynamic_energy_uj":  ("gpu_dynamic_baseline_v1",  "CALCULATED"),
+    "gpu_pct_of_pkg":         ("gpu_dynamic_baseline_v1",  "CALCULATED"),
+    # Chunk 15-A: gpu_samples table columns
+    "gpu_samples.energy_uj":          ("gpu_rapl_pp1_v1",             "MEASURED"),
+    "gpu_samples.source":             ("gpu_rapl_pp1_v1",             "MEASURED"),
+    # Chunk 15-A: runs new columns
+    "gpu_attribution_method":         ("gpu_attribution_exclusive_v1", "CALCULATED"),
+    "gpu_count":                      ("gpu_baseline_2sigma_v1",       "MEASURED"),
+    # Chunk 15-A: energy_attribution GPU AXIS 2A (populated by 15-C ETL)
+    "gpu_llm_compute_energy_uj":      ("gpu_attribution_exclusive_v1", "CALCULATED"),
+    "gpu_orchestration_energy_uj":    ("gpu_attribution_exclusive_v1", "CALCULATED"),
+    # Chunk 15-A: energy_attribution GPU AXIS 2B (populated by 15-C ETL)
+    "gpu_phase_planning_uj":          ("gpu_phase_alignment_v1",       "INFERRED"),
+    "gpu_phase_execution_uj":         ("gpu_phase_alignment_v1",       "INFERRED"),
+    "gpu_phase_synthesis_uj":         ("gpu_phase_alignment_v1",       "INFERRED"),
+    "gpu_phase_inter_uj":             ("gpu_phase_alignment_v1",       "INFERRED"),    
 }
 
 
@@ -478,7 +497,13 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "failure_classification_v1":       0.85,  # string-based exception matching
     "failure_injection_v1":            1.0,   # deterministic arithmetic, no measurement uncertainty 
     "failure_injection_v2":            1.0,   # SHA-256 stable seeding — no measurement uncertainty
-    "tool_instrumentation_v1":          1.0,             
+    "tool_instrumentation_v1":          1.0,
+    "gpu_rapl_pp1_v1":                  0.95,  # MSR 0x641, cross-validated vs perf PMU
+    "gpu_dynamic_baseline_v1":          0.90,  # baseline subtraction, same as cpu dynamic
+    # Chunk 15-A new methods
+    "gpu_attribution_exclusive_v1":     1.00,  # exclusive workload use, exact attribution
+    "gpu_baseline_2sigma_v1":           1.00,  # 2-sigma idle baseline, same as CPU method
+    "gpu_phase_alignment_v1":           0.70,  # proxy: CPU phase fractions applied to GPU    
 }
 
 

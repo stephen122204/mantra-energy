@@ -111,6 +111,19 @@ class EnergyAnalyzer:
         # Orchestration tax = uncore - min uncore baseline
         tax_uj = max(0, uncore_uj - idle_uncore_uj)
 
+        # GPU PP1 energy — from raw measurement, baseline-subtracted
+        # gpu_total_uj is None on platforms without MSR 0x641
+        gpu_total_uj    = getattr(raw, "gpu_total_uj", None)
+        gpu_baseline_uj = min_energy.get("gpu", 0) if baseline else 0
+        gpu_dynamic_uj  = (
+            max(0, gpu_total_uj - gpu_baseline_uj)
+            if gpu_total_uj is not None else None
+        )
+        gpu_pct = (
+            round(gpu_dynamic_uj / max(1, workload_uj) * 100, 2)
+            if gpu_dynamic_uj is not None and workload_uj > 0 else None
+        )
+
         # ====================================================================
         # Step 4: Get performance counters - handle both dict and object
         # ====================================================================
@@ -402,6 +415,10 @@ class EnergyAnalyzer:
             thermal_during_experiment=thermal_during_experiment,
             thermal_now_active=thermal_now_active,
             thermal_since_boot=thermal_since_boot,
+            gpu_total_energy_uj=gpu_total_uj,
+            gpu_baseline_energy_uj=gpu_baseline_uj if gpu_total_uj is not None else None,
+            gpu_dynamic_energy_uj=gpu_dynamic_uj,
+            gpu_pct_of_pkg=gpu_pct,
         )
     def compute_attributed_energy(
         self,

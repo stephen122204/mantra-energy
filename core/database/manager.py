@@ -161,6 +161,10 @@ class DatabaseManager:
         """Insert CPU samples."""
         self.samples.insert_cpu_samples(run_id, samples)
 
+    def insert_gpu_samples(self, run_id: int, samples: list) -> None:
+        """Insert GPU energy samples from GPUCollector."""
+        self.samples.insert_gpu_samples(run_id, samples)
+        
     def insert_interrupt_samples(
         self, run_id: int, samples: List[Dict[str, Any]]
     ) -> None:

@@ -89,7 +89,11 @@ class DerivedEnergyMeasurement:
     # Optional fields (with defaults) come AFTER
     baseline_id: Optional[str] = None
     dram_energy_uj: Optional[int] = None
-
+    # GPU PP1 energy fields — NULL on non-Tiger-Lake platforms
+    gpu_total_energy_uj:    Optional[int] = None  # SUM of MSR 0x641 deltas over run
+    gpu_baseline_energy_uj: Optional[int] = None  # idle GPU rate * duration
+    gpu_dynamic_energy_uj:  Optional[int] = None  # gpu_total - gpu_baseline
+    gpu_pct_of_pkg:         Optional[float] = None  # gpu_dynamic / pkg_dynamic * 100
     # ========================================================================
     # Performance Counters (Req 1.5, 1.6, 1.10)
     # ========================================================================

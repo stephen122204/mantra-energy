@@ -32,13 +32,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from .base import DatabaseError, DatabaseInterface
-from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,CREATE_RUN_QUALITY,
+from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES, CREATE_RUN_QUALITY,
+                     CREATE_GPU_SAMPLES, CREATE_GPU_CONFIG,
                      CREATE_ENVIRONMENT_CONFIG, CREATE_EVENTS_INDEXES,
                      CREATE_EXPERIMENTS, CREATE_EXPERIMENT_TYPE_TRIGGERS,CREATE_HARDWARE_CONFIG,
                      CREATE_GOAL_EXECUTION, CREATE_GOAL_ATTEMPT,CREATE_ETL_QUEUE,
                      CREATE_RETRY_POLICY, CREATE_TASK_RETRY_OVERRIDE,
                      CREATE_HALLUCINATION_EVENTS, CREATE_OUTPUT_QUALITY, CREATE_OUTPUT_QUALITY_JUDGES,
-                     CREATE_TOOL_FAILURE_EVENTS,
+                     CREATE_TOOL_FAILURE_EVENTS,CREATE_TASK_QUALITY_CONFIG,
                      CREATE_IDLE_BASELINES, CREATE_INTERRUPT_SAMPLES,
                      CREATE_LLM_INTERACTIONS, CREATE_ML_VIEW,
                      CREATE_ORCHESTRATION_ANALYSIS,
@@ -62,13 +63,16 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES,CREATE_RUN_QUALIT
                      CREATE_IO_SAMPLES,
                      CREATE_ENERGY_ATTRIBUTION,
                      CREATE_NORMALIZATION_FACTORS,
-                     CREATE_NORMALIZATION_VIEWS,
+                     CREATE_ENERGY_NORMALIZED_VIEW,
+                     CREATE_ATTRIBUTION_SUMMARY_VIEW,
                      CREATE_VIEW_GOAL_ENERGY_DECOMPOSITION,
                      CREATE_VIEW_FAILURE_ENERGY_TAXONOMY,
                      CREATE_VIEW_QUALITY_ENERGY_FRONTIER,
                      CREATE_VIEW_FRACTION_VERIFICATION,
                      CREATE_VIEW_OUTCOME_EFFICIENCY,
                      CREATE_SCHEMA_VERSION,
+                     CREATE_ENERGY_NORMALIZED_VIEW, 
+                     CREATE_ATTRIBUTION_SUMMARY_VIEW,
 
                      )
 
@@ -270,7 +274,8 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_TOOL_FAILURE_EVENTS)        
         self.conn.executescript(CREATE_HALLUCINATION_EVENTS)
         self.conn.executescript(CREATE_OUTPUT_QUALITY)
-        self.conn.executescript(CREATE_OUTPUT_QUALITY_JUDGES)                
+        self.conn.executescript(CREATE_OUTPUT_QUALITY_JUDGES) 
+        self.conn.executescript(CREATE_TASK_QUALITY_CONFIG)               
         self.conn.execute(CREATE_HARDWARE_CONFIG)
         self.conn.execute(CREATE_IDLE_BASELINES)
         self.conn.execute(CREATE_RUNS)
@@ -281,6 +286,8 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_TAX_INDEXES)
         self.conn.executescript(CREATE_ENERGY_SAMPLES)
         self.conn.executescript(CREATE_CPU_SAMPLES)
+        self.conn.executescript(CREATE_GPU_SAMPLES)
+        self.conn.executescript(CREATE_GPU_CONFIG)
         self.conn.executescript(CREATE_INTERRUPT_SAMPLES)
         self.conn.executescript(TASK_CATEGORIES_SCHEMA)
         self.conn.executescript(THERMAL_SAMPLES_SCHEMA)
@@ -306,7 +313,8 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_IO_SAMPLES)
         self.conn.executescript(CREATE_ENERGY_ATTRIBUTION)
         self.conn.executescript(CREATE_NORMALIZATION_FACTORS)
-        self.conn.executescript(CREATE_NORMALIZATION_VIEWS) 
+        self.conn.executescript(CREATE_ENERGY_NORMALIZED_VIEW) 
+        self.conn.executescript(CREATE_ATTRIBUTION_SUMMARY_VIEW)
         self.conn.executescript(CREATE_RUN_QUALITY)  
         self.conn.executescript(CREATE_VIEW_GOAL_ENERGY_DECOMPOSITION)
         self.conn.executescript(CREATE_VIEW_FAILURE_ENERGY_TAXONOMY)
@@ -646,8 +654,9 @@ class SQLiteAdapter(DatabaseInterface):
             (baseline_id, timestamp, package_power_watts, core_power_watts,
              uncore_power_watts, dram_power_watts, duration_seconds, sample_count,
              package_std, core_std, uncore_std, dram_std,
-             governor, turbo, background_cpu, process_count, method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             governor, turbo, background_cpu, process_count, method,
+             gpu_power_watts, gpu_std)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 baseline_id,
@@ -667,6 +676,9 @@ class SQLiteAdapter(DatabaseInterface):
                 metadata.get("background_cpu"),
                 metadata.get("processes"),
                 baseline_data.get("method", "idle_measurement"),
+                # GPU idle power — None on non-Tiger-Lake platforms
+                power.get("gpu"),
+                std_dev.get("gpu"),
             ),
         )
 

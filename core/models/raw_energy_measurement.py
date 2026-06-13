@@ -77,6 +77,9 @@ class RawEnergyMeasurement:
     thermal_since_boot: Optional[int] = (
         None  # 1 if system has ever throttled since boot
     )
+    # GPU PP1 energy via MSR 0x641 (Intel Tiger Lake only)
+    # Populated by EnergyEngine.stop_measurement() on UBUNTU2505, None elsewhere
+    gpu_total_uj: Optional[int] = None  # raw MSR delta * 61.0352 µJ over full run
     # Sampling data
     samples: List[tuple] = field(default_factory=list)
     io_samples:        list        = field(default_factory=list)  # Chunk 12

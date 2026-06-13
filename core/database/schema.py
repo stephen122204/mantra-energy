@@ -199,6 +199,8 @@ CREATE TABLE IF NOT EXISTS goal_attempt (
     finished_at             TIMESTAMP,
     updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- GPU PP1 energy for this attempt — NULL on non-Tiger-Lake platforms
+    gpu_energy_uj           INTEGER,  -- gpu_dynamic_energy_uj from runs for this attempt
     UNIQUE(goal_id, attempt_number),
     FOREIGN KEY (goal_id) REFERENCES goal_execution(goal_id),
     FOREIGN KEY (run_id)  REFERENCES runs(run_id)
@@ -377,6 +379,28 @@ CREATE INDEX IF NOT EXISTS idx_oqj_quality ON output_quality_judges(quality_id);
 CREATE INDEX IF NOT EXISTS idx_oqj_attempt ON output_quality_judges(attempt_id);
 CREATE INDEX IF NOT EXISTS idx_oqj_goal    ON output_quality_judges(goal_id);
 """
+# ========================================================================
+# Table: task_quality_config
+# Category-level quality judge configuration.
+# One row per task_category — works uniformly for EpG, mEpG, qEpG tasks.
+# Seeded by scripts/seed_quality_config.py after migration 042.
+# FK: task_category → task_categories.task_id
+# ========================================================================
+CREATE_TASK_QUALITY_CONFIG = """
+CREATE TABLE IF NOT EXISTS task_quality_config (
+    config_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_category   TEXT NOT NULL UNIQUE,
+    metric_type     TEXT NOT NULL CHECK(metric_type IN ('binary','scalar','pairwise','testsuite')),
+    judge_method    TEXT NOT NULL CHECK(judge_method IN ('exact_match','semantic_similarity','llm_judge','unit_test')),
+    threshold       REAL NOT NULL DEFAULT 0.80,
+    dual_judge      INTEGER NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_category) REFERENCES task_categories(task_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tqc_category ON task_quality_config(task_category);
+CREATE INDEX IF NOT EXISTS idx_tqc_method   ON task_quality_config(judge_method);
+"""
+
 # ── NEW CONSTANT — paste after CREATE_GOAL_ATTEMPT block ─────────────────────
 # Table 2h:etl_queue
 # Table-backed queue for decoupled ETL execution.
@@ -457,9 +481,65 @@ CREATE TABLE IF NOT EXISTS idle_baselines (
     turbo TEXT,
     background_cpu REAL,
     process_count INTEGER,
-    method TEXT
+    method TEXT,
+    -- GPU PP1 idle power via MSR 0x641 — NULL on non-Tiger-Lake platforms
+    gpu_power_watts REAL,   -- mean GPU idle power in Watts
+    gpu_std         REAL    -- std dev of GPU idle power samples
 );
 """
+
+CREATE_GPU_SAMPLES = """
+CREATE TABLE IF NOT EXISTS gpu_samples (
+    sample_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id           INTEGER NOT NULL REFERENCES runs(run_id),
+    gpu_index        INTEGER NOT NULL DEFAULT 0,
+    sample_start_ns  BIGINT NOT NULL,
+    sample_end_ns    BIGINT NOT NULL,
+    interval_ns      BIGINT NOT NULL,
+    energy_start_uj  BIGINT,
+    energy_end_uj    BIGINT,
+    energy_uj        BIGINT,
+    power_mw         INTEGER,
+    util_gpu_pct     REAL,
+    util_mem_pct     REAL,
+    sm_clock_mhz     INTEGER,
+    mem_clock_mhz    INTEGER,
+    mem_used_mb      INTEGER,
+    temperature_c    INTEGER,
+    source           TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_samples_run
+    ON gpu_samples(run_id);
+CREATE INDEX IF NOT EXISTS idx_gpu_samples_time
+    ON gpu_samples(run_id, sample_start_ns);
+"""
+ 
+# ============================================================
+# CREATE_GPU_CONFIG constant
+# ============================================================
+ 
+CREATE_GPU_CONFIG = """
+CREATE TABLE IF NOT EXISTS gpu_config (
+    gpu_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    gpu_index         INTEGER NOT NULL DEFAULT 0,
+    vendor            TEXT NOT NULL,
+    model             TEXT NOT NULL,
+    driver_version    TEXT,
+    cuda_version      TEXT,
+    rocm_version      TEXT,
+    vbios_version     TEXT,
+    pci_id            TEXT,
+    memory_total_mb   INTEGER,
+    energy_supported  INTEGER NOT NULL DEFAULT 0,
+    backend           TEXT,
+    gpu_hash          TEXT NOT NULL,
+    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(gpu_index, gpu_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_config_vendor
+    ON gpu_config(vendor);
+"""
+ 
 
 # ========================================================================
 # Table 4: runs (core table with 70+ columns)
@@ -638,6 +718,13 @@ CREATE TABLE IF NOT EXISTS runs (
 
     -- ── Framework overhead summary ────────────────────────────────────────────
     framework_overhead_energy_uj  INTEGER,  -- pre + post energy (diagnostic only)
+    -- GPU PP1 energy via MSR 0x641 (Intel Iris Xe, Tiger Lake) — ETL populated
+    gpu_total_energy_uj           INTEGER,  -- SUM(gpu_energy_uj) over all energy_samples for run
+    gpu_baseline_energy_uj        INTEGER,  -- baseline_rate_gpu_uj_per_ns * run_duration_ns
+    gpu_dynamic_energy_uj         INTEGER,  -- gpu_total_energy_uj - gpu_baseline_energy_uj
+    gpu_pct_of_pkg                REAL,     -- gpu_dynamic_energy_uj / dynamic_energy_uj * 100
+    gpu_attribution_method        TEXT,     -- ETL populated: exclusive|utilization|none (15-C)
+    gpu_count                     INTEGER DEFAULT 0,  -- GPUs detected at run time    
    
 
     FOREIGN KEY(exp_id) REFERENCES experiments(exp_id),
@@ -758,6 +845,9 @@ CREATE TABLE IF NOT EXISTS energy_samples (
     sample_start_ns  INTEGER,   -- epoch ns at sample start (explicit)
     sample_end_ns    INTEGER,   -- epoch ns at sample end (= timestamp_ns)
     interval_ns      INTEGER,   -- exact elapsed ns between start and end reads
+    gpu_start_uj     INTEGER,   -- MSR 0x641 counter at sample start, NULL if unavailable
+    gpu_end_uj       INTEGER,   -- MSR 0x641 counter at sample end, NULL if unavailable
+    gpu_energy_uj    INTEGER,   -- (gpu_end - gpu_start) * 61.0352 µJ, ETL populated
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_energy_run_time ON energy_samples(run_id, timestamp_ns);
@@ -1368,6 +1458,16 @@ CREATE TABLE IF NOT EXISTS energy_attribution (
     tpot_ms                         REAL DEFAULT NULL,    
     created_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     -- GPU AXIS 2A: functional projection (ETL populated by 15-C)
+     -- D7 invariant: gpu_dynamic = gpu_llm_compute + gpu_orchestration (exact)
+    gpu_llm_compute_energy_uj     BIGINT,
+    gpu_orchestration_energy_uj   BIGINT,
+     -- GPU AXIS 2B: phase projection (ETL populated by 15-C)
+     -- D8 invariant: gpu_dynamic = sum of phase columns (exact)
+    gpu_phase_planning_uj         BIGINT,
+    gpu_phase_execution_uj        BIGINT,
+    gpu_phase_synthesis_uj        BIGINT,
+    gpu_phase_inter_uj            BIGINT,   
     FOREIGN KEY (run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_energy_attribution_run
@@ -1422,6 +1522,8 @@ CREATE TABLE IF NOT EXISTS run_quality (
     rejection_reason    TEXT,
     quality_version     INTEGER NOT NULL,
     computed_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    gpu_valid            INTEGER DEFAULT 1,   -- 0 if GPU measurement invalid
+    gpu_rejection_reason TEXT,                 -- reason if gpu_valid=0
     FOREIGN KEY (run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_run_quality_run_id ON run_quality(run_id);
@@ -1431,7 +1533,7 @@ CREATE INDEX IF NOT EXISTS idx_run_quality_valid  ON run_quality(experiment_vali
 # Chunk 6: Normalisation Views
 # =============================================================================
  
-CREATE_NORMALIZATION_VIEWS = """
+CREATE_ENERGY_NORMALIZED_VIEW = """
 CREATE VIEW IF NOT EXISTS v_energy_normalized AS
 SELECT
     a.run_id,
@@ -1463,31 +1565,52 @@ LEFT JOIN (
            SUM(completion_tokens) AS completion_tokens
     FROM llm_interactions GROUP BY run_id
 ) l ON a.run_id = l.run_id;
- 
+"""
+
+CREATE_ATTRIBUTION_SUMMARY_VIEW = """
 CREATE VIEW IF NOT EXISTS v_attribution_summary AS
 SELECT
     a.run_id,
     r.workflow_type,
-    a.pkg_energy_uj          / 1e6  AS total_j,
-    a.core_energy_uj         / 1e6  AS compute_j,
-    a.dram_energy_uj         / 1e6  AS memory_j,
-    a.background_energy_uj   / 1e6  AS background_j,
-    a.network_wait_energy_uj / 1e6  AS network_j,
-    a.io_wait_energy_uj      / 1e6  AS io_j,
-    a.orchestration_energy_uj/ 1e6  AS orchestration_j,
-    a.planning_energy_uj     / 1e6  AS planning_j,
-    a.execution_energy_uj    / 1e6  AS execution_j,
-    a.synthesis_energy_uj    / 1e6  AS synthesis_j,
-    a.llm_compute_energy_uj  / 1e6  AS llm_compute_j,
-    a.thermal_penalty_energy_uj / 1e6 AS thermal_penalty_j,
-    a.unattributed_energy_uj / 1e6  AS unattributed_j,
-    ROUND(a.core_energy_uj          * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS compute_pct,
-    ROUND(a.dram_energy_uj          * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS memory_pct,
-    ROUND(a.background_energy_uj    * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS background_pct,
-    ROUND(a.orchestration_energy_uj * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS orchestration_pct,
-    ROUND(a.llm_compute_energy_uj   * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS application_pct,
-    ROUND(a.unattributed_energy_uj  * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS unattributed_pct,
+    -- Absolute Joules
+    a.pkg_energy_uj           / 1e6  AS pkg_j,
+    r.baseline_energy_uj      / 1e6  AS baseline_j,
+    r.dynamic_energy_uj       / 1e6  AS dynamic_j,
+    a.background_energy_uj    / 1e6  AS background_j,
+    r.attributed_energy_uj    / 1e6  AS attributed_j,
+    a.orchestration_energy_uj / 1e6  AS orchestration_j,
+    a.llm_wait_energy_uj      / 1e6  AS llm_wait_j,
+    a.llm_compute_energy_uj   / 1e6  AS llm_compute_j,
+    a.planning_energy_uj      / 1e6  AS planning_j,
+    a.execution_energy_uj     / 1e6  AS execution_j,
+    a.synthesis_energy_uj     / 1e6  AS synthesis_j,
+    a.inter_phase_energy_uj   / 1e6  AS inter_phase_j,
+    a.thermal_penalty_energy_uj / 1e6 AS thermal_j,
+    a.unattributed_energy_uj  / 1e6  AS unattributed_j,
+    -- L1: pkg decomposition (denominator = pkg)
+    ROUND(r.baseline_energy_uj     * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS baseline_pct_of_pkg,
+    ROUND(r.dynamic_energy_uj      * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS dynamic_pct_of_pkg,
+    ROUND(a.unattributed_energy_uj * 100.0 / NULLIF(a.pkg_energy_uj, 0), 2) AS unattributed_pct_of_pkg,
+    -- L2: dynamic decomposition (denominator = dynamic)
+    ROUND(a.background_energy_uj   * 100.0 / NULLIF(r.dynamic_energy_uj, 0), 2) AS background_pct_of_dynamic,
+    ROUND(r.attributed_energy_uj   * 100.0 / NULLIF(r.dynamic_energy_uj, 0), 2) AS attributed_pct_of_dynamic,
+    -- L3: attributed decomposition (denominator = attributed) — broad metrics
+    ROUND(a.orchestration_energy_uj * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS orchestration_pct,
+    ROUND(a.llm_wait_energy_uj      * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS llm_wait_pct,
+    ROUND(a.llm_compute_energy_uj   * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS llm_compute_pct,
+    ROUND(a.inter_phase_energy_uj   * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS inter_phase_pct,
+    -- D1: conservation-bounded functional partition (sums to 100% of attributed)
+    ROUND(a.llm_compute_energy_uj   * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS d1_llm_pct,
+    ROUND(a.orchestration_energy_uj * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS d1_orch_pct,
+    -- D2: conservation-bounded phase partition (sums to ~100% of attributed)
+    ROUND(a.planning_energy_uj      * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS d2_plan_pct,
+    ROUND(a.execution_energy_uj     * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS d2_exec_pct,
+    ROUND(a.synthesis_energy_uj     * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS d2_syn_pct,
+    ROUND(a.inter_phase_energy_uj   * 100.0 / NULLIF(r.attributed_energy_uj, 0), 2) AS d2_inter_pct,
+    -- Coverage
     a.attribution_coverage_pct,
+    r.phase_sample_coverage_pct,
+    a.attribution_method,
     a.attribution_model_version
 FROM energy_attribution a
 JOIN runs r ON a.run_id = r.run_id;

@@ -237,6 +237,7 @@ class ExperimentRunner:
                     num_samples=samples,
                     pre_wait_seconds=pre_wait,
                     force_remeasure=force_remeasure,
+                    measure_gpu=baseline_config.get("measure_gpu", True),
                 )
                 
                 # Insert to DB (only once, when measured)
@@ -731,6 +732,9 @@ class ExperimentRunner:
                         })
                 if converted:
                     db.insert_energy_samples(linear_id, converted)
+            # GPU samples — empty list if NoneBackend, safe to call always
+            if "gpu_samples" in linear_result and linear_result["gpu_samples"]:
+                db.insert_gpu_samples(linear_id, linear_result["gpu_samples"])
 
             # Linear CPU samples
             if "cpu_samples" in linear_result:
@@ -790,6 +794,9 @@ class ExperimentRunner:
                         })
                 if converted:
                     db.insert_energy_samples(agentic_id, converted)
+            # GPU samples — empty list if NoneBackend, safe to call always
+            if "gpu_samples" in agentic_result and agentic_result["gpu_samples"]:
+                db.insert_gpu_samples(agentic_id, agentic_result["gpu_samples"])
 
             # Agentic CPU samples
             if "cpu_samples" in agentic_result:
@@ -886,6 +893,9 @@ class ExperimentRunner:
             agentic_orchestration_uj = agentic_result["layer3_derived"][
                 "energy_uj"
             ].get("orchestration_tax", 0)
+            # GPU PP1 energy per workflow side — None on non-Tiger-Lake
+            linear_gpu_uj  = linear_result["ml_features"].get("gpu_dynamic_energy_uj")
+            agentic_gpu_uj = agentic_result["ml_features"].get("gpu_dynamic_energy_uj")            
             print(
                 f"🔍 DEBUG - linear energy_uj keys: {linear_result['layer3_derived']['energy_uj'].keys()}"
             )
@@ -966,6 +976,7 @@ class ExperimentRunner:
             energy_uj=linear_uj,
             orchestration_uj=linear_orchestration_uj,
             compute_uj=0,
+            gpu_energy_uj=linear_gpu_uj,
         )
         agentic_goal_id = self._record_goal_pair(
             db=db,
@@ -979,6 +990,7 @@ class ExperimentRunner:
             energy_uj=agentic_uj,
             orchestration_uj=agentic_orchestration_uj,
             compute_uj=0,
+            gpu_energy_uj=agentic_gpu_uj,
         )
         # ETL runs sync — after both goals recorded so normalization_factors
         # sees the full picture for this experiment repetition.
@@ -1013,6 +1025,7 @@ class ExperimentRunner:
         energy_uj: int,
         orchestration_uj: int,
         compute_uj: int,
+        gpu_energy_uj: int = None,
     ) -> int:
         """
         Create one goal_execution + one goal_attempt for a completed single-attempt run.
@@ -1080,6 +1093,7 @@ class ExperimentRunner:
             orchestration_uj=orchestration_uj,
             compute_uj=compute_uj,
             failure_type=failure_type,
+            gpu_energy_uj=gpu_energy_uj,
         )
  
         success = (outcome == "success")
@@ -1167,6 +1181,9 @@ class ExperimentRunner:
                             })
                     if converted:
                         db.insert_energy_samples(run_id, converted)
+            # GPU samples — empty list if NoneBackend, safe to call always
+            if "gpu_samples" in result and result["gpu_samples"]:
+                db.insert_gpu_samples(run_id, result["gpu_samples"])
 
                 if "cpu_samples" in result:
                     db.insert_cpu_samples(run_id, result["cpu_samples"])
@@ -1202,6 +1219,8 @@ class ExperimentRunner:
                 orchestration_uj = result["layer3_derived"]["energy_uj"].get(
                     "orchestration_tax", 0
                 )
+                # GPU PP1 energy for this run — None on non-Tiger-Lake
+                _gpu_uj = result.get("ml_features", {}).get("gpu_dynamic_energy_uj")
 
             logger.info("save_single: run_id=%d workflow=%s rep=%d", run_id, workflow_type, rep_num)
 
@@ -1239,6 +1258,7 @@ class ExperimentRunner:
                 energy_uj=energy_uj,
                 orchestration_uj=orchestration_uj,
                 compute_uj=0,
+                gpu_energy_uj=_gpu_uj,
             )
 
             if goal_id is not None:

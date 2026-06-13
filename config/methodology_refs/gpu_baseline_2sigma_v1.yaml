@@ -1,0 +1,12 @@
+method_id: gpu_baseline_2sigma_v1
+references:
+  - title: "Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3B — MSR_PP1_ENERGY_STATUS"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: "MSR 0x641 accumulates GPU energy continuously including during idle periods. Idle baseline measured at 10 Hz via GPUCollector during pre-experiment idle period. Idle GPU on i7-1165G7 Iris Xe measures approximately 50 mW (0.10 J over 2 seconds), physically consistent with integrated GPU idle power."
+  - title: "A-LEMS: Agentic LLM Energy Measurement System — Baseline Methodology"
+    authors: "Panigrahy, D. and Tyagi, A."
+    year: 2026
+    ref_type: "internal"
+    relevance: "GPU baseline uses identical 2-sigma methodology as CPU baseline (cpu_baseline_2sigma_v1). gpu_baseline_energy_uj = gpu_power_watts * run_duration_ns / 1e9. Stored in idle_baselines.gpu_power_watts and idle_baselines.gpu_std. Confidence 1.0 matches CPU baseline confidence."

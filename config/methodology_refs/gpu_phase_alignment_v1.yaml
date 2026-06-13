@@ -1,0 +1,17 @@
+method_id: gpu_phase_alignment_v1
+references:
+  - title: "Phase-Level Energy Attribution in Multi-Stage AI Workloads"
+    authors: "Panigrahy, D. and Tyagi, A."
+    year: 2026
+    ref_type: "internal"
+    relevance: "GPU phase energy is estimated by applying CPU orchestration_events phase fractions to gpu_dynamic_energy_uj. This proxy method assumes GPU activity is temporally correlated with CPU phase structure — valid for LLM inference workloads where GPU compute is driven by the same LLM call sequence as CPU orchestration. Confidence 0.70 reflects that GPU phase boundaries are inferred, not directly observed."
+  - title: "Energy Proportionality and Workload Characterization"
+    authors: "Barroso, L. A. and Holzle, U."
+    year: 2007
+    ref_type: "paper"
+    relevance: "Establishes theoretical basis for proportional energy attribution across compute domains sharing the same workload timeline. Supports proxy approach when domain-specific phase signals are unavailable."
+  - title: "A-LEMS: Agentic LLM Energy Measurement System — Conservation Invariants"
+    authors: "Panigrahy, D. and Tyagi, A."
+    year: 2026
+    ref_type: "internal"
+    relevance: "D8 invariant: gpu_dynamic = planning + execution + synthesis + inter. Exact by construction — remainder assigned to inter_uj ensures zero deviation. GPUCollector at 10 Hz provides temporal resolution sufficient for phase alignment with orchestration_events phase boundaries."

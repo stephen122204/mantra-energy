@@ -29,6 +29,7 @@ Author: Deepak Panigrahy
 import logging
 import os
 import time
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from core.utils.formula import formula
@@ -41,6 +42,11 @@ logger = logging.getLogger(__name__)
 # RAPL READER CLASS
 # ============================================================================
 
+# GPU PP1 MSR address and energy unit (Tiger Lake, i7-1165G7)
+# MSR_PP1_ENERGY_STATUS — Iris Xe GPU energy accumulator
+GPU_PP1_MSR      = "0x641"
+# Energy unit from MSR 0x606 bits[12:8]=14 → 0.5^14 J = 61.0352 µJ per LSB
+GPU_ENERGY_UNIT_UJ = 61.0352
 
 class RAPLReader:
     """
@@ -145,7 +151,70 @@ class RAPLReader:
 
         # Initialize last readings for wrap-around detection
         self.last_readings = {}
+        # Detect GPU MSR availability once at init — avoid per-sample overhead
+        self.gpu_pp1_available = self._detect_gpu_pp1()
+        if self.gpu_pp1_available:
+            logger.info("GPU PP1 MSR 0x641 available — gpu columns will be populated")
+        else:
+            logger.info("GPU PP1 MSR 0x641 not readable — gpu columns will be NULL")        
 
+    def _detect_gpu_pp1(self) -> bool:
+        """
+        Check if MSR 0x641 (GPU PP1 energy) is readable via msr_read binary.
+        Called once at init. Never raises — returns False on any error.
+        Returns:
+            True if GPU PP1 MSR is readable, False otherwise.
+        """
+        try:
+            msr_bin = self._find_msr_binary()
+            if not msr_bin:
+                return False
+            result = subprocess.run(
+                [msr_bin, "0", GPU_PP1_MSR],
+                capture_output=True, text=True, timeout=1
+            )
+            return result.returncode == 0 and result.stdout.strip().isdigit()
+        except Exception as e:
+            logger.debug("GPU PP1 detection failed: %s", e)
+            return False
+    def _find_msr_binary(self) -> Optional[str]:
+        """
+        Locate the msr_read binary relative to this file.
+        Returns path string if found and executable, None otherwise.
+        """
+        # msr_read lives in core/msr_helper/ relative to repo root
+        candidate = Path(__file__).parent.parent / "msr_helper" / "msr_read"
+        if candidate.exists() and os.access(str(candidate), os.X_OK):
+            return str(candidate)
+        logger.debug("msr_read binary not found at %s", candidate)
+        return None
+    def read_gpu_msr(self) -> Optional[int]:
+        """
+        Read MSR 0x641 (MSR_PP1_ENERGY_STATUS) and return value in µJ.
+        Converts raw MSR counter to µJ using GPU_ENERGY_UNIT_UJ (61.0352).
+        Returns:
+            Energy in µJ as integer, or None if unavailable/error.
+        """
+        if not self.gpu_pp1_available:
+            return None
+        try:
+            msr_bin = self._find_msr_binary()
+            if not msr_bin:
+                return None
+            result = subprocess.run(
+                [msr_bin, "0", GPU_PP1_MSR],
+                capture_output=True, text=True, timeout=1
+            )
+            if result.returncode != 0 or not result.stdout.strip().isdigit():
+                logger.warning("GPU MSR read failed: %s", result.stderr.strip())
+                return None
+            # Convert raw counter to µJ using RAPL energy unit
+            raw = int(result.stdout.strip())
+            return int(raw * GPU_ENERGY_UNIT_UJ)
+        except Exception as e:
+            logger.warning("GPU MSR read exception: %s", e)
+            return None
+        
     def _validate_path(self, path: str) -> bool:
         """
         Validate that a RAPL path exists and is readable.
