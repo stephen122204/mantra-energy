@@ -661,3 +661,11 @@ VALUES (<next_version>, datetime('now'), 'Description of change');
 Data-only migrations (INSERT/UPDATE) do NOT get a schema_version entry.
 After any DDL migration, re-run `scripts/detect_environment.py` to 
 regenerate `env_hash` with new schema_version in `environment.json`.
+
+## Rule: test_harness.py and run_experiment.py must stay in sync
+Any change to core execution flow in `core/execution/tests/test_harness.py`
+must be mirrored in `scripts/run_experiment.py` (and vice versa).
+These serve different purposes (single vs multi task) but share the same
+harness call patterns. Divergence causes silent measurement inconsistencies.
+Applies to: run_agentic(), run_linear(), tool_graph wiring, save_pair(),
+save_single(), goal_execution tracking, provider config.

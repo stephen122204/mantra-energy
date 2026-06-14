@@ -9,6 +9,10 @@ import os
 import sys
 import time
 from pathlib import Path
+# Ensure project root is in path when run as script
+_project_root = Path(__file__).parent.parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 from core.utils.preflight import preflight
 
 import requests  # Add this for IP geolocation

@@ -190,7 +190,8 @@ class GoalTracker:
         compute_uj: int,
         failure_cause: str = None,
         failure_type: str = None,
-    ) -> None:
+        gpu_energy_uj: int = None,
+         ) -> None:
         """
         UPDATE goal_attempt with terminal state, run_id, and energy snapshots.
 
@@ -237,6 +238,7 @@ class GoalTracker:
                     compute_uj       = ?,
                     failure_cause    = ?,
                     failure_type     = ?,
+                    gpu_energy_uj    = ?,
                     finished_at      = ?,
                     updated_at       = ?
                 WHERE attempt_id = ?
@@ -244,7 +246,7 @@ class GoalTracker:
             params = (
                 run_id, outcome, status, is_winning,
                 energy_uj, orchestration_uj, compute_uj,
-                failure_cause, failure_type, now, now,
+                failure_cause, failure_type, gpu_energy_uj, now, now,
                 attempt_id,
             )
         else:

@@ -253,3 +253,100 @@ ReaderFactory dispatches:
 The selected reader's `METHOD_PROVENANCE` is stored in every run's
 `measurement_methodology` rows via `reader_mode` parameter, ensuring
 full audit trail of which reader was active for each experiment.
+## GPU PP1 Energy Measurement
+
+### Method ID: `gpu_rapl_pp1_v1`
+
+**Platform:** UBUNTU2505 (Intel i7-1165G7, Tiger Lake, Iris Xe 96EU)  
+**Provenance:** MEASURED  
+**Confidence:** 0.95  
+**Layer:** silicon
+
+#### Background
+
+Intel Tiger Lake exposes GPU energy via MSR_PP1_ENERGY_STATUS (MSR 0x641). This is a
+package-level cumulative counter — no per-process GPU split is possible. Attribution
+uses baseline subtraction, identical to the CPU dynamic energy methodology.
+
+**Important:** The sysfs powercap path `intel-rapl:0/intel-rapl:0:1` is named `uncore`
+on Tiger Lake and measures the uncore domain (L3 cache, memory controller, ring bus),
+NOT the GPU. GPU energy is only accessible via MSR 0x641 directly.
+
+#### Read Mechanism
+
+GPU energy is read via the `msr_read` C binary (`core/msr_helper/msr_read.c`):
+
+```
+./msr_read 0 0x641   → raw 64-bit counter value
+```
+
+Energy unit from MSR 0x606 bits[12:8] = 14:
+
+```
+E_unit = 0.5^14 J = 61.0352 µJ per LSB
+```
+
+Formula:
+
+$$E_{gpu} = (R_{end} - R_{start}) \times 61.0352\,\mu J$$
+
+#### Cross-Validation
+
+MSR 0x641 readings were cross-validated against the Linux perf PMU event
+`power/energy-gpu/` over 5-second windows. Agreement within 7% confirms
+the MSR read is correct.
+
+#### Platform Availability
+
+| Platform | Available | Method |
+|----------|-----------|--------|
+| UBUNTU2505 (Tiger Lake) | Yes | MSR 0x641 via msr_read |
+| GN100 (ARM GB10) | No | No MSR interface |
+| macOS | No | No /dev/cpu/N/msr |
+| Other Linux x86 | Conditional | Detection via `_detect_gpu_pp1()` |
+
+On unavailable platforms, all GPU columns store NULL. ETL skips GPU computation
+when `gpu_total_energy_uj IS NULL`.
+
+---
+
+### Method ID: `gpu_dynamic_baseline_v1`
+
+**Provenance:** CALCULATED  
+**Confidence:** 0.90  
+**Layer:** silicon
+
+#### Formula
+
+$$E_{gpu,dyn} = E_{gpu,total} - \dot{E}_{gpu,base} \cdot t$$
+
+Where:
+- $E_{gpu,total}$ = SUM of gpu_energy_uj across all energy_samples for the run
+- $\dot{E}_{gpu,base}$ = `idle_baselines.gpu_power_watts` (mean - 2*std, 2nd percentile)
+- $t$ = run duration in seconds
+
+#### Baseline Measurement
+
+GPU baseline is measured during `measure_idle_baseline()` when `measure_gpu: true`
+in `app_settings.yaml`. Each idle sample reads MSR 0x641 at start and end of the
+sample window, computing GPU power in Watts. Mean and std are stored in
+`idle_baselines.gpu_power_watts` and `idle_baselines.gpu_std`.
+
+#### Columns Populated
+
+| Column | Table | Description |
+|--------|-------|-------------|
+| `gpu_total_energy_uj` | `runs` | SUM(gpu_energy_uj) over all energy_samples |
+| `gpu_baseline_energy_uj` | `runs` | idle GPU rate * run_duration_ns |
+| `gpu_dynamic_energy_uj` | `runs` | gpu_total - gpu_baseline |
+| `gpu_pct_of_pkg` | `runs` | gpu_dynamic / dynamic_energy_uj * 100 |
+| `gpu_energy_uj` | `goal_attempt` | gpu_dynamic_energy_uj for this attempt |
+| `gpu_total_energy_uj` | `goal_execution` | SUM across attempts |
+| `gpu_pct_of_pkg` | `goal_execution` | GPU share of goal energy |
+
+#### Paper Finding
+
+Integrated GPU energy (Intel Iris Xe, MSR PP1) accounts for a higher percentage
+of dynamic package energy during agentic workflows than linear workflows. This
+increase is driven by orchestration overhead — not ML compute, since no CUDA or
+local GPU inference is used in any experiment.

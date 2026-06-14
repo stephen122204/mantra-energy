@@ -1,0 +1,17 @@
+method_id: gpu_rapl_pp1_v1
+references:
+  - title: "Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3B: System Programming Guide, Chapter 14.9 — RAPL Interfaces"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: "Defines MSR_PP1_ENERGY_STATUS (0x641) as the PP1 power plane energy counter for the integrated graphics domain on Intel Tiger Lake and related microarchitectures."
+  - title: "Intel Tiger Lake Platform Design Guide"
+    authors: "Intel Corporation"
+    year: 2020
+    ref_type: "manual"
+    relevance: "Confirms PP1 domain maps to integrated GPU (Iris Xe) on i7-1165G7. MSR 0x641 accumulates GPU energy in RAPL energy units derived from MSR 0x606 bits[12:8]."
+  - title: "Running Average Power Limit (RAPL) — Linux kernel documentation"
+    authors: "Linux Kernel Contributors"
+    year: 2024
+    ref_type: "internal"
+    relevance: "Documents /sys/class/powercap/intel-rapl interface. Note: intel-rapl:0:1 is named 'uncore' on Tiger Lake — GPU energy is NOT available via sysfs powercap; must use MSR 0x641 directly."

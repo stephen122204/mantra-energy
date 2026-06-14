@@ -2,30 +2,35 @@
 # Orchestration Overhead Study — run after baseline_study completes.
 # Direct thesis proof: measures orchestration_fraction across workflow types.
 # experiment_type: overhead_study — signals analysis pipeline to compute overhead metrics.
-
+# Tool-using agentic tasks expected to show highest overhead_fraction values.
 study:
   name: "Orchestration Overhead Study"
   experiment_type: "overhead_study"
-  experiment_goal: "Measure orchestration_fraction across workflow types and task categories to prove thesis"
+  experiment_goal: "Measure orchestration_fraction across workflow types and task categories. Tool-using agentic tasks expected to show highest overhead."
   experiment_notes: "Higher repetition count than baseline for statistical power on overhead_fraction. No retries."
   workflow_modes: ["linear", "agentic"]
 
 tasks:
+  # No-tool baseline anchor tasks
   - id: gsm8k_basic
-  - id: gsm8k_multi_step
   - id: logical_reasoning
   - id: factual_qa
   - id: code_fibonacci
+  # Tool-using tasks — orchestration overhead evidence
   - id: tg_single_calc
   - id: tg_single_db
   - id: tg_sequential_2
+  - id: tg_sequential_3
+  - id: tg_parallel_2
+  - id: tg_deep_chain_4
+
 providers:
   - name: llama_cpp
     model_id: tinyllama-1b-gguf
 
 execution:
-  repetitions: 2
-  cool_down_seconds: 12
+  repetitions: 15
+  cool_down_seconds: 30
   save_db: true
 
 retry_policy:

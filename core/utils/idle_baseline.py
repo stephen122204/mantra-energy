@@ -85,6 +85,7 @@ def measure_idle_baseline(
     pin_cores: Optional[List[int]] = None,
     cache_file: Optional[Path] = None,
     force_remeasure: bool = False,
+    measure_gpu: bool = True,   # Set False to skip GPU PP1 baseline on this platform
 ) -> BaselineMeasurement:  # CHANGED: Returns BaselineMeasurement, not dict
     """
     Measure system idle energy baseline using research-grade methodology.
@@ -192,9 +193,12 @@ def measure_idle_baseline(
         dprint(f"📊 Sample {sample_idx + 1}/{num_samples}")
 
         start_rapl = rapl_reader.read_energy()
+        # GPU PP1 start — None on non-Tiger-Lake platforms
+        gpu_start_uj = rapl_reader.read_gpu_msr() if measure_gpu else None
         time.sleep(duration_seconds)
         end_rapl = rapl_reader.read_energy()
-
+        # GPU PP1 end read paired with start above
+        gpu_end_uj = rapl_reader.read_gpu_msr() if measure_gpu else None
         sample_power = {}
         for domain in start_rapl:
             if domain in end_rapl:
@@ -202,11 +206,18 @@ def measure_idle_baseline(
                 delta_joules = delta_uj / 1_000_000
                 power_watts = delta_joules / duration_seconds
                 sample_power[domain] = power_watts
-
                 # Store for statistics
                 if domain not in all_powers:
                     all_powers[domain] = []
                 all_powers[domain].append(power_watts)
+        # GPU baseline power — only if both reads succeeded
+        if gpu_start_uj is not None and gpu_end_uj is not None and gpu_end_uj >= gpu_start_uj:
+            gpu_delta_uj = gpu_end_uj - gpu_start_uj
+            gpu_power_w  = (gpu_delta_uj / 1_000_000) / duration_seconds
+            sample_power["gpu"] = gpu_power_w
+            if "gpu" not in all_powers:
+                all_powers["gpu"] = []
+            all_powers["gpu"].append(gpu_power_w)
 
         all_samples.append(sample_power)
         dprint(f"   Power: {sample_power}")

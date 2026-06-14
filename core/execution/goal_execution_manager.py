@@ -145,6 +145,8 @@ def execute_goal(
         "pkg_energy_uj", "core_energy_uj", "uncore_energy_uj",
         "dram_energy_uj", "dynamic_energy_uj", "idle_energy_uj",
         "attributed_energy_uj", "orchestration_tax_uj",
+        # GPU PP1 energy — None on non-Tiger-Lake, accumulated across attempts
+        "gpu_total_energy_uj", "gpu_dynamic_energy_uj",
     ]
     accumulated_energy = {k: 0 for k in _acc_keys}
     for attempt_num in range(1, max_attempts + 1):

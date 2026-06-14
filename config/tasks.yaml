@@ -747,3 +747,305 @@ tasks:
     prompt: "The smooth planks were carefully measured and cut."
     expected_answer: "audio_duration_ratio > 0.7"
     output_file: "data/test_files/vc_en_clone.wav"
+
+# =====================================================
+# MULTI-TOOL TASKS — exercises tool orchestration
+# =====================================================
+ 
+  - id: db_query_analysis
+    category: multi_tool
+    name: "Database Query and Analysis"
+    description: "Query experiment database and analyze results"
+    level: 2
+    tool_calls: 2
+    tool_sequence: [database_query, database_query]
+    max_tool_calls: 4
+    prompt: |
+      Use the database query tool to find the average energy consumption
+      for linear vs agentic workflows. Then query again to find the top 3
+      most energy-intensive tasks. Summarize your findings.
+    expected_answer: "comparison of linear vs agentic energy with specific numbers"
+ 
+  - id: file_analysis_pipeline
+    category: multi_tool
+    name: "File Analysis Pipeline"
+    description: "Read file, process data, write summary"
+    level: 2
+    tool_calls: 2
+    tool_sequence: [file_processor, file_processor]
+    max_tool_calls: 4
+    prompt: |
+      Read the experiment_summary.txt file, identify the key metrics,
+      then write a processed_summary.txt with only the energy-related findings.
+    expected_answer: "file successfully read and processed summary written"
+ 
+  - id: multi_source_research
+    category: multi_tool
+    name: "Multi-Source Research Task"
+    description: "Query multiple sources and synthesize findings"
+    level: 3
+    tool_calls: 3
+    tool_sequence: [database_query, api_query, file_processor]
+    max_tool_calls: 6
+    prompt: |
+      First query the database for recent experiment results.
+      Then fetch the latest metrics from the API endpoint.
+      Finally save a combined report to findings.txt.
+      Synthesize all findings into a coherent summary.
+    expected_answer: "coherent synthesis from multiple sources with saved report"
+ 
+# =====================================================
+# PLANNING TASKS
+# =====================================================
+ 
+  - id: experiment_planning
+    category: planning
+    name: "Experiment Planning"
+    description: "Plan a multi-step experiment using available data"
+    level: 3
+    tool_calls: 2
+    tool_sequence: [database_query, file_processor]
+    max_tool_calls: 4
+    prompt: |
+      Query the database to understand current experiment coverage.
+      Based on the gaps you find, create a detailed experiment plan
+      and save it to experiment_plan.txt. Include task types, providers,
+      and expected repetitions needed for statistical significance.
+    expected_answer: "structured experiment plan saved to file with clear rationale"
+ 
+  - id: resource_optimization_plan
+    category: planning
+    name: "Resource Optimization Planning"
+    description: "Analyze resource usage and create optimization plan"
+    level: 3
+    tool_calls: 2
+    tool_sequence: [database_query, file_processor]
+    max_tool_calls: 4
+    prompt: |
+      Query the database for runs with highest energy consumption.
+      Identify patterns and create an optimization strategy.
+      Save your recommendations to optimization_plan.txt.
+    expected_answer: "data-driven optimization plan with specific recommendations"
+ 
+# =====================================================
+# DATA ANALYSIS TASKS
+# =====================================================
+ 
+  - id: energy_trend_analysis
+    category: data_analysis
+    name: "Energy Trend Analysis"
+    description: "Analyze energy consumption trends across experiments"
+    level: 2
+    tool_calls: 2
+    tool_sequence: [database_query, file_processor]
+    max_tool_calls: 4
+    prompt: |
+      Query the database to get energy consumption data grouped by
+      workflow type and task category. Identify the top 3 trends
+      and save your analysis to energy_trends.txt.
+    expected_answer: "trend analysis with at least 3 identified patterns and supporting data"
+ 
+  - id: comparative_performance
+    category: data_analysis
+    name: "Comparative Performance Analysis"
+    description: "Compare performance metrics across providers"
+    level: 2
+    tool_calls: 1
+    tool_sequence: [database_query]
+    max_tool_calls: 3
+    prompt: |
+      Query the database to compare average response time and energy
+      consumption across different providers. Which provider is most
+      energy-efficient for reasoning tasks?
+    expected_answer: "provider comparison with energy efficiency ranking"
+ 
+# =====================================================
+# DEBUGGING TASKS
+# =====================================================
+ 
+  - id: debug_python_logic
+    category: debugging
+    name: "Debug Python Logic Error"
+    description: "Identify and fix logical error in Python code"
+    level: 2
+    tool_calls: 0
+    prompt: |
+      Find and fix the bug in this Python function:
+      def calculate_average(numbers):
+          total = 0
+          for n in numbers:
+              total += n
+          return total
+      The function returns wrong results for empty lists.
+    expected_answer: "def calculate_average(numbers):\n    if not numbers:\n        return 0\n    return sum(numbers) / len(numbers)"
+ 
+  - id: debug_with_file_check
+    category: debugging
+    name: "Debug with File Verification"
+    description: "Debug code and verify fix using file tool"
+    level: 3
+    tool_calls: 1
+    tool_sequence: [file_processor]
+    max_tool_calls: 3
+    prompt: |
+      Read the buggy_code.py file, identify all bugs, fix them,
+      and write the corrected version to fixed_code.py.
+      Explain each bug you found and how you fixed it.
+    expected_answer: "bugs identified with explanations and corrected file written"
+ 
+# =====================================================
+# RESEARCH TASKS
+# =====================================================
+ 
+  - id: literature_synthesis
+    category: research
+    name: "Research Synthesis Task"
+    description: "Synthesize research findings from database"
+    level: 3
+    tool_calls: 2
+    tool_sequence: [database_query, file_processor]
+    max_tool_calls: 4
+    prompt: |
+      Query the database for all overhead_study experiments.
+      Analyze the orchestration_fraction values across workflow types.
+      Write a research summary to research_findings.txt that would
+      support or refute the thesis that orchestration dominates energy.
+    expected_answer: "research summary with statistical analysis and clear thesis support/refutation"
+ 
+  - id: methodology_comparison
+    category: research
+    name: "Methodology Comparison"
+    description: "Compare two measurement approaches using data"
+    level: 3
+    tool_calls: 2
+    tool_sequence: [database_query, database_query]
+    max_tool_calls: 4
+    prompt: |
+      Query the database twice: first for energy_attribution data,
+      then for phase_attribution data. Compare the two attribution
+      methodologies. Which gives more insight into orchestration overhead?
+    expected_answer: "methodological comparison with evidence-based recommendation"
+ 
+# =====================================================
+# ORCHESTRATION TASKS — paper CORE evidence
+# =====================================================
+ 
+  - id: orchestration_overhead_measure
+    category: orchestration
+    name: "Orchestration Overhead Measurement"
+    description: "Multi-step task designed to maximize orchestration phases"
+    level: 3
+    tool_calls: 3
+    tool_sequence: [database_query, file_processor, api_query]
+    max_tool_calls: 6
+    prompt: |
+      Step 1: Query the database for the last 10 experiment runs.
+      Step 2: Process and save the results to overhead_analysis.txt.
+      Step 3: Fetch current system metrics from the API.
+      Step 4: Synthesize all data into a final overhead report.
+      This task is designed to exercise all orchestration phases.
+    expected_answer: "complete overhead report synthesizing database, file, and API data"
+ 
+  - id: tool_chain_execution
+    category: orchestration
+    name: "Tool Chain Execution"
+    description: "Sequential tool execution with dependency chain"
+    level: 3
+    tool_calls: 3
+    tool_sequence: [database_query, file_processor, file_processor]
+    max_tool_calls: 6
+    prompt: |
+      Query the database for energy data.
+      Save raw results to raw_energy.txt.
+      Then process raw_energy.txt and save aggregated stats to
+      energy_summary.txt. Report total orchestration steps taken.
+    expected_answer: "two files created with correct data pipeline, step count reported"
+ 
+# =====================================================
+# TRANSLATION TASKS — linear only
+# =====================================================
+ 
+  - id: english_to_hindi
+    category: translation
+    name: "English to Hindi Translation"
+    description: "Translate technical content to Hindi"
+    level: 2
+    tool_calls: 0
+    prompt: |
+      Translate the following to Hindi:
+      "Energy consumption in artificial intelligence systems depends
+      significantly on the orchestration structure of the workflow."
+    expected_answer: "ऊर्जा खपत कृत्रिम बुद्धिमत्ता प्रणालियों में"
+ 
+  - id: multilingual_summary
+    category: translation
+    name: "Multilingual Summary"
+    description: "Summarize content in multiple languages"
+    level: 3
+    tool_calls: 0
+    prompt: |
+      Provide a one-sentence summary of the concept of orchestration
+      overhead in AI systems in: English, Hindi, and Tamil.
+    expected_answer: "three summaries in three languages covering orchestration overhead concept"
+ 
+# =====================================================
+# CREATIVE WRITING TASKS — linear only
+# =====================================================
+ 
+  - id: technical_blog_post
+    category: creative_writing
+    name: "Technical Blog Post"
+    description: "Write engaging technical content"
+    level: 2
+    tool_calls: 0
+    prompt: |
+      Write a 150-word blog post explaining why agentic AI systems
+      consume more energy than simple inference. Make it accessible
+      to a non-technical audience.
+    expected_answer: "engaging 150-word blog post covering agentic energy overhead"
+ 
+  - id: research_abstract
+    category: creative_writing
+    name: "Research Abstract Writing"
+    description: "Write a structured research abstract"
+    level: 3
+    tool_calls: 0
+    prompt: |
+      Write a 100-word abstract for a paper titled:
+      'Orchestration Structure as the Dominant Driver of Energy
+      Consumption in Agentic AI Workloads'
+      Include: problem, method, key finding, implication.
+    expected_answer: "structured abstract with problem, method, finding, and implication"
+ 
+# =====================================================
+# WEB SEARCH TASKS — uses api_query tool as proxy
+# =====================================================
+ 
+  - id: current_info_retrieval
+    category: web_search
+    name: "Current Information Retrieval"
+    description: "Retrieve and synthesize current information"
+    level: 2
+    tool_calls: 1
+    tool_sequence: [api_query]
+    max_tool_calls: 3
+    prompt: |
+      Use the API query tool to fetch current system metrics.
+      Based on the retrieved data, provide a summary of the
+      current system state and any anomalies you notice.
+    expected_answer: "factual summary of retrieved API data with anomaly identification"
+ 
+  - id: multi_query_synthesis
+    category: web_search
+    name: "Multi-Query Synthesis"
+    description: "Multiple API queries synthesized into report"
+    level: 3
+    tool_calls: 2
+    tool_sequence: [api_query, api_query]
+    max_tool_calls: 4
+    prompt: |
+      Make two API queries to different endpoints.
+      Compare the results and identify any discrepancies.
+      Provide a synthesized report of your findings.
+    expected_answer: "comparative report from two API sources with discrepancies noted"
+ 

@@ -270,6 +270,7 @@ class RetryCoordinator:
             # Energy snapshots for attempt row — zero if run never produced them
             energy_uj        = 0
             orchestration_uj = 0
+            gpu_energy_uj=gpu_energy_uj,
             compute_uj       = 0
             run_id           = None
 
@@ -288,6 +289,7 @@ class RetryCoordinator:
                         # Last resort: dynamic only
                         energy_uj = result["layer3_derived"]["energy_uj"]["workload"]
                     orchestration_uj = result["layer3_derived"]["energy_uj"].get("orchestration_tax", 0)
+                    gpu_energy_uj = ml.get("gpu_dynamic_energy_uj")
                 except (KeyError, TypeError):
                     pass
                 run_id = result.get("run_id")
@@ -304,6 +306,7 @@ class RetryCoordinator:
                 orchestration_uj=orchestration_uj,
                 compute_uj=compute_uj,
                 failure_type=failure_type,
+                gpu_energy_uj=gpu_energy_uj if 'gpu_energy_uj' in dir() else None,
             )
 
             prev_attempt_id = attempt_id

@@ -53,6 +53,7 @@ experiment:
     num_samples: 3
     pre_wait_seconds: 10
     cache_file: "data/idle_baseline.json"
+    measure_gpu: true
   # true for production, false to use cache  
   
 # ===== NEW: MSR measurement settings =====

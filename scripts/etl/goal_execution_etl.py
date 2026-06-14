@@ -54,7 +54,7 @@ def process_one(goal_id: int, conn) -> None:
 
     # Load all attempts for energy summation
     attempts = conn.execute(
-        """SELECT attempt_id, run_id, is_winning, energy_uj
+        """SELECT attempt_id, run_id, is_winning, energy_uj, gpu_energy_uj
            FROM goal_attempt
            WHERE goal_id = ?
            ORDER BY attempt_number""",
@@ -75,6 +75,10 @@ def process_one(goal_id: int, conn) -> None:
         return
 
     total_energy_uj = _sum_attempt_energies(attempts)
+    # GPU total — SUM(gpu_energy_uj) across attempts, None if all NULL
+    _gpu_vals = [a[4] for a in attempts if a[4] is not None]
+    gpu_total_uj = sum(_gpu_vals) if _gpu_vals else None
+
 
     # Failed goals — no winning attempt means all energy was wasted.
     # overhead_fraction = 1.0 is the correct paper signal: 100% overhead, 0% productive.
@@ -87,6 +91,7 @@ def process_one(goal_id: int, conn) -> None:
             overhead_energy_uj=total_energy_uj,
             overhead_fraction=1.0,
             orchestration_fraction=None,
+            gpu_total_uj=gpu_total_uj,
         )
         run_ids = list({a[1] for a in attempts if a[1] and a[1] != -1})
         for run_id in run_ids:
@@ -103,10 +108,18 @@ def process_one(goal_id: int, conn) -> None:
     _orch_run_id = winning_run_id or first_run_id
     orchestration_fraction = _get_orchestration_fraction(conn, _orch_run_id)
 
+# GPU pct of goal energy — gpu_dynamic / total * 100
+    gpu_pct = (
+        round(gpu_total_uj / total_energy_uj * 100, 2)
+        if gpu_total_uj is not None and total_energy_uj and total_energy_uj > 0
+        else None
+    )
     _update_goal_execution(
         conn, goal_id,
         total_energy_uj, successful_energy_uj, overhead_energy_uj,
         overhead_fraction, orchestration_fraction,
+        gpu_total_uj=gpu_total_uj,
+        gpu_pct=gpu_pct,
     )
 
 
@@ -248,10 +261,11 @@ def _update_goal_execution(
     conn, goal_id: int,
     total_energy_uj, successful_energy_uj, overhead_energy_uj,
     overhead_fraction, orchestration_fraction,
+    gpu_total_uj=None, gpu_pct=None,
 ) -> None:
     """
     UPDATE goal_execution ETL columns for one goal_id.
-    All five columns written in one UPDATE for atomicity.
+    All columns written in one UPDATE for atomicity.
     """
     conn.execute(
         """UPDATE goal_execution SET
@@ -259,11 +273,14 @@ def _update_goal_execution(
                successful_energy_uj   = ?,
                overhead_energy_uj     = ?,
                overhead_fraction      = ?,
-               orchestration_fraction = ?
+               orchestration_fraction = ?,
+               gpu_total_energy_uj    = ?,
+               gpu_pct_of_pkg         = ?
            WHERE goal_id = ?""",
         (
             total_energy_uj, successful_energy_uj, overhead_energy_uj,
             overhead_fraction, orchestration_fraction,
+            gpu_total_uj, gpu_pct,
             goal_id,
         ),
     )

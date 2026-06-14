@@ -1,0 +1,12 @@
+method_id: gpu_dynamic_baseline_v1
+references:
+  - title: "Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3B: System Programming Guide, Chapter 14.9 — RAPL Interfaces"
+    authors: "Intel Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: "Baseline subtraction methodology mirrors RAPL dynamic energy computation: E_dynamic = E_total - E_idle_baseline. Same approach applied to GPU PP1 domain."
+  - title: "A-LEMS Phase Attribution ETL — internal methodology"
+    authors: "Deepak Panigrahy"
+    year: 2026
+    ref_type: "internal"
+    relevance: "GPU baseline uses min_power_watts (mean - 2*std, 2nd percentile) from idle_baselines.gpu_power_watts, identical to cpu dynamic_energy_uj baseline subtraction. Confidence 0.90 due to package-level counter with no per-process GPU split."

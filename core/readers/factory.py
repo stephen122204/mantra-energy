@@ -58,8 +58,25 @@ class ReaderFactory:
         energy_reader  = ReaderFactory.get_energy_reader()
         cpu_reader     = ReaderFactory.get_cpu_reader(config)
         thermal_reader = ReaderFactory.get_thermal_reader(config)
+
     """
 
+    @classmethod
+    def get_gpu_energy_uj(cls, energy_reader) -> Optional[int]:
+        """
+        Read GPU PP1 energy from any energy reader.
+        Returns None on platforms where GPU MSR is unavailable.
+        Callers must use this method — never call read_gpu_msr() directly.
+        This preserves PAC-2: no platform-conditional logic outside factory.
+        Args:
+            energy_reader: Any EnergyReaderABC instance from get_energy_reader()
+        Returns:
+            GPU energy in µJ or None.
+        """
+        # read_gpu_msr() is defined on ABC as returning None by default
+        # RAPLReader overrides it with real MSR read on Linux x86
+        return energy_reader.read_gpu_msr()
+    
     @classmethod
     def get_energy_reader(
         cls,

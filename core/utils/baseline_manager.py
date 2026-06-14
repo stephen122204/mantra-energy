@@ -156,16 +156,20 @@ class BaselineManager:
 
                 power_watts = {
                     "package-0": row.get("package_power_watts", 0.0),
-                    "core": row.get("core_power_watts", 0.0),
-                    "uncore": row.get("uncore_power_watts", 0.0),
-                    "dram": row.get("dram_power_watts", 0.0),
+                    "core":      row.get("core_power_watts", 0.0),
+                    "uncore":    row.get("uncore_power_watts", 0.0),
+                    "dram":      row.get("dram_power_watts", 0.0),
+                    # GPU idle rate — 0.0 if not measured (safe for baseline math)
+                    "gpu":       row.get("gpu_power_watts") or 0.0,
                 }
 
                 std_dev = {
                     "package-0": row.get("package_std", 0.0),
-                    "core": row.get("core_std", 0.0),
-                    "uncore": row.get("uncore_std", 0.0),
-                    "dram": row.get("dram_std", 0.0),
+                    "core":      row.get("core_std", 0.0),
+                    "uncore":    row.get("uncore_std", 0.0),
+                    "dram":      row.get("dram_std", 0.0),
+                    # GPU std — 0.0 if not measured on this platform
+                    "gpu":       row.get("gpu_std") or 0.0,
                 }
 
                 return BaselineMeasurement(

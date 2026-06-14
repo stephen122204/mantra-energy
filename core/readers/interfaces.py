@@ -154,6 +154,7 @@ class EnergyReaderABC(BaseReader):
         """
         ...
 
+
     @abstractmethod
     def get_domains(self) -> List[str]:
         """
@@ -165,6 +166,16 @@ class EnergyReaderABC(BaseReader):
         """
         ...
 
+    def read_gpu_msr(self) -> Optional[int]:
+            """
+            Read GPU PP1 energy via MSR 0x641 (Intel Tiger Lake only).
+            Default returns None — only RAPLReader overrides with real read.
+            Never raises. NULL-safe: callers must handle None.
+            Returns:
+                Energy in µJ as int, or None if unavailable on this platform.
+            """
+            return None
+    
     # -------------------------------------------------------------------------
     # Methodology helpers — concrete, no override needed
     # -------------------------------------------------------------------------

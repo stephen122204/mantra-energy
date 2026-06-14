@@ -341,7 +341,8 @@ class RunsRepository:
                 duration_includes_overhead, pre_task_energy_uj, pre_task_duration_ns,
                 rapl_before_pretask_uj, rapl_after_task_uj,
                 post_task_duration_ns, post_task_energy_uj,
-                framework_overhead_energy_uj
+                framework_overhead_energy_uj,gpu_total_energy_uj, gpu_baseline_energy_uj,
+                gpu_dynamic_energy_uj, gpu_pct_of_pkg
 
             ) VALUES (
                 ?, ?, ?, ?, ?,
@@ -375,7 +376,8 @@ class RunsRepository:
                 ?, ?, ?, ?, ?,
                 ? , ?, ?, ?, ?, ?,
                 ?, ?,
-                ?, ?, ?
+                ?, ?, ?,
+                ?, ?, ?, ?
             )
         """
 
@@ -502,7 +504,11 @@ class RunsRepository:
             rapl_after_task_uj,                 # raw RAPL pkg at t1
             post_task_duration_ns,              # t2 - t1
             None,   # post_task_energy_uj — ETL populated (fix_run_with_pretask)
-            None,   # framework_overhead_energy_uj — ETL populated                             
+            None,   # framework_overhead_energy_uj — ETL populated  
+            ml.get("gpu_total_energy_uj"),      # MEASURED via MSR 0x641
+            ml.get("gpu_baseline_energy_uj"),   # CALCULATED — idle rate * duration
+            ml.get("gpu_dynamic_energy_uj"),    # CALCULATED — total - baseline
+            ml.get("gpu_pct_of_pkg"),                                         
         )
 
         try:

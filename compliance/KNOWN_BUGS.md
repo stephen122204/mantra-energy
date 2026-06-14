@@ -95,3 +95,16 @@ rather than runs.duration_ns. Orchestration phase decomposition for
 retry runs (Bug 7) reflects winning attempt phases only; retry
 coordination overhead is accounted in retry_energy_uj via goal_attempt
 aggregation. None of these bugs affect attributed_energy_uj, EpG, or OOI."
+
+## Bug 9: planning_energy_uj = 0 for agentic runs
+
+**Severity:** LOW — D2 validator warns but doesn't fail
+**Impact:** planning phase energy unattributed. Absorbed into baseline or lost.
+**Root cause:** Planning phase completes before RAPL sampling window captures it.
+orchestration_events.event_energy_uj = NULL for planning events — ETL sets
+attributed_energy_uj = 0 when source is NULL.
+**Evidence:** exp_id=990 run_id=4507: planning event energy_uj=NULL, attributed=0
+**Fix assignment:** Instrumentation chunk — add explicit RAPL snapshot at planning phase start/end boundary
+**Paper impact:** D2 phase partition cannot be verified for planning component.
+Document as known limitation: "Planning phase energy (<5% of total) not separately attributed."
+**Workaround:** None. execution + synthesis phases correctly attributed.
