@@ -1035,6 +1035,13 @@ def get_cpu_flags():
                     break
     except:
         pass
+    # ARM fallback — aarch64 has no AVX2/AVX512/VMX flags in /proc/cpuinfo
+    if not flags:
+        flags = {
+            "has_avx2":   False,
+            "has_avx512": False,
+            "has_vmx":    False,
+        }
     return flags
 
 
