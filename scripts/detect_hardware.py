@@ -806,12 +806,23 @@ def get_cpu_info() -> Dict[str, Any]:
             for line in f:
                 if line.startswith("model name"):
                     cpu_model = line.split(":")[1].strip()
+                # ARM: uses 'Model name' (capital M) not 'model name'
+                elif line.startswith("Model name"):
+                    cpu_model = line.split(":")[1].strip()
                 elif line.startswith("vendor_id"):
                     cpu_vendor = line.split(":")[1].strip()
                 elif line.startswith("microcode"):
                     microcode = line.split(":")[1].strip()
     except:
         pass
+    # ARM fallback: check DMI product name for Grace CPU
+    if cpu_model == "Unknown":
+        try:
+            product = open('/sys/class/dmi/id/product_name').read().strip()
+            if 'GN100' in product or 'Veriton' in product:
+                cpu_model = 'NVIDIA Grace (Neoverse V2)'
+        except Exception:
+            pass
 
     # Try to get actual physical core count
     try:
@@ -1044,6 +1055,321 @@ def get_cpu_flags():
         }
     return flags
 
+
+def detect_spbm():
+    # type: () -> dict
+    """
+    Detect NVIDIA SPBM spark_hwmon driver on GN100.
+    Discovers hwmon path dynamically — never hardcodes hwmon device number.
+    Returns dict for hw_config.json spbm section.
+    Called by detect_hardware.py main() on any Linux platform.
+    No-op (returns available=False) on non-GN100 systems.
+    """
+    import glob as _glob
+    result = {
+        'available': False,
+        'hwmon_path': '',
+        'energy_channels': [],
+        'power_channels': [],
+        'energy_paths': {},
+        'power_paths': {},
+    }
+ 
+    # Find spark_hwmon device by checking hwmon name files
+    for hwmon_dir in sorted(_glob.glob('/sys/class/hwmon/hwmon*/')):
+        try:
+            name = open(hwmon_dir + 'name').read().strip()
+            if 'spbm' not in name.lower() and 'spark' not in name.lower():
+                continue
+ 
+            result['hwmon_path'] = hwmon_dir
+ 
+            # Discover energy channels via label files
+            for label_file in sorted(_glob.glob(hwmon_dir + 'energy*_label')):
+                try:
+                    label = open(label_file).read().strip()
+                    input_file = label_file.replace('_label', '_input')
+                    if os.path.exists(input_file):
+                        result['energy_channels'].append(label)
+                        result['energy_paths'][label] = input_file
+                except Exception:
+                    continue
+ 
+            # Discover power channels via label files
+            for label_file in sorted(_glob.glob(hwmon_dir + 'power*_label')):
+                try:
+                    label = open(label_file).read().strip()
+                    input_file = label_file.replace('_label', '_input')
+                    if os.path.exists(input_file):
+                        result['power_channels'].append(label)
+                        result['power_paths'][label] = input_file
+                except Exception:
+                    continue
+ 
+            if result['energy_channels']:
+                result['available'] = True
+                print(f"   ✅ SPBM: {hwmon_dir} channels={result['energy_channels']}")
+            else:
+                print(f"   ⚠️  SPBM: hwmon found at {hwmon_dir} but no energy channels")
+ 
+            break  # Only one SPBM device expected
+ 
+        except Exception as e:
+            continue
+ 
+    if not result['available']:
+        print("   ℹ️  SPBM: spark_hwmon not loaded (expected on non-GN100 systems)")
+ 
+    return result
+ 
+ 
+def detect_dcgm():
+    # type: () -> dict
+    """
+    Detect NVIDIA DCGM daemon availability and field 156 support.
+    Returns dict for hw_config.json dcgm section.
+    """
+    import subprocess as _subprocess
+    result = {
+        'available': False,
+        'daemon_running': False,
+        'field_156_verified': False,
+        'field_155_verified': False,
+    }
+ 
+    # Check if dcgmi command exists
+    try:
+        which = _subprocess.run(['which', 'dcgmi'],
+                               capture_output=True, text=True, timeout=3)
+        if which.returncode != 0:
+            print("   ℹ️  DCGM: dcgmi not found (install: apt install datacenter-gpu-manager)")
+            return result
+        result['available'] = True
+    except Exception:
+        return result
+ 
+    # Check if daemon is running
+    try:
+        disco = _subprocess.run(
+            ['dcgmi', 'discovery', '-l'],
+            capture_output=True, text=True, timeout=5
+        )
+        if disco.returncode == 0:
+            result['daemon_running'] = True
+            print("   ✅ DCGM: daemon running")
+        else:
+            print("   ⚠️  DCGM: daemon not running (run: sudo systemctl start nvidia-dcgm)")
+            return result
+    except Exception as e:
+        print(f"   ⚠️  DCGM: discovery failed: {e}")
+        return result
+ 
+    # Verify field 156 (TOTEC) readable
+    try:
+        dmon = _subprocess.run(
+            ['dcgmi', 'dmon', '-e', '155,156', '-c', '1'],
+            capture_output=True, text=True, timeout=10
+        )
+        if dmon.returncode == 0 and 'GPU' in dmon.stdout:
+            result['field_156_verified'] = True
+            result['field_155_verified'] = True
+            print("   ✅ DCGM: field 155+156 verified")
+        else:
+            print("   ⚠️  DCGM: field 156 not readable")
+    except Exception as e:
+        print(f"   ⚠️  DCGM: dmon failed: {e}")
+ 
+    return result
+ 
+ 
+def detect_arm_pmu():
+    # type: () -> dict
+    """
+    Detect ARM PMU event availability via perf list.
+    Returns dict for hw_config.json arm_pmu section.
+    Only meaningful on aarch64 systems.
+    """
+    import subprocess as _subprocess
+    import platform as _platform
+    result = {
+        'available': False,
+        'events': [],
+        'has_generic_events': False,
+        'has_armv8_events': False,
+    }
+ 
+    if _platform.machine() != 'aarch64':
+        return result
+ 
+    try:
+        # Check generic events (instructions, cycles) — available on all PMUv3
+        generic = _subprocess.run(
+            ['perf', 'stat', '-e', 'instructions,cycles', '--', 'true'],
+            capture_output=True, text=True, timeout=5
+        )
+        if 'instructions' in generic.stderr:
+            result['has_generic_events'] = True
+            result['events'].extend(['instructions', 'cycles'])
+ 
+        # Check armv8_pmuv3 specific events
+        pmu_list = _subprocess.run(
+            ['perf', 'list', 'armv8_pmuv3'],
+            capture_output=True, text=True, timeout=5
+        )
+        if 'armv8_pmuv3' in pmu_list.stdout:
+            result['has_armv8_events'] = True
+            # Extract available event names
+            for line in pmu_list.stdout.splitlines():
+                if 'armv8_pmuv3/' in line:
+                    event = line.strip().split()[0]
+                    result['events'].append(event)
+ 
+        result['available'] = result['has_generic_events'] or result['has_armv8_events']
+        if result['available']:
+            print(f"   ✅ ARM PMU: {len(result['events'])} events available")
+        else:
+            print("   ⚠️  ARM PMU: perf events not available")
+ 
+    except Exception as e:
+        print(f"   ⚠️  ARM PMU detection failed: {e}")
+ 
+    return result
+ 
+ 
+def detect_arm_cpuidle():
+    # type: () -> dict
+    """
+    Detect ARM cpuidle state statistics availability.
+    /sys/devices/system/cpu/cpu0/cpuidle/state*/name gives state names.
+    Different from x86 C-states but provides residency data.
+    """
+    import glob as _glob
+    result = {
+        'available': False,
+        'states': [],
+        'paths': {},
+    }
+ 
+    state_dirs = sorted(_glob.glob('/sys/devices/system/cpu/cpu0/cpuidle/state*/'))
+    for state_dir in state_dirs:
+        try:
+            name = open(state_dir + 'name').read().strip()
+            time_path = state_dir + 'time'
+            if os.path.exists(time_path):
+                result['states'].append(name)
+                result['paths'][name] = time_path
+        except Exception:
+            continue
+ 
+    result['available'] = len(result['states']) > 0
+    if result['available']:
+        print(f"   ✅ ARM cpuidle: {result['states']}")
+    else:
+        print("   ℹ️  ARM cpuidle: no states found")
+ 
+    return result
+ 
+ 
+def detect_cpu_vendor_extended(hw_config):
+    # type: (dict) -> str
+    """
+    Extended CPU vendor detection for ARM platforms.
+    /proc/cpuinfo on ARM uses 'CPU implementer' not 'vendor_id'.
+    Returns vendor string for hw_config.json.
+    """
+    import platform as _platform
+ 
+    arch = _platform.machine()
+ 
+    if arch == 'x86_64':
+        # Existing x86 logic
+        try:
+            for line in open('/proc/cpuinfo'):
+                if 'vendor_id' in line.lower() or 'Vendor ID' in line:
+                    val = line.split(':')[1].strip()
+                    if 'GenuineIntel' in val:
+                        return 'intel'
+                    if 'AuthenticAMD' in val:
+                        return 'amd'
+        except Exception:
+            pass
+        return 'intel'  # default x86
+ 
+    if arch == 'aarch64':
+        # Check for NVIDIA Grace via DMI/system info
+        try:
+            product = open('/sys/class/dmi/id/product_name').read().strip()
+            if 'GN100' in product or 'Grace' in product or 'Veriton' in product:
+                return 'nvidia_grace'
+        except Exception:
+            pass
+        # Check via /proc/cpuinfo CPU implementer
+        try:
+            for line in open('/proc/cpuinfo'):
+                if 'CPU implementer' in line:
+                    impl = line.split(':')[1].strip()
+                    # 0x4e = NVIDIA, 0x41 = ARM
+                    if '0x4e' in impl:
+                        return 'nvidia_grace'
+        except Exception:
+            pass
+        # Check for Apple Silicon
+        try:
+            import subprocess as _subprocess
+            result = _subprocess.run(
+                ['sysctl', '-n', 'hw.optional.arm64'],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.stdout.strip() == '1':
+                return 'apple'
+        except Exception:
+            pass
+        return 'arm_unknown'
+ 
+    return 'unknown'
+ 
+ 
+def detect_gpu_vendor_model():
+    # type: () -> tuple
+    """
+    Extended GPU detection that returns proper vendor and model names.
+    Fixes 'Corporation Device 2e12' issue on GN100 by querying nvidia-smi.
+    Returns (vendor, model) strings.
+    """
+    import subprocess as _subprocess
+ 
+    # Try nvidia-smi first — most accurate for NVIDIA GPUs
+    try:
+        result = _subprocess.run(
+            ['nvidia-smi', '--query-gpu=gpu_name', '--format=csv,noheader'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            model = result.stdout.strip().split('\n')[0].strip()
+            print(f"   ✅ GPU (nvidia-smi): {model}")
+            return ('nvidia', model)
+    except Exception:
+        pass
+ 
+    # Fall back to lspci
+    try:
+        result = _subprocess.run(
+            ['lspci', '-nn'],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.splitlines():
+            if 'VGA' in line or 'Display' in line or '3D' in line:
+                if 'NVIDIA' in line or '10de' in line.lower():
+                    return ('nvidia', line.split(':')[-1].strip())
+                if 'AMD' in line or '1002' in line.lower():
+                    return ('amd', line.split(':')[-1].strip())
+                if 'Intel' in line or '8086' in line.lower():
+                    return ('intel', line.split(':')[-1].strip())
+    except Exception:
+        pass
+ 
+    return ('unknown', 'Unknown GPU')
+ 
 
 def get_cpu_details():
     """Get detailed CPU info (family, model, stepping)"""
@@ -1383,8 +1709,32 @@ NOTE:
 
             if args.verbose:
                 print(f"   ✅ Hardware hash: {final_config['hardware_hash']}")
-                if final_config["gpu"].get("model"):
-                    print(f"   ✅ GPU: {final_config['gpu']['model']}")
+# Extended GPU detection — fixes 'Corporation Device' on ARM
+                gpu_vendor, gpu_model = detect_gpu_vendor_model()
+                if final_config.get('gpu'):
+                    final_config['gpu']['vendor'] = gpu_vendor
+                    final_config['gpu']['model'] = gpu_model
+                    final_config['gpu_model'] = gpu_model
+                print(f"   ✅ GPU: {gpu_vendor} {gpu_model}")
+
+                # CPU vendor extended detection — handles ARM/Grace
+                cpu_vendor_ext = detect_cpu_vendor_extended(final_config)
+                final_config['cpu']['vendor'] = cpu_vendor_ext
+                final_config['cpu_vendor'] = cpu_vendor_ext
+                print(f"   ✅ CPU vendor: {cpu_vendor_ext}")
+
+                # SPBM detection — GN100 only, no-op elsewhere
+                final_config['spbm'] = detect_spbm()
+
+                # DCGM detection
+                final_config['dcgm'] = detect_dcgm()
+
+                # ARM PMU detection
+                final_config['arm_pmu'] = detect_arm_pmu()
+
+                # ARM cpuidle detection
+                final_config['cpuidle'] = detect_arm_cpuidle()
+
                 print(
                     f"   ✅ CPU flags: AVX2={final_config['cpu_flags']['has_avx2']}, AVX512={final_config['cpu_flags']['has_avx512']}"
                 )
