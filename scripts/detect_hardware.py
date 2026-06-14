@@ -1545,6 +1545,24 @@ NOTE:
                 existing["gpu"] = get_gpu_info()
                 existing["hardware_hash"] = generate_hardware_hash(existing)
 
+                # Extended GPU detection — fixes 'Corporation Device' on ARM
+                gpu_vendor, gpu_model = detect_gpu_vendor_model()
+                existing["gpu"] = get_gpu_info()
+                if gpu_model and gpu_model != 'Unknown GPU':
+                    existing["gpu"]["vendor"] = gpu_vendor
+                    existing["gpu"]["model"] = gpu_model
+                    existing["gpu_model"] = gpu_model
+                # CPU vendor extended detection
+                cpu_vendor_ext = detect_cpu_vendor_extended(existing)
+                existing["cpu"]["vendor"] = cpu_vendor_ext
+                existing["cpu_vendor"] = cpu_vendor_ext
+                # SPBM, DCGM, ARM PMU, cpuidle — no-op on non-GN100
+                existing["spbm"]     = detect_spbm()
+                existing["dcgm"]     = detect_dcgm()
+                existing["arm_pmu"]  = detect_arm_pmu()
+                existing["cpuidle"]  = detect_arm_cpuidle()
+                existing["hardware_hash"] = generate_hardware_hash(existing)
+                
                 # ============================================================
                 # ENHANCE: Add thermal discovery with semantic mapping
                 # ============================================================
