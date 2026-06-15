@@ -354,14 +354,29 @@ class DCGMBackend:
  
     def _init_dcgm(self):
         # type: () -> None
-        """Connect to local DCGM daemon. Sets _handle=None on failure."""
+        """
+        Connect to local DCGM daemon and set up field watch on energy field 156.
+        Uses DcgmGroup + WatchFields pattern — validated on GN100 GB10.
+        Sets _handle=None on any failure so is_available() returns False cleanly.
+        """
         try:
             import pydcgm
-            # Connect to DCGM daemon running on localhost
-            handle = pydcgm.DcgmHandle(ipAddress='127.0.0.1')
-            self._handle = handle
-            self._system = handle.GetSystem()
-            logger.info("DCGMBackend: connected to DCGM daemon")
+            import dcgm_fields
+            self._pydcgm = pydcgm
+            self._dcgm_fields = dcgm_fields
+            # Connect to daemon — must be running (nvidia-dcgm.service)
+            self._handle = pydcgm.DcgmHandle(ipAddress='127.0.0.1')
+            self._system = self._handle.GetSystem()
+            # Create group containing GPU 0 for field watching
+            self._group = pydcgm.DcgmGroup(self._handle, groupName='alems_gpu_energy')
+            self._group.AddGpu(0)
+            # Create field group for energy + util + temp fields
+            self._field_group = pydcgm.DcgmFieldGroup(
+                self._handle, 'alems_fields',
+                [self.FIELD_TOTAL_ENERGY, self.FIELD_GPU_UTIL, self.FIELD_GPU_TEMP])
+            # Watch at 100ms interval — GPUCollector samples at 10Hz so this is fine
+            self._group.samples.WatchFields(self._field_group, 100000, 1.0, 0)
+            logger.info("DCGMBackend: connected to DCGM daemon, watching field 156")
         except Exception as e:
             logger.debug("DCGMBackend init failed: %s", e)
             self._handle = None
@@ -370,48 +385,59 @@ class DCGMBackend:
         # type: () -> bool
         return self._handle is not None
  
+    def _get_latest(self):
+        # type: () -> Optional[object]
+        """Refresh DCGM fields and return latest value collection."""
+        if self._handle is None:
+            return None
+        try:
+            self._system.UpdateAllFields(1)
+            return self._group.samples.GetLatest(self._field_group)
+        except Exception as e:
+            logger.warning("DCGMBackend._get_latest failed: %s", e)
+            return None
+ 
     def read_energy_uj(self, gpu_index=0):
         # type: (int) -> Optional[int]
         """
-        Read DCGM field 156 cumulative energy in mJ, convert to µJ.
+        Read DCGM field 156 cumulative energy.
+        DCGM returns raw counter — unit confirmed as mJ on GN100 (fv.value=34771379 at idle).
+        Converted to µJ by x1000 for platform consistency.
         Returns None on failure — never raises (PAC-4 compliant).
         """
-        if self._system is None:
+        collection = self._get_latest()
+        if collection is None:
             return None
         try:
-            gpus = self._system.discovery.GetAllGpuIds()
-            if gpu_index >= len(gpus):
+            # Navigate: collection.values[gpu_id][field_id].values[0].value
+            fv = collection.values[gpu_index][self.FIELD_TOTAL_ENERGY].values[0]
+            if fv.isBlank:
                 return None
-            gpu_id = gpus[gpu_index]
-            values = self._system.fields.GetLatestValuesForFields(
-                gpu_id, [self.FIELD_TOTAL_ENERGY])
-            if values and values[0].value is not None:
-                # DCGM returns mJ — convert to µJ for platform consistency
-                return int(values[0].value * 1000)
-            return None
+            # Multiply by 1000 to convert mJ to µJ
+            return int(fv.value * 1000)
         except Exception as e:
             logger.warning("DCGMBackend.read_energy_uj failed: %s", e)
             return None
  
     def read_signals(self, gpu_index=0):
         # type: (int) -> Dict[str, Any]
-        """Read GPU utilization and temperature via DCGM."""
-        if self._system is None:
+        """Read GPU utilization and temperature via DCGM fields 203 and 150."""
+        collection = self._get_latest()
+        if collection is None:
             return {}
         signals = {}
         try:
-            gpus = self._system.discovery.GetAllGpuIds()
-            if gpu_index >= len(gpus):
-                return {}
-            gpu_id = gpus[gpu_index]
-            values = self._system.fields.GetLatestValuesForFields(
-                gpu_id, [self.FIELD_GPU_UTIL, self.FIELD_GPU_TEMP])
-            if len(values) >= 1 and values[0].value is not None:
-                signals['util_gpu_pct'] = float(values[0].value)
-            if len(values) >= 2 and values[1].value is not None:
-                signals['temperature_c'] = int(values[1].value)
-        except Exception as e:
-            logger.debug("DCGMBackend.read_signals failed: %s", e)
+            fv_util = collection.values[gpu_index][self.FIELD_GPU_UTIL].values[0]
+            if not fv_util.isBlank:
+                signals['util_gpu_pct'] = float(fv_util.value)
+        except Exception:
+            pass
+        try:
+            fv_temp = collection.values[gpu_index][self.FIELD_GPU_TEMP].values[0]
+            if not fv_temp.isBlank:
+                signals['temperature_c'] = int(fv_temp.value)
+        except Exception:
+            pass
         return signals
  
     def get_gpu_info(self):
