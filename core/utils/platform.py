@@ -111,6 +111,20 @@ class PlatformCapabilities:
     env_hash:          str           = "unknown"  # provenance fingerprint
     kernel_version:    str           = "unknown"
 
+    # GN100 / ARM platform capabilities (Chunk 16-A)
+    has_spbm:          bool          = False   # spark_hwmon SPBM driver loaded and has energy channels
+    spbm_hwmon_path:   str           = ""      # /sys/class/hwmon/hwmonN/ discovered dynamically
+    has_dcgm:          bool          = False   # DCGM daemon running and dcgmi responds
+    has_nvml:          bool          = False   # pynvml importable and nvmlInit() succeeds
+    has_arm_pmu:       bool          = False   # ARM PMU events available via perf
+    has_cpufreq_sysfs: bool          = False   # /sys/devices/system/cpu/cpu0/cpufreq/ exists
+    is_grace_cpu:      bool          = False   # NVIDIA Grace (Neoverse V2) CPU detected
+    is_apple_silicon:  bool          = False   # Apple M1/M2/M3 detected
+    has_amd_energy:    bool          = False   # amd_energy kernel module loaded
+    cpu_vendor:        str           = ""      # 'intel' | 'amd' | 'nvidia_grace' | 'apple'
+    gpu_vendor:        str           = ""      # 'nvidia' | 'amd' | 'intel' | 'apple'
+
+
     def to_dict(self) -> dict:
         """
         Serialise to plain dict for JSON output (platform.json).
@@ -224,6 +238,25 @@ class PlatformDetector:
         has_perf      = self._check_perf()          # live probe — not in hw_config
         has_iokit     = (current_os == "Darwin")    # IOKit always present on macOS
 
+        # GN100 / ARM caps — read from hw_config populated by detect_hardware.py
+        spbm_cfg          = self._hw_config.get("spbm", {})
+        dcgm_cfg          = self._hw_config.get("dcgm", {})
+        arm_pmu_cfg       = self._hw_config.get("arm_pmu", {})
+        cpu_cfg           = self._hw_config.get("cpu", {})
+        gpu_cfg           = self._hw_config.get("gpu", {})
+ 
+        has_spbm          = bool(spbm_cfg.get("available", False))
+        spbm_hwmon_path   = spbm_cfg.get("hwmon_path", "")
+        has_dcgm          = bool(dcgm_cfg.get("available", False))
+        has_nvml          = self._check_nvml()
+        has_arm_pmu       = bool(arm_pmu_cfg.get("available", False))
+        has_cpufreq_sysfs = self._check_cpufreq_sysfs()
+        cpu_vendor        = cpu_cfg.get("vendor", "")
+        gpu_vendor        = gpu_cfg.get("vendor", "")
+        is_grace_cpu      = (cpu_vendor == "nvidia_grace")
+        is_apple_silicon  = (cpu_vendor == "apple")
+        has_amd_energy    = (cpu_vendor == "amd") and self._check_amd_energy()
+
         rapl_domains   = list(self._hw_config.get("rapl", {}).get("paths", {}).keys())
         virtualization = self._hw_config.get("system", {}).get("virtualization")
         hostname       = self._hw_config.get("metadata", {}).get("hostname", "unknown")
@@ -242,6 +275,7 @@ class PlatformDetector:
             arch         = current_arch,
             has_rapl     = has_rapl,
             has_iokit    = has_iokit,
+            has_spbm     = has_spbm,
             in_container = in_container,
         )
 
@@ -266,6 +300,18 @@ class PlatformDetector:
             has_turbostat     = has_turbostat,
             has_thermal       = has_thermal,
             has_iokit         = has_iokit,
+            has_spbm          = has_spbm,
+            spbm_hwmon_path   = spbm_hwmon_path,
+            has_dcgm          = has_dcgm,
+            has_nvml          = has_nvml,
+            has_arm_pmu       = has_arm_pmu,
+            has_cpufreq_sysfs = has_cpufreq_sysfs,
+            is_grace_cpu      = is_grace_cpu,
+            is_apple_silicon  = is_apple_silicon,
+            has_amd_energy    = has_amd_energy,
+            cpu_vendor        = cpu_vendor,
+            gpu_vendor        = gpu_vendor,
+ 
             rapl_domains      = rapl_domains,
             virtualization    = virtualization,
             hostname          = hostname,
@@ -341,6 +387,10 @@ class PlatformDetector:
         if is_linux and is_x86 and has_rapl:
             return MEASURED     # best case: direct RAPL µJ counter
 
+        if is_linux and has_spbm:
+            # GN100: SPBM spark_hwmon is a direct hardware energy counter — MEASURED
+            return MEASURED
+        
         if is_linux and is_x86 and not has_rapl:
             return INFERRED     # x86 without RAPL — permissions or container block
 
@@ -375,6 +425,29 @@ class PlatformDetector:
         """Return True if turbostat binary was found by detect_hardware."""
         return self._hw_config.get("turbostat", {}).get("available", False)
 
+    def _check_nvml(self) -> bool:
+        """Return True if pynvml is importable and nvmlInit() succeeds."""
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            pynvml.nvmlShutdown()
+            return True
+        except Exception:
+            return False
+ 
+    def _check_cpufreq_sysfs(self) -> bool:
+        """Return True if cpufreq sysfs path exists (ARM and x86 both have this)."""
+        import os
+        return os.path.isdir("/sys/devices/system/cpu/cpu0/cpufreq")
+ 
+    def _check_amd_energy(self) -> bool:
+        """Return True if amd_energy sysfs node present (module must be loaded)."""
+        import glob
+        return bool(glob.glob("/sys/class/hwmon/hwmon*/name") and
+                    any("amd_energy" in open(f).read()
+                        for f in glob.glob("/sys/class/hwmon/hwmon*/name")
+                        if _safe_read(f)))
+    
     def _check_perf(self) -> bool:
         """
         Live-probe whether perf binary is callable.
@@ -499,5 +572,13 @@ if __name__ == "__main__":
     print(f"  Thermal zones    : {'yes' if caps.has_thermal else 'no'}")
     print(f"  torch installed  : {'yes' if caps.torch_available else 'no'}")
     print(f"  env_hash         : {caps.env_hash}")
+    print(f"  cpu_vendor       : {caps.cpu_vendor or 'unknown'}")
+    print(f"  gpu_vendor       : {caps.gpu_vendor or 'unknown'}")
+    print(f"  is_grace_cpu     : {'yes' if caps.is_grace_cpu else 'no'}")
+    print(f"  has_spbm         : {'yes — ' + caps.spbm_hwmon_path if caps.has_spbm else 'no'}")
+    print(f"  has_dcgm         : {'yes' if caps.has_dcgm else 'no'}")
+    print(f"  has_nvml         : {'yes' if caps.has_nvml else 'no'}")
+    print(f"  has_arm_pmu      : {'yes' if caps.has_arm_pmu else 'no'}")
+    print(f"  has_cpufreq_sysfs: {'yes' if caps.has_cpufreq_sysfs else 'no'}")
     print("=" * 65)
     print(f"\n✅ Written → config/platform.json")

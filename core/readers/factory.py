@@ -116,6 +116,10 @@ class ReaderFactory:
             if caps.os == "Darwin":
                 return cls._make_iokit_reader(config)
 
+            # GN100: SPBM spark_hwmon gives direct µJ counters for Grace CPU
+            if caps.os == "Linux" and caps.is_grace_cpu and caps.has_spbm:
+                return cls._make_spbm_reader(config, caps)
+            
             # Linux x86_64: RAPL sysfs gives direct µJ counters
             return cls._make_rapl_reader(config)
 
@@ -314,7 +318,27 @@ class ReaderFactory:
             "get_scheduler_monitor: platform=%s -> DummySchedulerMonitor (LIMITED)",
             caps.os,
         )
-        return DummySchedulerMonitor(config)    
+        return DummySchedulerMonitor(config)   
+     
+    @staticmethod
+    def _make_spbm_reader(config: dict, caps: "PlatformCapabilities"):
+        """Import and instantiate SPBMEnergyReader (GN100 aarch64 MEASURED).
+ 
+        PAC-2: import isolated here — never import SPBMEnergyReader elsewhere.
+        hwmon_path injected from caps so reader never rediscovers at runtime.
+        Falls back to DummyEnergyReader until 16-B delivers spbm_energy_reader.py.
+        """
+        try:
+            from core.readers.spbm_energy_reader import SPBMEnergyReader  # type: ignore[import]
+            return SPBMEnergyReader(config, hwmon_path=caps.spbm_hwmon_path)
+        except ImportError:
+            logger.warning(
+                "_make_spbm_reader: spbm_energy_reader not yet available "
+                "(16-B pending) — falling back to DummyEnergyReader"
+            )
+            from core.readers.fallback.dummy_energy_reader import DummyEnergyReader
+            return DummyEnergyReader(config) 
+
     @staticmethod
     def _make_rapl_reader(config: dict):
         """Import and instantiate RAPLReader (Linux x86_64 MEASURED)."""
