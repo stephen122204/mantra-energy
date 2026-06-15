@@ -1,7 +1,5 @@
 # GPU Energy Measurement Methodology
 
-**Chunk 15 — A-LEMS Platform**
-**Status:** 15-A complete (MSR PP1 backend). 15-B pending (NVML/DCGM/IOKit/ROCm).
 
 ---
 
@@ -166,7 +164,7 @@ CREATE TABLE gpu_samples (
 
 ## gpu_config Table
 
-One row per physical GPU per machine. Populated by `scripts/chunk15_detect_gpu.py`.
+One row per physical GPU per machine. Populated by `scripts/detect_gpu.py`.
 
 ```sql
 CREATE TABLE gpu_config (
@@ -204,7 +202,7 @@ inserted when `gpu_hash` changes (driver or VBIOS update detected).
 | `none` | GPU not used or counters unavailable | NoneBackend or no GPU |
 
 **B-decision:** `gpu_dynamic_energy_uj` is the canonical attributed GPU energy
-metric. It is identical to what Chunk 15 spec calls `gpu_attributed_energy_uj`.
+metric. The canonical column is `gpu_dynamic_energy_uj` — equivalent in definition to `gpu_attributed_energy_uj`.
 No separate column needed — the equation is the same:
 
 ```
@@ -283,7 +281,7 @@ Three EpG variants on `goal_execution`:
 | `EpG_total` | `(successful_energy_uj + gpu_total_energy_uj) / successful_goals` |
 
 `EpG_total` is the cross-platform headline metric. Computed by
-`goal_execution_etl.py` extension in Chunk 15-C.
+`goal_execution_etl.py` extension (planned).
 
 ---
 
@@ -307,16 +305,16 @@ ALTER TABLE run_quality ADD COLUMN gpu_rejection_reason TEXT;
 
 | method_id | Type | Confidence | Backend |
 |-----------|------|-----------|---------|
-| `gpu_rapl_pp1_v1` | MEASURED | 1.0 | MSR PP1 (15-A) |
-| `gpu_dynamic_baseline_v1` | CALCULATED | 0.90 | All (15-A) |
-| `gpu_attribution_exclusive_v1` | CALCULATED | 1.0 | All (15-A) |
-| `gpu_baseline_2sigma_v1` | MEASURED | 1.0 | All (15-A) |
-| `gpu_phase_alignment_v1` | INFERRED | 0.70 | All (15-C) |
-| `nvml_total_energy_v1` | MEASURED | 1.0 | NVML (15-B) |
-| `nvml_power_integration_v1` | MEASURED | 0.85 | NVML fallback (15-B) |
-| `dcgm_energy_v1` | MEASURED | 1.0 | DCGM (15-B) |
-| `iokit_gpu_energy_v1` | MEASURED | 0.90 | IOKit (15-B) |
-| `rocm_smi_energy_v1` | MEASURED | 0.85 | ROCm (15-B) |
+| `gpu_rapl_pp1_v1` | MEASURED | 1.0 | MSR PP1 |
+| `gpu_dynamic_baseline_v1` | CALCULATED | 0.90 | All backends |
+| `gpu_attribution_exclusive_v1` | CALCULATED | 1.0 | All backends |
+| `gpu_baseline_2sigma_v1` | MEASURED | 1.0 | All backends |
+| `gpu_phase_alignment_v1` | INFERRED | 0.70 | All backends |
+| `nvml_total_energy_v1` | MEASURED | 1.0 | NVML |
+| `nvml_power_integration_v1` | MEASURED | 0.85 | NVML fallback |
+| `dcgm_energy_v1` | MEASURED | 1.0 | DCGM |
+| `iokit_gpu_energy_v1` | MEASURED | 0.90 | IOKit |
+| `rocm_smi_energy_v1` | MEASURED | 0.85 | ROCm |
 
 ---
 
@@ -346,5 +344,4 @@ ALTER TABLE run_quality ADD COLUMN gpu_rejection_reason TEXT;
 
 - `07-energy-readers-methodology.md` — CPU RAPL measurement, GPU PP1 section
 - `01-measurement-methodology.md` — Overall A-LEMS measurement model
-- `CHUNK15_GPU_REVISED.md` — Master spec for Chunk 15
 - arXiv:2605.27599 — "The Energy Blind Spot" (LOCO Workshop paper)

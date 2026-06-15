@@ -418,10 +418,12 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "gpu_baseline_energy_uj": ("gpu_dynamic_baseline_v1",  "CALCULATED"),
     "gpu_dynamic_energy_uj":  ("gpu_dynamic_baseline_v1",  "CALCULATED"),
     "gpu_pct_of_pkg":         ("gpu_dynamic_baseline_v1",  "CALCULATED"),
-    # Chunk 15-A: gpu_samples table columns
+    # gpu_samples table columns
     "gpu_samples.energy_uj":          ("gpu_rapl_pp1_v1",             "MEASURED"),
     "gpu_samples.source":             ("gpu_rapl_pp1_v1",             "MEASURED"),
-    # Chunk 15-A: runs new columns
+    "gpu_samples.util_gpu_pct":       ("nvml_total_energy_v1",        "MEASURED"),
+    "gpu_samples.power_mw":           ("nvml_power_integration_v1",   "MEASURED"),
+    # runs GPU columns
     "gpu_attribution_method":         ("gpu_attribution_exclusive_v1", "CALCULATED"),
     "gpu_count":                      ("gpu_baseline_2sigma_v1",       "MEASURED"),
     # Chunk 15-A: energy_attribution GPU AXIS 2A (populated by 15-C ETL)
@@ -500,10 +502,14 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "tool_instrumentation_v1":          1.0,
     "gpu_rapl_pp1_v1":                  0.95,  # MSR 0x641, cross-validated vs perf PMU
     "gpu_dynamic_baseline_v1":          0.90,  # baseline subtraction, same as cpu dynamic
-    # Chunk 15-A new methods
     "gpu_attribution_exclusive_v1":     1.00,  # exclusive workload use, exact attribution
     "gpu_baseline_2sigma_v1":           1.00,  # 2-sigma idle baseline, same as CPU method
-    "gpu_phase_alignment_v1":           0.70,  # proxy: CPU phase fractions applied to GPU    
+    "gpu_phase_alignment_v1":           0.70,  # proxy: CPU phase fractions applied to GPU
+    "nvml_total_energy_v1":             1.00,  # cumulative mJ counter, validated on RTX 2070 + GN100
+    "nvml_power_integration_v1":        0.85,  # power x dt fallback, integration error ~15%
+    "dcgm_energy_v1":                   1.00,  # DCGM field 156, validated on GN100 GB10
+    "iokit_gpu_energy_v1":              0.90,  # Apple powermetrics, not independently validated
+    "rocm_smi_energy_v1":               0.85,  # ROCm SMI stub, no hardware validation yet
 }
 
 

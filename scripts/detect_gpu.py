@@ -164,7 +164,41 @@ def upsert_gpu_config(db_path, gpu_infos):
         logger.info("gpu_config now has %d row(s)", count)
     finally:
         conn.close()
-
+def detect_nvidia_nvml():
+    """Detect NVIDIA GPUs via pynvml (nvidia-ml-py). Returns gpu_info list."""
+    try:
+        from core.readers.gpu_collector import NVMLBackend
+        backend = NVMLBackend()
+        if backend.is_available():
+            return backend.get_gpu_info()
+    except Exception as e:
+        logger.debug("NVML detection failed: %s", e)
+    return []
+ 
+ 
+def detect_nvidia_dcgm():
+    """Detect NVIDIA GPUs via DCGM. GN100 primary path. Returns gpu_info list."""
+    try:
+        from core.readers.gpu_collector import DCGMBackend
+        backend = DCGMBackend()
+        if backend.is_available():
+            return backend.get_gpu_info()
+    except Exception as e:
+        logger.debug("DCGM detection failed: %s", e)
+    return []
+ 
+ 
+def detect_apple_iokit():
+    """Detect Apple Silicon GPU via IOKit/powermetrics. macOS only."""
+    try:
+        from core.readers.gpu_collector import IOKitBackend
+        backend = IOKitBackend()
+        if backend.is_available():
+            return backend.get_gpu_info()
+    except Exception as e:
+        logger.debug("IOKit detection failed: %s", e)
+    return []
+ 
 
 def main():
     parser = argparse.ArgumentParser(
@@ -179,29 +213,32 @@ def main():
         hw_config = json.load(f)
 
     gpu_infos = []
-
-    # 15-B will add DCGM detection here (before NVML — GN100 priority)
-    # dcgm_gpus = detect_nvidia_dcgm()
-    # if dcgm_gpus:
-    #     gpu_infos.extend(dcgm_gpus)
-
-    # 15-B will add NVML detection here
-    # if not gpu_infos:
-    #     nvml_gpus = detect_nvidia_nvml()
-    #     if nvml_gpus:
-    #         gpu_infos.extend(nvml_gpus)
-
-    # Intel integrated — UBUNTU2505 path (active now)
+ 
+    # DCGM first — GN100/DGX path, primary on ARM where RAPL absent
+    dcgm_gpus = detect_nvidia_dcgm()
+    if dcgm_gpus:
+        gpu_infos.extend(dcgm_gpus)
+        logger.info("Detected %d GPU(s) via DCGM", len(dcgm_gpus))
+ 
+    # NVML — discrete NVIDIA GPUs, skip if DCGM already found them
+    if not dcgm_gpus:
+        nvml_gpus = detect_nvidia_nvml()
+        if nvml_gpus:
+            gpu_infos.extend(nvml_gpus)
+            logger.info("Detected %d GPU(s) via NVML", len(nvml_gpus))
+ 
+    # Intel integrated — UBUNTU2505 Iris Xe path
     intel = detect_intel_integrated(hw_config)
     if intel:
         gpu_infos.append(intel)
         logger.info("Detected Intel integrated GPU: %s (backend=%s)",
                     intel['model'], intel['backend'])
-
-    # 15-B will add Apple IOKit detection here
-    # apple = detect_apple_iokit()
-    # if apple:
-    #     gpu_infos.extend(apple)
+ 
+    # Apple Silicon — Stephen Abkin M1 Pro path
+    apple_gpus = detect_apple_iokit()
+    if apple_gpus:
+        gpu_infos.extend(apple_gpus)
+        logger.info("Detected %d Apple GPU(s) via IOKit", len(apple_gpus))
 
     if not gpu_infos:
         logger.warning("No GPU detected on this machine. gpu_config will be empty.")

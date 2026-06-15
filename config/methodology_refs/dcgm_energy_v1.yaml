@@ -1,0 +1,12 @@
+method_id: dcgm_energy_v1
+references:
+  - title: "NVIDIA Data Center GPU Manager (DCGM) User Guide"
+    authors: "NVIDIA Corporation"
+    year: 2024
+    ref_type: "manual"
+    relevance: "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION field 156 — cumulative mJ counter validated on GN100 GB10 Superchip"
+  - title: "GN100 spark_hwmon SPBM Driver Validation"
+    authors: "Deepak Panigrahy"
+    year: 2026
+    ref_type: "internal"
+    relevance: "First confirmed replication of DCGM field 156 on GN100 OEM hardware. 14 power channels, 4 energy accumulators confirmed. arXiv:2605.27599"

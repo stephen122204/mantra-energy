@@ -1,0 +1,7 @@
+method_id: rocm_smi_energy_v1
+references:
+  - title: "AMD ROCm SMI Library API Reference"
+    authors: "Advanced Micro Devices"
+    year: 2024
+    ref_type: "manual"
+    relevance: "rsmi_dev_energy_count_get() cumulative energy counter. Stub only — no AMD hardware in lab as of 2026-06."

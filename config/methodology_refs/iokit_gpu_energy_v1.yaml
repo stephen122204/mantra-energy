@@ -1,0 +1,7 @@
+method_id: iokit_gpu_energy_v1
+references:
+  - title: "Apple powermetrics man page"
+    authors: "Apple Inc."
+    year: 2024
+    ref_type: "manual"
+    relevance: "powermetrics --samplers gpu_power exposes instantaneous GPU power in mW on Apple Silicon"

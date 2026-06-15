@@ -1,7 +1,6 @@
 # Normalisation Factors Methodology
 
 **Document:** `research/13-normalization-factors-methodology.md`  
-**Chunk:** 6 (schema), 8 (population)  
 **Method ID:** `normalization_factors_v1`  
 **Confidence:** 0.90
 
@@ -28,7 +27,7 @@ Factors are divided into two groups:
 
 Describe the inherent properties of the task being evaluated. These are
 determined by task configuration and can be computed from `orchestration_events`
-and `llm_interactions` without Chunk 8.
+and `llm_interactions` tables.
 
 | Factor | Source | Description |
 |--------|--------|-------------|
@@ -46,7 +45,7 @@ and `llm_interactions` without Chunk 8.
 ### Behavioural Factors (dynamic)
 
 Describe how the run actually executed — its efficiency relative to the task.
-These require Chunk 8 tables (`query_execution`, `query_attempt`,
+These require the `query_execution`, `query_attempt`,
 `hallucination_events`).
 
 | Factor | Source | Description |
@@ -72,7 +71,7 @@ Describe the resource environment during execution.
 | `cache_miss_rate` | computed | `l3_misses / (l3_hits + l3_misses)` |
 | `io_wait_ratio` | computed | `io_block_time_ms / duration_ms` |
 | `stall_time_ms` | INFERRED | time CPU stalled (not computing) |
-| `sla_violations` | Chunk 8 | steps exceeding latency SLA |
+| `sla_violations` | `query_execution` | steps exceeding latency SLA |
 
 ---
 
@@ -114,14 +113,14 @@ and should trigger a quality flag in `experiment_valid`.
 
 ## Population Status
 
-| Factor Group | Chunk 6 | Chunk 8 |
-|-------------|---------|---------|
+| Factor Group | Schema Only | ETL Populated |
+|-------------|-------------|---------------|
 | Structural | ❌ Empty | ✅ Populated |
 | Behavioural | ❌ NULL | ✅ Populated |
 | Resource | ❌ Empty | ✅ Populated |
 
-**Chunk 6 creates the schema only.** All rows are NULL until the
-`normalization_factors_etl.py` script is implemented in Chunk 8.
+Schema creates the tables only. All rows are NULL until
+`normalization_factors_etl.py` runs.
 
 ---
 
@@ -140,7 +139,7 @@ Run B appears cheaper — but it did 5× less work. Normalised, Run A is
 
 ---
 
-## Chunk 8 Dependencies
+## ETL Dependencies
 
 ```
 normalization_factors.successful_goals   ← query_execution.success

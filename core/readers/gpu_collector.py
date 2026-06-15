@@ -15,7 +15,7 @@ Backend detection order (15-A implements MSR + None; 15-B adds the rest):
 PAC-2 compliant: GPUCollector is the ONLY place that imports GPU backends.
 Never import backends directly in energy_engine.py or harness.py.
 
-cp to: core/energy/gpu_collector.py
+core/readers/gpu_collector.py
 """
 
 import logging
@@ -180,6 +180,390 @@ class MSRPP1Backend:
             'backend':          self.SOURCE,
         }]
 
+class NVMLBackend:
+    """
+    NVIDIA GPU backend via nvidia-ml-py (pynvml).
+    Covers: Alex Flesher RTX 2070 Super, GN100 GB10 fallback if DCGM absent.
+ 
+    Primary: nvmlDeviceGetTotalEnergyConsumption() — cumulative mJ counter.
+    Fallback: nvmlDeviceGetPowerUsage() instantaneous mW when counter absent.
+    Confidence: 1.0 cumulative, 0.85 power-integration fallback.
+    """
+    SOURCE = 'nvml'
+ 
+    def __init__(self):
+        self._handle = None
+        self._gpu_count = 0
+        self._has_energy_counter = False
+        self._pynvml = None
+        self._init_nvml()
+ 
+    def _init_nvml(self):
+        # type: () -> None
+        """Initialize NVML. Sets _handle=None on failure — never raises."""
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            self._pynvml = pynvml
+            self._gpu_count = pynvml.nvmlDeviceGetCount()
+            if self._gpu_count == 0:
+                return
+            self._handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            # Probe cumulative energy counter — not available on all drivers
+            try:
+                pynvml.nvmlDeviceGetTotalEnergyConsumption(self._handle)
+                self._has_energy_counter = True
+                logger.info("NVMLBackend: cumulative energy counter available")
+            except pynvml.NVMLError:
+                self._has_energy_counter = False
+                logger.info("NVMLBackend: falling back to power integration")
+        except Exception as e:
+            logger.debug("NVMLBackend init failed: %s", e)
+            self._handle = None
+ 
+    def is_available(self):
+        # type: () -> bool
+        return self._handle is not None
+ 
+    def read_energy_uj(self, gpu_index=0):
+        # type: (int) -> Optional[int]
+        """
+        Read cumulative energy in µJ (mJ counter x1000) or mW for integration.
+        Returns None on failure — never raises (PAC-4 compliant).
+        """
+        if self._handle is None:
+            return None
+        try:
+            if self._has_energy_counter:
+                # nvmlDeviceGetTotalEnergyConsumption returns mJ — convert to µJ
+                mj = self._pynvml.nvmlDeviceGetTotalEnergyConsumption(self._handle)
+                return int(mj * 1000)
+            else:
+                # Instantaneous mW — GPUCollector integrates power x dt
+                mw = self._pynvml.nvmlDeviceGetPowerUsage(self._handle)
+                return int(mw)
+        except Exception as e:
+            logger.warning("NVMLBackend.read_energy_uj failed: %s", e)
+            return None
+ 
+    def read_signals(self, gpu_index=0):
+        # type: (int) -> Dict[str, Any]
+        """Read GPU utilization, clocks, memory, temperature via NVML."""
+        if self._handle is None:
+            return {}
+        signals = {}
+        try:
+            util = self._pynvml.nvmlDeviceGetUtilizationRates(self._handle)
+            signals['util_gpu_pct'] = float(util.gpu)
+            signals['util_mem_pct'] = float(util.memory)
+        except Exception:
+            pass
+        try:
+            signals['sm_clock_mhz'] = int(
+                self._pynvml.nvmlDeviceGetClockInfo(
+                    self._handle, self._pynvml.NVML_CLOCK_SM))
+            signals['mem_clock_mhz'] = int(
+                self._pynvml.nvmlDeviceGetClockInfo(
+                    self._handle, self._pynvml.NVML_CLOCK_MEM))
+        except Exception:
+            pass
+        try:
+            mem = self._pynvml.nvmlDeviceGetMemoryInfo(self._handle)
+            signals['mem_used_mb'] = int(mem.used / (1024 * 1024))
+        except Exception:
+            pass
+        try:
+            signals['temperature_c'] = int(
+                self._pynvml.nvmlDeviceGetTemperature(
+                    self._handle, self._pynvml.NVML_TEMPERATURE_GPU))
+        except Exception:
+            pass
+        return signals
+ 
+    def get_gpu_info(self):
+        # type: () -> List[Dict[str, Any]]
+        """Returns metadata list for gpu_config INSERT."""
+        if self._handle is None:
+            return []
+        info_list = []
+        for i in range(self._gpu_count):
+            try:
+                h = self._pynvml.nvmlDeviceGetHandleByIndex(i)
+                name = self._pynvml.nvmlDeviceGetName(h)
+                if isinstance(name, bytes):
+                    name = name.decode()
+                mem = self._pynvml.nvmlDeviceGetMemoryInfo(h)
+                driver = self._pynvml.nvmlSystemGetDriverVersion()
+                if isinstance(driver, bytes):
+                    driver = driver.decode()
+                cuda_ver = None
+                try:
+                    cv = self._pynvml.nvmlSystemGetCudaDriverVersion()
+                    cuda_ver = "{}.{}".format(cv // 1000, (cv % 1000) // 10)
+                except Exception:
+                    pass
+                info_list.append({
+                    'gpu_index':        i,
+                    'vendor':           'nvidia',
+                    'model':            name,
+                    'driver_version':   driver,
+                    'cuda_version':     cuda_ver,
+                    'rocm_version':     None,
+                    'vbios_version':    None,
+                    'pci_id':           None,
+                    'memory_total_mb':  int(mem.total / (1024 * 1024)),
+                    'energy_supported': 1 if self._has_energy_counter else 0,
+                    'backend':          self.SOURCE,
+                })
+            except Exception as e:
+                logger.warning("NVMLBackend.get_gpu_info gpu %d failed: %s", i, e)
+        return info_list
+ 
+    def shutdown(self):
+        """Clean NVML shutdown."""
+        try:
+            self._pynvml.nvmlShutdown()
+        except Exception:
+            pass
+ 
+ 
+class DCGMBackend:
+    """
+    NVIDIA DCGM backend for DGX/HGX systems.
+    Primary platform: GN100 (NVIDIA GB10 Superchip, ARM aarch64).
+ 
+    DCGM field 156 = DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION (cumulative mJ).
+    Validated on GN100: spark_hwmon loaded, 4 energy accumulators confirmed.
+    RAPL absent on GB10 — DCGM is the only energy path on this platform.
+ 
+    Bindings at /usr/local/dcgm/bindings/python3/ — registered via .pth file.
+    Run scripts/setup_dcgm_venv.sh once after activating venv on GN100.
+    """
+    SOURCE = 'dcgm'
+    # DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION — cumulative mJ counter
+    FIELD_TOTAL_ENERGY = 156
+    # DCGM_FI_DEV_GPU_UTIL — GPU utilization percent
+    FIELD_GPU_UTIL = 203
+    # DCGM_FI_DEV_GPU_TEMP — GPU temperature Celsius
+    FIELD_GPU_TEMP = 150
+ 
+    def __init__(self):
+        self._handle = None
+        self._system = None
+        self._init_dcgm()
+ 
+    def _init_dcgm(self):
+        # type: () -> None
+        """Connect to local DCGM daemon. Sets _handle=None on failure."""
+        try:
+            import pydcgm
+            # Connect to DCGM daemon running on localhost
+            handle = pydcgm.DcgmHandle(ipAddress='127.0.0.1')
+            self._handle = handle
+            self._system = handle.GetSystem()
+            logger.info("DCGMBackend: connected to DCGM daemon")
+        except Exception as e:
+            logger.debug("DCGMBackend init failed: %s", e)
+            self._handle = None
+ 
+    def is_available(self):
+        # type: () -> bool
+        return self._handle is not None
+ 
+    def read_energy_uj(self, gpu_index=0):
+        # type: (int) -> Optional[int]
+        """
+        Read DCGM field 156 cumulative energy in mJ, convert to µJ.
+        Returns None on failure — never raises (PAC-4 compliant).
+        """
+        if self._system is None:
+            return None
+        try:
+            gpus = self._system.discovery.GetAllGpuIds()
+            if gpu_index >= len(gpus):
+                return None
+            gpu_id = gpus[gpu_index]
+            values = self._system.fields.GetLatestValuesForFields(
+                gpu_id, [self.FIELD_TOTAL_ENERGY])
+            if values and values[0].value is not None:
+                # DCGM returns mJ — convert to µJ for platform consistency
+                return int(values[0].value * 1000)
+            return None
+        except Exception as e:
+            logger.warning("DCGMBackend.read_energy_uj failed: %s", e)
+            return None
+ 
+    def read_signals(self, gpu_index=0):
+        # type: (int) -> Dict[str, Any]
+        """Read GPU utilization and temperature via DCGM."""
+        if self._system is None:
+            return {}
+        signals = {}
+        try:
+            gpus = self._system.discovery.GetAllGpuIds()
+            if gpu_index >= len(gpus):
+                return {}
+            gpu_id = gpus[gpu_index]
+            values = self._system.fields.GetLatestValuesForFields(
+                gpu_id, [self.FIELD_GPU_UTIL, self.FIELD_GPU_TEMP])
+            if len(values) >= 1 and values[0].value is not None:
+                signals['util_gpu_pct'] = float(values[0].value)
+            if len(values) >= 2 and values[1].value is not None:
+                signals['temperature_c'] = int(values[1].value)
+        except Exception as e:
+            logger.debug("DCGMBackend.read_signals failed: %s", e)
+        return signals
+ 
+    def get_gpu_info(self):
+        # type: () -> List[Dict[str, Any]]
+        """Returns metadata list for gpu_config INSERT."""
+        if self._system is None:
+            return []
+        try:
+            gpus = self._system.discovery.GetAllGpuIds()
+            info_list = []
+            for i, gpu_id in enumerate(gpus):
+                attrs = self._system.discovery.GetGpuAttributes(gpu_id)
+                info_list.append({
+                    'gpu_index':        i,
+                    'vendor':           'nvidia',
+                    'model':            attrs.identifiers.deviceName,
+                    'driver_version':   attrs.identifiers.driverVersion,
+                    'cuda_version':     None,
+                    'rocm_version':     None,
+                    'vbios_version':    attrs.identifiers.vbios,
+                    'pci_id':           None,
+                    'memory_total_mb':  None,
+                    'energy_supported': 1,
+                    'backend':          self.SOURCE,
+                })
+            return info_list
+        except Exception as e:
+            logger.warning("DCGMBackend.get_gpu_info failed: %s", e)
+            return []
+ 
+ 
+class IOKitBackend:
+    """
+    Apple Silicon GPU energy backend via powermetrics.
+    Platform: macOS only — Stephen Abkin M1 Pro.
+ 
+    powermetrics exposes instantaneous GPU power in mW per sample.
+    GPUCollector integrates power x dt to derive energy in µJ.
+    Requires sudo on macOS — warns if unavailable.
+    Confidence: 0.90 (Apple internal counter, not independently validated).
+    """
+    SOURCE = 'iokit'
+ 
+    def __init__(self):
+        # Probe once at init — avoids repeated sudo calls during sampling
+        self._available = self._probe()
+ 
+    def _probe(self):
+        # type: () -> bool
+        """Return True only on macOS with accessible powermetrics."""
+        import platform as _platform
+        if _platform.system() != 'Darwin':
+            return False
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['sudo', 'powermetrics', '--samplers', 'gpu_power',
+                 '-n', '1', '-i', '100'],
+                capture_output=True, timeout=5
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+ 
+    def is_available(self):
+        # type: () -> bool
+        return self._available
+ 
+    def read_energy_uj(self, gpu_index=0):
+        # type: (int) -> Optional[int]
+        """
+        Returns instantaneous GPU power in mW via powermetrics.
+        GPUCollector multiplies by dt to get energy — stored in power_mw field.
+        Returns None on failure.
+        """
+        if not self._available:
+            return None
+        try:
+            import subprocess
+            import re
+            result = subprocess.run(
+                ['sudo', 'powermetrics', '--samplers', 'gpu_power',
+                 '-n', '1', '-i', '100', '--format', 'plist'],
+                capture_output=True, timeout=5, text=True
+            )
+            match = re.search(r'gpu_power.*?(\d+\.?\d*)', result.stdout)
+            if match:
+                return int(float(match.group(1)))
+            return None
+        except Exception as e:
+            logger.warning("IOKitBackend.read_energy_uj failed: %s", e)
+            return None
+ 
+    def read_signals(self, gpu_index=0):
+        # type: (int) -> Dict[str, Any]
+        """No additional signals from powermetrics in current implementation."""
+        return {}
+ 
+    def get_gpu_info(self):
+        # type: () -> List[Dict[str, Any]]
+        """Apple GPU info from system_profiler."""
+        try:
+            import subprocess
+            import json as _json
+            result = subprocess.run(
+                ['system_profiler', 'SPDisplaysDataType', '-json'],
+                capture_output=True, text=True, timeout=10
+            )
+            data = _json.loads(result.stdout)
+            gpus = data.get('SPDisplaysDataType', [{}])
+            return [{
+                'gpu_index':        0,
+                'vendor':           'apple',
+                'model':            gpus[0].get('sppci_model', 'Apple GPU'),
+                'driver_version':   None,
+                'cuda_version':     None,
+                'rocm_version':     None,
+                'vbios_version':    None,
+                'pci_id':           None,
+                'memory_total_mb':  None,
+                'energy_supported': 1,
+                'backend':          self.SOURCE,
+            }]
+        except Exception:
+            return []
+ 
+ 
+class ROCmBackend:
+    """
+    AMD GPU backend via ROCm SMI.
+    STUB ONLY — no AMD GPU hardware in lab as of 2026-06.
+    Interface matches all other backends exactly for future activation.
+    Activate when AMD hardware joins the lab.
+    """
+    SOURCE = 'rocm_smi'
+ 
+    def is_available(self):
+        # type: () -> bool
+        """Stub — always False until AMD hardware joins the lab."""
+        return False
+ 
+    def read_energy_uj(self, gpu_index=0):
+        # type: (int) -> Optional[int]
+        return None
+ 
+    def read_signals(self, gpu_index=0):
+        # type: (int) -> Dict[str, Any]
+        return {}
+ 
+    def get_gpu_info(self):
+        # type: () -> List[Dict[str, Any]]
+        return []
 
 class GPUCollector:
     """
@@ -229,30 +613,29 @@ class GPUCollector:
         # type: (Any) -> Any
         """
         Backend detection. First available wins.
-        15-B will uncomment DCGM/NVML/ROCm/IOKit blocks.
-        NoneBackend returned if nothing available — never raises.
+        DCGM before NVML: on GN100, DCGM is the validated energy path.
+        MSR PP1 before ROCm: Intel integrated is x86 only.
+        NoneBackend: graceful fallback, never raises.
         """
-        # DCGM — GN100/DGX systems (15-B implements)
-        # try:
-        #     from core.energy.gpu_collector import DCGMBackend
-        #     b = DCGMBackend()
-        #     if b.is_available():
-        #         logger.info("GPUCollector: using DCGMBackend")
-        #         return b
-        # except Exception as e:
-        #     logger.debug("DCGMBackend probe: %s", e)
-
-        # NVML — NVIDIA discrete GPUs (15-B implements)
-        # try:
-        #     from core.energy.gpu_collector import NVMLBackend
-        #     b = NVMLBackend()
-        #     if b.is_available():
-        #         logger.info("GPUCollector: using NVMLBackend")
-        #         return b
-        # except Exception as e:
-        #     logger.debug("NVMLBackend probe: %s", e)
-
-        # MSR PP1 — Intel integrated GPU, available now on UBUNTU2505
+        # DCGM — GN100/DGX systems, RAPL absent on ARM so DCGM is primary
+        try:
+            b = DCGMBackend()
+            if b.is_available():
+                logger.info("GPUCollector: using DCGMBackend")
+                return b
+        except Exception as e:
+            logger.debug("DCGMBackend probe failed: %s", e)
+ 
+        # NVML — NVIDIA discrete GPUs (RTX 2070, etc.)
+        try:
+            b = NVMLBackend()
+            if b.is_available():
+                logger.info("GPUCollector: using NVMLBackend")
+                return b
+        except Exception as e:
+            logger.debug("NVMLBackend probe failed: %s", e)
+ 
+        # MSR PP1 — Intel integrated GPU (UBUNTU2505 Iris Xe)
         if rapl_reader is not None:
             try:
                 b = MSRPP1Backend(rapl_reader)
@@ -260,28 +643,26 @@ class GPUCollector:
                     logger.info("GPUCollector: using MSRPP1Backend")
                     return b
             except Exception as e:
-                logger.debug("MSRPP1Backend probe: %s", e)
-
-        # ROCm — AMD GPU (15-B stub)
-        # try:
-        #     from core.energy.gpu_collector import ROCmBackend
-        #     b = ROCmBackend()
-        #     if b.is_available():
-        #         logger.info("GPUCollector: using ROCmBackend")
-        #         return b
-        # except Exception as e:
-        #     logger.debug("ROCmBackend probe: %s", e)
-
-        # IOKit — Apple Silicon (15-B stub)
-        # try:
-        #     from core.energy.gpu_collector import IOKitBackend
-        #     b = IOKitBackend()
-        #     if b.is_available():
-        #         logger.info("GPUCollector: using IOKitBackend")
-        #         return b
-        # except Exception as e:
-        #     logger.debug("IOKitBackend probe: %s", e)
-
+                logger.debug("MSRPP1Backend probe failed: %s", e)
+ 
+        # ROCm — AMD GPU stub, activates when hardware joins lab
+        try:
+            b = ROCmBackend()
+            if b.is_available():
+                logger.info("GPUCollector: using ROCmBackend")
+                return b
+        except Exception as e:
+            logger.debug("ROCmBackend probe failed: %s", e)
+ 
+        # IOKit — Apple Silicon (Stephen Abkin M1 Pro)
+        try:
+            b = IOKitBackend()
+            if b.is_available():
+                logger.info("GPUCollector: using IOKitBackend")
+                return b
+        except Exception as e:
+            logger.debug("IOKitBackend probe failed: %s", e)
+ 
         logger.debug("GPUCollector: no backend available, using NoneBackend")
         return NoneBackend()
 

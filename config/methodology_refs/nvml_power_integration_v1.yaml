@@ -1,0 +1,7 @@
+method_id: nvml_power_integration_v1
+references:
+  - title: "NVIDIA Management Library (NVML) API Reference"
+    authors: "NVIDIA Corporation"
+    year: 2024
+    ref_type: "manual"
+    relevance: "nvmlDeviceGetPowerUsage() — instantaneous mW reading used as fallback when cumulative counter unavailable"

@@ -239,6 +239,90 @@ def _load_measured_methods() -> List[Dict]:
         },  
 
         {
+            "id":            "nvml_total_energy_v1",
+            "name":          "NVIDIA NVML Cumulative Energy Counter",
+            "provenance":    "MEASURED",
+            "layer":         "silicon",
+            "confidence":    1.0,
+            "description":   (
+                "nvmlDeviceGetTotalEnergyConsumption() returns cumulative mJ. "
+                "Converted to µJ. Available on NVIDIA drivers >= 340.x. "
+                "Validated on RTX 2070 Super (Alex Flesher) and GN100 GB10."
+            ),
+            "formula_latex": r"E_{gpu} = \Delta\text{NVML}_{energy} \times 1000\,\mu J/mJ",
+            "parameters":    {"nvml_field": "totalEnergyConsumption", "unit": "mJ"},
+            "doc":           "24-gpu-energy-methodology.md",
+            "section":       "NVML Backend (NVIDIA Discrete GPUs)",
+        },
+        {
+            "id":            "nvml_power_integration_v1",
+            "name":          "NVIDIA NVML Power Integration Fallback",
+            "provenance":    "MEASURED",
+            "layer":         "silicon",
+            "confidence":    0.85,
+            "description":   (
+                "nvmlDeviceGetPowerUsage() returns instantaneous mW. "
+                "Energy = power x dt. Used when cumulative counter unavailable. "
+                "Lower confidence due to integration error accumulation."
+            ),
+            "formula_latex": r"E_{gpu} = P_{gpu} \times \Delta t",
+            "parameters":    {"nvml_field": "powerUsage", "unit": "mW"},
+            "doc":           "24-gpu-energy-methodology.md",
+            "section":       "NVML Backend (NVIDIA Discrete GPUs)",
+        },
+        {
+            "id":            "dcgm_energy_v1",
+            "name":          "NVIDIA DCGM Field 156 Energy",
+            "provenance":    "MEASURED",
+            "layer":         "silicon",
+            "confidence":    1.0,
+            "description":   (
+                "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION (field 156). "
+                "Cumulative mJ counter from DCGM daemon. "
+                "Validated on GN100 GB10 Superchip: spark_hwmon loaded, "
+                "4 energy accumulators confirmed. "
+                "Primary GPU energy path on ARM where RAPL is absent."
+            ),
+            "formula_latex": r"E_{gpu} = \Delta\text{DCGM}_{f156} \times 1000\,\mu J/mJ",
+            "parameters":    {"dcgm_field": 156, "unit": "mJ"},
+            "doc":           "24-gpu-energy-methodology.md",
+            "section":       "DCGM Backend (GN100)",
+        },
+        {
+            "id":            "iokit_gpu_energy_v1",
+            "name":          "Apple IOKit GPU Energy (powermetrics)",
+            "provenance":    "MEASURED",
+            "layer":         "silicon",
+            "confidence":    0.90,
+            "description":   (
+                "Apple Silicon GPU energy via sudo powermetrics. "
+                "Instantaneous power integrated over sample interval. "
+                "Platform: Stephen Abkin M1 Pro. "
+                "Confidence 0.90: Apple internal counter, not independently validated."
+            ),
+            "formula_latex": r"E_{gpu} = P_{gpu,powermetrics} \times \Delta t",
+            "parameters":    {"tool": "powermetrics", "sampler": "gpu_power"},
+            "doc":           "24-gpu-energy-methodology.md",
+            "section":       "IOKit Backend",
+        },
+        {
+            "id":            "rocm_smi_energy_v1",
+            "name":          "AMD ROCm SMI Energy Counter (Stub)",
+            "provenance":    "MEASURED",
+            "layer":         "silicon",
+            "confidence":    0.85,
+            "description":   (
+                "rsmi_dev_energy_count_get() cumulative counter. "
+                "Stub only — no AMD GPU hardware in lab as of 2026-06. "
+                "Activate when AMD hardware joins the lab."
+            ),
+            "formula_latex": r"E_{gpu} = \Delta\text{ROCm}_{energy}",
+            "parameters":    {"api": "rsmi_dev_energy_count_get"},
+            "doc":           "24-gpu-energy-methodology.md",
+            "section":       "ROCm Backend",
+        },
+
+        {
             "id":            "gpu_attribution_exclusive_v1",
             "name":          "GPU Dynamic Energy Attribution (Exclusive Workload)",
             "provenance":    "CALCULATED",

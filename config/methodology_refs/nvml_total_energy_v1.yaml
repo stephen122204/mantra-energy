@@ -1,0 +1,12 @@
+method_id: nvml_total_energy_v1
+references:
+  - title: "NVIDIA Management Library (NVML) API Reference"
+    authors: "NVIDIA Corporation"
+    year: 2024
+    ref_type: "manual"
+    relevance: "nvmlDeviceGetTotalEnergyConsumption() — cumulative mJ counter, field totalEnergyConsumption"
+  - title: "nvidia-ml-py Python Bindings"
+    authors: "NVIDIA Corporation"
+    year: 2024
+    ref_type: "manual"
+    relevance: "Python wrapper for NVML used in NVMLBackend"
