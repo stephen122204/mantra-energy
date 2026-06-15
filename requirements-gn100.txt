@@ -1,0 +1,5 @@
+# GN100-specific requirements
+# After pip install -r requirements-gn100.txt, also run:
+# bash scripts/setup_dcgm_venv.sh
+nvidia-ml-py>=13.0.0
+llama-cpp-python  # must be built with CMAKE_ARGS="-DGGML_CUDA=on"
