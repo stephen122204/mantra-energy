@@ -342,7 +342,65 @@ def _load_measured_methods() -> List[Dict]:
             "formula_latex": r"E_{gpu,baseline} = P_{gpu,idle} \times t_{run}",
             "parameters":    {"method": "2sigma_idle", "rate_hz": 10},
         },
-
+        {
+            "id":           "energy_domain_registry_v1",
+            "name":         "Energy Domain Registry",
+            "provenance":   "SYSTEM",
+            "layer":        "silicon",
+            "confidence":   1.00,
+            "description":  (
+                "Lookup table mapping energy domain names to hardware topology. "
+                "PACKAGE, NETWORK, ACCELERATOR, STORAGE are independent roots. "
+                "contributes_to_parent per platform in platform_domain_relationships. "
+                "Adding a new platform requires only new rows in energy_sources "
+                "and platform_domain_relationships — zero schema changes."
+            ),
+            "formula_latex": r"\text{domain} \in \mathcal{D}_{\text{platform}}",
+            "parameters":   {},
+            "doc":          "26-unified-energy-schema.md",
+            "section":      "Core Tables",
+        },
+        {
+            "id":           "nvlink_c2c_isolation_v1",
+            "name":         "NVLink-C2C Energy Isolation via SPBM Subtraction",
+            "provenance":   "INFERRED",
+            "layer":        "silicon",
+            "confidence":   0.95,
+            "description":  (
+                "NVLink-C2C die-to-die energy isolated by subtracting DCGM GPU "
+                "compute energy from SPBM GPU rail energy on GN100 GB10. "
+                "SPBM GPU rail = GPU compute + HBM + NVLink-C2C overhead. "
+                "DCGM field 156 = GPU compute only (excludes HBM and NVLink-C2C). "
+                "Delta = NVLink-C2C + HBM memory bandwidth energy. "
+                "Validated idle baseline: 992 mW delta on GN100 (2026-06-14). "
+                "First measurement of NVLink-C2C power on GB10 unified memory SoC. "
+                "ISPASS 2027 paper primary methodology."
+            ),
+            "formula_latex": r"E_{nvlink\_c2c} = E_{spbm\_gpu} - E_{dcgm\_gpu}",
+            "parameters":   {"idle_baseline_mw": 992, "dcgm_field": 156},
+            "doc":          "26-network-wait-energy-methodology.md",
+            "section":      "NVLink-C2C Energy Isolation",
+        },
+        {
+            "id":           "device_telemetry_v1",
+            "name":         "Device Telemetry (Power, Temperature, Utilization)",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "confidence":   1.00,
+            "description":  (
+                "Instantaneous device state sampled at 10 Hz alongside energy_samples_v2. "
+                "Covers GPU telemetry (NVML, DCGM), SoC wall power (SPBM dc_input), "
+                "and future network and storage device telemetry. "
+                "power_mw is instantaneous milliwatts — not cumulative. "
+                "energy_uj present for NVML and DCGM backends (cumulative counter). "
+                "energy_uj is NULL for SMI_INTEG — power integration done at ETL. "
+                "dc_input_mw captures wall input power on GN100 SOC device type."
+            ),
+            "formula_latex": r"P(t) = \frac{dE}{dt}\bigg|_{t}",
+            "parameters":   {"sampling_hz": 10},
+            "doc":          "07-energy-readers-methodology.md",
+            "section":      "Device Telemetry",
+        },
         {
             "id":            "gpu_phase_alignment_v1",
             "name":          "GPU Phase Energy Alignment (CPU Proxy)",

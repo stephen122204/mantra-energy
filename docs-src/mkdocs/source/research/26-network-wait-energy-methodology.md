@@ -107,3 +107,70 @@ WHERE li.non_local_ms > 100
 ORDER BY li.non_local_ms DESC;
 -- Expected: network_wait_j > 0 despite cpu_percent_during_wait ≈ 0
 ```
+
+---
+
+## NVLink-C2C Energy Isolation
+
+NVLink-C2C is the die-to-die interconnect between the Grace CPU and Blackwell GPU
+on the GN100 unified memory SoC. Unlike NVLink between discrete GPUs, NVLink-C2C
+operates within a single package at 900 GB/s with no PCIe boundary.
+
+DCGM field 156 (TOTEC) measures GPU compute energy only. It excludes HBM memory
+bandwidth energy and NVLink-C2C transfer energy. SPBM gpu accumulator measures
+the full GPU rail including compute, HBM, and NVLink-C2C.
+
+### Isolation Formula
+
+$$E_{nvlink\_c2c} = E_{spbm\_gpu} - E_{dcgm\_gpu}$$
+
+Where:
+
+- $E_{spbm\_gpu}$ = SPBM gpu rail energy (compute + HBM + NVLink-C2C)
+- $E_{dcgm\_gpu}$ = DCGM field 156 energy (compute only)
+- $E_{nvlink\_c2c}$ = NVLink-C2C + HBM overhead (die-to-die transfer cost)
+
+### Validated Baseline (GN100, 2026-06-14)
+
+| Channel | Idle Power |
+|---------|-----------|
+| SPBM gpu rail | ~5,354 mW |
+| DCGM field 156 | ~4,362 mW |
+| NVLink-C2C delta | ~992 mW |
+
+The 992 mW baseline represents the minimum NVLink-C2C + HBM power at idle.
+Under inference load this delta increases as GPU pulls KV cache from shared
+LPDDR5X memory across the NVLink-C2C interconnect.
+
+### Implementation
+
+ETL computes NVLINK_C2C per sample and writes to `energy_derived_metrics`:
+
+```sql
+INSERT INTO energy_derived_metrics
+    (run_id, sample_id, metric_name, value_uj,
+     derivation_formula, source_ids_used)
+SELECT
+    spbm.run_id, spbm.sample_id,
+    'NVLINK_C2C',
+    spbm.energy_uj - dcgm.energy_uj,
+    'SPBM_GPU - DCGM_GPU',
+    '2,4'
+FROM energy_sample_domains spbm
+JOIN energy_sample_domains dcgm
+    ON dcgm.sample_id = spbm.sample_id
+   AND dcgm.domain_id = 7
+   AND dcgm.source_id = 4
+WHERE spbm.domain_id = 7
+  AND spbm.source_id = 2;
+```
+
+### Distinction from ET (ASHES 2026)
+
+ET (Tran, Maiterth et al.) measures NVLink energy between discrete GPUs via NVML.
+That topology mixes compute and NVLink in the same counter. SPBM rail subtraction
+separates them for the first time on a unified memory SoC.
+
+### method_id
+
+`nvlink_c2c_isolation_v1` — confidence 0.95 (INFERRED: subtraction of two MEASURED values)

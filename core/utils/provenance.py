@@ -423,6 +423,13 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "gpu_samples.source":             ("gpu_rapl_pp1_v1",             "MEASURED"),
     "gpu_samples.util_gpu_pct":       ("nvml_total_energy_v1",        "MEASURED"),
     "gpu_samples.power_mw":           ("nvml_power_integration_v1",   "MEASURED"),
+    # Unified energy schema (SPEC_ENERGY_SCHEMA_V2)
+    "energy_sample_domains.energy_uj":        ("energy_domain_registry_v1",  "MEASURED"),
+    "energy_derived_metrics.value_uj":        ("nvlink_c2c_isolation_v1",    "INFERRED"),
+    "device_telemetry.power_mw":              ("device_telemetry_v1",        "MEASURED"),
+    "device_telemetry.energy_uj":             ("device_telemetry_v1",        "MEASURED"),
+    "device_telemetry.dc_input_mw":           ("device_telemetry_v1",        "MEASURED"),
+    "platform_domain_relationships.contributes_to_parent": ("energy_domain_registry_v1", "SYSTEM"),    
     # runs GPU columns
     "gpu_attribution_method":         ("gpu_attribution_exclusive_v1", "CALCULATED"),
     "gpu_count":                      ("gpu_baseline_2sigma_v1",       "MEASURED"),
@@ -508,6 +515,9 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "nvml_total_energy_v1":             1.00,  # cumulative mJ counter, validated on RTX 2070 + GN100
     "nvml_power_integration_v1":        0.85,  # power x dt fallback, integration error ~15%
     "dcgm_energy_v1":                   1.00,  # DCGM field 156, validated on GN100 GB10
+    "energy_domain_registry_v1":        1.00,  # lookup table, system metadata
+    "nvlink_c2c_isolation_v1":          0.95,  # SPBM_GPU - DCGM_GPU subtraction
+    "device_telemetry_v1":              1.00,  # instantaneous device state readings    
     "iokit_gpu_energy_v1":              0.90,  # Apple powermetrics, not independently validated
     "rocm_smi_energy_v1":               0.85,  # ROCm SMI stub, no hardware validation yet
 }

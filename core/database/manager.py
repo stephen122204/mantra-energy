@@ -164,7 +164,27 @@ class DatabaseManager:
     def insert_gpu_samples(self, run_id: int, samples: list) -> None:
         """Insert GPU energy samples from GPUCollector."""
         self.samples.insert_gpu_samples(run_id, samples)
-        
+    def insert_energy_samples_v2(self, run_id, samples):
+        # type: (int, list) -> None
+        """Insert normalized energy samples for new-schema platforms."""
+        self.samples.insert_energy_samples_v2(run_id, samples)
+ 
+    def insert_energy_derived_metrics(self, run_id, metrics):
+        # type: (int, list) -> None
+        """Insert ETL-computed derived metrics. Never called at measurement time."""
+        self.samples.insert_energy_derived_metrics(run_id, metrics)
+ 
+    def insert_device_telemetry(self, run_id, samples):
+        # type: (int, list) -> None
+        """Insert device telemetry (power, temp, util) for new platforms."""
+        self.samples.insert_device_telemetry(run_id, samples)
+ 
+    def insert_platform_domain_relationships(self, hw_id, hardware_hash, rows):
+        # type: (int, str, list) -> None
+        """Seed platform topology once per machine at first run."""
+        self.samples.insert_platform_domain_relationships(
+            hw_id, hardware_hash, rows
+        )        
     def insert_interrupt_samples(
         self, run_id: int, samples: List[Dict[str, Any]]
     ) -> None:

@@ -1,0 +1,17 @@
+method_id: device_telemetry_v1
+references:
+  - title: "NVIDIA Data Center GPU Manager (DCGM) Documentation"
+    authors: "NVIDIA Corporation"
+    year: 2024
+    ref_type: "manual"
+    relevance: "DCGM field definitions for GPU telemetry (field 155 power, field 156 energy)"
+  - title: "NVIDIA Management Library (NVML) Reference"
+    authors: "NVIDIA Corporation"
+    year: 2024
+    ref_type: "manual"
+    relevance: "NVML API for GPU utilization, temperature, clock, power"
+  - title: "spark_hwmon: SPBM Hardware Monitor Driver"
+    authors: "antheas"
+    year: 2024
+    ref_type: "manual"
+    relevance: "spark_hwmon driver exposing dc_input and SoC power channels on GN100"

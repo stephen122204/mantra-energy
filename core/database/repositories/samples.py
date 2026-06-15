@@ -23,7 +23,10 @@ Author: Deepak Panigrahy
 """
 
 import json
+import logging
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class SamplesRepository:
@@ -186,8 +189,135 @@ class SamplesRepository:
             for s in samples
         ]
         self.db.conn.executemany(query, rows)
-        print("insert_gpu_samples: %d rows for run_id=%d", len(rows), run_id)
-
+        logger.debug("insert_gpu_samples: %d rows for run_id=%d", len(rows), run_id)
+        
+    def insert_energy_samples_v2(self, run_id, samples):
+        # type: (int, list) -> None
+        """
+        Insert normalized energy samples for new-schema platforms.
+        Each sample carries source_id and a domains dict.
+        Returns list of (local sample_id, EnergySampleV2) for domain insert.
+        Called for GN100 (SPBM+DCGM), Apple (IOKit), AMD, TAMU, future.
+        Legacy RAPL path uses insert_energy_samples() unchanged.
+        """
+        if not samples:
+            return
+        for s in samples:
+            cur = self.db.conn.execute("""
+                INSERT INTO energy_samples_v2
+                    (run_id, source_id, timestamp_ns, interval_ns)
+                VALUES (?, ?, ?, ?)
+            """, (run_id, s.source_id, s.timestamp_ns, s.interval_ns))
+            sample_id = cur.lastrowid
+            # Insert one domain row per measured domain — absent domains not stored
+            domain_rows = [
+                (sample_id, run_id, domain_id, s.source_id, energy_uj)
+                for domain_id, energy_uj in s.domains.items()
+                if energy_uj is not None
+            ]
+            if domain_rows:
+                self.db.conn.executemany("""
+                    INSERT INTO energy_sample_domains
+                        (sample_id, run_id, domain_id, source_id, energy_uj)
+                    VALUES (?, ?, ?, ?, ?)
+                """, domain_rows)
+        logger.debug(
+            "insert_energy_samples_v2: %d samples run_id=%d", len(samples), run_id
+        )
+ 
+    def insert_energy_derived_metrics(self, run_id, metrics):
+        # type: (int, list) -> None
+        """
+        Insert ETL-computed derived metrics.
+        metrics: list of dicts with keys:
+            sample_id (nullable), metric_name, value_uj,
+            derivation_formula, source_ids_used
+        Never called during measurement — ETL only.
+        """
+        if not metrics:
+            return
+        rows = [(
+            run_id,
+            m.get('sample_id'),
+            m['metric_name'],
+            m.get('value_uj'),
+            m['derivation_formula'],
+            m['source_ids_used'],
+        ) for m in metrics]
+        self.db.conn.executemany("""
+            INSERT INTO energy_derived_metrics
+                (run_id, sample_id, metric_name, value_uj,
+                 derivation_formula, source_ids_used)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, rows)
+        logger.debug(
+            "insert_energy_derived_metrics: %d rows run_id=%d", len(rows), run_id
+        )
+ 
+    def insert_device_telemetry(self, run_id, samples):
+        # type: (int, list) -> None
+        """
+        Insert instantaneous device telemetry (power, temp, util, clock).
+        Replaces gpu_samples for new platforms going forward.
+        Legacy gpu_samples path unchanged.
+        energy_uj nullable — NULL for SMI_INTEG (integrated at ETL).
+        """
+        if not samples:
+            return
+        rows = [(
+            run_id,
+            s.source_id,
+            s.timestamp_ns,
+            s.interval_ns,
+            s.device_type,
+            s.power_mw,
+            s.energy_uj,
+            s.util_pct,
+            s.temp_c,
+            s.clock_mhz,
+            s.dc_input_mw,
+            s.mem_util_pct,
+        ) for s in samples]
+        self.db.conn.executemany("""
+            INSERT INTO device_telemetry (
+                run_id, source_id, timestamp_ns, interval_ns,
+                device_type, power_mw, energy_uj, util_pct,
+                temp_c, clock_mhz, dc_input_mw, mem_util_pct
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, rows)
+        logger.debug(
+            "insert_device_telemetry: %d rows run_id=%d", len(rows), run_id
+        )
+ 
+    def insert_platform_domain_relationships(self, hw_id, hardware_hash, rows):
+        # type: (int, str, list) -> None
+        """
+        Seed platform topology for this machine.
+        Called once per machine at first experiment run.
+        Idempotent via INSERT OR IGNORE.
+        rows: list of dicts with source_id, domain_id, parent_domain_id,
+              contributes_to_parent.
+        """
+        if not rows:
+            return
+        data = [(
+            hw_id,
+            hardware_hash,
+            r['source_id'],
+            r['domain_id'],
+            r.get('parent_domain_id'),
+            r.get('contributes_to_parent', 1),
+        ) for r in rows]
+        self.db.conn.executemany("""
+            INSERT OR IGNORE INTO platform_domain_relationships
+                (hw_id, hardware_hash, source_id, domain_id,
+                 parent_domain_id, contributes_to_parent)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, data)
+        logger.debug(
+            "insert_platform_domain_relationships: %d rows hw_id=%d",
+            len(data), hw_id
+        )
     # =========================================================================
     # CPU SAMPLES — turbostat telemetry
     # =========================================================================

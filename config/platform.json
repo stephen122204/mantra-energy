@@ -5,7 +5,7 @@
   "has_rapl": true,
   "has_msr": true,
   "has_perf": true,
-  "has_turbostat": true,
+  "has_turbostat": false,
   "has_thermal": true,
   "has_iokit": false,
   "rapl_domains": [
@@ -19,6 +19,17 @@
   "in_container": false,
   "container_runtime": null,
   "python_version": "3.13.7",
-  "env_hash": "a355f881f3454d8e",
-  "kernel_version": "6.17.0-22-generic"
+  "env_hash": "82446320b27ce4e3",
+  "kernel_version": "6.17.0-23-generic",
+  "has_spbm": false,
+  "spbm_hwmon_path": "",
+  "has_dcgm": false,
+  "has_nvml": false,
+  "has_arm_pmu": false,
+  "has_cpufreq_sysfs": true,
+  "is_grace_cpu": false,
+  "is_apple_silicon": false,
+  "has_amd_energy": false,
+  "cpu_vendor": "GenuineIntel",
+  "gpu_vendor": ""
 }

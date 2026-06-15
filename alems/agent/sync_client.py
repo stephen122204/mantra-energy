@@ -189,6 +189,10 @@ def _build_payload(con, run_ids, exp_ids, db_path, include_samples=True):
         "runs":                run_rows,
         # Child tables — only in Phase 2
         "energy_samples":            fetch("energy_samples",    "run_id", run_ids) if include_samples else [],
+        "energy_samples_v2":         fetch("energy_samples_v2",      "run_id", run_ids) if include_samples else [],
+        "energy_sample_domains":     fetch("energy_sample_domains",  "run_id", run_ids) if include_samples else [],
+        "energy_derived_metrics":    fetch("energy_derived_metrics", "run_id", run_ids) if include_samples else [],
+        "device_telemetry":          fetch("device_telemetry",       "run_id", run_ids) if include_samples else [],
         "cpu_samples":               fetch("cpu_samples",       "run_id", run_ids) if include_samples else [],
         "thermal_samples":           fetch("thermal_samples",   "run_id", run_ids) if include_samples else [],
         "interrupt_samples":         fetch("interrupt_samples", "run_id", run_ids) if include_samples else [],

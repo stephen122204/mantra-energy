@@ -1,0 +1,17 @@
+method_id: nvlink_c2c_isolation_v1
+references:
+  - title: "NVLink-C2C Energy Attribution on GB10: First Measurements of Die-to-Die Communication Power in a Unified Memory SoC"
+    authors: "Deepak Panigrahy, Aakash Tyagi, Matthias Maiterth"
+    year: 2027
+    ref_type: "paper"
+    relevance: "Primary paper introducing this measurement methodology"
+  - title: "ET: Measuring NVLink Energy Using Performance Counters"
+    authors: "Tran, Maiterth et al."
+    year: 2026
+    ref_type: "paper"
+    relevance: "Prior work on NVLink energy between discrete GPUs (different topology)"
+  - title: "A-LEMS LOCO Paper: Energy Blind Spot in Agentic AI Systems"
+    authors: "Deepak Panigrahy, Aakash Tyagi"
+    year: 2026
+    ref_type: "paper"
+    relevance: "arXiv:2605.27599 — DCGM field 156 validation and SPBM discovery on GN100"

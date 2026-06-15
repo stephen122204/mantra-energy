@@ -735,7 +735,9 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in linear_result and linear_result["gpu_samples"]:
                 db.insert_gpu_samples(linear_id, linear_result["gpu_samples"])
-
+            # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
+            if "spbm_samples" in linear_result and linear_result["spbm_samples"]:
+                db.insert_energy_samples_v2(linear_id, linear_result["spbm_samples"])
             # Linear CPU samples
             if "cpu_samples" in linear_result:
                 db.insert_cpu_samples(linear_id, linear_result["cpu_samples"])
@@ -797,6 +799,9 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in agentic_result and agentic_result["gpu_samples"]:
                 db.insert_gpu_samples(agentic_id, agentic_result["gpu_samples"])
+            # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
+            if "spbm_samples" in agentic_result and agentic_result["spbm_samples"]:
+                db.insert_energy_samples_v2(agentic_id, agentic_result["spbm_samples"])                
 
             # Agentic CPU samples
             if "cpu_samples" in agentic_result:
@@ -1184,6 +1189,9 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in result and result["gpu_samples"]:
                 db.insert_gpu_samples(run_id, result["gpu_samples"])
+                # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
+            if "spbm_samples" in result and result["spbm_samples"]:
+                db.insert_energy_samples_v2(run_id, result["spbm_samples"])
 
                 if "cpu_samples" in result:
                     db.insert_cpu_samples(run_id, result["cpu_samples"])

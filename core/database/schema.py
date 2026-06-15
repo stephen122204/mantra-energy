@@ -487,6 +487,150 @@ CREATE TABLE IF NOT EXISTS idle_baselines (
     gpu_std         REAL    -- std dev of GPU idle power samples
 );
 """
+# Unified multi-platform energy schema (SPEC_ENERGY_SCHEMA_V2)
+# All new platforms write here. Existing energy_samples untouched.
+ 
+CREATE_ENERGY_SOURCES = """
+CREATE TABLE IF NOT EXISTS energy_sources (
+    source_id    INTEGER PRIMARY KEY,
+    name         TEXT    NOT NULL UNIQUE,
+    description  TEXT,
+    confidence   REAL    NOT NULL DEFAULT 1.0,
+    provenance   TEXT    NOT NULL DEFAULT 'MEASURED',
+    layer        TEXT    NOT NULL DEFAULT 'silicon'
+);
+"""
+ 
+CREATE_ENERGY_DOMAINS = """
+CREATE TABLE IF NOT EXISTS energy_domains (
+    domain_id             INTEGER PRIMARY KEY,
+    name                  TEXT    NOT NULL UNIQUE,
+    description           TEXT,
+    parent_domain_id      INTEGER REFERENCES energy_domains(domain_id),
+    is_leaf               BOOLEAN NOT NULL DEFAULT 1,
+    is_cumulative         BOOLEAN NOT NULL DEFAULT 1,
+    unit                  TEXT    NOT NULL DEFAULT 'uj'
+);
+"""
+ 
+# Narrow table — hot path during measurement (thousands of rows per run)
+CREATE_ENERGY_SAMPLES_V2 = """
+CREATE TABLE IF NOT EXISTS energy_samples_v2 (
+    sample_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id        INTEGER NOT NULL REFERENCES runs(run_id),
+    global_run_id TEXT,
+    source_id     INTEGER NOT NULL REFERENCES energy_sources(source_id),
+    timestamp_ns  BIGINT  NOT NULL,
+    interval_ns   BIGINT  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_esv2_run
+    ON energy_samples_v2(run_id);
+CREATE INDEX IF NOT EXISTS idx_esv2_run_source
+    ON energy_samples_v2(run_id, source_id);
+CREATE INDEX IF NOT EXISTS idx_esv2_time
+    ON energy_samples_v2(run_id, timestamp_ns);
+"""
+ 
+# Raw domain values only — never derived quantities
+CREATE_ENERGY_SAMPLE_DOMAINS = """
+CREATE TABLE IF NOT EXISTS energy_sample_domains (
+    sample_id     INTEGER NOT NULL REFERENCES energy_samples_v2(sample_id),
+    run_id        INTEGER NOT NULL,
+    global_run_id TEXT,
+    domain_id     INTEGER NOT NULL REFERENCES energy_domains(domain_id),
+    source_id     INTEGER NOT NULL REFERENCES energy_sources(source_id),
+    energy_uj     REAL    NOT NULL,
+    PRIMARY KEY (sample_id, domain_id, source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_esd_run
+    ON energy_sample_domains(run_id);
+CREATE INDEX IF NOT EXISTS idx_esd_domain
+    ON energy_sample_domains(domain_id, run_id);
+"""
+ 
+# ETL-computed quantities — never raw measurements
+CREATE_ENERGY_DERIVED_METRICS = """
+CREATE TABLE IF NOT EXISTS energy_derived_metrics (
+    metric_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id             INTEGER NOT NULL REFERENCES runs(run_id),
+    global_run_id      TEXT,
+    sample_id          INTEGER REFERENCES energy_samples_v2(sample_id),
+    metric_name        TEXT    NOT NULL,
+    value_uj           REAL,
+    derivation_formula TEXT    NOT NULL,
+    source_ids_used    TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_edm_run
+    ON energy_derived_metrics(run_id);
+CREATE INDEX IF NOT EXISTS idx_edm_metric
+    ON energy_derived_metrics(run_id, metric_name);
+"""
+ 
+# Instantaneous device state — power, temperature, utilization, clock
+CREATE_DEVICE_TELEMETRY = """
+CREATE TABLE IF NOT EXISTS device_telemetry (
+    telemetry_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id        INTEGER NOT NULL REFERENCES runs(run_id),
+    global_run_id TEXT,
+    source_id     INTEGER NOT NULL REFERENCES energy_sources(source_id),
+    timestamp_ns  BIGINT  NOT NULL,
+    interval_ns   BIGINT  NOT NULL,
+    device_type   TEXT    NOT NULL,
+    power_mw      REAL,
+    energy_uj     REAL,
+    util_pct      REAL,
+    temp_c        REAL,
+    clock_mhz     REAL,
+    dc_input_mw   REAL,
+    mem_util_pct  REAL
+);
+CREATE INDEX IF NOT EXISTS idx_dt_run
+    ON device_telemetry(run_id);
+CREATE INDEX IF NOT EXISTS idx_dt_run_device
+    ON device_telemetry(run_id, device_type);
+"""
+ 
+# Platform topology — which domains contribute to which root per machine
+CREATE_PLATFORM_DOMAIN_RELATIONSHIPS = """
+CREATE TABLE IF NOT EXISTS platform_domain_relationships (
+    hw_id                 INTEGER NOT NULL REFERENCES hardware_config(hw_id),
+    hardware_hash         TEXT    NOT NULL,
+    source_id             INTEGER NOT NULL REFERENCES energy_sources(source_id),
+    domain_id             INTEGER NOT NULL REFERENCES energy_domains(domain_id),
+    parent_domain_id      INTEGER REFERENCES energy_domains(domain_id),
+    contributes_to_parent BOOLEAN NOT NULL DEFAULT 1,
+    PRIMARY KEY (hw_id, source_id, domain_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pdr_hash
+    ON platform_domain_relationships(hardware_hash, source_id, domain_id);
+"""
+ 
+# Unified query surface — legacy RAPL rows + new normalized rows
+CREATE_V_ENERGY_VIEW = """
+CREATE VIEW IF NOT EXISTS v_energy AS
+SELECT es.sample_id, es.run_id, es.timestamp_ns, es.interval_ns,
+    'RAPL' AS source_name, 'PACKAGE' AS domain_name, es.package_energy_uj AS energy_uj
+FROM energy_samples es WHERE es.package_energy_uj IS NOT NULL
+UNION ALL
+SELECT es.sample_id, es.run_id, es.timestamp_ns, es.interval_ns,
+    'RAPL', 'CORE', es.core_energy_uj
+FROM energy_samples es WHERE es.core_energy_uj IS NOT NULL
+UNION ALL
+SELECT es.sample_id, es.run_id, es.timestamp_ns, es.interval_ns,
+    'RAPL', 'UNCORE', es.uncore_energy_uj
+FROM energy_samples es WHERE es.uncore_energy_uj IS NOT NULL
+UNION ALL
+SELECT es.sample_id, es.run_id, es.timestamp_ns, es.interval_ns,
+    'RAPL', 'DRAM', es.dram_energy_uj
+FROM energy_samples es WHERE es.dram_energy_uj IS NOT NULL
+UNION ALL
+SELECT esv2.sample_id, esv2.run_id, esv2.timestamp_ns, esv2.interval_ns,
+    src.name AS source_name, dom.name AS domain_name, esd.energy_uj
+FROM energy_samples_v2 esv2
+JOIN energy_sources        src ON src.source_id = esv2.source_id
+JOIN energy_sample_domains esd ON esd.sample_id = esv2.sample_id
+JOIN energy_domains        dom ON dom.domain_id  = esd.domain_id;
+"""
 
 CREATE_GPU_SAMPLES = """
 CREATE TABLE IF NOT EXISTS gpu_samples (

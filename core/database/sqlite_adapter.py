@@ -34,6 +34,10 @@ from typing import Any, Dict, List, Optional, Union
 from .base import DatabaseError, DatabaseInterface
 from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES, CREATE_RUN_QUALITY,
                      CREATE_GPU_SAMPLES, CREATE_GPU_CONFIG,
+                     CREATE_ENERGY_SOURCES, CREATE_ENERGY_DOMAINS,
+                     CREATE_ENERGY_SAMPLES_V2, CREATE_ENERGY_SAMPLE_DOMAINS,
+                     CREATE_ENERGY_DERIVED_METRICS, CREATE_DEVICE_TELEMETRY,
+                     CREATE_PLATFORM_DOMAIN_RELATIONSHIPS, CREATE_V_ENERGY_VIEW,                     
                      CREATE_ENVIRONMENT_CONFIG, CREATE_EVENTS_INDEXES,
                      CREATE_EXPERIMENTS, CREATE_EXPERIMENT_TYPE_TRIGGERS,CREATE_HARDWARE_CONFIG,
                      CREATE_GOAL_EXECUTION, CREATE_GOAL_ATTEMPT,CREATE_ETL_QUEUE,
@@ -287,6 +291,15 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_ENERGY_SAMPLES)
         self.conn.executescript(CREATE_CPU_SAMPLES)
         self.conn.executescript(CREATE_GPU_SAMPLES)
+        # Unified multi-platform energy schema (SPEC_ENERGY_SCHEMA_V2)
+        self.conn.executescript(CREATE_ENERGY_SOURCES)
+        self.conn.executescript(CREATE_ENERGY_DOMAINS)
+        self.conn.executescript(CREATE_ENERGY_SAMPLES_V2)
+        self.conn.executescript(CREATE_ENERGY_SAMPLE_DOMAINS)
+        self.conn.executescript(CREATE_ENERGY_DERIVED_METRICS)
+        self.conn.executescript(CREATE_DEVICE_TELEMETRY)
+        self.conn.executescript(CREATE_PLATFORM_DOMAIN_RELATIONSHIPS)
+        self.conn.executescript(CREATE_V_ENERGY_VIEW)        
         self.conn.executescript(CREATE_GPU_CONFIG)
         self.conn.executescript(CREATE_INTERRUPT_SAMPLES)
         self.conn.executescript(TASK_CATEGORIES_SCHEMA)

@@ -350,3 +350,61 @@ Integrated GPU energy (Intel Iris Xe, MSR PP1) accounts for a higher percentage
 of dynamic package energy during agentic workflows than linear workflows. This
 increase is driven by orchestration overhead — not ML compute, since no CUDA or
 local GPU inference is used in any experiment.
+
+---
+
+## Device Telemetry
+
+Device telemetry captures instantaneous device state at 10 Hz alongside energy
+sampling. It is distinct from energy measurement: power is instantaneous (mW),
+energy is cumulative (µJ). They have different conservation properties and
+different consumers.
+
+### What Device Telemetry Captures
+
+| Field | Unit | Description |
+|-------|------|-------------|
+| power_mw | mW | Instantaneous device power draw |
+| energy_uj | µJ | Cumulative energy delta (nullable) |
+| util_pct | % | Device utilization 0 to 100 |
+| temp_c | °C | Device temperature |
+| clock_mhz | MHz | Device clock frequency |
+| dc_input_mw | mW | Wall input power (SPBM dc_input, SOC only) |
+| mem_util_pct | % | Memory utilization (GPU only) |
+
+### Device Types
+
+```
+GPU      discrete or integrated GPU (NVML, DCGM, IOKit)
+SOC      full SoC telemetry (SPBM dc_input channel, GN100)
+CPU      CPU frequency and C-state telemetry (future)
+NETWORK  network device telemetry (future RDMA)
+STORAGE  storage device telemetry (future NVMe)
+```
+
+### energy_uj Nullability
+
+`energy_uj` is present when the backend provides a cumulative counter:
+
+- NVML: `nvmlDeviceGetTotalEnergyConsumption()` returns cumulative mJ
+- DCGM: field 156 returns cumulative mJ
+- IOKit: integrated power sensor
+
+`energy_uj` is NULL for `SMI_INTEG` (nvidia-smi power integration). In that
+case power_mw is recorded and ETL integrates W x dt at run completion.
+
+### dc_input_mw (GN100 SOC)
+
+SPBM exposes a `dc_input` power channel giving wall input power to the SoC.
+This is stored in `device_telemetry` with `device_type='SOC'`. It is the
+closest equivalent to a wall power meter on the GN100 platform and is used
+for total system energy accounting in the NVLink-C2C paper.
+
+### Sampling Rate
+
+Device telemetry is sampled at 10 Hz, aligned with `energy_samples_v2` timestamps.
+This allows per-sample correlation between energy domain values and device state.
+
+### method_id
+
+`device_telemetry_v1` — confidence 1.0 (MEASURED: direct hardware interface reads)

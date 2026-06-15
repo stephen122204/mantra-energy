@@ -173,6 +173,19 @@ class EnergyEngine:
         self.sensor    = self.thermal_reader         # alias: existing code uses self.sensor
         self.gpu_collector = GPUCollector(rapl_reader=self.rapl)
         self.last_gpu_samples = []
+        # SPBMSampler active on GN100 only — no-op on all other platforms.
+        # isinstance check is caps-driven: factory already ensured correct reader.
+        # PAC-2: import isolated in try/except — never fails on non-GN100 machines.
+        try:
+            from core.readers.spbm_energy_reader import SPBMEnergyReader, SPBMSampler
+            if isinstance(self.rapl, SPBMEnergyReader):
+                self.spbm_sampler = SPBMSampler(self.rapl)
+            else:
+                self.spbm_sampler = None
+        except ImportError:
+            self.spbm_sampler = None
+        self.last_spbm_samples = []
+
         # PAC-2 compliant: TurbostatReader now via factory (Chunk 7 factorisation)
         # Linux x86 -> TurbostatReader, macOS/other -> DummyTurbostatReader
         self.turbostat = _ReaderFactory.get_turbostat_reader(config)    # not yet factorised (Chunk 7)
@@ -662,7 +675,9 @@ class EnergyEngine:
         # GPUCollector.start() is no-op if no backend available (PAC-4 compliant)
         self.gpu_collector.start()
         # NEW: Start interrupt sampling
-        # NEW: Start interrupt sampling
+        # SPBM SoC energy sampling — GN100 only, no-op elsewhere (PAC-4 compliant)
+        if self.spbm_sampler:
+            self.spbm_sampler.start()        
         if self.collect_interrupt_samples:
             self.scheduler.start_interrupt_sampling(pid=self._workload_pid)
         
@@ -738,11 +753,15 @@ class EnergyEngine:
         # Stop GPU collector and store samples for harness access
         # Returns empty list if NoneBackend or no samples collected
         self.last_gpu_samples = self.gpu_collector.stop()
+        # Stop SPBM sampler — returns EnergySampleV2 list, empty on non-GN100
+        self.last_spbm_samples = (
+            self.spbm_sampler.stop() if self.spbm_sampler else []
+        )        
         logger.debug("stop_measurement: %d gpu_samples collected",
                      len(self.last_gpu_samples))
         # Optional: separate by type if samples have type field
         # Optional: separate by type if samples have type field
-        self.last_energy_samples = []
+        self.last_energy_samples = []       
         self.last_cpu_samples = []
 
         # Try to categorize samples if they have a 'type' field

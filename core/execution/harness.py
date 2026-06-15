@@ -674,6 +674,7 @@ class ExperimentHarness:
             },
             "energy_samples": energy_samples,
             "gpu_samples":    list(self.energy_engine.last_gpu_samples),
+            "spbm_samples":   list(self.energy_engine.last_spbm_samples),
             "cpu_samples": cpu_samples,
             "interrupt_samples": interrupt_samples,
             "io_samples":        io_samples,
@@ -703,6 +704,7 @@ class ExperimentHarness:
         if hasattr(self.energy_engine, "last_samples"):
             result["energy_samples"] = list(self.energy_engine.last_samples)
             result["gpu_samples"]    = list(self.energy_engine.last_gpu_samples)
+            result["spbm_samples"]   = list(self.energy_engine.last_spbm_samples)
             dprint(
                 f"📊 Added {len(self.energy_engine.last_samples)} energy samples to result"
             )
@@ -1228,6 +1230,7 @@ class ExperimentHarness:
             },
             "energy_samples": energy_samples,
             "gpu_samples":    list(self.energy_engine.last_gpu_samples),
+            "spbm_samples":   list(self.energy_engine.last_spbm_samples),
             "cpu_samples": cpu_samples,
             "interrupt_samples": interrupt_samples,
             "io_samples":        io_samples,
@@ -1258,6 +1261,7 @@ class ExperimentHarness:
         if hasattr(self.energy_engine, "last_samples"):
             result["energy_samples"] = list(self.energy_engine.last_samples)
             result["gpu_samples"]    = list(self.energy_engine.last_gpu_samples)
+            result["spbm_samples"]   = list(self.energy_engine.last_spbm_samples)
             dprint(
                 f"📊 Added {len(self.energy_engine.last_samples)} energy samples to result"
             )

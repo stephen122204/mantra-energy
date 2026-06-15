@@ -1,0 +1,12 @@
+method_id: energy_domain_registry_v1
+references:
+  - title: "A-LEMS Unified Energy Schema Design"
+    authors: "Deepak Panigrahy, Aakash Tyagi"
+    year: 2026
+    ref_type: "internal"
+    relevance: "Defines multi-root energy domain hierarchy for A-LEMS platform"
+  - title: "Energy Proportional Computing"
+    authors: "Barroso, Holzle"
+    year: 2007
+    ref_type: "paper"
+    relevance: "Foundation for energy domain attribution methodology"
