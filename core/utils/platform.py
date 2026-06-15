@@ -352,6 +352,7 @@ class PlatformDetector:
         has_rapl:     bool,
         has_iokit:    bool,
         in_container: bool,
+        has_spbm:     bool = False,
     ) -> str:
         """
         Apply measurement mode decision tree (first-match wins).
