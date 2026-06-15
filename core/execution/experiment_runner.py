@@ -55,6 +55,24 @@ logger = logging.getLogger(__name__)
 _goal_tracker = GoalTracker()   # module-level singleton — stateless class
 _failure_classifier = FailureClassifier()  # stateless — classify failures on normal path
 
+def _convert_gpu_to_telemetry(gpu_samples):
+    """Convert GpuSample list to DeviceTelemetrySample list for device_telemetry table.
+    PAC-2: wrapped at call site — this function does not raise.
+    """
+    from core.readers.energy_sample_v2 import DeviceTelemetrySample, SOURCE_DCGM, SOURCE_NVML
+    result = []
+    for s in gpu_samples:
+        src = SOURCE_DCGM if getattr(s, "source", "") == "dcgm" else SOURCE_NVML
+        result.append(DeviceTelemetrySample(
+            source_id=src,
+            power_mw=s.power_mw,
+            util_pct=s.util_gpu_pct,
+            temp_c=s.temperature_c,
+            clock_mhz=s.sm_clock_mhz,
+            mem_util_pct=s.util_mem_pct,
+        ))
+    return result
+
 class ExperimentRunner:
     """Shared experiment logic - ONLY duplicate code + new features"""
 
@@ -735,6 +753,12 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in linear_result and linear_result["gpu_samples"]:
                 db.insert_gpu_samples(linear_id, linear_result["gpu_samples"])
+                try:
+                    telemetry = _convert_gpu_to_telemetry(linear_result["gpu_samples"])
+                    if telemetry:
+                        db.insert_device_telemetry(linear_id, telemetry)
+                except Exception as e:
+                    logger.warning("device_telemetry insert failed (linear): %s", e)                
             # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in linear_result and linear_result["spbm_samples"]:
                 db.insert_energy_samples_v2(linear_id, linear_result["spbm_samples"])
@@ -799,6 +823,12 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in agentic_result and agentic_result["gpu_samples"]:
                 db.insert_gpu_samples(agentic_id, agentic_result["gpu_samples"])
+                try:
+                    telemetry = _convert_gpu_to_telemetry(agentic_result["gpu_samples"])
+                    if telemetry:
+                        db.insert_device_telemetry(agentic_id, telemetry)
+                except Exception as e:
+                    logger.warning("device_telemetry insert failed (agentic): %s", e)                
             # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in agentic_result and agentic_result["spbm_samples"]:
                 db.insert_energy_samples_v2(agentic_id, agentic_result["spbm_samples"])                
@@ -1189,6 +1219,12 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in result and result["gpu_samples"]:
                 db.insert_gpu_samples(run_id, result["gpu_samples"])
+                try:
+                    telemetry = _convert_gpu_to_telemetry(result["gpu_samples"])
+                    if telemetry:
+                        db.insert_device_telemetry(run_id, telemetry)
+                except Exception as e:
+                    logger.warning("device_telemetry insert failed (single): %s", e)                
                 # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in result and result["spbm_samples"]:
                 db.insert_energy_samples_v2(run_id, result["spbm_samples"])
