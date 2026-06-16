@@ -128,6 +128,11 @@ class IOKitPowerReader(EnergyReaderABC):
 
         # Return current accumulated values (zeros in stub)
         return dict(self._cumulative_uj)
+    
+    def get_measurement_schema(self):
+        """Return Apple IOKit schema — unified memory CPU + GPU domains."""
+        from core.readers.measurement_schema import SCHEMA_APPLE_IOKIT
+        return SCHEMA_APPLE_IOKIT
 
     def get_domains(self) -> List[str]:
         """

@@ -103,6 +103,11 @@ class DummyEnergyReader(EnergyReaderABC):
 
         return {domain: 0 for domain in self.STUB_DOMAINS}
 
+    def get_measurement_schema(self):
+        """Return empty schema — dummy reader has no real domains."""
+        from core.readers.measurement_schema import SCHEMA_DUMMY
+        return SCHEMA_DUMMY
+
     def get_domains(self) -> List[str]:
         """
         Return the list of stub domain names.

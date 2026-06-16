@@ -186,6 +186,11 @@ class SPBMEnergyReader(EnergyReaderABC):
             'gpu':   self._read_uj('gpu'),
         }
 
+    def get_measurement_schema(self):
+        """Return SPBM ARM schema — 64-bit counters at 10 Hz, GN100 domains."""
+        from core.readers.measurement_schema import SCHEMA_SPBM_ARM
+        return SCHEMA_SPBM_ARM
+    
     def read_energy_uj(self):
         # type: () -> Dict[str, Optional[int]]
         """

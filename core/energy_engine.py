@@ -40,13 +40,14 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from core.readers.factory import ReaderFactory
 from core.readers.gpu_collector import GPUCollector
+from core.readers.energy_collector import EnergyCollector
+from core.readers.normalized_writer import NormalizedWriter
+from core.readers.legacy_writer import LegacyWriter
 from core.utils.platform import get_platform_capabilities
 
 import requests
 
-# ====================================================================
-# ADD THIS IMPORT
-# ====================================================================
+
 from core.models.baseline_measurement import BaselineMeasurement
 # Import the new raw measurement model (Layer 1)
 from core.models.raw_energy_measurement import RawEnergyMeasurement
@@ -173,18 +174,11 @@ class EnergyEngine:
         self.sensor    = self.thermal_reader         # alias: existing code uses self.sensor
         self.gpu_collector = GPUCollector(rapl_reader=self.rapl)
         self.last_gpu_samples = []
-        # SPBMSampler active on GN100 only — no-op on all other platforms.
-        # isinstance check is caps-driven: factory already ensured correct reader.
-        # PAC-2: import isolated in try/except — never fails on non-GN100 machines.
-        try:
-            from core.readers.spbm_energy_reader import SPBMEnergyReader, SPBMSampler
-            if isinstance(self.rapl, SPBMEnergyReader):
-                self.spbm_sampler = SPBMSampler(self.rapl)
-            else:
-                self.spbm_sampler = None
-        except ImportError:
-            self.spbm_sampler = None
-        self.last_spbm_samples = []
+        # EnergyCollector replaces SPBMSampler and _sampling_loop (16B3).
+        # Platform differences declared in reader.get_measurement_schema().
+        # Zero platform-specific branching here — collector is generic.
+        self._energy_collector = None      # initialized in start_measurement per run
+        self.last_spbm_samples = []        # kept for backward compat, always empty now
 
         # PowerRailSampler: reads all 10 SPBM power rails at 10 Hz — GN100 only
         try:
@@ -311,6 +305,39 @@ class EnergyEngine:
             },
         )
 
+
+    def _resolve_domain_id_cache(self, schema):
+        """
+        Build canonical_name -> domain_id dict from energy_domains table.
+        Called once per run at collector init. Returns empty dict on failure.
+        """
+        cache = {}
+        try:
+            cur = self.db.conn.execute(
+                "SELECT name, domain_id FROM energy_domains"
+            )
+            # Build lookup from all known domains — filter by schema domains at write time
+            cache = {row[0]: row[1] for row in cur.fetchall()}
+        except Exception as e:
+            logger.warning("_resolve_domain_id_cache failed: %s", e)
+        return cache
+ 
+    def _resolve_source_id(self, schema):
+        """
+        Look up source_id for this reader's source name in energy_sources table.
+        Returns 1 (RAPL) as fallback — never crashes.
+        """
+        try:
+            cur = self.db.conn.execute(
+                "SELECT source_id FROM energy_sources WHERE name = ?",
+                (schema.source,),
+            )
+            row = cur.fetchone()
+            return row[0] if row else 1
+        except Exception as e:
+            logger.warning("_resolve_source_id failed: %s", e)
+            return 1
+        
     def _start_thermal_sampling(self):
         """Start thermal sampling thread"""
         self.thermal_sampling_active = True
@@ -577,6 +604,32 @@ class EnergyEngine:
                 logger.error("Sampling loop error: %s", e)
                 time.sleep(0.01)    # brief pause to avoid tight error loop
 
+    def _resolve_domain_id_cache(self, schema) -> dict:
+        """Build canonical_name -> domain_id from energy_domains table."""
+        # Called once per run at collector init — no per-tick DB reads
+        try:
+            cur = self.db.conn.execute(
+                "SELECT name, domain_id FROM energy_domains"
+            )
+            return {row[0]: row[1] for row in cur.fetchall()}
+        except Exception as e:
+            logger.warning("_resolve_domain_id_cache failed: %s", e)
+            return {}
+
+    def _resolve_source_id(self, schema) -> int:
+        """Look up source_id for reader's source name in energy_sources table."""
+        # Returns 1 (RAPL) as safe fallback — never crashes
+        try:
+            cur = self.db.conn.execute(
+                "SELECT source_id FROM energy_sources WHERE name = ?",
+                (schema.source,),
+            )
+            row = cur.fetchone()
+            return row[0] if row else 1
+        except Exception as e:
+            logger.warning("_resolve_source_id failed: %s", e)
+            return 1
+        
     def _start_sampling(self) -> None:
         """Start the high‑frequency sampling thread."""
         self._start_thermal_sampling()
@@ -690,16 +743,33 @@ class EnergyEngine:
         if self._platform_caps.has_turbostat:
             self.turbostat.start_monitoring(interval_ms=interval_ms)
 
-        # Start high-frequency sampling (RAPL samples)
-        # Start high-frequency sampling (RAPL samples)
-        self._start_sampling()
-        # GPU energy sampling — runs at 10 Hz alongside RAPL sampling
+        # EnergyCollector: generic loop replacing _sampling_loop + SPBMSampler (16B3)
+        try:
+            schema = self.energy_reader.get_measurement_schema()
+            if schema.domains:
+                domain_id_cache = self._resolve_domain_id_cache(schema)
+                source_id = self._resolve_source_id(schema)
+                adapters = [NormalizedWriter(self.db, source_id, domain_id_cache)]
+                # LegacyWriter: RAPL only — transitional backward compat
+                if schema.source == "RAPL":
+                    adapters.append(LegacyWriter(self.db, self.current_run_id))
+                self._energy_collector = EnergyCollector(
+                    reader=self.energy_reader,
+                    adapters=adapters,
+                    run_id=self.current_run_id,
+                    source_id=source_id,
+                )
+                self._energy_collector.start()
+            else:
+                logger.info("start_measurement: empty schema — EnergyCollector not started")
+                self._energy_collector = None
+        except Exception as e:
+            logger.warning("EnergyCollector start failed (PAC-2): %s", e)
+            self._energy_collector = None
+        # GPU energy sampling — runs at 10 Hz alongside EnergyCollector
         # GPUCollector.start() is no-op if no backend available (PAC-4 compliant)
         self.gpu_collector.start()
-        # NEW: Start interrupt sampling
-        # SPBM SoC energy sampling — GN100 only, no-op elsewhere (PAC-4 compliant)
-        if self.spbm_sampler:
-            self.spbm_sampler.start()
+        # PowerRailSampler: 10 SPBM power rails — GN100 only (16B1)
         if self.power_rail_sampler:
             self.power_rail_sampler.start()        
         if self.collect_interrupt_samples:
@@ -747,15 +817,12 @@ class EnergyEngine:
         # ====================================================================
         # STEP 1: Stop continuous readers FIRST
         # ====================================================================
-        # Stop high-frequency sampling
-        samples = self._stop_sampling()
-        if samples:
-            print(f"🔍 DEBUG - Number of samples: {len(samples)}")
-            print(f"🔍 DEBUG - First sample type: {type(samples[0])}")
-            print(f"🔍 DEBUG - First sample length: {len(samples[0])}")
-            print(f"🔍 DEBUG - First sample content: {samples[0]}")
-            if len(samples) > 1:
-                print(f"🔍 DEBUG - Second sample content: {samples[1]}")
+        # EnergyCollector stop — flushes all adapters (16B3)
+        # NormalizedWriter and LegacyWriter flush() called inside stop()
+        if self._energy_collector is not None:
+            self._energy_collector.stop()
+            self._energy_collector = None
+        samples = []   # legacy var kept — downstream code checks len(samples)
 
         interrupt_samples = []
         if (
@@ -777,10 +844,8 @@ class EnergyEngine:
         # Stop GPU collector and store samples for harness access
         # Returns empty list if NoneBackend or no samples collected
         self.last_gpu_samples = self.gpu_collector.stop()
-        # Stop SPBM sampler — returns EnergySampleV2 list, empty on non-GN100
-        self.last_spbm_samples = (
-            self.spbm_sampler.stop() if self.spbm_sampler else []
-        )
+        # SPBMSampler retired (16B3) — EnergyCollector handles GN100 now
+        self.last_spbm_samples = []
         self.last_rail_result = (
             self.power_rail_sampler.stop() if self.power_rail_sampler else None
         )        

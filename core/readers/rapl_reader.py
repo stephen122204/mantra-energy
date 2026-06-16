@@ -477,6 +477,11 @@ class RAPLReader:
         """Return list of accessible RAPL domain names."""
         return list(self.available_paths.keys())
 
+    def get_measurement_schema(self):
+        """Return RAPL x86 measurement schema — 32-bit counters at 100 Hz."""
+        from core.readers.measurement_schema import SCHEMA_RAPL_X86
+        return SCHEMA_RAPL_X86
+    
     def read_energy_uj(self) -> dict:
         """EnergyReaderABC interface — delegates to read_energy_safe()."""
         return self.read_energy_safe()

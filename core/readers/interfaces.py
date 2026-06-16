@@ -40,6 +40,8 @@ Author: Deepak Panigrahy
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
+from core.readers.measurement_schema import MeasurementSchema
+ 
 
 
 # ============================================================================
@@ -139,6 +141,24 @@ class EnergyReaderABC(BaseReader):
     # Abstract interface — subclass must implement these
     # -------------------------------------------------------------------------
 
+    def get_measurement_schema(self):
+        # type: () -> MeasurementSchema
+        """
+        Declare this reader's measurement capabilities.
+ 
+        Returns a frozen MeasurementSchema describing:
+        - Which domains this platform measures (native keys + canonical names)
+        - Maximum safe sampling rate
+        - Counter bit width for wraparound handling
+        - Domain hierarchy for conservation invariant checks
+ 
+        Called ONCE at EnergyCollector startup and cached.
+        MUST NOT perform I/O or read hardware state.
+        Subclasses that do not override this return SCHEMA_DUMMY (safe default).
+        """
+        from core.readers.measurement_schema import SCHEMA_DUMMY
+        return SCHEMA_DUMMY   # safe default — subclasses override
+    
     @abstractmethod
     def read_energy_uj(self) -> Dict[str, int]:
         """
