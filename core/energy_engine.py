@@ -305,7 +305,7 @@ class EnergyEngine:
             readers={
                 "rapl": self.rapl is not None,
                 "perf": self.perf.perf_available,
-                "turbostat": self.turbostat.available,
+                "turbostat": self.turbostat.available if hasattr(self.turbostat, "available") else self.turbostat.is_available(),
                 "sensor": len(self.sensor.available_sensors) > 0,
                 "msr": msr_available,
             },
@@ -1314,7 +1314,7 @@ class EnergyEngine:
             readers.append("rapl")
         if self.perf.perf_available:
             readers.append("perf")
-        if self.turbostat.available:
+        if self.turbostat.available if hasattr(self.turbostat, "available") else self.turbostat.is_available():
             readers.append("turbostat")
         if self.sensor.available_sensors:
             readers.append("sensor")
