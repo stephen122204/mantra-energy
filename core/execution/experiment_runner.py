@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from core.utils.preflight import preflight
 
+
 import psutil
 
 # Add project root to path
@@ -49,11 +50,13 @@ import scripts.etl.energy_attribution_etl as energy_attribution_etl
 from core.execution.retry_coordinator import RetryCoordinator, ExecutionResult
 from core.execution.failure_classifier import FailureClassifier
 from core.execution.failure_injector import FailureInjector
+from core.readers.power_rail_sampler import PowerRailSampler
 import logging
 logger = logging.getLogger(__name__)
 
 _goal_tracker = GoalTracker()   # module-level singleton — stateless class
 _failure_classifier = FailureClassifier()  # stateless — classify failures on normal path
+
 
 def _convert_gpu_to_telemetry(gpu_samples):
     """Convert GpuSample list to DeviceTelemetrySample list for device_telemetry table.
@@ -73,6 +76,16 @@ def _convert_gpu_to_telemetry(gpu_samples):
         ))
     return result
 
+def _get_power_paths() -> dict:
+    import json, pathlib
+    cfg_path = pathlib.Path(__file__).parent.parent.parent / "config" / "hw_config.json"
+    try:
+        cfg = json.loads(cfg_path.read_text())
+        return cfg.get("spbm", {}).get("power_paths", {})
+    except Exception as e:
+        logger.warning("_get_power_paths: failed to read hw_config: %s", e)
+        return {}
+    
 class ExperimentRunner:
     """Shared experiment logic - ONLY duplicate code + new features"""
 
@@ -762,6 +775,12 @@ class ExperimentRunner:
             # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in linear_result and linear_result["spbm_samples"]:
                 db.insert_energy_samples_v2(linear_id, linear_result["spbm_samples"])
+                if "rail_result" in linear_result and linear_result["rail_result"]:
+                    try:
+                        db.insert_power_rail_samples(linear_id, linear_result["rail_result"].samples)
+                        db.insert_run_power_limits(linear_id, linear_result["rail_result"].limits_snapshot)
+                    except Exception as e:
+                        logger.warning("power_rail insert failed (linear): %s", e)                
             # Linear CPU samples
             if "cpu_samples" in linear_result:
                 db.insert_cpu_samples(linear_id, linear_result["cpu_samples"])
@@ -832,7 +851,12 @@ class ExperimentRunner:
             # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in agentic_result and agentic_result["spbm_samples"]:
                 db.insert_energy_samples_v2(agentic_id, agentic_result["spbm_samples"])                
-
+                if "rail_result" in agentic_result and agentic_result["rail_result"]:
+                    try:
+                        db.insert_power_rail_samples(agentic_id, agentic_result["rail_result"].samples)
+                        db.insert_run_power_limits(agentic_id, agentic_result["rail_result"].limits_snapshot)
+                    except Exception as e:
+                        logger.warning("power_rail insert failed (agentic): %s", e)
             # Agentic CPU samples
             if "cpu_samples" in agentic_result:
                 db.insert_cpu_samples(agentic_id, agentic_result["cpu_samples"])
@@ -1228,7 +1252,12 @@ class ExperimentRunner:
                 # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in result and result["spbm_samples"]:
                 db.insert_energy_samples_v2(run_id, result["spbm_samples"])
-
+                if "rail_result" in result and result["rail_result"]:
+                    try:
+                        db.insert_power_rail_samples(run_id, result["rail_result"].samples)
+                        db.insert_run_power_limits(run_id, result["rail_result"].limits_snapshot)
+                    except Exception as e:
+                        logger.warning("power_rail insert failed (single): %s", e)
                 if "cpu_samples" in result:
                     db.insert_cpu_samples(run_id, result["cpu_samples"])
 

@@ -402,6 +402,50 @@ def _load_measured_methods() -> List[Dict]:
             "section":      "Device Telemetry",
         },
         {
+            "id":           "power_rail_sampling_v1",
+            "name":         "Power Rail Sampling (SPBM hwmon, GN100)",
+            "provenance":   "MEASURED",
+            "layer":        "hardware",
+            "confidence":   1.00,
+            "description":  (
+                "Instantaneous power readings from 10 SPBM hwmon rails on GN100 at configurable Hz (default 10 Hz). "
+                "Rails sourced from hw_config.json spbm.power_paths — no hardcoded hwmon numbers. "
+                "Covers full power topology: dc_input (wall), sys_total, soc_pkg, cpu_gpu, "
+                "cpu_p, cpu_e, vcore, gpu, prereg, dla. "
+                "Power limits (PL1, PL2, SYSPL1, SYSPL2) captured once per run in run_power_limits — "
+                "not sampled at frequency (firmware constants during normal operation). "
+                "Mid-run limit changes recorded in power_limit_events if detected. "
+                "Values in µW from sysfs converted to mW at read time. "
+                "Decoupled from energy_samples_v2 — independent timestamp stream allows "
+                "different sampling frequencies per stream in future platforms."
+            ),
+            "formula_latex": r"E_{derived}(t_1, t_2) = \int_{t_1}^{t_2} P(t)\, dt \approx \sum_i P_i \cdot \Delta t_i",
+            "parameters":   {"sampling_hz": 10, "rails": 10, "limits": 4},
+            "doc":          "27-power-rail-schema.md",
+            "section":      "Power Rail Sampling",
+        },
+        {
+            "id":           "power_rail_etl_v1",
+            "name":         "Power Rail ETL: Time-Integrated Energy Derivation",
+            "provenance":   "DERIVED",
+            "layer":        "etl",
+            "confidence":   0.95,
+            "description":  (
+                "ETL-computed energy derived by integrating instantaneous power rail samples "
+                "over time (power × interval_ns). Produces three derived metrics per run: "
+                "wall_energy_uj (dc_input rail integrated), dla_energy_uj (dla rail integrated), "
+                "board_overhead_uj (wall_energy_uj minus pkg accumulator energy_uj). "
+                "Stored in energy_derived_metrics with derivation_formula field for paper citability. "
+                "Confidence 0.95 reflects Riemann sum approximation at 10 Hz sampling. "
+                "Conservation check: dc_input_integrated ≈ pkg_accumulator + board_overhead. "
+                "Deviation from conservation invariant flags measurement anomalies."
+            ),
+            "formula_latex": r"E_{board} = E_{dc\_input} - E_{pkg}",
+            "parameters":   {"integration_method": "riemann_sum", "source_hz": 10},
+            "doc":          "27-power-rail-schema.md",
+            "section":      "ETL Integration",
+        },        
+        {
             "id":            "gpu_phase_alignment_v1",
             "name":          "GPU Phase Energy Alignment (CPU Proxy)",
             "provenance":    "INFERRED",

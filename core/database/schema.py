@@ -631,6 +631,64 @@ JOIN energy_sources        src ON src.source_id = esv2.source_id
 JOIN energy_sample_domains esd ON esd.sample_id = esv2.sample_id
 JOIN energy_domains        dom ON dom.domain_id  = esd.domain_id;
 """
+CREATE_POWER_RAILS = """
+CREATE TABLE IF NOT EXISTS power_rails (
+    rail_id        INTEGER PRIMARY KEY,
+    rail_name      TEXT NOT NULL UNIQUE,
+    device_type    TEXT NOT NULL,
+    parent_rail_id INTEGER REFERENCES power_rails(rail_id),
+    rail_kind      TEXT NOT NULL DEFAULT 'POWER',
+    hwmon_channel  TEXT,
+    hw_config_key  TEXT,
+    notes          TEXT
+);
+"""
+ 
+CREATE_POWER_LIMITS = """
+CREATE TABLE IF NOT EXISTS power_limits (
+    limit_id    INTEGER PRIMARY KEY,
+    limit_name  TEXT NOT NULL UNIQUE,
+    description TEXT,
+    units       TEXT NOT NULL DEFAULT 'mw'
+);
+"""
+ 
+CREATE_POWER_RAIL_SAMPLES = """
+CREATE TABLE IF NOT EXISTS power_rail_samples (
+    rail_sample_id INTEGER PRIMARY KEY,
+    run_id         INTEGER NOT NULL,
+    timestamp_ns   INTEGER NOT NULL,
+    interval_ns    INTEGER,
+    rail_id        INTEGER NOT NULL REFERENCES power_rails(rail_id),
+    power_mw       REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_prs_run_time
+    ON power_rail_samples(run_id, timestamp_ns);
+CREATE INDEX IF NOT EXISTS idx_prs_rail
+    ON power_rail_samples(rail_id, run_id);
+"""
+ 
+CREATE_RUN_POWER_LIMITS = """
+CREATE TABLE IF NOT EXISTS run_power_limits (
+    run_id    INTEGER NOT NULL,
+    limit_id  INTEGER NOT NULL REFERENCES power_limits(limit_id),
+    value_mw  REAL NOT NULL,
+    PRIMARY KEY (run_id, limit_id)
+);
+"""
+ 
+CREATE_POWER_LIMIT_EVENTS = """
+CREATE TABLE IF NOT EXISTS power_limit_events (
+    event_id     INTEGER PRIMARY KEY,
+    run_id       INTEGER NOT NULL,
+    timestamp_ns INTEGER NOT NULL,
+    limit_id     INTEGER NOT NULL REFERENCES power_limits(limit_id),
+    old_value_mw REAL,
+    new_value_mw REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ple_run_time
+    ON power_limit_events(run_id, timestamp_ns);
+"""
 
 CREATE_GPU_SAMPLES = """
 CREATE TABLE IF NOT EXISTS gpu_samples (

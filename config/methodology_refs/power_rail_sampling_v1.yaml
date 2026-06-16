@@ -1,0 +1,93 @@
+# config/methodology_refs/power_rail_sampling_v1.yaml
+# Power Rail Sampling methodology reference
+# Matches seed_methodology.py entry and provenance.py METHOD_CONFIDENCE
+
+method_id: power_rail_sampling_v1
+name: "Power Rail Sampling (SPBM hwmon, GN100)"
+version: 1
+provenance: MEASURED
+layer: hardware
+confidence: 1.00
+
+description: |
+  Instantaneous power readings from 10 SPBM hwmon rails on the NVIDIA GN100
+  (Grace Blackwell Superchip) at configurable frequency (default 10 Hz).
+  All paths sourced from hw_config.json spbm.power_paths — no hardcoded
+  hwmon numbers. Dynamic hwmon discovery ensures correctness across reboots.
+
+rails_measured:
+  - name: dc_input
+    rail_id: 1
+    device_type: BOARD
+    role: "DC wall input after adapter. True wall power reference."
+  - name: sys_total
+    rail_id: 2
+    device_type: BOARD
+    role: "Total system draw including all subsystems."
+  - name: soc_pkg
+    rail_id: 3
+    device_type: SOC
+    role: "Full SoC package power."
+  - name: cpu_gpu
+    rail_id: 4
+    device_type: SOC
+    role: "CPU and GPU combined rail."
+  - name: cpu_p
+    rail_id: 5
+    device_type: CPU
+    role: "CPU performance cores."
+  - name: cpu_e
+    rail_id: 6
+    device_type: CPU
+    role: "CPU efficiency cores."
+  - name: vcore
+    rail_id: 7
+    device_type: CPU
+    role: "CPU vcore supply rail."
+  - name: gpu
+    rail_id: 8
+    device_type: GPU
+    role: "GPU compute rail."
+  - name: prereg
+    rail_id: 9
+    device_type: BOARD
+    role: "Pre-regulator board input."
+  - name: dla
+    rail_id: 10
+    device_type: ACCELERATOR
+    role: "Deep Learning Accelerator rail."
+
+limits_captured_once:
+  - name: PL1
+    limit_id: 1
+    role: "Sustained power limit (SOC)."
+  - name: PL2
+    limit_id: 2
+    role: "Burst power limit (SOC)."
+  - name: SYSPL1
+    limit_id: 3
+    role: "Sustained power limit (system)."
+  - name: SYSPL2
+    limit_id: 4
+    role: "Burst power limit (system)."
+
+formula: |
+  E_derived(t1, t2) = integral(P(t) dt) ≈ sum(P_i * delta_t_i)
+  where P_i is power_mw at sample i and delta_t_i is interval_ns / 1e6
+
+conservation_invariant: |
+  dc_input_integrated ≈ pkg_accumulator + board_overhead
+  Deviation flags measurement anomaly.
+
+storage:
+  samples_table: power_rail_samples
+  limits_table: run_power_limits
+  events_table: power_limit_events
+  derived_table: energy_derived_metrics
+
+units:
+  sysfs_read: microwatts (uW)
+  stored: milliwatts (mW)
+  derived_energy: microjoules (uJ)
+
+reference_doc: docs-src/mkdocs/source/research/27-power-rail-schema.md

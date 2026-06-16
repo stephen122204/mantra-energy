@@ -1,0 +1,47 @@
+# config/methodology_refs/power_rail_etl_v1.yaml
+# Power Rail ETL methodology reference
+# Confidence 0.95: Riemann sum approximation at 10 Hz
+
+method_id: power_rail_etl_v1
+name: "Power Rail ETL: Time-Integrated Energy Derivation"
+version: 1
+provenance: DERIVED
+layer: etl
+confidence: 0.95
+
+description: |
+  ETL process that integrates instantaneous power_rail_samples over time
+  to produce derived energy quantities stored in energy_derived_metrics.
+  Three metrics produced per run: wall_energy_uj, dla_energy_uj,
+  board_overhead_uj. Confidence 0.95 reflects Riemann sum approximation
+  at 10 Hz — not a hardware accumulator.
+
+derived_metrics:
+  - metric_name: wall_energy_uj
+    source_rail: dc_input (rail_id=1)
+    formula: "sum(power_mw * interval_ns / 1e6) for all dc_input samples in run"
+    units: microjoules
+
+  - metric_name: dla_energy_uj
+    source_rail: dla (rail_id=10)
+    formula: "sum(power_mw * interval_ns / 1e6) for all dla samples in run"
+    units: microjoules
+
+  - metric_name: board_overhead_uj
+    formula: "wall_energy_uj - pkg_accumulator_energy_uj"
+    source_rails: [dc_input, energy_sample_domains PACKAGE domain]
+    units: microjoules
+
+conservation_check:
+  formula: "dc_input_integrated ≈ pkg_accumulator + board_overhead"
+  tolerance: 0.05
+  action_on_violation: "log WARNING, flag run in runs.quality_flags"
+
+storage:
+  output_table: energy_derived_metrics
+  derivation_formula_stored: true
+  source_ids_stored: true
+
+formula_latex: "E_{board} = E_{dc\\_input} - E_{pkg}"
+
+reference_doc: docs-src/mkdocs/source/research/27-power-rail-schema.md

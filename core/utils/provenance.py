@@ -429,7 +429,15 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "device_telemetry.power_mw":              ("device_telemetry_v1",        "MEASURED"),
     "device_telemetry.energy_uj":             ("device_telemetry_v1",        "MEASURED"),
     "device_telemetry.dc_input_mw":           ("device_telemetry_v1",        "MEASURED"),
-    "platform_domain_relationships.contributes_to_parent": ("energy_domain_registry_v1", "SYSTEM"),    
+    "platform_domain_relationships.contributes_to_parent": ("energy_domain_registry_v1", "SYSTEM"),
+    # 16B1 power rail schema
+    "power_rail_samples.power_mw":            ("power_rail_sampling_v1",   "MEASURED"),
+    "power_rail_samples.interval_ns":         ("power_rail_sampling_v1",   "MEASURED"),
+    "run_power_limits.value_mw":              ("power_rail_sampling_v1",   "MEASURED"),
+    "power_limit_events.new_value_mw":        ("power_rail_sampling_v1",   "MEASURED"),
+    "energy_derived_metrics.wall_energy_uj":  ("power_rail_etl_v1",        "DERIVED"),
+    "energy_derived_metrics.dla_energy_uj":   ("power_rail_etl_v1",        "DERIVED"),
+    "energy_derived_metrics.board_overhead_uj": ("power_rail_etl_v1",      "DERIVED"),        
     # runs GPU columns
     "gpu_attribution_method":         ("gpu_attribution_exclusive_v1", "CALCULATED"),
     "gpu_count":                      ("gpu_baseline_2sigma_v1",       "MEASURED"),
@@ -520,6 +528,8 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "device_telemetry_v1":              1.00,  # instantaneous device state readings    
     "iokit_gpu_energy_v1":              0.90,  # Apple powermetrics, not independently validated
     "rocm_smi_energy_v1":               0.85,  # ROCm SMI stub, no hardware validation yet
+    "power_rail_sampling_v1":           1.00,  # SPBM hwmon sysfs direct read
+    "power_rail_etl_v1":                0.95,  # power x time integration (ETL derived)    
 }
 
 

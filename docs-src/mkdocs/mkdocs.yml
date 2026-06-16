@@ -89,6 +89,7 @@ nav:
     - Tool instrumentation Methodology:   research/24-tool-instrumentation-methodology.md
     - Energy Attribution Guide:           research/25-energy-attribution-guide.md
     - Unified Energy Schema:              research/26-unified-energy-schema.md
+    - Power Rail Schema:                  research/27-power-rail-schema.md
   
   - API Reference: 
     - Overview: api/reference.md

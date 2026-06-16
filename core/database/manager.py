@@ -184,7 +184,16 @@ class DatabaseManager:
         """Seed platform topology once per machine at first run."""
         self.samples.insert_platform_domain_relationships(
             hw_id, hardware_hash, rows
-        )        
+        )   
+    def insert_power_rail_samples(self, run_id: int, samples) -> int:
+        # 30% inline comment: inserts PowerRailSample list to power_rail_samples table
+        from core.database.repositories.power_rails import insert_power_rail_samples
+        return insert_power_rail_samples(self.conn, run_id, samples)
+ 
+    def insert_run_power_limits(self, run_id: int, limits_snapshot: dict) -> int:
+        # 30% inline comment: inserts once-per-run firmware limit snapshot to run_power_limits
+        from core.database.repositories.power_rails import insert_run_power_limits
+        return insert_run_power_limits(self.conn, run_id, limits_snapshot)             
     def insert_interrupt_samples(
         self, run_id: int, samples: List[Dict[str, Any]]
     ) -> None:

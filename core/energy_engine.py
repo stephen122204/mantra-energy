@@ -186,6 +186,26 @@ class EnergyEngine:
             self.spbm_sampler = None
         self.last_spbm_samples = []
 
+        # PowerRailSampler: reads all 10 SPBM power rails at 10 Hz — GN100 only
+        try:
+            from core.readers.power_rail_sampler import PowerRailSampler
+            _power_paths = _get_power_paths() if hasattr(self, '_get_power_paths') else {}
+            if not _power_paths:
+                import json, pathlib
+                _cfg = pathlib.Path(__file__).parent.parent / "config" / "hw_config.json"
+                try:
+                    _power_paths = json.loads(_cfg.read_text()).get("spbm", {}).get("power_paths", {})
+                except Exception:
+                    _power_paths = {}
+            if _power_paths:
+                self.power_rail_sampler = PowerRailSampler(_power_paths, hz=10)
+            else:
+                self.power_rail_sampler = None
+        except Exception as e:
+            logger.warning("PowerRailSampler init failed (PAC-2): %s", e)
+            self.power_rail_sampler = None
+        self.last_rail_result = None
+
         # PAC-2 compliant: TurbostatReader now via factory (Chunk 7 factorisation)
         # Linux x86 -> TurbostatReader, macOS/other -> DummyTurbostatReader
         self.turbostat = _ReaderFactory.get_turbostat_reader(config)    # not yet factorised (Chunk 7)
@@ -677,7 +697,9 @@ class EnergyEngine:
         # NEW: Start interrupt sampling
         # SPBM SoC energy sampling — GN100 only, no-op elsewhere (PAC-4 compliant)
         if self.spbm_sampler:
-            self.spbm_sampler.start()        
+            self.spbm_sampler.start()
+        if self.power_rail_sampler:
+            self.power_rail_sampler.start()        
         if self.collect_interrupt_samples:
             self.scheduler.start_interrupt_sampling(pid=self._workload_pid)
         
@@ -756,6 +778,9 @@ class EnergyEngine:
         # Stop SPBM sampler — returns EnergySampleV2 list, empty on non-GN100
         self.last_spbm_samples = (
             self.spbm_sampler.stop() if self.spbm_sampler else []
+        )
+        self.last_rail_result = (
+            self.power_rail_sampler.stop() if self.power_rail_sampler else None
         )        
         logger.debug("stop_measurement: %d gpu_samples collected",
                      len(self.last_gpu_samples))

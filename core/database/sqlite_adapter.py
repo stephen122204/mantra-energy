@@ -37,7 +37,10 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES, CREATE_RUN_QUALI
                      CREATE_ENERGY_SOURCES, CREATE_ENERGY_DOMAINS,
                      CREATE_ENERGY_SAMPLES_V2, CREATE_ENERGY_SAMPLE_DOMAINS,
                      CREATE_ENERGY_DERIVED_METRICS, CREATE_DEVICE_TELEMETRY,
-                     CREATE_PLATFORM_DOMAIN_RELATIONSHIPS, CREATE_V_ENERGY_VIEW,                     
+                     CREATE_PLATFORM_DOMAIN_RELATIONSHIPS, CREATE_V_ENERGY_VIEW,
+                     CREATE_POWER_RAILS, CREATE_POWER_LIMITS,
+                     CREATE_POWER_RAIL_SAMPLES, CREATE_RUN_POWER_LIMITS,
+                     CREATE_POWER_LIMIT_EVENTS,                     
                      CREATE_ENVIRONMENT_CONFIG, CREATE_EVENTS_INDEXES,
                      CREATE_EXPERIMENTS, CREATE_EXPERIMENT_TYPE_TRIGGERS,CREATE_HARDWARE_CONFIG,
                      CREATE_GOAL_EXECUTION, CREATE_GOAL_ATTEMPT,CREATE_ETL_QUEUE,
@@ -299,7 +302,12 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_ENERGY_DERIVED_METRICS)
         self.conn.executescript(CREATE_DEVICE_TELEMETRY)
         self.conn.executescript(CREATE_PLATFORM_DOMAIN_RELATIONSHIPS)
-        self.conn.executescript(CREATE_V_ENERGY_VIEW)        
+        self.conn.executescript(CREATE_V_ENERGY_VIEW)
+        self.conn.executescript(CREATE_POWER_RAILS)
+        self.conn.executescript(CREATE_POWER_LIMITS)
+        self.conn.executescript(CREATE_POWER_RAIL_SAMPLES)
+        self.conn.executescript(CREATE_RUN_POWER_LIMITS)
+        self.conn.executescript(CREATE_POWER_LIMIT_EVENTS)        
         self.conn.executescript(CREATE_GPU_CONFIG)
         self.conn.executescript(CREATE_INTERRUPT_SAMPLES)
         self.conn.executescript(TASK_CATEGORIES_SCHEMA)
