@@ -305,7 +305,7 @@ class EnergyEngine:
             readers={
                 "rapl": self.rapl is not None,
                 "perf": self.perf.perf_available,
-                "turbostat": self.turbostat.available if hasattr(self.turbostat, "available") else self.turbostat.is_available(),
+                "turbostat": self._platform_caps.has_turbostat,
                 "sensor": len(self.sensor.available_sensors) > 0,
                 "msr": msr_available,
             },
@@ -678,7 +678,8 @@ class EnergyEngine:
         # ====================================================================
         # perf: attach to task process pid so counters measure actual work
         # _workload_pid set by harness via set_workload_pid() before this call
-        self.perf.start_process_measurement(pid=self._workload_pid)
+        if self._platform_caps.has_perf:
+            self.perf.start_process_measurement(pid=self._workload_pid)
 
         # turbostat: continuous sampling at the same rate as RAPL
         # <-- NEW: Compute interval in milliseconds from sampling_rate_hz
@@ -686,7 +687,8 @@ class EnergyEngine:
             int(1000 / self.sampling_rate_hz) if self.sampling_rate_hz > 0 else 100
         )
         # <-- MODIFIED: Pass interval_ms to start_monitoring (new signature)
-        self.turbostat.start_monitoring(interval_ms=interval_ms)
+        if self._platform_caps.has_turbostat:
+            self.turbostat.start_monitoring(interval_ms=interval_ms)
 
         # Start high-frequency sampling (RAPL samples)
         # Start high-frequency sampling (RAPL samples)
@@ -802,10 +804,10 @@ class EnergyEngine:
                 # Add more logic based on actual formatif hasattr(self.energy_engine, 'samples'):
         # Stop perf and get accumulated counters
 
-        perf_data = self.perf.stop_process_measurement()
-
+        perf_data = self.perf.stop_process_measurement() if self._platform_caps.has_perf else {}
+ 
         # Stop turbostat and get continuous data
-        turbostat_data = self.turbostat.stop_monitoring()
+        turbostat_data = self.turbostat.stop_monitoring() if self._platform_caps.has_turbostat else {"dataframe": None, "num_samples": 0, "duration_seconds": 0.0, "summary": {}}
         thermal_samples = self._stop_thermal_sampling()
         # ====================================================================
         # STEP 2: Capture snapshot readers END values
@@ -1052,8 +1054,8 @@ class EnergyEngine:
                 "python_version": sys.version.split()[0],
                 "cpu_affinity": list(os.sched_getaffinity(0)),
                 "pinned_cores": self.pinned_cores,
-                "turbostat_version": self.turbostat.turbostat_version,
-                "cpu_topology": self.turbostat.cpu_topology,
+                "turbostat_version": self.turbostat.turbostat_version if self._platform_caps.has_turbostat else None,
+                "cpu_topology": self.turbostat.cpu_topology if self._platform_caps.has_turbostat else {},
                 # Raw thermal snapshots
                 "thermal_start": thermal_start,
                 "thermal_end": thermal_end,
@@ -1314,7 +1316,7 @@ class EnergyEngine:
             readers.append("rapl")
         if self.perf.perf_available:
             readers.append("perf")
-        if self.turbostat.available if hasattr(self.turbostat, "available") else self.turbostat.is_available():
+        if self._platform_caps.has_turbostat:
             readers.append("turbostat")
         if self.sensor.available_sensors:
             readers.append("sensor")
