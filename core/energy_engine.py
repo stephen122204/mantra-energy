@@ -415,7 +415,7 @@ class EnergyEngine:
         # Measure baseline using utility (returns BaselineMeasurement object)
         dprint(f"🔍 DEBUG - force_remeasure value: {force_remeasure}")
         baseline = measure_baseline(
-            rapl_reader=self.rapl,
+            energy_reader=self.rapl,      # self.rapl IS SPBMEnergyReader on GN100 — factory set this
             core_pinner=self.core_pinner,
             duration_seconds=duration_seconds,
             num_samples=num_samples,
@@ -423,11 +423,11 @@ class EnergyEngine:
             pin_cores=self.pinned_cores,
             force_remeasure=force_remeasure,
             measure_gpu=measure_gpu,
+            # cache_file not passed — uses DEFAULT_CACHE_FILE from get_baseline_cache_path()
+            # which resolves ALEMS_DATA_ROOT + hostname on GN100 (Layer 1)
+            # yaml cache_file is Layer 2 fallback — already consumed by get_baseline_cache_path()
         )
 
-        print(f">>> INPUT duration_seconds: {duration_seconds}")
-        print(f">>> INPUT num_samples: {num_samples}")
-        print(f">>> INPUT pre_wait_seconds: {pre_wait_seconds}")
 
         # DEBUG: Object ID after measure_baseline
         print(f"🔍 DEBUG1 - baseline object ID after measure_baseline: {id(baseline)}")

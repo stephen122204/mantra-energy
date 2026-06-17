@@ -483,11 +483,100 @@ CREATE TABLE IF NOT EXISTS idle_baselines (
     background_cpu REAL,
     process_count INTEGER,
     method TEXT,
-    -- GPU PP1 idle power via MSR 0x641 — NULL on non-Tiger-Lake platforms
+    -- GPU idle power — NULL if no GPU measurement on this platform
+    -- gpu_method distinguishes MSR PP1 (Tiger Lake) vs DCGM f156 (GN100) vs IOKit
     gpu_power_watts REAL,   -- mean GPU idle power in Watts
-    gpu_std         REAL    -- std dev of GPU idle power samples
+    gpu_std         REAL,   -- std dev of GPU idle power samples
+    -- v61 additions: platform-agnostic domain storage
+    gpu_method      TEXT,   -- 'msr_pp1' | 'dcgm_f156' | 'iokit' | NULL
+    std_dev_json    TEXT    -- JSON dump of full std_dev_watts for all domains
 );
 """
+
+# =============================================================================
+# idle_baseline_domains — normalized domain storage (v61)
+# =============================================================================
+CREATE_IDLE_BASELINE_DOMAINS = """
+CREATE TABLE IF NOT EXISTS idle_baseline_domains (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    baseline_id TEXT    NOT NULL REFERENCES idle_baselines(baseline_id),
+    domain_id   INTEGER NOT NULL REFERENCES energy_domains(domain_id),
+    power_watts REAL    NOT NULL,
+    std_watts   REAL    NOT NULL DEFAULT 0.0,
+    UNIQUE(baseline_id, domain_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ibd_baseline_id ON idle_baseline_domains(baseline_id);
+CREATE INDEX IF NOT EXISTS idx_ibd_domain_id   ON idle_baseline_domains(domain_id);
+"""
+ 
+# v_idle_baselines: backward-compatible view over normalized storage
+CREATE_V_IDLE_BASELINES = """
+CREATE VIEW IF NOT EXISTS v_idle_baselines AS
+SELECT
+    ib.baseline_id, ib.timestamp, ib.duration_seconds, ib.sample_count,
+    ib.method, ib.gpu_method, ib.governor, ib.turbo,
+    ib.background_cpu, ib.process_count,
+    COALESCE(ib.package_power_watts,
+        (SELECT ibd.power_watts FROM idle_baseline_domains ibd
+         JOIN energy_domains ed ON ed.domain_id = ibd.domain_id
+         WHERE ibd.baseline_id = ib.baseline_id AND ed.name = 'PACKAGE')
+    ) AS package_power_watts,
+    COALESCE(ib.core_power_watts,
+        (SELECT ibd.power_watts FROM idle_baseline_domains ibd
+         JOIN energy_domains ed ON ed.domain_id = ibd.domain_id
+         WHERE ibd.baseline_id = ib.baseline_id AND ed.name IN ('CORE','CPU_P')
+         LIMIT 1)
+    ) AS core_power_watts,
+    COALESCE(ib.dram_power_watts,
+        (SELECT ibd.power_watts FROM idle_baseline_domains ibd
+         JOIN energy_domains ed ON ed.domain_id = ibd.domain_id
+         WHERE ibd.baseline_id = ib.baseline_id AND ed.name = 'DRAM')
+    ) AS dram_power_watts,
+    COALESCE(ib.uncore_power_watts,
+        (SELECT ibd.power_watts FROM idle_baseline_domains ibd
+         JOIN energy_domains ed ON ed.domain_id = ibd.domain_id
+         WHERE ibd.baseline_id = ib.baseline_id AND ed.name = 'UNCORE')
+    ) AS uncore_power_watts,
+    COALESCE(ib.gpu_power_watts,
+        (SELECT ibd.power_watts FROM idle_baseline_domains ibd
+         JOIN energy_domains ed ON ed.domain_id = ibd.domain_id
+         WHERE ibd.baseline_id = ib.baseline_id AND ed.name = 'GPU')
+    ) AS gpu_power_watts,
+    ib.package_std, ib.core_std, ib.dram_std, ib.uncore_std, ib.gpu_std
+FROM idle_baselines ib;
+"""
+ 
+CREATE_V_IDLE_BASELINE_DOMAINS = """
+CREATE VIEW IF NOT EXISTS v_idle_baseline_domains AS
+SELECT
+    ibd.baseline_id,
+    ed.name         AS domain_name,
+    ibd.power_watts,
+    ibd.std_watts,
+    ib.timestamp,
+    ib.method,
+    ib.gpu_method
+FROM idle_baseline_domains ibd
+JOIN energy_domains  ed ON ed.domain_id   = ibd.domain_id
+JOIN idle_baselines  ib ON ib.baseline_id = ibd.baseline_id;
+"""
+ 
+CREATE_V_PLATFORM_BASELINE_SUMMARY = """
+CREATE VIEW IF NOT EXISTS v_platform_baseline_summary AS
+SELECT
+    ib.baseline_id,
+    ib.timestamp,
+    COUNT(ibd.id)               AS domain_count,
+    GROUP_CONCAT(ed.name, ', ') AS domains_measured,
+    ib.method,
+    ib.gpu_method,
+    ib.governor
+FROM idle_baselines ib
+LEFT JOIN idle_baseline_domains ibd ON ibd.baseline_id = ib.baseline_id
+LEFT JOIN energy_domains        ed  ON ed.domain_id    = ibd.domain_id
+GROUP BY ib.baseline_id;
+"""
+
 # Unified multi-platform energy schema (SPEC_ENERGY_SCHEMA_V2)
 # All new platforms write here. Existing energy_samples untouched.
  

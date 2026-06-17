@@ -175,9 +175,16 @@ class ExperimentHarness:
 
             # Create database manager
             db = DatabaseManager(db_config)
-
             # Ensure tables exist
             db.create_tables()
+            # Verify BASELINE_DOMAIN_MAP integrity at startup — fail-fast (BDC-8)
+            from core.utils.idle_baseline import (
+                _verify_domain_map_integrity, DomainMapIntegrityError)
+            try:
+                _verify_domain_map_integrity(db.db.conn)
+            except DomainMapIntegrityError as e:
+                logger.error("Domain map integrity check FAILED: %s", e)
+                raise
 
             # Get hardware ID if info provided
             hw_id = None

@@ -1,387 +1,615 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-IDLE BASELINE MEASUREMENT UTILITY – Research-Grade Idle Power Measurement
-with automatic caching and system state tracking
+IDLE BASELINE MEASUREMENT UTILITY
+================================================================================
+
+Research-grade idle power measurement with platform-agnostic reader dispatch,
+normalized domain storage, and machine-aware cache path resolution.
+
+Architecture:
+    BASELINE_DOMAIN_MAP is the single source of truth for raw-key -> canonical
+    domain name mapping. It lives here and nowhere else. All other modules
+    consume this map; none define their own mappings (BDC-2).
+
+    Raw platform keys (pkg, cpu_p, package-0) exist ONLY inside
+    measure_idle_baseline() during the sampling loop. They never leave
+    this module in raw form. BaselineMeasurement.power_watts always
+    uses canonical uppercase energy_domains.name values (BDC-6).
+
+    Every domain returned by read_energy() is stored. No threshold
+    filtering, no sign filtering, no silent drops (BDC-7).
+
+Author: Deepak Panigrahy
 ================================================================================
 """
 
 import sys
 from pathlib import Path
 
-# Add project root to Python path
+# Project root resolution — must happen before any local imports
 project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 import json
 import logging
+import os
+import socket
 import statistics
 import time
 from typing import Any, Dict, List, Optional
 
-import psutil  # NEW: For process and CPU monitoring
+import psutil
 
-from core.models.baseline_measurement import \
-    BaselineMeasurement  # NEW: Use proper model
-from core.readers.rapl_reader import RAPLReader
+from core.models.baseline_measurement import BaselineMeasurement
+from core.readers.interfaces import EnergyReaderABC       # PAC-2: ABC only, never RAPLReader
 from core.readers.scheduler_monitor import SchedulerMonitor
 from core.utils.core_pinner import CorePinner
 from core.utils.debug import dprint
 
 logger = logging.getLogger(__name__)
-from core.config_loader import ConfigLoader
-config = ConfigLoader()
-settings = config.get_settings()
-cache_file = settings.get("experiment", {}).get("baseline", {}).get("cache_file", "data/idle_baseline.json")
-DEFAULT_CACHE_FILE = project_root / cache_file
 
+# =============================================================================
+# BASELINE_DOMAIN_MAP — single source of truth (BDC-2)
+# =============================================================================
+# Format: raw_reader_key -> (canonical_name, legacy_idle_baselines_col, legacy_std_col)
+#
+# canonical_name MUST match energy_domains.name exactly (uppercase).
+# legacy_* is None for domains with no fixed column in idle_baselines.
+# This map is the ONLY place in A-LEMS that translates raw keys to canonical names.
+# _verify_domain_map_integrity() cross-checks this against the live DB at startup.
+#
+# How to add a new platform reader:
+#   1. Add its raw keys here with correct canonical_name and legacy columns.
+#   2. Run _verify_domain_map_integrity() — it will tell you if canonical_name
+#      is missing from energy_domains table (add via seed if so).
+#   3. No other file needs to change for the mapping to take effect.
 
-def get_system_state() -> Dict[str, Any]:
+BASELINE_DOMAIN_MAP = {
+    # ---- RAPL keys (UBUNTU2505, Intel x86) -----------------------------------
+    'package-0': ('PACKAGE', 'package_power_watts', 'package_std'),
+    'core':      ('CORE',    'core_power_watts',    'core_std'),
+    'dram':      ('DRAM',    'dram_power_watts',    'dram_std'),
+    'uncore':    ('UNCORE',  'uncore_power_watts',  'uncore_std'),
+    # ---- SPBM keys (GN100, NVIDIA Grace aarch64) ----------------------------
+    'pkg':       ('PACKAGE', 'package_power_watts', 'package_std'),
+    'cpu_p':     ('CPU_P',   'core_power_watts',    'core_std'),
+    'cpu_e':     ('CPU_E',   None,                  None),       # no legacy column
+    'gpu':       ('GPU',     'gpu_power_watts',     'gpu_std'),
+    # ---- Apple IOKit keys (Stephen M1) — Chunk 16F --------------------------
+    'cpu':       ('CORE',    'core_power_watts',    'core_std'),
+    'gpu_apple': ('GPU_APPLE', None,                None),
+    # ---- AMD keys (Alex Ryzen) — Chunk 16E ----------------------------------
+    'ccd0':      ('CCD0',    None,                  None),
+    'ccd1':      ('CCD1',    None,                  None),
+    'package':   ('PACKAGE', 'package_power_watts', 'package_std'),
+}
+
+# =============================================================================
+# Machine-aware cache path resolution
+# =============================================================================
+
+def get_baseline_cache_path():
+    # type: () -> str
     """
-    Get current system state for reproducibility.
+    Resolve idle_baseline.json path for this machine.
 
-    Captures:
-    - CPU governor (performance/powersave)
-    - Turbo boost status
-    - Number of running processes
-    - Background CPU usage
+    Same 3-layer resolution as get_alems_db_path() — same pattern, same rules.
+
+    Priority:
+      Layer 1: ALEMS_DATA_ROOT env var + hostname
+               -> $ALEMS_DATA_ROOT/$hostname/idle_baseline.json
+      Layer 2: app_settings.yaml baseline.cache_file (relative path)
+      Layer 3: hardcoded fallback -> data/idle_baseline.json
 
     Returns:
-        Dictionary with system state information
+        Absolute or relative path string for the cache JSON file.
     """
-    state = {}
+    # Source ~/.alemsrc if not already done — Ab Initio pattern
+    alemsrc = os.path.expanduser("~/.alemsrc")
+    if os.path.exists(alemsrc):
+        with open(alemsrc) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("export "):
+                    key, _, val = line[7:].partition("=")
+                    os.environ.setdefault(key.strip(), val.strip())
 
-    # Get CPU governor (affects idle power)
+    base = os.environ.get("ALEMS_DATA_ROOT")
+    if base:
+        # Layer 1: machine-specific directory alongside experiments.db
+        machine_id = socket.gethostname().lower()
+        return os.path.join(base, machine_id, "idle_baseline.json")
+
+    # Layer 2: read from app_settings.yaml
     try:
-        with open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "r") as f:
+        import yaml
+        settings_path = project_root / "config" / "app_settings.yaml"
+        if settings_path.exists():
+            with open(settings_path) as f:
+                settings = yaml.safe_load(f) or {}
+            cache_file = (settings
+                          .get("experiment", {})
+                          .get("baseline", {})
+                          .get("cache_file", ""))
+            if cache_file:
+                return str(project_root / cache_file)
+    except Exception as e:
+        logger.debug("get_baseline_cache_path: yaml read failed: %s", e)
+
+    # Layer 3: hardcoded fallback
+    return str(project_root / "data" / "idle_baseline.json")
+
+
+# Module-level default resolved once at import time
+DEFAULT_CACHE_FILE = Path(get_baseline_cache_path())
+
+# =============================================================================
+# Domain integrity verification (BDC-8)
+# =============================================================================
+
+class DomainMapIntegrityError(RuntimeError):
+    """Raised at startup when BASELINE_DOMAIN_MAP does not match energy_domains."""
+    pass
+
+
+def _verify_domain_map_integrity(db_conn, domain_map=None):
+    # type: (Any, Optional[Dict]) -> None
+    """
+    Cross-check BASELINE_DOMAIN_MAP against live energy_domains table.
+
+    Called once from EnergyEngine.__init__(). Fails loud before any
+    measurement runs. Never called during sampling loop (BDC-8).
+
+    Checks:
+      1. Every canonical_name in domain_map exists in energy_domains.
+      2. No duplicate raw_keys in domain_map.
+      3. Every legacy_column (non-None) exists as a real column in idle_baselines.
+      4. v62 reader_keys column (if present) matches domain_map — WARNING only.
+
+    Args:
+        db_conn:    sqlite3 connection to the experiments DB.
+        domain_map: Defaults to BASELINE_DOMAIN_MAP if None.
+
+    Raises:
+        DomainMapIntegrityError: If any hard check fails.
+    """
+    if domain_map is None:
+        domain_map = BASELINE_DOMAIN_MAP
+
+    errors   = []
+    warnings = []
+
+    # Build canonical name set from DB
+    try:
+        cur = db_conn.execute("SELECT name FROM energy_domains")
+        db_canonical = {row[0] for row in cur.fetchall()}
+    except Exception as e:
+        raise DomainMapIntegrityError(
+            "Cannot query energy_domains: %s — run setup_new_machine.sh first" % e
+        )
+
+    # Check 1: every canonical_name exists in DB
+    code_canonical = {v[0] for v in domain_map.values()}
+    missing = code_canonical - db_canonical
+    if missing:
+        errors.append(
+            "Canonical names in BASELINE_DOMAIN_MAP missing from energy_domains: %s"
+            % sorted(missing)
+        )
+
+    # Check 2: no duplicate raw_keys
+    raw_keys = list(domain_map.keys())
+    if len(raw_keys) != len(set(raw_keys)):
+        errors.append("Duplicate raw_keys detected in BASELINE_DOMAIN_MAP")
+
+    # Check 3: legacy_column values exist in idle_baselines DDL
+    idle_cols = set()
+    try:
+        cur = db_conn.execute("PRAGMA table_info(idle_baselines)")
+        idle_cols = {row[1] for row in cur.fetchall()}
+    except Exception as e:
+        warnings.append("Cannot verify idle_baselines columns: %s" % e)
+
+    if idle_cols:
+        for raw_key, (canonical, legacy_col, legacy_std) in domain_map.items():
+            if legacy_col and legacy_col not in idle_cols:
+                errors.append(
+                    "raw_key '%s' -> legacy_col '%s' not found in idle_baselines"
+                    % (raw_key, legacy_col)
+                )
+            if legacy_std and legacy_std not in idle_cols:
+                errors.append(
+                    "raw_key '%s' -> legacy_std '%s' not found in idle_baselines"
+                    % (raw_key, legacy_std)
+                )
+
+    # Check 4: v62 reader_keys consistency — WARNING only (v62 is documentation)
+    try:
+        cur = db_conn.execute(
+            "SELECT name, reader_keys FROM energy_domains WHERE reader_keys IS NOT NULL"
+        )
+        for row in cur.fetchall():
+            db_name, db_keys_str = row[0], row[1]
+            db_keys = set(k.strip() for k in db_keys_str.split(','))
+            # find raw_keys in domain_map that map to this canonical name
+            code_keys = {k for k, v in domain_map.items() if v[0] == db_name}
+            orphan_in_db   = db_keys - code_keys
+            orphan_in_code = code_keys - db_keys
+            if orphan_in_db:
+                warnings.append(
+                    "energy_domains.reader_keys has '%s' for %s but BASELINE_DOMAIN_MAP does not"
+                    % (orphan_in_db, db_name)
+                )
+            if orphan_in_code:
+                warnings.append(
+                    "BASELINE_DOMAIN_MAP has raw_keys %s for %s but energy_domains.reader_keys does not (run v62)"
+                    % (orphan_in_code, db_name)
+                )
+    except Exception:
+        # v62 not yet applied on this machine — silently skip
+        pass
+
+    for w in warnings:
+        logger.warning("DomainMap: %s", w)
+
+    if errors:
+        raise DomainMapIntegrityError(
+            "BASELINE_DOMAIN_MAP integrity check failed:\n" + "\n".join(errors)
+        )
+
+    logger.info(
+        "Domain map integrity verified: %d raw_keys, %d canonical domains",
+        len(domain_map), len(code_canonical),
+    )
+
+
+# =============================================================================
+# System state capture
+# =============================================================================
+
+def get_system_state():
+    # type: () -> Dict[str, Any]
+    """
+    Capture current system state for baseline reproducibility metadata.
+
+    Returns:
+        Dict with governor, turbo, processes, background_cpu.
+        All fields have safe fallback values — never raises.
+    """
+    state = {}  # type: Dict[str, Any]
+
+    # CPU frequency governor — affects idle power significantly
+    try:
+        with open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor") as f:
             state["governor"] = f.read().strip()
-    except:
+    except Exception:
         state["governor"] = "unknown"
 
-    # Get turbo boost status (affects max frequency)
+    # Intel turbo boost status (x86 only — ARM has no equivalent path)
     try:
-        with open("/sys/devices/system/cpu/intel_pstate/no_turbo", "r") as f:
-            turbo_val = f.read().strip()
-            state["turbo"] = "disabled" if turbo_val == "1" else "enabled"
-    except:
-        state["turbo"] = "unknown"
+        with open("/sys/devices/system/cpu/intel_pstate/no_turbo") as f:
+            state["turbo"] = "disabled" if f.read().strip() == "1" else "enabled"
+    except Exception:
+        state["turbo"] = "unknown"   # ARM, AMD, or non-pstate — not an error
 
-    # Get background process count (noise indicator)
+    # Background process and CPU load — noise indicators for baseline validity
     state["processes"] = len(psutil.pids())
-
-    # Get background CPU usage (noise indicator)
     state["background_cpu"] = psutil.cpu_percent(interval=1)
 
     return state
 
 
+# =============================================================================
+# Core measurement function
+# =============================================================================
+
 def measure_idle_baseline(
-    rapl_reader: RAPLReader,
-    core_pinner: CorePinner,
-    duration_seconds: int = 10,
-    num_samples: int = 10,
-    pre_wait_seconds: int = 10,
-    pin_cores: Optional[List[int]] = None,
-    cache_file: Optional[Path] = None,
-    force_remeasure: bool = False,
-    measure_gpu: bool = True,   # Set False to skip GPU PP1 baseline on this platform
-) -> BaselineMeasurement:  # CHANGED: Returns BaselineMeasurement, not dict
+    energy_reader,                       # type: EnergyReaderABC
+    core_pinner,                         # type: CorePinner
+    duration_seconds=10,                 # type: int
+    num_samples=10,                      # type: int
+    pre_wait_seconds=10,                 # type: int
+    pin_cores=None,                      # type: Optional[List[int]]
+    cache_file=None,                     # type: Optional[Path]
+    force_remeasure=False,               # type: bool
+    measure_gpu=True,                    # type: bool
+):
+    # type: (...) -> BaselineMeasurement
     """
     Measure system idle energy baseline using research-grade methodology.
-    Automatically caches the result and reuses it on subsequent calls.
 
-    NEW FEATURES:
-    - Tracks system state (governor, turbo, processes, background CPU)
-    - Returns proper BaselineMeasurement object with metadata
-    - Cache validation ensures state matches before reuse
+    Platform-agnostic: energy_reader is any EnergyReaderABC — RAPLReader on
+    x86, SPBMEnergyReader on GN100, IOKitCPUEnergyReader on Apple M1.
+    The factory in energy_engine.py selects the correct reader before calling here.
+
+    Key design decisions:
+      - read_energy() is called (not read_energy_uj()) to get ALL platform domains.
+        BDC-7: nothing is filtered. Every domain the reader returns is stored.
+      - Raw keys (pkg, package-0) are converted to canonical uppercase names
+        via BASELINE_DOMAIN_MAP before BaselineMeasurement is constructed.
+        The returned object always has canonical keys — never raw platform keys.
+      - measure_gpu=False disables the optional separate GPU collector call only.
+        It never suppresses domains already returned by read_energy().
+      - Cache validation checks governor + turbo — same system state required
+        for cache hit. ALEMS_DATA_ROOT machines use machine-specific cache path.
 
     Args:
-        rapl_reader: Initialized RAPLReader instance
-        core_pinner: CorePinner instance for CPU affinity
-        duration_seconds: How long each idle sample lasts
-        num_samples: Number of samples to take
-        pre_wait_seconds: Time to wait before starting
-        pin_cores: List of cores to pin to (None = use pinner's default)
-        cache_file: Path to cache file (default: data/idle_baseline.json)
-        force_remeasure: If True, ignore cache and force new measurement
+        energy_reader:    Platform reader from ReaderFactory.get_energy_reader().
+        core_pinner:      CorePinner for CPU affinity during measurement.
+        duration_seconds: Duration of each idle sample in seconds.
+        num_samples:      Number of samples to average over.
+        pre_wait_seconds: Wait time before sampling for system to reach deep idle.
+        pin_cores:        Specific cores to pin to (None = pinner default).
+        cache_file:       Override cache path (None = DEFAULT_CACHE_FILE).
+        force_remeasure:  If True, ignore existing cache and remeasure.
+        measure_gpu:      If True, call energy_reader.read_gpu_msr() for separate
+                          GPU energy accumulator reading alongside read_energy().
+                          Does NOT affect whether gpu domain from read_energy() is stored.
 
     Returns:
-        BaselineMeasurement object with power values and metadata
+        BaselineMeasurement with canonical uppercase keys in power_watts.
     """
-    # Use default cache if none provided
+    # Resolve cache path — machine-aware
     if cache_file is None:
         cache_file = DEFAULT_CACHE_FILE
-
-    # Create cache directory if needed
+    cache_file = Path(cache_file)
     cache_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Get current system state
     current_state = get_system_state()
     dprint(
-        f"System state: governor={current_state['governor']}, "
-        f"turbo={current_state['turbo']}, "
-        f"processes={current_state['processes']}, "
-        f"background_cpu={current_state['background_cpu']:.1f}%"
+        "System state: governor=%s turbo=%s processes=%d background_cpu=%.1f%%",
+        current_state["governor"], current_state["turbo"],
+        current_state["processes"], current_state["background_cpu"],
     )
 
-    # Try to load from cache unless forced to remeasure
+    # ------------------------------------------------------------------
+    # Cache load — skip if force_remeasure or state mismatch
+    # ------------------------------------------------------------------
     if not force_remeasure and cache_file.exists():
         try:
-            with open(cache_file, "r") as f:
+            with open(cache_file) as f:
                 cache_data = json.load(f)
-
-            # Verify cache matches current system state
-            cached_state = cache_data.get("metadata", {})
-            if (
-                cached_state.get("governor") == current_state["governor"]
-                and cached_state.get("turbo") == current_state["turbo"]
-            ):
-
-                dprint(f"✅ Loaded idle baseline from {cache_file}")
-
-                # Convert cached dict back to BaselineMeasurement
-                return BaselineMeasurement(
-                    baseline_id=cache_data["baseline_id"],
-                    timestamp=cache_data["timestamp"],
-                    power_watts=cache_data["power_watts"],
-                    duration_seconds=cache_data["duration_seconds"],
-                    sample_count=cache_data["sample_count"],
-                    std_dev_watts=cache_data["std_dev_watts"],
-                    cpu_temperature_c=cache_data.get("cpu_temperature_c", 0),
-                    method=cache_data.get("method", "idle_measurement"),
-                    metadata=cache_data.get("metadata", {}),
-                )
+            cached_meta = cache_data.get("metadata", {})
+            # Governor and turbo must match — these change idle power significantly
+            if (cached_meta.get("governor") == current_state["governor"]
+                    and cached_meta.get("turbo") == current_state["turbo"]):
+                dprint("Loaded idle baseline from cache: %s", cache_file)
+                return BaselineMeasurement.from_dict(cache_data)
             else:
-                dprint("⚠️ Cache invalid (system state changed), remeasuring...")
+                dprint("Cache invalid (system state changed) — remeasuring")
         except Exception as e:
-            logger.warning(f"Failed to load cache, remeasuring: {e}")
+            logger.warning("Failed to load baseline cache, remeasuring: %s", e)
 
     dprint(
-        f"📝 Measuring idle baseline: {num_samples} samples of {duration_seconds}s each"
+        "Measuring idle baseline: %d samples x %ds each",
+        num_samples, duration_seconds,
     )
 
-    # ------------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Step 1: Pin to dedicated cores (Req 1.15)
-    # ------------------------------------------------------------------------
+    # ------------------------------------------------------------------
     if pin_cores is not None:
         core_pinner.pin_to_cores(pin_cores)
-        dprint(f"📌 Pinned to runtime-specified cores: {pin_cores}")
+        dprint("Pinned to cores: %s", pin_cores)
     else:
-        core_pinner.pin_to_cores()  # Use pinner's default
-        dprint(f"📌 Pinned to default cores: {core_pinner.default_cores}")
+        core_pinner.pin_to_cores()
+        dprint("Pinned to default cores: %s", core_pinner.default_cores)
 
-    # ------------------------------------------------------------------------
-    # Step 2: Wait for system to enter deep idle states (Req 1.7)
-    # ------------------------------------------------------------------------
-    dprint(
-        f"⏳ Waiting {pre_wait_seconds} seconds for system to enter deep idle states..."
-    )
+    # ------------------------------------------------------------------
+    # Step 2: Pre-wait for system to reach deep idle states (Req 1.7)
+    # ------------------------------------------------------------------
+    dprint("Waiting %ds for deep idle...", pre_wait_seconds)
     time.sleep(pre_wait_seconds)
 
-    # ------------------------------------------------------------------------
-    # Step 3: Collect multiple samples
-    # ------------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Step 3: Collect samples
+    # ------------------------------------------------------------------
     sched_monitor = SchedulerMonitor({})
-    all_samples = []
-    all_powers = {}  # Store values per domain for statistics
-    start_interrupts = (
-        sched_monitor._read_total_interrupts()
-    )  # You'll need to import this
-    start_time = time.time()
-    for sample_idx in range(num_samples):
-        dprint(f"📊 Sample {sample_idx + 1}/{num_samples}")
+    all_powers    = {}   # type: Dict[str, List[float]]   # raw_key -> [watts per sample]
+    all_stds      = {}   # type: Dict[str, List[float]]
 
-        start_rapl = rapl_reader.read_energy()
-        # GPU PP1 start — None on non-Tiger-Lake platforms
-        gpu_start_uj = rapl_reader.read_gpu_msr() if measure_gpu else None
+    start_interrupts = sched_monitor._read_total_interrupts()
+    start_time       = time.time()
+
+    for sample_idx in range(num_samples):
+        dprint("Sample %d/%d", sample_idx + 1, num_samples)
+
+        # read_energy() returns ALL domains the platform exposes — BDC-7
+        start_raw = energy_reader.read_energy()
+
+        # Optional separate GPU accumulator read (measure_gpu flag controls this ONLY)
+        # This is ADDITIONAL to whatever gpu domain read_energy() already returns
+        gpu_start_uj = None
+        if measure_gpu:
+            try:
+                gpu_start_uj = energy_reader.read_gpu_msr()
+            except Exception:
+                gpu_start_uj = None   # MSR not available on this platform — MIC-1
+
         time.sleep(duration_seconds)
-        end_rapl = rapl_reader.read_energy()
-        # GPU PP1 end read paired with start above
-        gpu_end_uj = rapl_reader.read_gpu_msr() if measure_gpu else None
-        sample_power = {}
-        for domain in start_rapl:
-            if domain in end_rapl:
-                delta_uj = max(0, end_rapl[domain] - start_rapl[domain])
-                delta_joules = delta_uj / 1_000_000
-                power_watts = delta_joules / duration_seconds
-                sample_power[domain] = power_watts
-                # Store for statistics
-                if domain not in all_powers:
-                    all_powers[domain] = []
-                all_powers[domain].append(power_watts)
-        # GPU baseline power — only if both reads succeeded
-        if gpu_start_uj is not None and gpu_end_uj is not None and gpu_end_uj >= gpu_start_uj:
+
+        end_raw = energy_reader.read_energy()
+
+        gpu_end_uj = None
+        if measure_gpu:
+            try:
+                gpu_end_uj = energy_reader.read_gpu_msr()
+            except Exception:
+                gpu_end_uj = None
+
+        # Compute per-domain power for this sample
+        for raw_key in start_raw:
+            if raw_key not in end_raw:
+                continue    # domain disappeared mid-sample — skip, not zero
+            delta_uj = max(0, end_raw[raw_key] - start_raw[raw_key])
+            power_w  = (delta_uj / 1_000_000) / duration_seconds
+            if raw_key not in all_powers:
+                all_powers[raw_key] = []
+            all_powers[raw_key].append(power_w)
+
+        # Separate GPU accumulator sample — only if both reads succeeded
+        # Key 'gpu_dcgm' distinguishes this from the gpu domain in read_energy()
+        if (gpu_start_uj is not None and gpu_end_uj is not None
+                and gpu_end_uj >= gpu_start_uj):
             gpu_delta_uj = gpu_end_uj - gpu_start_uj
             gpu_power_w  = (gpu_delta_uj / 1_000_000) / duration_seconds
-            sample_power["gpu"] = gpu_power_w
-            if "gpu" not in all_powers:
-                all_powers["gpu"] = []
-            all_powers["gpu"].append(gpu_power_w)
+            if 'gpu_dcgm' not in all_powers:
+                all_powers['gpu_dcgm'] = []
+            all_powers['gpu_dcgm'].append(gpu_power_w)
 
-        all_samples.append(sample_power)
-        dprint(f"   Power: {sample_power}")
+    # ------------------------------------------------------------------
+    # Step 4: Statistics
+    # ------------------------------------------------------------------
+    raw_power  = {}   # type: Dict[str, float]
+    raw_std    = {}   # type: Dict[str, float]
 
-    # ------------------------------------------------------------------------
-    # Step 4: Compute statistics (mean and standard deviation)
-    # ------------------------------------------------------------------------
-    avg_power = {}
-    std_power = {}
-
-    for domain, values in all_powers.items():
-        avg_power[domain] = statistics.mean(values)
-        if len(values) > 1:
-            std_power[domain] = statistics.stdev(values)
-        else:
-            std_power[domain] = 0.0
+    for raw_key, values in all_powers.items():
+        raw_power[raw_key] = statistics.mean(values)
+        raw_std[raw_key]   = statistics.stdev(values) if len(values) > 1 else 0.0
         dprint(
-            f"   Domain {domain}: mean={avg_power[domain]:.4f} W, "
-            f"std={std_power[domain]:.4f} W"
+            "  %s: mean=%.4fW std=%.4fW",
+            raw_key, raw_power[raw_key], raw_std[raw_key],
         )
 
-    # Record end interrupts
+    end_time       = time.time()
     end_interrupts = sched_monitor._read_total_interrupts()
-    end_time = time.time()
+    elapsed        = end_time - start_time
+    interrupt_rate = (end_interrupts - start_interrupts) / max(elapsed, 1)
+    current_state["interrupt_rate"] = interrupt_rate
 
-    # Calculate average interrupt rate during baseline
-    elapsed = end_time - start_time
-    avg_interrupt_rate = (end_interrupts - start_interrupts) / elapsed
+    # ------------------------------------------------------------------
+    # Step 5: Normalize raw keys to canonical names (BDC-6)
+    # This is the ONLY place in A-LEMS where raw keys become canonical names.
+    # After this point, no code anywhere sees pkg, package-0, cpu_p etc.
+    # ------------------------------------------------------------------
+    canonical_power = {}   # type: Dict[str, float]
+    canonical_std   = {}   # type: Dict[str, float]
 
-    # Add to current_state before it becomes metadata
-    current_state["interrupt_rate"] = avg_interrupt_rate
+    for raw_key, power in raw_power.items():
+        if raw_key not in BASELINE_DOMAIN_MAP:
+            # Unknown key — log warning, do not store (BDC-7: only skip truly unmapped keys)
+            logger.warning(
+                "measure_idle_baseline: raw_key '%s' not in BASELINE_DOMAIN_MAP "
+                "— add it to maintain BDC-7 completeness",
+                raw_key,
+            )
+            continue
+        canonical_name = BASELINE_DOMAIN_MAP[raw_key][0]
+        # If two raw_keys map to same canonical (e.g. 'core' and 'cpu' both -> CORE)
+        # only one platform sends each key so this will not collide in practice
+        canonical_power[canonical_name] = power
+        canonical_std[canonical_name]   = raw_std.get(raw_key, 0.0)
 
-    # ------------------------------------------------------------------------
-    # Step 5: Create BaselineMeasurement object
-    # ------------------------------------------------------------------------
+    # Determine gpu_method for provenance — stored in metadata, inserted by insert_baseline
+    gpu_method = getattr(energy_reader, 'METHOD_ID', None)
+    current_state["gpu_method"] = gpu_method
+
+    # ------------------------------------------------------------------
+    # Step 6: Construct BaselineMeasurement with canonical keys
+    # ------------------------------------------------------------------
     baseline = BaselineMeasurement(
-        baseline_id=f"baseline_{int(time.time())}",
+        baseline_id=f"baseline_{int(time.time())}_{os.getpid()}",
         timestamp=time.time(),
-        power_watts=avg_power,
+        power_watts=canonical_power,         # canonical uppercase keys always
         duration_seconds=duration_seconds * num_samples,
         sample_count=num_samples,
-        std_dev_watts=std_power,
-        cpu_temperature_c=0,  # Add if you have temperature sensor
+        std_dev_watts=canonical_std,
+        cpu_temperature_c=None,              # MIC-1: NULL not 0.0 when unavailable
         method="idle_measurement",
-        metadata=current_state,  # Store system state for validation
+        metadata=current_state,
     )
 
-    # ------------------------------------------------------------------------
-    # Step 6: Save to cache (with metadata for validation)
-    # ------------------------------------------------------------------------
+    # BDC-7 self-check: canonical count must equal raw domain count from read_energy()
+    expected_count = len(all_powers)
+    actual_count   = len(canonical_power)
+    if actual_count < expected_count:
+        logger.warning(
+            "BDC-7 warning: read_energy() returned %d domains but only %d "
+            "were mapped via BASELINE_DOMAIN_MAP. Add missing raw_keys.",
+            expected_count, actual_count,
+        )
+
+    # ------------------------------------------------------------------
+    # Step 7: Save to cache
+    # ------------------------------------------------------------------
     try:
         with open(cache_file, "w") as f:
-            json.dump(
-                {
-                    "baseline_id": baseline.baseline_id,
-                    "timestamp": baseline.timestamp,
-                    "power_watts": baseline.power_watts,
-                    "duration_seconds": baseline.duration_seconds,
-                    "sample_count": baseline.sample_count,
-                    "std_dev_watts": baseline.std_dev_watts,
-                    "cpu_temperature_c": baseline.cpu_temperature_c,
-                    "method": baseline.method,
-                    "metadata": baseline.metadata,
-                },
-                f,
-                indent=2,
-            )
-        dprint(f"💾 Saved idle baseline to {cache_file}")
+            json.dump(baseline.to_dict(), f, indent=2, default=str)
+        dprint("Saved idle baseline to %s", cache_file)
     except Exception as e:
-        logger.error(f"Failed to save baseline cache: {e}")
+        logger.error("Failed to save baseline cache: %s", e)
 
-    dprint(
-        "✅ Idle baseline complete:", **{k: f"{v:.4f} W" for k, v in avg_power.items()}
-    )
     return baseline
 
 
-def apply_baseline_correction(
-    raw_energy_uj: Dict[str, int],
-    baseline_power_watts: Dict[str, float],
-    duration_seconds: float,
-) -> Dict[str, int]:
+# =============================================================================
+# Baseline correction utility (unchanged)
+# =============================================================================
+
+def apply_baseline_correction(raw_energy_uj, baseline_power_watts, duration_seconds):
+    # type: (Dict[str, int], Dict[str, float], float) -> Dict[str, int]
     """
     Apply idle baseline correction to raw energy measurements.
 
     Args:
-        raw_energy_uj: Raw energy readings in microjoules
-        baseline_power_watts: Idle power in Watts per domain
-        duration_seconds: Duration of the measurement
+        raw_energy_uj:        Raw energy in microjoules per domain.
+        baseline_power_watts: Idle power in Watts per domain (canonical keys).
+        duration_seconds:     Duration of the measurement window.
 
     Returns:
-        Corrected energy in microjoules (raw - idle)
+        Corrected energy in microjoules (raw minus idle), minimum 0.
     """
     corrected = {}
-
     for domain, energy_uj in raw_energy_uj.items():
         if domain in baseline_power_watts:
-            idle_joules = baseline_power_watts[domain] * duration_seconds
-            idle_uj = int(idle_joules * 1_000_000)
+            idle_uj = int(baseline_power_watts[domain] * duration_seconds * 1_000_000)
             corrected[domain] = max(0, energy_uj - idle_uj)
         else:
-            corrected[domain] = energy_uj
-
+            corrected[domain] = energy_uj    # no baseline for this domain — use raw
     return corrected
 
 
-# ============================================================================
-# Example usage (standalone test)
-# ============================================================================
-if __name__ == "__main__":
-    import json
+# =============================================================================
+# Standalone test
+# =============================================================================
 
-    # Set up logging
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     print("\n" + "=" * 70)
-    print("🔬 IDLE BASELINE MEASUREMENT TEST")
+    print("IDLE BASELINE MEASUREMENT TEST")
     print("=" * 70)
 
-    # Load config
-    with open(project_root / "config" / "hw_config.json") as f:
-        config = json.load(f)
-
-    # Initialize readers
-    rapl = RAPLReader(config)
+    # Factory dispatch — correct reader for this platform (PAC-2)
+    from core.readers.factory import ReaderFactory
+    reader = ReaderFactory.get_energy_reader()
     pinner = CorePinner(default_cores=[0, 1])
-    print(f"📊 {pinner}")
 
-    # First call – should measure and save
-    print("\n📝 First call (measuring, should save to cache)...")
-    baseline1 = measure_idle_baseline(
-        rapl_reader=rapl,
+    print(f"Reader: {reader.__class__.__name__}")
+    print(f"Available: {reader.is_available()}")
+
+    print("\nFirst call (measuring, will save to cache)...")
+    b1 = measure_idle_baseline(
+        energy_reader=reader,
         core_pinner=pinner,
         duration_seconds=2,
         num_samples=2,
         pre_wait_seconds=2,
     )
-    print(f"   Baseline: {baseline1.power_watts}")
-    print(
-        f"   Interrupt Rate: {baseline1.metadata.get('interrupt_rate', 'N/A'):.1f}/sec"
-    )
+    print(f"  power_watts: {b1.power_watts}")
+    print(f"  domains: {list(b1.power_watts.keys())}")
 
-    # Second call – should load from cache
-    print("\n📝 Second call (should load from cache)...")
-    baseline2 = measure_idle_baseline(rapl_reader=rapl, core_pinner=pinner)
-    print(f"   Baseline: {baseline2.power_watts}")
-    print(
-        f"   Interrupt Rate: {baseline2.metadata.get('interrupt_rate', 'N/A'):.1f}/sec"
-    )
+    print("\nSecond call (should load from cache)...")
+    b2 = measure_idle_baseline(energy_reader=reader, core_pinner=pinner)
+    print(f"  power_watts: {b2.power_watts}")
 
-    # Force remeasure
-    print("\n📝 Force remeasure...")
-    baseline3 = measure_idle_baseline(
-        rapl_reader=rapl,
-        core_pinner=pinner,
-        force_remeasure=True,
-        duration_seconds=2,
-        num_samples=2,
-    )
-    print(f"   Baseline: {baseline3.power_watts}")
-    print(
-        f"   Interrupt Rate: {baseline3.metadata.get('interrupt_rate', 'N/A'):.1f}/sec"
-    )
+    # Round-trip integrity check (BDC-7)
+    assert set(b1.power_watts.keys()) == set(b2.power_watts.keys()), \
+        "Round-trip key mismatch!"
+    print("\nRound-trip integrity: PASS")
 
     print("\n" + "=" * 70)
-    print("✅ Test complete!")
+    print("Test complete")
     print("=" * 70)

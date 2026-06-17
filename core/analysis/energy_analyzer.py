@@ -90,9 +90,9 @@ class EnergyAnalyzer:
         if baseline:
             # Use minimum baseline (2nd percentile) instead of mean
             min_energy = baseline.min_energy_uj(raw.duration_seconds)
-            idle_uj = min_energy["package-0"]
-            idle_core_uj = min_energy["core"]
-            idle_uncore_uj = min_energy["uncore"]
+            idle_uj = min_energy.get("PACKAGE", min_energy.get("package-0", 0))
+            idle_core_uj = min_energy.get("CORE", min_energy.get("CPU_P", min_energy.get("core", 0)))
+            idle_uncore_uj = min_energy.get("UNCORE", min_energy.get("uncore", 0))
             baseline_id = baseline.baseline_id
 
             print(
@@ -114,7 +114,7 @@ class EnergyAnalyzer:
         # GPU PP1 energy — from raw measurement, baseline-subtracted
         # gpu_total_uj is None on platforms without MSR 0x641
         gpu_total_uj    = getattr(raw, "gpu_total_uj", None)
-        gpu_baseline_uj = min_energy.get("gpu", 0) if baseline else 0
+        gpu_baseline_uj = min_energy.get("GPU", min_energy.get("gpu", 0)) if baseline else 0
         gpu_dynamic_uj  = (
             max(0, gpu_total_uj - gpu_baseline_uj)
             if gpu_total_uj is not None else None

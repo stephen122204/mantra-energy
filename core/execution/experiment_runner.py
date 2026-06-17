@@ -241,8 +241,10 @@ class ExperimentRunner:
         """Get baseline (measure if needed) and insert to DB once."""
         baseline_config = self.settings.get("experiment", {}).get("baseline", {})
         force_remeasure = baseline_config.get("force_remeasure", False)
-        cache_file = baseline_config.get("cache_file", "data/idle_baseline.json")
-        
+        # Resolve cache path via machine-aware 3-layer logic (BDC-4)
+        from scripts.tools.path_loader import get_baseline_cache_path
+        cache_file = get_baseline_cache_path()
+ 
         # Check if cache file exists
         cache_path = Path(cache_file)
         cache_exists = cache_path.exists()
@@ -276,8 +278,9 @@ class ExperimentRunner:
 
                 print(f"\n   ✅ Baseline measured and saved!")
                 print(f"      Baseline ID: {harness.baseline.baseline_id}")
-                print(f"      Package idle power: {harness.baseline.power_watts.get('package-0', 0):.3f} W")
-                print(f"      Core idle power:    {harness.baseline.power_watts.get('core', 0):.3f} W")
+                # canonical keys after v61: PACKAGE, CORE (not package-0, core)
+                print(f"      Package idle power: {harness.baseline.package_power_w:.3f} W")
+                print(f"      Core idle power:    {harness.baseline.core_power_w:.3f} W")
 
             except Exception as e:
                 import traceback
@@ -686,10 +689,12 @@ class ExperimentRunner:
             baseline_dict = {
                 "baseline_id": b.baseline_id,
                 "timestamp": b.timestamp,
-                "package_power_watts": b.power_watts.get("package-0", 0),
-                "core_power_watts": b.power_watts.get("core", 0),
-                "uncore_power_watts": b.power_watts.get("uncore", 0),
-                "dram_power_watts": b.power_watts.get("dram", 0),
+                # canonical keys after v61: PACKAGE, CORE, UNCORE, DRAM
+                "package_power_watts": b.power_watts.get("PACKAGE", 0),
+                "core_power_watts":    b.power_watts.get("CORE",
+                                       b.power_watts.get("CPU_P", 0)),
+                "uncore_power_watts":  b.power_watts.get("UNCORE", 0),
+                "dram_power_watts":    b.power_watts.get("DRAM", 0),
                 "duration_seconds": b.duration_seconds,
                 "sample_count": b.sample_count,
                 "package_std": b.std_dev_watts.get("package-0"),

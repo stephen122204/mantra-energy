@@ -33,6 +33,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from .base import DatabaseError, DatabaseInterface
 from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES, CREATE_RUN_QUALITY,
+                     CREATE_IDLE_BASELINE_DOMAINS, CREATE_V_IDLE_BASELINES,
+                     CREATE_V_IDLE_BASELINE_DOMAINS, CREATE_V_PLATFORM_BASELINE_SUMMARY,
                      CREATE_GPU_SAMPLES, CREATE_GPU_CONFIG,
                      CREATE_ENERGY_SOURCES, CREATE_ENERGY_DOMAINS,
                      CREATE_ENERGY_SAMPLES_V2, CREATE_ENERGY_SAMPLE_DOMAINS,
@@ -321,6 +323,11 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_MEASUREMENT_METHOD_REGISTRY)
         self.conn.executescript(CREATE_METHOD_REFERENCES)
         self.conn.executescript(CREATE_MEASUREMENT_METHODOLOGY)
+        # v61: normalized idle baseline domain storage + backward-compat views
+        self.conn.executescript(CREATE_IDLE_BASELINE_DOMAINS)
+        self.conn.executescript(CREATE_V_IDLE_BASELINES)
+        self.conn.executescript(CREATE_V_IDLE_BASELINE_DOMAINS)
+        self.conn.executescript(CREATE_V_PLATFORM_BASELINE_SUMMARY)
         self.conn.executescript(CREATE_METRIC_DISPLAY_REGISTRY)
         self.conn.executescript(CREATE_QUERY_REGISTRY)
         self.conn.executescript(CREATE_STANDARDIZATION_REGISTRY)
@@ -660,50 +667,69 @@ class SQLiteAdapter(DatabaseInterface):
         # Extract nested dictionaries
         power = baseline_data.get("power_watts", {})
         std_dev = baseline_data.get("std_dev_watts", {})
-        metadata = baseline_data.get("metadata", {})
-        # ========== ADD THESE DEBUG LINES ==========
-        print(f"🔍 DEBUG sqladapter- metadata in insert_baseline: {metadata}")
-        print(
-            f"🔍 DEBUG sqladapter- governor from metadata: {metadata.get('governor')}"
-        )
-        print(f"🔍 DEBUG sqladapter- turbo from metadata: {metadata.get('turbo')}")
-        # ===========================================
+        metadata     = baseline_data.get("metadata", {})
+        gpu_method   = metadata.get("gpu_method")
+        std_dev_json = __import__("json").dumps(std_dev)
 
         self.conn.execute(
             """
-            INSERT INTO idle_baselines
+            INSERT OR IGNORE INTO idle_baselines
             (baseline_id, timestamp, package_power_watts, core_power_watts,
              uncore_power_watts, dram_power_watts, duration_seconds, sample_count,
              package_std, core_std, uncore_std, dram_std,
              governor, turbo, background_cpu, process_count, method,
-             gpu_power_watts, gpu_std)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             gpu_power_watts, gpu_std, gpu_method, std_dev_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?)
         """,
             (
                 baseline_id,
                 baseline_data.get("timestamp"),
-                power.get("package-0"),
-                power.get("core"),
-                power.get("uncore"),
-                power.get("dram", 0),
+                power.get("PACKAGE"),
+                power.get("CORE", power.get("CPU_P")),
+                power.get("UNCORE"),
+                power.get("DRAM"),
                 baseline_data.get("duration_seconds"),
                 baseline_data.get("sample_count"),
-                std_dev.get("package-0"),
-                std_dev.get("core"),
-                std_dev.get("uncore"),
-                std_dev.get("dram", 0),
+                std_dev.get("PACKAGE"),
+                std_dev.get("CORE", std_dev.get("CPU_P")),
+                std_dev.get("UNCORE"),
+                std_dev.get("DRAM"),
                 metadata.get("governor"),
                 metadata.get("turbo"),
                 metadata.get("background_cpu"),
                 metadata.get("processes"),
                 baseline_data.get("method", "idle_measurement"),
-                # GPU idle power — None on non-Tiger-Lake platforms
-                power.get("gpu"),
-                std_dev.get("gpu"),
+                power.get("GPU"),
+                std_dev.get("GPU"),
+                gpu_method,
+                std_dev_json,
             ),
         )
-
+        self._insert_baseline_domains(baseline_id, power, std_dev)
         return baseline_id
+
+    def _insert_baseline_domains(self, baseline_id, power_watts, std_dev_watts):
+        # type: (str, dict, dict) -> None
+        """Insert one row per canonical domain into idle_baseline_domains (BDC-3)."""
+        import logging as _log
+        for canonical_name, power in power_watts.items():
+            cur = self.conn.execute(
+                "SELECT domain_id FROM energy_domains WHERE name = ?",
+                (canonical_name,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                _log.getLogger(__name__).warning(
+                    "_insert_baseline_domains: '%s' not in energy_domains",
+                    canonical_name,
+                )
+                continue
+            self.conn.execute(
+                "INSERT OR IGNORE INTO idle_baseline_domains "
+                "(baseline_id, domain_id, power_watts, std_watts) VALUES (?,?,?,?)",
+                (baseline_id, row[0], power, std_dev_watts.get(canonical_name, 0.0)),
+            )
 
     def insert_run(self, run_data: Dict[str, Any]) -> int:
         """
