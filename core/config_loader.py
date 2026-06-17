@@ -137,8 +137,9 @@ class ConfigLoader:
         import os
         base = os.environ.get("ALEMS_DATA_ROOT")
         if base:
-            # machine_id from hw_config.json e.g. "gn100-2b96"
-            machine_id = self._hardware_config.get("machine_id", "unknown").lower()
+            import socket
+            # hostname is always available — no hw_config dependency
+            machine_id = socket.gethostname().lower()
             return f"{base}/{machine_id}/experiments.db"
         # Fallback: read app_settings.yaml — used on UBUNTU2505
         settings = self.get_settings()
