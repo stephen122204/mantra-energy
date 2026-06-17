@@ -443,7 +443,9 @@ class ConfigLoader:
             if not isinstance(sqlite_config, dict):
                 sqlite_config = {}
 
-            sqlite_config.setdefault("path", "data/experiments.db")
+            # Use get_db_path() for machine-aware path resolution
+            # Overrides yaml default on machines with ALEMS_DATA_ROOT set
+            sqlite_config["path"] = self.get_db_path()
             sqlite_config.setdefault("journal_mode", "WAL")
             sqlite_config.setdefault("timeout", 30)
             db_config["sqlite"] = sqlite_config
