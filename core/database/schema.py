@@ -1123,7 +1123,7 @@ CREATE TABLE IF NOT EXISTS interrupt_samples (
     total_ticks_start    INTEGER,   -- /proc/stat sum(all fields) at interval
     total_ticks_end      INTEGER,   -- /proc/stat sum(all fields) at interval end
     proc_ticks_start     INTEGER,   -- /proc/[pid]/stat utime+stime at interval start
-    proc_ticks_end       INTEGER    -- /proc/[pid]/stat utime+stime at interval end
+    proc_ticks_end       INTEGER,    -- /proc/[pid]/stat utime+stime at interval end
     sample_start_ns      INTEGER,   -- epoch ns at sample start (explicit)
     sample_end_ns        INTEGER,   -- epoch ns at sample end (= timestamp_ns)
     interval_ns          INTEGER,   -- exact elapsed ns for this sample
