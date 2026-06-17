@@ -174,6 +174,7 @@ CREATE TABLE IF NOT EXISTS goal_attempt (
     goal_id                 INTEGER NOT NULL,
     run_id                  INTEGER NOT NULL,
     attempt_number          INTEGER NOT NULL DEFAULT 1,
+    is_retry                INTEGER NOT NULL DEFAULT 0,   -- 1 if attempt follows prior failure on same goal_id
     is_winning              INTEGER NOT NULL DEFAULT 0,
     outcome                 TEXT NOT NULL
                             CHECK(outcome IN (

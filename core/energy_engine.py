@@ -624,15 +624,8 @@ class EnergyEngine:
         """
         import sqlite3
         try:
-            settings = self.settings.get("database", {}) if isinstance(self.settings, dict) \
-                else getattr(self.settings, "database", {})
-            if hasattr(settings, "__dict__"):
-                settings = settings.__dict__
-            sqlite_cfg = settings.get("sqlite", {}) if isinstance(settings, dict) \
-                else getattr(settings, "sqlite", {})
-            if hasattr(sqlite_cfg, "__dict__"):
-                sqlite_cfg = sqlite_cfg.__dict__
-            db_path = sqlite_cfg.get("path", "data/experiments.db")
+            from scripts.tools.path_loader import get_alems_db_path
+            db_path = get_alems_db_path()   # resolves via ~/.alemsrc + socket.gethostname()
             conn = sqlite3.connect(db_path, timeout=5)
             cur = conn.execute("SELECT name, domain_id FROM energy_domains")
             result = {row[0]: row[1] for row in cur.fetchall()}
@@ -650,15 +643,8 @@ class EnergyEngine:
         """
         import sqlite3
         try:
-            settings = self.settings.get("database", {}) if isinstance(self.settings, dict) \
-                else getattr(self.settings, "database", {})
-            if hasattr(settings, "__dict__"):
-                settings = settings.__dict__
-            sqlite_cfg = settings.get("sqlite", {}) if isinstance(settings, dict) \
-                else getattr(settings, "sqlite", {})
-            if hasattr(sqlite_cfg, "__dict__"):
-                sqlite_cfg = sqlite_cfg.__dict__
-            db_path = sqlite_cfg.get("path", "data/experiments.db")
+            from scripts.tools.path_loader import get_alems_db_path
+            db_path = get_alems_db_path()   # resolves via ~/.alemsrc + socket.gethostname()
             conn = sqlite3.connect(db_path, timeout=5)
             cur = conn.execute(
                 "SELECT source_id FROM energy_sources WHERE name = ?",

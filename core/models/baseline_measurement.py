@@ -108,6 +108,31 @@ class BaselineMeasurement:
         """Serialize to JSON."""
         return json.dumps(self.to_dict(), indent=2, default=str)
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BaselineMeasurement":
+        """
+        Reconstruct BaselineMeasurement from a serialized dictionary.
+
+        Mirrors to_dict() exactly. Used when loading baseline from JSON cache.
+        timestamp_iso is ignored — timestamp (float) is the canonical field.
+
+        Args:
+            data: Dictionary produced by to_dict() or stored in JSON cache.
+
+        Returns:
+            BaselineMeasurement instance with all fields populated.
+        """
+        return cls(
+            baseline_id=data["baseline_id"],
+            timestamp=data["timestamp"],
+            power_watts=data["power_watts"],
+            duration_seconds=data["duration_seconds"],
+            sample_count=data["sample_count"],
+            std_dev_watts=data.get("std_dev_watts", {}),
+            cpu_temperature_c=data.get("cpu_temperature_c"),
+            method=data.get("method", "idle_measurement"),
+            metadata=data.get("metadata", {}),
+        )
     @property
     def min_power_watts(self) -> Dict[str, float]:
         """
