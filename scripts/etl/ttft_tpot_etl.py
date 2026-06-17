@@ -19,7 +19,8 @@ import sqlite3
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DB_PATH   = str(REPO_ROOT / "data" / "experiments.db")
+from scripts.tools.path_loader import get_alems_db_path
+DB_PATH = get_alems_db_path()
 
 logger = logging.getLogger(__name__)
 

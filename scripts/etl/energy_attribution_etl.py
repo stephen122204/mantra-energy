@@ -61,7 +61,8 @@ get_llm_energy_from_samples = _llm_mod.get_llm_energy_from_samples
 logger = logging.getLogger(__name__)
 
 # Default DB path — overridable for testing
-DEFAULT_DB = Path("data/experiments.db")
+from scripts.tools.path_loader import get_alems_db_path
+DB_PATH = get_alems_db_path()
 
 # Thermal throttle threshold in Celsius
 THERMAL_THRESHOLD_C = 85.0

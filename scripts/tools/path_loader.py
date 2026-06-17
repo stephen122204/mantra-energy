@@ -3,8 +3,24 @@
 Path configuration loader - loads from config/paths.yaml
 Supports your hierarchical YAML structure
 """
+import os
+import socket
 import yaml
 from pathlib import Path
+
+
+def get_alems_db_path() -> str:
+    """
+    Resolve the correct SQLite DB path for this machine.
+    Uses ALEMS_DATA_ROOT env var + hostname on machines with external storage.
+    Falls back to project default on UBUNTU2505 and similar.
+    Single source of truth for all ETL scripts — never hardcode data/experiments.db.
+    """
+    base = os.environ.get("ALEMS_DATA_ROOT")
+    if base:
+        machine_id = socket.gethostname().lower()
+        return f"{base}/{machine_id}/experiments.db"
+    return "data/experiments.db"
 
 class PathConfig:
     def __init__(self, config_file=None):

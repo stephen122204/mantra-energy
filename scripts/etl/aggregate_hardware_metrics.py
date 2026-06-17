@@ -13,7 +13,8 @@ import sqlite3
 import threading
 import argparse
 
-DB_PATH = "data/experiments.db"
+from scripts.tools.path_loader import get_alems_db_path
+DB_PATH = get_alems_db_path()
 
 
 def _conn(db_path: str) -> sqlite3.Connection:
