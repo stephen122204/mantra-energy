@@ -47,7 +47,7 @@ import threading
 logger = logging.getLogger(__name__)
 
 from scripts.tools.path_loader import get_alems_db_path
-DB_PATH = get_alems_db_path()
+DEFAULT_DB = Path(get_alems_db_path())
 
 # Coverage quality thresholds
 COVERAGE_GOLD       = 95.0
