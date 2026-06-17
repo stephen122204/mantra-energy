@@ -12,10 +12,19 @@ from pathlib import Path
 def get_alems_db_path() -> str:
     """
     Resolve the correct SQLite DB path for this machine.
-    Uses ALEMS_DATA_ROOT env var + hostname on machines with external storage.
-    Falls back to project default on UBUNTU2505 and similar.
-    Single source of truth for all ETL scripts — never hardcode data/experiments.db.
+    Sources ~/.alemsrc first (Ab Initio pattern) then reads ALEMS_DATA_ROOT.
+    Falls back to project default when ALEMS_DATA_ROOT not set.
+    Single source of truth for all ETL scripts and config_loader.
     """
+    # Source ~/.alemsrc if not already done — same logic as ConfigLoader._source_alemsrc()
+    alemsrc = os.path.expanduser("~/.alemsrc")
+    if os.path.exists(alemsrc):
+        with open(alemsrc) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("export "):
+                    key, _, val = line[7:].partition("=")
+                    os.environ.setdefault(key.strip(), val.strip())
     base = os.environ.get("ALEMS_DATA_ROOT")
     if base:
         machine_id = socket.gethostname().lower()
