@@ -42,6 +42,12 @@ class EnergySample:
     domains:      Dict[str, int] = field(    # canonical_name -> delta µJ
         default_factory=dict
     )
+    raw_start:    Dict[str, int] = field(    # native_key -> counter value at tick start
+        default_factory=dict
+    )
+    raw_end:      Dict[str, int] = field(    # native_key -> counter value at tick end
+        default_factory=dict
+    )
 
     def get_domain(self, canonical_name: str, default: int = 0) -> int:
         """Safe domain lookup — returns default if domain absent or None."""

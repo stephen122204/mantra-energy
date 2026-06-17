@@ -136,10 +136,18 @@ class EnergyCollector:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
 
-        # Flush all adapters after thread is stopped — safe, single-threaded
+        # Flush all adapters — both return buffered sample lists, no DB writes
+        # Route by is_legacy flag — avoids circular import of writer classes
+        self._flushed_v2_samples: List = []
+        self._flushed_legacy_samples: List = []
         for adapter in self._adapters:
             try:
-                adapter.flush()
+                result = adapter.flush()
+                if isinstance(result, list):
+                    if getattr(adapter, "is_legacy", False):
+                        self._flushed_legacy_samples.extend(result)
+                    else:
+                        self._flushed_v2_samples.extend(result)
             except Exception as e:
                 logger.warning("EnergyCollector: adapter flush failed: %s", e)
 
@@ -201,6 +209,8 @@ class EnergyCollector:
                         source=self._schema.source,
                         run_id=self._run_id,
                         domains=domains,
+                        raw_start=dict(self._prev) if self._prev else {},
+                        raw_end=dict(curr) if curr else {},
                     )
                     for adapter in self._adapters:
                         adapter.write(sample)   # PAC-2: adapter.write never raises

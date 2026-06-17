@@ -62,6 +62,7 @@ nav:
     - Adding New Providers: developer-guide/how-to-add-provider.md
     - Testing Models: developer-guide/how-to-test-models.md
     - Retry Study Design: developer-guide/20-retry-study-design.md
+    - Config Hierarchy & DB Path: developer-guide/21-config-hierarchy.md
 
     - Compliance:
       - Developer Compliance Guide: compliance/COMPLIANCE.md

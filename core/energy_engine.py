@@ -140,6 +140,7 @@ class EnergyEngine:
         # Store configuration
         self.config = config
         self.settings = config.get("settings", {})  # app_settings.yaml content
+        
 
         # --------------------------------------------------------------------
         # Initialize all hardware readers
@@ -174,6 +175,8 @@ class EnergyEngine:
         self.sensor    = self.thermal_reader         # alias: existing code uses self.sensor
         self.gpu_collector = GPUCollector(rapl_reader=self.rapl)
         self.last_gpu_samples = []
+        self.last_v2_samples = []          # NormalizedWriter samples, inserted post run_id
+        self.last_legacy_samples = []      # LegacyWriter samples, inserted post run_id
         # EnergyCollector replaces SPBMSampler and _sampling_loop (16B3).
         # Platform differences declared in reader.get_measurement_schema().
         # Zero platform-specific branching here — collector is generic.
@@ -263,6 +266,8 @@ class EnergyEngine:
         self._sampling_thread: Optional[threading.Thread] = None
         self._sampling_queue: queue.Queue = queue.Queue()
         self._sampling_active = False
+        self._side_sampling_active = False       # IO + interrupt side-sampler (10Hz)
+        self._side_sampling_thread = None
         msr_available = (
             hasattr(self.msr, "helper_available") and self.msr.helper_available
         ) or self.msr.rdmsr_available
@@ -305,38 +310,6 @@ class EnergyEngine:
             },
         )
 
-
-    def _resolve_domain_id_cache(self, schema):
-        """
-        Build canonical_name -> domain_id dict from energy_domains table.
-        Called once per run at collector init. Returns empty dict on failure.
-        """
-        cache = {}
-        try:
-            cur = self.db.conn.execute(
-                "SELECT name, domain_id FROM energy_domains"
-            )
-            # Build lookup from all known domains — filter by schema domains at write time
-            cache = {row[0]: row[1] for row in cur.fetchall()}
-        except Exception as e:
-            logger.warning("_resolve_domain_id_cache failed: %s", e)
-        return cache
- 
-    def _resolve_source_id(self, schema):
-        """
-        Look up source_id for this reader's source name in energy_sources table.
-        Returns 1 (RAPL) as fallback — never crashes.
-        """
-        try:
-            cur = self.db.conn.execute(
-                "SELECT source_id FROM energy_sources WHERE name = ?",
-                (schema.source,),
-            )
-            row = cur.fetchone()
-            return row[0] if row else 1
-        except Exception as e:
-            logger.warning("_resolve_source_id failed: %s", e)
-            return 1
         
     def _start_thermal_sampling(self):
         """Start thermal sampling thread"""
@@ -604,31 +577,7 @@ class EnergyEngine:
                 logger.error("Sampling loop error: %s", e)
                 time.sleep(0.01)    # brief pause to avoid tight error loop
 
-    def _resolve_domain_id_cache(self, schema) -> dict:
-        """Build canonical_name -> domain_id from energy_domains table."""
-        # Called once per run at collector init — no per-tick DB reads
-        try:
-            cur = self.db.conn.execute(
-                "SELECT name, domain_id FROM energy_domains"
-            )
-            return {row[0]: row[1] for row in cur.fetchall()}
-        except Exception as e:
-            logger.warning("_resolve_domain_id_cache failed: %s", e)
-            return {}
 
-    def _resolve_source_id(self, schema) -> int:
-        """Look up source_id for reader's source name in energy_sources table."""
-        # Returns 1 (RAPL) as safe fallback — never crashes
-        try:
-            cur = self.db.conn.execute(
-                "SELECT source_id FROM energy_sources WHERE name = ?",
-                (schema.source,),
-            )
-            row = cur.fetchone()
-            return row[0] if row else 1
-        except Exception as e:
-            logger.warning("_resolve_source_id failed: %s", e)
-            return 1
         
     def _start_sampling(self) -> None:
         """Start the high‑frequency sampling thread."""
@@ -666,9 +615,90 @@ class EnergyEngine:
         self._workload_pid = pid
         self.disk_reader.pid = pid
 
+
+    def _resolve_domain_id_cache(self, schema) -> dict:
+        """
+        Build canonical_name -> domain_id from energy_domains table.
+        Opens short-lived read-only connection — closed immediately after query.
+        Called once per run at start_measurement, never during sampling loop.
+        """
+        import sqlite3
+        try:
+            settings = self.settings.get("database", {}) if isinstance(self.settings, dict) \
+                else getattr(self.settings, "database", {})
+            if hasattr(settings, "__dict__"):
+                settings = settings.__dict__
+            sqlite_cfg = settings.get("sqlite", {}) if isinstance(settings, dict) \
+                else getattr(settings, "sqlite", {})
+            if hasattr(sqlite_cfg, "__dict__"):
+                sqlite_cfg = sqlite_cfg.__dict__
+            db_path = sqlite_cfg.get("path", "data/experiments.db")
+            conn = sqlite3.connect(db_path, timeout=5)
+            cur = conn.execute("SELECT name, domain_id FROM energy_domains")
+            result = {row[0]: row[1] for row in cur.fetchall()}
+            conn.close()                   # closed immediately — no lock held
+            return result
+        except Exception as e:
+            logger.warning("_resolve_domain_id_cache failed: %s", e)
+            return {}
+
+    def _resolve_source_id(self, schema) -> int:
+        """
+        Look up source_id for this reader's source name in energy_sources table.
+        Opens short-lived read-only connection — closed immediately after query.
+        Returns 1 (RAPL) as safe fallback — never crashes.
+        """
+        import sqlite3
+        try:
+            settings = self.settings.get("database", {}) if isinstance(self.settings, dict) \
+                else getattr(self.settings, "database", {})
+            if hasattr(settings, "__dict__"):
+                settings = settings.__dict__
+            sqlite_cfg = settings.get("sqlite", {}) if isinstance(settings, dict) \
+                else getattr(settings, "sqlite", {})
+            if hasattr(sqlite_cfg, "__dict__"):
+                sqlite_cfg = sqlite_cfg.__dict__
+            db_path = sqlite_cfg.get("path", "data/experiments.db")
+            conn = sqlite3.connect(db_path, timeout=5)
+            cur = conn.execute(
+                "SELECT source_id FROM energy_sources WHERE name = ?",
+                (schema.source,),
+            )
+            row = cur.fetchone()
+            conn.close()                   # closed immediately — no lock held
+            return row[0] if row else 1
+        except Exception as e:
+            logger.warning("_resolve_source_id failed: %s", e)
+            return 1
     # ------------------------------------------------------------------------
     # Measurement session management
     # ------------------------------------------------------------------------
+
+    def _side_sampling_loop(self) -> None:
+        """
+        10Hz side-sampler for IO and interrupt sampling.
+        Runs alongside EnergyCollector — replaces piggy-backed sampling
+        that was inside _sampling_loop before 16B3 deleted it.
+        PAC-2: never crashes — logs and continues on any error.
+        """
+        interval = 0.1   # 10Hz — same cadence as old _sampling_loop side effects
+        next_tick = time.monotonic() + interval
+        while self._side_sampling_active:
+            now = time.monotonic()
+            sleep_s = next_tick - now
+            if sleep_s > 0:
+                time.sleep(sleep_s)
+            next_tick += interval
+            try:
+                # IO sample — disk read/write bytes delta
+                if self.collect_interrupt_samples:
+                    self.scheduler.sample_interrupts()
+                io_s = self.disk_reader.sample()
+                if io_s:
+                    self._io_samples.append(io_s)
+            except Exception as e:
+                logger.error("_side_sampling_loop error: %s", e)
+                time.sleep(0.01)
 
     def start_measurement(self) -> str:
         """
@@ -747,12 +777,13 @@ class EnergyEngine:
         try:
             schema = self.energy_reader.get_measurement_schema()
             if schema.domains:
+                # Resolve domain_id_cache and source_id from schema
+                # These are resolved here using pre-built schema — no DB access
                 domain_id_cache = self._resolve_domain_id_cache(schema)
                 source_id = self._resolve_source_id(schema)
-                adapters = [NormalizedWriter(self.db, source_id, domain_id_cache)]
-                # LegacyWriter: RAPL only — transitional backward compat
+                adapters = [NormalizedWriter(source_id, domain_id_cache)]
                 if schema.source == "RAPL":
-                    adapters.append(LegacyWriter(self.db, self.current_run_id))
+                    adapters.append(LegacyWriter())
                 self._energy_collector = EnergyCollector(
                     reader=self.energy_reader,
                     adapters=adapters,
@@ -778,6 +809,15 @@ class EnergyEngine:
         self._io_samples = []
         self.disk_reader._last = None          # reset delta baseline
         self.disk_reader.device = self.disk_reader._detect_device()
+        # Start 10Hz side-sampler for IO and interrupt sampling
+        # Replaces the piggy-backed sampling that was in _sampling_loop (pre-16B3)
+        self._side_sampling_active = True
+        self._side_sampling_thread = threading.Thread(
+            target=self._side_sampling_loop,
+            name="EnergyEngine-SideSampler",
+            daemon=True,
+        )
+        self._side_sampling_thread.start()
         dprint(f"Started measurement {self.measurement_id}")
         return self.measurement_id
 
@@ -821,6 +861,9 @@ class EnergyEngine:
         # NormalizedWriter and LegacyWriter flush() called inside stop()
         if self._energy_collector is not None:
             self._energy_collector.stop()
+            # Collect buffered v2 samples — inserted after insert_run() in experiment_runner
+            self.last_v2_samples = list(self._energy_collector._flushed_v2_samples)
+            self.last_legacy_samples = list(self._energy_collector._flushed_legacy_samples)
             self._energy_collector = None
         samples = []   # legacy var kept — downstream code checks len(samples)
 
@@ -867,6 +910,10 @@ class EnergyEngine:
                 # backward compat — old tuple format (timestamp, energy_dict)
                 self.last_energy_samples.append(sample)
                 # Add more logic based on actual formatif hasattr(self.energy_engine, 'samples'):
+        # Stop side-sampler — no more IO/interrupt samples after this point
+        self._side_sampling_active = False
+        if hasattr(self, "_side_sampling_thread") and self._side_sampling_thread:
+            self._side_sampling_thread.join(timeout=2.0)
         # Stop perf and get accumulated counters
 
         perf_data = self.perf.stop_process_measurement() if self._platform_caps.has_perf else {}

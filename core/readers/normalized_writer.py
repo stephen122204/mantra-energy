@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from core.readers.energy_sample import EnergySample
 from core.readers.persistence_adapter import PersistenceAdapter
@@ -38,15 +38,15 @@ class NormalizedWriter(PersistenceAdapter):
 
     def __init__(
         self,
-        db_manager,                          # ALEMSDatabase manager instance
         source_id: int,                      # energy_sources.source_id for this reader
-        domain_id_cache: Dict[str, int],     # canonical_name -> domain_id
+        domain_id_cache: Dict[str, int],     # canonical_name -> domain_id, pre-resolved
     ):
-        self._db = db_manager
-        self._source_id = source_id          # stored per write — identifies measurement interface
-        self._domain_id_cache = domain_id_cache
-        self._lock = threading.Lock()        # serialize writes from background thread
-        self._write_count = 0                # diagnostic counter
+        self._source_id = source_id
+        self._domain_id_cache = domain_id_cache   # used at flush to convert keys
+        self.is_legacy = False               # router flag for EnergyCollector
+        self._lock = threading.Lock()
+        self._write_count = 0
+        self._buffer: List[EnergySample] = []     # flushed after insert_run() assigns run_id
 
     def write(self, sample: EnergySample) -> None:
         """
@@ -55,76 +55,43 @@ class NormalizedWriter(PersistenceAdapter):
         """
         try:
             with self._lock:
-                # Insert sample header — returns new sample_id
-                sample_id = self._insert_header(sample)
-                if sample_id is None:
-                    return  # header insert failed, skip domain rows
-
-                # Insert one domain row per measured domain
-                for canonical_name, delta_uj in sample.domains.items():
-                    domain_id = self._domain_id_cache.get(canonical_name)
-                    if domain_id is None:
-                        # Domain not in registry — log once, skip silently
-                        logger.warning(
-                            "NormalizedWriter: unknown canonical domain '%s' — "
-                            "add to energy_domains table",
-                            canonical_name,
-                        )
-                        continue
-                    self._insert_domain_row(
-                        sample_id, domain_id, delta_uj, sample.run_id
-                    )
-
-                self._write_count += 1
-
+                # Buffer sample — run_id not available until insert_run()
+                # Flushed via energy_engine.last_v2_samples after run_id assigned
+                self._buffer.append(sample)
         except Exception as e:
-            # PAC-2: never crash the sampling thread
             logger.warning("NormalizedWriter.write failed: %s", e)
 
-    def _insert_header(self, sample: EnergySample) -> Optional[int]:
-        """Insert energy_samples_v2 header row, return sample_id."""
-        try:
-            conn = self._db.conn
-            cur = conn.execute(
-                """INSERT INTO energy_samples_v2
-                   (run_id, source_id, timestamp_ns, interval_ns)
-                   VALUES (?, ?, ?, ?)""",
-                (
-                    sample.run_id,
-                    self._source_id,
-                    sample.timestamp_ns,
-                    sample.interval_ns,
-                ),
-            )
-            return cur.lastrowid
-        except Exception as e:
-            logger.warning("NormalizedWriter._insert_header failed: %s", e)
-            return None
+    
 
-    def _insert_domain_row(
-        self,
-        sample_id: int,
-        domain_id: int,
-        energy_uj: int,
-        run_id: int,
-    ) -> None:
-        """Insert one energy_sample_domains row for this domain."""
-        try:
-            self._db.conn.execute(
-                """INSERT INTO energy_sample_domains
-                   (sample_id, domain_id, source_id, energy_uj, run_id)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (sample_id, domain_id, self._source_id, energy_uj, run_id),
-            )
-        except Exception as e:
-            logger.warning("NormalizedWriter._insert_domain_row failed: %s", e)
-
-    def flush(self) -> None:
-        """Commit pending writes. Called on EnergyCollector.stop()."""
-        try:
-            self._db.conn.commit()
-            logger.debug(
-                "NormalizedWriter.flush: committed %d samples", self._write_count
-            )
-        except Exception as e:
-            logger.warning("NormalizedWriter.flush failed: %s", e)
+    def flush(self) -> List:
+        """
+        Convert buffered EnergySamples to objects insert_energy_samples_v2() expects.
+        Returns list of SimpleNamespace(source_id, timestamp_ns, interval_ns, domains)
+        where domains keys are integer domain_ids not canonical names.
+        Called by EnergyCollector.stop() — no DB access here.
+        """
+        from types import SimpleNamespace
+        with self._lock:
+            result = []
+            for sample in self._buffer:
+                # Convert canonical_name -> domain_id using pre-resolved cache
+                domains = {}
+                for canonical_name, delta_uj in sample.domains.items():
+                    domain_id = self._domain_id_cache.get(canonical_name)
+                    if domain_id is not None:
+                        domains[domain_id] = delta_uj
+                    else:
+                        logger.warning(
+                            "NormalizedWriter: unknown domain '%s' — "
+                            "add to energy_domains table", canonical_name,
+                        )
+                if domains:
+                    result.append(SimpleNamespace(
+                        source_id=self._source_id,
+                        timestamp_ns=sample.timestamp_ns,
+                        interval_ns=sample.interval_ns,
+                        domains=domains,
+                    ))
+            self._buffer.clear()
+            logger.debug("NormalizedWriter.flush: %d samples ready", len(result))
+            return result

@@ -766,6 +766,10 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in linear_result and linear_result["gpu_samples"]:
                 db.insert_gpu_samples(linear_id, linear_result["gpu_samples"])
+            if "v2_samples" in linear_result and linear_result["v2_samples"]:
+                db.insert_energy_samples_v2(linear_id, linear_result["v2_samples"])
+            if "legacy_samples" in linear_result and linear_result["legacy_samples"]:
+                db.insert_energy_samples(linear_id, linear_result["legacy_samples"])
                 try:
                     telemetry = _convert_gpu_to_telemetry(linear_result["gpu_samples"])
                     if telemetry:
@@ -842,6 +846,10 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in agentic_result and agentic_result["gpu_samples"]:
                 db.insert_gpu_samples(agentic_id, agentic_result["gpu_samples"])
+            if "v2_samples" in agentic_result and agentic_result["v2_samples"]:
+                db.insert_energy_samples_v2(agentic_id, agentic_result["v2_samples"])
+            if "legacy_samples" in agentic_result and agentic_result["legacy_samples"]:
+                db.insert_energy_samples(agentic_id, agentic_result["legacy_samples"])
                 try:
                     telemetry = _convert_gpu_to_telemetry(agentic_result["gpu_samples"])
                     if telemetry:
@@ -1243,6 +1251,8 @@ class ExperimentRunner:
             # GPU samples — empty list if NoneBackend, safe to call always
             if "gpu_samples" in result and result["gpu_samples"]:
                 db.insert_gpu_samples(run_id, result["gpu_samples"])
+            if "v2_samples" in result and result["v2_samples"]:
+                db.insert_energy_samples_v2(run_id, result["v2_samples"])
                 try:
                     telemetry = _convert_gpu_to_telemetry(result["gpu_samples"])
                     if telemetry:

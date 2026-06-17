@@ -48,11 +48,11 @@ class LegacyWriter(PersistenceAdapter):
     Thread safety: lock protects the accumulated buffer.
     """
 
-    def __init__(self, db_manager, run_id: int):
-        self._db = db_manager
-        self._run_id = run_id                # fixed for the lifetime of this writer
+    def __init__(self):
+        # No DB connection — buffered, returned at flush(), inserted by experiment_runner
+        self.is_legacy = True                # router flag for EnergyCollector
         self._lock = threading.Lock()
-        self._buffer: List[Dict] = []        # accumulated sample dicts, flushed in batch
+        self._buffer: List[Dict] = []        # accumulated sample dicts
 
     def write(self, sample: EnergySample) -> None:
         """
@@ -73,14 +73,16 @@ class LegacyWriter(PersistenceAdapter):
                 row[legacy_col] = sample.domains.get(canonical_name, 0)
 
             # Also populate start/end raw fields for backward compat ETL
-            row["pkg_start_uj"]    = 0   # not available from delta-only EnergySample
-            row["pkg_end_uj"]      = 0   # legacy ETL uses delta fields, not start/end
-            row["core_start_uj"]   = 0
-            row["core_end_uj"]     = 0
-            row["dram_start_uj"]   = 0
-            row["dram_end_uj"]     = 0
-            row["uncore_start_uj"] = 0
-            row["uncore_end_uj"]   = 0
+            # Raw counter values from EnergyCollector tick — needed by ETL
+            # for pre_task_energy_uj, framework_overhead_energy_uj attribution
+            row["pkg_start_uj"]    = sample.raw_start.get("package-0")
+            row["pkg_end_uj"]      = sample.raw_end.get("package-0")
+            row["core_start_uj"]   = sample.raw_start.get("core")
+            row["core_end_uj"]     = sample.raw_end.get("core")
+            row["dram_start_uj"]   = sample.raw_start.get("dram")
+            row["dram_end_uj"]     = sample.raw_end.get("dram")
+            row["uncore_start_uj"] = sample.raw_start.get("uncore")
+            row["uncore_end_uj"]   = sample.raw_end.get("uncore")
 
             with self._lock:
                 self._buffer.append(row)
@@ -88,21 +90,13 @@ class LegacyWriter(PersistenceAdapter):
         except Exception as e:
             logger.warning("LegacyWriter.write failed: %s", e)
 
-    def flush(self) -> None:
+    def flush(self) -> List[Dict]:
         """
-        Batch insert buffered samples into legacy energy_samples table.
-        Called on EnergyCollector.stop() after sampling thread joins.
+        Return buffered legacy rows for insert_energy_samples() in experiment_runner.
+        No DB access here — follows gpu_collector pattern.
         """
         with self._lock:
-            if not self._buffer:
-                return
-            try:
-                # Use existing insert_energy_samples repository method
-                self._db.insert_energy_samples(self._run_id, self._buffer)
-                logger.debug(
-                    "LegacyWriter.flush: inserted %d rows for run %d",
-                    len(self._buffer), self._run_id,
-                )
-                self._buffer.clear()
-            except Exception as e:
-                logger.warning("LegacyWriter.flush failed: %s", e)
+            result = list(self._buffer)
+            self._buffer.clear()
+            logger.debug("LegacyWriter.flush: returning %d rows", len(result))
+            return result

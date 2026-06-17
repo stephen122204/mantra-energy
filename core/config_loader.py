@@ -67,6 +67,7 @@ class ConfigLoader:
         # NEW: Load grid intensity config for sustainability calculator
         # ====================================================================
         self._grid_intensity = self._load_json("grid_intensity_2026.json")
+        self._source_alemsrc()             # load machine-specific env vars
         if self._grid_intensity:
             country_count = len(
                 [k for k in self._grid_intensity.keys() if k != "metadata"]
@@ -102,6 +103,54 @@ class ConfigLoader:
         except Exception as e:
             print(f"⚠️ Error loading {filename}: {e}")
             return {}
+    def _source_alemsrc(self) -> None:
+        """
+        Source ~/.alemsrc if it exists — Ab Initio inspired pattern.
+        Sets machine-specific env vars (ALEMS_DATA_ROOT, API keys) without
+        requiring shell sourcing. Uses setdefault so shell env always wins.
+        """
+        import os
+        alemsrc = os.path.expanduser("~/.alemsrc")
+        if not os.path.exists(alemsrc):
+            return                         # no rc file — silent, not an error
+        with open(alemsrc) as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith("export "):
+                    continue               # skip comments and blank lines
+                key, _, val = line[7:].partition("=")
+                # setdefault: shell environment always takes priority over rc file
+                os.environ.setdefault(key.strip(), val.strip())
+
+    def get_db_path(self) -> str:
+        """
+        Resolve the correct SQLite DB path for this machine.
+
+        Priority:
+          1. ALEMS_DATA_ROOT env var + machine_id  (GN100, remote machines)
+          2. app_settings.yaml database.sqlite.path (UBUNTU2505 default)
+
+        ALEMS_DATA_ROOT is set in ~/.alemsrc on machines with non-default
+        storage. Never derived from hw_config database key — that key does
+        not exist in hw_config.json.
+        """
+        import os
+        base = os.environ.get("ALEMS_DATA_ROOT")
+        if base:
+            # machine_id from hw_config.json e.g. "gn100-2b96"
+            machine_id = self._hardware_config.get("machine_id", "unknown").lower()
+            return f"{base}/{machine_id}/experiments.db"
+        # Fallback: read app_settings.yaml — used on UBUNTU2505
+        settings = self.get_settings()
+        db_config = settings.get("database", {}) if isinstance(settings, dict) \
+            else getattr(settings, "database", {})
+        if hasattr(db_config, "__dict__"):
+            db_config = db_config.__dict__
+        sqlite_config = db_config.get("sqlite", {}) if isinstance(db_config, dict) \
+            else getattr(db_config, "sqlite", {})
+        if hasattr(sqlite_config, "__dict__"):
+            sqlite_config = sqlite_config.__dict__
+        return sqlite_config.get("path", "data/experiments.db")
 
     def get_hardware_config(self) -> Dict[str, Any]:
         """

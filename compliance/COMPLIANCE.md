@@ -669,3 +669,27 @@ These serve different purposes (single vs multi task) but share the same
 harness call patterns. Divergence causes silent measurement inconsistencies.
 Applies to: run_agentic(), run_linear(), tool_graph wiring, save_pair(),
 save_single(), goal_execution tracking, provider config.
+## 14. Energy Engine Isolation (EEI)
+
+### Rule EEI-1: EnergyEngine Never Touches the Database
+EnergyEngine is a measurement component. It reads hardware. It never writes
+to, queries, or opens a connection to any database. No sqlite3.connect(),
+no db.conn, no DatabaseManager reference anywhere in energy_engine.py.
+
+### Rule EEI-2: DB Connections Only in Repository Layer
+All DB access goes through:
+    DatabaseManager → SamplesRepository → self.db.conn.execute()
+Never open sqlite3.connect() directly outside of sqlite_adapter.py.
+Opening a second connection on the same SQLite file causes database locked
+errors that are silent and hard to diagnose.
+
+### Rule EEI-3: Writers Are Buffers Only
+NormalizedWriter and LegacyWriter buffer samples during measurement.
+They never open DB connections. They return buffers via flush().
+experiment_runner inserts after insert_run() assigns run_id.
+Pattern: measure → buffer → insert_run() → insert samples with run_id.
+
+### Rule EEI-4: run_id Is Never Available at Measurement Time
+run_id is assigned by insert_run() which happens AFTER stop_measurement().
+Any code that tries to use run_id during or before stop_measurement() is wrong.
+Writers receive run_id only via experiment_runner after insert_run() returns.

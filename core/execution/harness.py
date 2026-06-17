@@ -129,7 +129,7 @@ class ExperimentHarness:
         engine_config = hw_config.copy()
         engine_config["settings"] = settings_dict
 
-        self.energy_engine = EnergyEngine(engine_config)  # ← Now passing dict
+        self.energy_engine = EnergyEngine(engine_config)
         self.energy_analyzer = EnergyAnalyzer()
         self.sustainability = SustainabilityCalculator(
             config_loader
@@ -675,6 +675,8 @@ class ExperimentHarness:
             "energy_samples": energy_samples,
             "gpu_samples":    list(self.energy_engine.last_gpu_samples),
             "spbm_samples":   list(self.energy_engine.last_spbm_samples),
+            "v2_samples":     list(self.energy_engine.last_v2_samples),
+            "legacy_samples": list(self.energy_engine.last_legacy_samples),
             "rail_result":    self.energy_engine.last_rail_result,
             "cpu_samples": cpu_samples,
             "interrupt_samples": interrupt_samples,
@@ -706,6 +708,7 @@ class ExperimentHarness:
             result["energy_samples"] = list(self.energy_engine.last_samples)
             result["gpu_samples"]    = list(self.energy_engine.last_gpu_samples)
             result["spbm_samples"]   = list(self.energy_engine.last_spbm_samples)
+            result["v2_samples"]     = list(self.energy_engine.last_v2_samples)
             result["rail_result"]    = self.energy_engine.last_rail_result
             dprint(
                 f"📊 Added {len(self.energy_engine.last_samples)} energy samples to result"
@@ -1233,6 +1236,8 @@ class ExperimentHarness:
             "energy_samples": energy_samples,
             "gpu_samples":    list(self.energy_engine.last_gpu_samples),
             "spbm_samples":   list(self.energy_engine.last_spbm_samples),
+            "v2_samples":     list(self.energy_engine.last_v2_samples),
+            "legacy_samples": list(self.energy_engine.last_legacy_samples),
             "rail_result":    self.energy_engine.last_rail_result,
             "cpu_samples": cpu_samples,
             "interrupt_samples": interrupt_samples,
@@ -1265,6 +1270,8 @@ class ExperimentHarness:
             result["energy_samples"] = list(self.energy_engine.last_samples)
             result["gpu_samples"]    = list(self.energy_engine.last_gpu_samples)
             result["spbm_samples"]   = list(self.energy_engine.last_spbm_samples)
+            result["v2_samples"]     = list(self.energy_engine.last_v2_samples)
+            result["legacy_samples"]     = list(self.energy_engine.last_legacy_samples)
             result["rail_result"]    = self.energy_engine.last_rail_result
             dprint(
                 f"📊 Added {len(self.energy_engine.last_samples)} energy samples to result"
