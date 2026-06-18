@@ -593,7 +593,7 @@ class ExperimentHarness:
                 "run_queue_length": derived.run_queue_length,
                 "kernel_time_ms": derived.kernel_time_ms,
                 "user_time_ms": derived.user_time_ms,
-                "frequency_mhz": cpu_metrics.get('cpu_avg_mhz', 0),
+                "frequency_mhz": derived.frequency_mhz if derived.frequency_mhz else 0,
                 "package_temp_celsius": derived.package_temp_celsius,
                 "baseline_temp_celsius": (
                     self.baseline.cpu_temperature_c if self.baseline else None
@@ -1114,7 +1114,7 @@ class ExperimentHarness:
                 "run_queue_length": derived.run_queue_length,
                 "kernel_time_ms": derived.kernel_time_ms,
                 "user_time_ms": derived.user_time_ms,
-                "frequency_mhz": cpu_metrics.get('cpu_avg_mhz', 0),
+                "frequency_mhz": derived.frequency_mhz if derived.frequency_mhz else 0,
                 "package_temp_celsius": derived.package_temp_celsius,
                 "baseline_temp_celsius": (
                     self.baseline.cpu_temperature_c if self.baseline else None
