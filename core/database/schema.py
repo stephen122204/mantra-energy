@@ -200,6 +200,8 @@ CREATE TABLE IF NOT EXISTS goal_attempt (
     finished_at             TIMESTAMP,
     updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    retry_of_attempt_id     INTEGER,  -- attempt_id this retries, NULL if first attempt
+    failure_type            TEXT,     -- fine-grained failure classification
     -- GPU PP1 energy for this attempt — NULL on non-Tiger-Lake platforms
     gpu_energy_uj           INTEGER,  -- gpu_dynamic_energy_uj from runs for this attempt
     UNIQUE(goal_id, attempt_number),
@@ -1016,8 +1018,10 @@ CREATE TABLE IF NOT EXISTS runs (
     gpu_dynamic_energy_uj         INTEGER,  -- gpu_total_energy_uj - gpu_baseline_energy_uj
     gpu_pct_of_pkg                REAL,     -- gpu_dynamic_energy_uj / dynamic_energy_uj * 100
     gpu_attribution_method        TEXT,     -- ETL populated: exclusive|utilization|none (15-C)
-    gpu_count                     INTEGER DEFAULT 0,  -- GPUs detected at run time    
-   
+    gpu_count                     INTEGER DEFAULT 0,  -- GPUs detected at run time
+    global_run_id                 TEXT,               -- cross-machine run correlation ID
+    sync_status                   INTEGER NOT NULL DEFAULT 0,  -- 0=local only, 1=synced
+    sync_samples_status           INTEGER NOT NULL DEFAULT 0,  -- 0=local only, 1=synced
 
     FOREIGN KEY(exp_id) REFERENCES experiments(exp_id),
     FOREIGN KEY(hw_id) REFERENCES hardware_config(hw_id),
@@ -1680,7 +1684,8 @@ CREATE TABLE IF NOT EXISTS llm_interactions (
     tcp_retransmits INTEGER,
     error_message TEXT,
     status TEXT,
-    
+    global_run_id TEXT,               -- cross-machine run correlation ID
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
