@@ -815,6 +815,11 @@ class ExperimentRunner:
                     linear_result.get("cpu_samples", []),
                     linear_result.get("interrupt_samples", []),
                 )
+                # ARM: preserve frequency_mhz from INSERT when cpu_samples empty
+                if not linear_agg.get("cpu_avg_mhz") and \
+                        linear_result.get("ml_features", {}).get("frequency_mhz"):
+                    linear_agg["cpu_avg_mhz"] = linear_result["ml_features"]["frequency_mhz"]
+                    linear_agg["cpu_busy_mhz"] = linear_result["ml_features"]["frequency_mhz"]
                 db.update_run_stats(linear_id, linear_agg)
 
             # Insert agentic run
@@ -893,6 +898,11 @@ class ExperimentRunner:
                     agentic_result.get("cpu_samples", []),
                     agentic_result.get("interrupt_samples", []),
                 )
+                # ARM: preserve frequency_mhz from INSERT when cpu_samples empty
+                if not agentic_agg.get("cpu_avg_mhz") and \
+                        agentic_result.get("ml_features", {}).get("frequency_mhz"):
+                    agentic_agg["cpu_avg_mhz"] = agentic_result["ml_features"]["frequency_mhz"]
+                    agentic_agg["cpu_busy_mhz"] = agentic_result["ml_features"]["frequency_mhz"]
                 db.update_run_stats(agentic_id, agentic_agg)
             # Agentic orchestration events
             if "orchestration_events" in agentic_result:
