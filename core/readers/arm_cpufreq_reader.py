@@ -206,19 +206,35 @@ class ARMCPUFreqReader(TurbostatReaderABC):
         logger.debug("ARMCPUFreqReader: %d snapshots, %.1f avg MHz",
                      len(samples), avg_mhz)
 
+        summary = {
+            'frequency_mean': avg_mhz,
+            'frequency_max':  max(all_freqs) if all_freqs else avg_mhz,
+            'frequency_min':  min(all_freqs) if all_freqs else avg_mhz,
+        }
         return {
-            'Avg_MHz':      avg_mhz,
-            # Bzy_MHz approximated as Avg_MHz — turbostat computes busy% from
-            # C-state residency which is not available on ARM in x86 form
-            'Bzy_MHz':      avg_mhz,
-            # Thermal data belongs to ARMThermalReader (16-D), not here
-            'package_temp': None,
-            # ARM uses WFI/WFE idle states — not equivalent to x86 c2/c3/c6/c7.
-            # NULL is scientifically correct per MIC-1 (not zero, not estimated).
+            'Avg_MHz':          avg_mhz,
+            'Bzy_MHz':          avg_mhz,
+            'package_temp':     None,
             'C1%': None, 'C2%': None, 'C3%': None,
             'C6%': None, 'C7%': None,
+            'dataframe':        None,
+            'num_samples':      len(samples),
+            'duration_seconds': len(samples) / CPUFREQ_SAMPLING_HZ,
+            'summary':          summary,
         }
 
+    def get_column_mapping(self):
+        # type: () -> dict
+        """
+        Return mapping of ARM cpufreq metric names to runs table columns.
+        ARM does not produce turbostat columns — returns empty dict for
+        columns that are NULL on aarch64 (ring_bus, voltage, c-states).
+        """
+        return {
+            'frequency_mean': 'frequency_mhz',
+            'frequency_max':  'cpu_avg_mhz',
+        }
+    
     def _sampling_loop(self):
         """
         Background thread: reads all CPU frequencies at CPUFREQ_SAMPLING_HZ.

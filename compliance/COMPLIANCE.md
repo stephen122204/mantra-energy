@@ -693,3 +693,22 @@ Pattern: measure → buffer → insert_run() → insert samples with run_id.
 run_id is assigned by insert_run() which happens AFTER stop_measurement().
 Any code that tries to use run_id during or before stop_measurement() is wrong.
 Writers receive run_id only via experiment_runner after insert_run() returns.
+
+## Migration Source Control (MSC)
+
+MSC-1: Every file in migrations/schema/ and migrations/seed/ is immutable
+       after first commit. Fix forward with a new file. No exceptions.
+       Violation = checksum mismatch detected by alems migrate --verify.
+
+MSC-2: Every experiment run must record migration_set_hash from manifest.json
+       in environment_config. NULL migration_set_hash is acceptable for
+       historical rows only. Never acceptable for new rows after Chunk M3 ships.
+
+MSC-3: Machine-specific scripts live only under scripts/machine_setup/<hostname>/.
+       They are never placed in migrations/schema/ or migrations/seed/.
+       Violation = GN100 test data silently applying to UBUNTU2505.
+
+MSC-4: migrations/schema/ contains DDL only (CREATE, ALTER, DROP).
+       migrations/seed/ contains data only (INSERT, UPDATE, DELETE).
+       A schema/ file with INSERT is a violation. A seed/ file with
+       ALTER TABLE is a violation.
