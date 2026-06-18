@@ -218,7 +218,7 @@ class ARMPMUReader(CPUReaderABC):
                 # Map ARM event string back to A-LEMS metric name
                 for alems_name, arm_event in ARM_PMU_EVENTS.items():
                     if arm_event in event_name or event_name in arm_event:
-                        results[alems_name] = int(value)
+                        results[alems_name] = results.get(alems_name, 0) + int(value)
                         break
             except (ValueError, IndexError):
                 # Non-numeric lines (headers, warnings) — skip silently
