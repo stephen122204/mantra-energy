@@ -127,7 +127,8 @@ class ARMPMUReader(CPUReaderABC):
         # System-wide (-a) is the only reliable mode on aarch64.
         # Consequence: counts include all processes, not just the workload.
         # Confidence remains 0.95 — LLM inference dominates system activity.
-        cmd += ['-a', '--', 'sleep', str(PERF_TIMEOUT_SECONDS)]
+        # System-wide mode with no child process — perf runs until we send signal
+        cmd += ['-a']
 
         try:
             self._perf_proc = subprocess.Popen(
@@ -154,8 +155,11 @@ class ARMPMUReader(CPUReaderABC):
         if not self._perf_proc:
             return PerformanceCounters()
         try:
-            self._perf_proc.terminate()
-            stdout, stderr = self._perf_proc.communicate(timeout=5)
+            import signal
+            # SIGINT causes perf to print summary and exit cleanly on ARM.
+            # SIGTERM leaves the child process running — communicate() times out.
+            self._perf_proc.send_signal(signal.SIGINT)
+            stdout, stderr = self._perf_proc.communicate(timeout=10)
             self._results = self._parse_perf_output(stderr)
             logger.debug("ARMPMUReader: results=%s", self._results)
         except Exception as e:
