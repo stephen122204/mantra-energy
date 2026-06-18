@@ -303,7 +303,7 @@ class EnergyEngine:
             "EnergyEngine initialized",
             readers={
                 "rapl": self.rapl is not None,
-                "perf": self.perf.perf_available,
+                "perf": getattr(self.perf, 'perf_available', getattr(self.perf, '_available', False)),
                 "turbostat": self._platform_caps.has_turbostat,
                 "sensor": len(self.sensor.available_sensors) > 0,
                 "msr": msr_available,
