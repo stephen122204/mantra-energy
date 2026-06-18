@@ -110,26 +110,36 @@ class RawEnergyMeasurement:
 
     @property
     def package_energy_uj(self) -> int:
-        """Compute raw package energy delta in microjoules."""
-        start = self.rapl_start_uj.get("package-0", 0)
-        end = self.rapl_end_uj.get("package-0", 0)
+        """Compute raw package energy delta in microjoules.
+        Supports RAPL key 'package-0' (x86) and SPBM key 'pkg' (GN100 aarch64).
+        """
+        start = self.rapl_start_uj.get("package-0",
+                self.rapl_start_uj.get("pkg", 0))
+        end   = self.rapl_end_uj.get("package-0",
+                self.rapl_end_uj.get("pkg", 0))
         return max(0, end - start)
 
     @property
     def core_energy_uj(self) -> int:
-        """Compute raw core energy delta in microjoules."""
-        start = self.rapl_start_uj.get("core", 0)
-        end = self.rapl_end_uj.get("core", 0)
+        """Compute raw core energy delta in microjoules.
+        Supports RAPL key 'core' (x86) and SPBM key 'cpu_p' (GN100 P-cores).
+        """
+        start = self.rapl_start_uj.get("core",
+                self.rapl_start_uj.get("cpu_p", 0))
+        end   = self.rapl_end_uj.get("core",
+                self.rapl_end_uj.get("cpu_p", 0))
         return max(0, end - start)
 
     @property
     def dram_energy_uj(self) -> Optional[int]:
-        """Compute raw DRAM energy delta if available."""
+        """Compute raw DRAM energy delta if available.
+        Returns None on GN100 — Grace has no DRAM RAPL domain (MIC-1).
+        """
         if "dram" in self.rapl_start_uj and "dram" in self.rapl_end_uj:
             start = self.rapl_start_uj["dram"]
-            end = self.rapl_end_uj["dram"]
+            end   = self.rapl_end_uj["dram"]
             return max(0, end - start)
-        return None
+        return None   # NULL correct for GN100 — never 0
 
     @property
     def package_energy_j(self) -> float:
