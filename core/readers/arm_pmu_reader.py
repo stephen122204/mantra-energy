@@ -142,19 +142,17 @@ class ARMPMUReader(CPUReaderABC):
             self._perf_proc = None
 
     def stop_process_measurement(self):
-        # type: () -> Dict
+        # type: () -> object
         """
-        Stop perf stat and parse results.
+        Stop perf stat and return results as PerformanceCounters object.
 
-        Sends SIGTERM to perf, which causes it to print its summary to stderr
-        before exiting. communicate() waits for clean exit.
-
-        Returns:
-            Dict mapping A-LEMS metric names to integer counts.
-            Empty dict if perf was not started or parsing failed.
+        Returns PerformanceCounters (same type as PerfReader) so all
+        downstream consumers (harness.py, energy_analyzer.py, display_formatter)
+        work identically on ARM and x86 without any isinstance() branching.
         """
+        from core.models.performance_counters import PerformanceCounters
         if not self._perf_proc:
-            return {}
+            return PerformanceCounters()
         try:
             self._perf_proc.terminate()
             stdout, stderr = self._perf_proc.communicate(timeout=5)
@@ -165,7 +163,20 @@ class ARMPMUReader(CPUReaderABC):
             self._results = {}
         finally:
             self._perf_proc = None
-        return self._results
+        # Return PerformanceCounters object — identical interface to PerfReader.
+        # ARM perf does not report page faults — 0 is correct (int field).
+        return PerformanceCounters(
+            instructions_retired=self._results.get('instructions', 0),
+            cpu_cycles=self._results.get('cycles', 0),
+            cache_misses=self._results.get('cache_misses', 0),
+            cache_references=self._results.get('cache_references', 0),
+            l1d_cache_misses=self._results.get('cache_misses', 0),
+            l2_cache_misses=self._results.get('l2_cache_misses', 0),
+            l3_cache_hits=self._results.get('l3_cache_hits', 0),
+            l3_cache_misses=self._results.get('l3_cache_misses', 0),
+            major_page_faults=0,
+            minor_page_faults=0,
+        )
 
     def _parse_perf_output(self, stderr_text):
         # type: (str) -> Dict
