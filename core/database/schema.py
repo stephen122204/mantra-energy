@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS experiments (
     runs_completed INTEGER DEFAULT 0,        -- Number of successful runs (TD8)
     runs_total INTEGER,
     optimization_enabled INTEGER DEFAULT 0,                                            -- Total runs planned (TD8)
+    global_exp_id         TEXT,      -- cross-machine experiment correlation ID
     -- ========== NEW COLUMNS END ==========
     experiment_type TEXT NOT NULL DEFAULT 'normal',  -- study intent: normal/overhead_study/retry_study/failure_injection/quality_sweep/calibration/ablation/pilot/debug
     experiment_goal TEXT,                             -- free-text description of what this experiment measures
@@ -123,6 +124,8 @@ CREATE TABLE IF NOT EXISTS goal_execution (
     goal_type               TEXT NOT NULL,
     workflow_type           TEXT NOT NULL
                             CHECK(workflow_type IN ('linear','agentic')),
+    gpu_total_energy_uj     INTEGER, -- total GPU energy across all attempts for this goal
+    gpu_pct_of_pkg          REAL,    -- gpu_total_energy_uj / total_energy_uj * 100                        
     difficulty_level        TEXT
                             CHECK(difficulty_level IS NULL OR difficulty_level IN (
                                 'easy','medium','hard'
@@ -293,6 +296,7 @@ CREATE TABLE IF NOT EXISTS hallucination_events (
     expected_output         TEXT,
     actual_output           TEXT,
     wasted_energy_uj        INTEGER,
+
     detected_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (attempt_id)             REFERENCES goal_attempt(attempt_id),
     FOREIGN KEY (goal_id)                REFERENCES goal_execution(goal_id),
@@ -1106,7 +1110,8 @@ CREATE TABLE IF NOT EXISTS orchestration_tax_summary (
     orchestration_tax_uj INTEGER,
     tax_percent REAL,
     linear_orchestration_uj INTEGER,    -- ← ADD THIS
-    agentic_orchestration_uj INTEGER,   -- ← ADD THIS    
+    agentic_orchestration_uj INTEGER,   -- ← ADD THIS 
+    global_run_id               TEXT,    -- cross-machine run correlation ID   
     FOREIGN KEY(linear_run_id) REFERENCES runs(run_id),
     FOREIGN KEY(agentic_run_id) REFERENCES runs(run_id)
 );
@@ -1144,6 +1149,7 @@ CREATE TABLE IF NOT EXISTS energy_samples (
     gpu_start_uj     INTEGER,   -- MSR 0x641 counter at sample start, NULL if unavailable
     gpu_end_uj       INTEGER,   -- MSR 0x641 counter at sample end, NULL if unavailable
     gpu_energy_uj    INTEGER,   -- (gpu_end - gpu_start) * 61.0352 µJ, ETL populated
+    global_run_id   TEXT,            -- cross-machine run correlation ID
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_energy_run_time ON energy_samples(run_id, timestamp_ns);
@@ -1188,6 +1194,7 @@ CREATE TABLE IF NOT EXISTS cpu_samples (
     l3_cache_misses      BIGINT,      -- Chunk 12: L3 cache misses from perf    
     -- JSON overflow for additional turbostat columns
     extra_metrics_json TEXT,
+    global_run_id       TEXT,        -- cross-machine run correlation ID
     -- Chunk 2: Interval tracking
     sample_start_ns  INTEGER,          -- epoch ns at sample start (explicit)
     sample_end_ns    INTEGER,          -- epoch ns at sample end (= timestamp_ns)
@@ -1218,6 +1225,7 @@ CREATE TABLE IF NOT EXISTS interrupt_samples (
     total_ticks_end      INTEGER,   -- /proc/stat sum(all fields) at interval end
     proc_ticks_start     INTEGER,   -- /proc/[pid]/stat utime+stime at interval start
     proc_ticks_end       INTEGER,    -- /proc/[pid]/stat utime+stime at interval end
+    global_run_id       TEXT,        -- cross-machine run correlation ID
     sample_start_ns      INTEGER,   -- epoch ns at sample start (explicit)
     sample_end_ns        INTEGER,   -- epoch ns at sample end (= timestamp_ns)
     interval_ns          INTEGER,   -- exact elapsed ns for this sample
@@ -1241,7 +1249,8 @@ CREATE TABLE IF NOT EXISTS thermal_samples (
     wifi_temp      REAL,
     throttle_event INTEGER DEFAULT 0,
     voltage_vcore  REAL,             -- Chunk 12: Vcore voltage from hwmon sysfs
-    fan_rpm        INTEGER,           -- Chunk 12: Fan RPM from hwmon sysfs    
+    fan_rpm        INTEGER,           -- Chunk 12: Fan RPM from hwmon sysfs
+    global_run_id       TEXT,        -- cross-machine run correlation ID    
     all_zones_json TEXT,
     sensor_count   INTEGER,
     -- Chunk 2: Interval tracking
@@ -1602,7 +1611,11 @@ CREATE TABLE IF NOT EXISTS hardware_config (
     system_product TEXT,                      
     system_type TEXT,                         
     virtualization_type TEXT,                  
-    detected_at TIMESTAMP,                    
+    detected_at 
+    last_seen           TIMESTAMP,   -- last heartbeat from this machine
+    agent_status        TEXT,        -- 'active'|'inactive'|'unreachable'
+    agent_version       TEXT,        -- A-LEMS agent version on this machine
+    server_hw_id        INTEGER,     -- hw_id on central server (future sync)         
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
