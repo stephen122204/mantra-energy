@@ -188,6 +188,12 @@ class RunPersistenceService:
                 result.get("cpu_samples", []),
                 result.get("interrupt_samples", []),
             )
+            # Preserve frequency_mhz from INSERT if turbostat samples empty (ARM).
+            # cpu_samples are turbostat-derived — absent on aarch64 where
+            # ARMCPUFreqReader data flows via derived.frequency_mhz at INSERT time.
+            if not agg.get("cpu_avg_mhz") and result.get("ml_features", {}).get("frequency_mhz"):
+                agg["cpu_avg_mhz"] = result["ml_features"]["frequency_mhz"]
+                agg["cpu_busy_mhz"] = result["ml_features"]["frequency_mhz"]
             db.update_run_stats(run_id, agg)
 
     def _insert_events(self, db, run_id: int, result: dict) -> None:
