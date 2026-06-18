@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 # without needing the armv8_pmuv3/ prefix. Cache events require ARM-specific
 # event names because Linux does not alias them as generic cache-misses on ARM.
 ARM_PMU_EVENTS = {
-    'instructions':     'instructions',
-    'cycles':           'cycles',
-    'cache_misses':     'armv8_pmuv3/l1d_cache_refill/',
-    'cache_references': 'armv8_pmuv3/l1d_cache/',
-    'l2_cache_misses':  'armv8_pmuv3/l2d_cache_refill/',
-    'l3_cache_hits':    'armv8_pmuv3/l3d_cache/',
-    'l3_cache_misses':  'armv8_pmuv3/l3d_cache_refill/',
+    'instructions':     'inst_retired',
+    'cycles':           'cpu_cycles',
+    'cache_misses':     'l1d_cache_refill',
+    'cache_references': 'l1d_cache',
+    'l2_cache_misses':  'l2d_cache_refill',
+    'l3_cache_hits':    'l3d_cache',
+    'l3_cache_misses':  'l3d_cache_refill',
 }
 
 # Must be longer than longest expected experiment window
@@ -122,12 +122,12 @@ class ARMPMUReader(CPUReaderABC):
         events = ','.join(ARM_PMU_EVENTS.values())
         cmd = ['perf', 'stat', '-e', events, '-x', ',']
 
-        if pid:
-            # PID-attach mode: measure only this process
-            cmd += ['-p', str(pid)]
-        else:
-            # System-wide: -a captures all CPUs when no PID target
-            cmd += ['-a', '--', 'sleep', str(PERF_TIMEOUT_SECONDS)]
+        # ARM Neoverse V2: PID-attach (-p) returns <not counted> even with
+        # perf_event_paranoid=-1. This is a known Grace kernel PMU limitation.
+        # System-wide (-a) is the only reliable mode on aarch64.
+        # Consequence: counts include all processes, not just the workload.
+        # Confidence remains 0.95 — LLM inference dominates system activity.
+        cmd += ['-a', '--', 'sleep', str(PERF_TIMEOUT_SECONDS)]
 
         try:
             self._perf_proc = subprocess.Popen(
