@@ -418,9 +418,9 @@ class ExperimentRunner:
                     samples.append(
                         {
                             "timestamp_ns": int(timestamp * 1_000_000_000),
-                            "pkg_energy_uj": energy_dict.get("package-0", 0),
-                            "core_energy_uj": energy_dict.get("core", 0),
-                            "uncore_energy_uj": energy_dict.get("uncore", 0),
+                            "pkg_energy_uj": energy_dict.get("PACKAGE", energy_dict.get("package-0", 0)),
+                            "core_energy_uj": energy_dict.get("CORE", energy_dict.get("CPU_P", energy_dict.get("core", 0))),
+                            "uncore_energy_uj": energy_dict.get("UNCORE", energy_dict.get("uncore", 0)),
                             "dram_energy_uj": 0,
                         }
                     )
@@ -697,10 +697,10 @@ class ExperimentRunner:
                 "dram_power_watts":    b.power_watts.get("DRAM", 0),
                 "duration_seconds": b.duration_seconds,
                 "sample_count": b.sample_count,
-                "package_std": b.std_dev_watts.get("package-0"),
-                "core_std": b.std_dev_watts.get("core"),
-                "uncore_std": b.std_dev_watts.get("uncore"),
-                "dram_std": b.std_dev_watts.get("dram"),
+                "package_std": b.std_dev_watts.get("PACKAGE", b.std_dev_watts.get("package-0")),
+                "core_std":    b.std_dev_watts.get("CORE", b.std_dev_watts.get("CPU_P", b.std_dev_watts.get("core"))),
+                "uncore_std":  b.std_dev_watts.get("UNCORE", b.std_dev_watts.get("uncore")),
+                "dram_std":    b.std_dev_watts.get("DRAM", b.std_dev_watts.get("dram")),
                 "governor": metadata.get("governor"),
                 "turbo": metadata.get("turbo"),
                 "background_cpu": metadata.get("background_cpu"),
@@ -761,9 +761,9 @@ class ExperimentRunner:
                         timestamp, energy_dict = sample
                         converted.append({
                             "timestamp_ns":    int(timestamp * 1_000_000_000),
-                            "pkg_energy_uj":   energy_dict.get("package-0", 0),
-                            "core_energy_uj":  energy_dict.get("core", 0),
-                            "uncore_energy_uj": energy_dict.get("uncore", 0),
+                            "pkg_energy_uj":   energy_dict.get("PACKAGE", energy_dict.get("package-0", 0)),
+                            "core_energy_uj":  energy_dict.get("CORE", energy_dict.get("CPU_P", energy_dict.get("core", 0))),
+                            "uncore_energy_uj": energy_dict.get("UNCORE", energy_dict.get("uncore", 0)),
                             "dram_energy_uj":  0,
                         })
                 if converted:
@@ -841,9 +841,9 @@ class ExperimentRunner:
                         timestamp, energy_dict = sample
                         converted.append({
                             "timestamp_ns":    int(timestamp * 1_000_000_000),
-                            "pkg_energy_uj":   energy_dict.get("package-0", 0),
-                            "core_energy_uj":  energy_dict.get("core", 0),
-                            "uncore_energy_uj": energy_dict.get("uncore", 0),
+                            "pkg_energy_uj":   energy_dict.get("PACKAGE", energy_dict.get("package-0", 0)),
+                            "core_energy_uj":  energy_dict.get("CORE", energy_dict.get("CPU_P", energy_dict.get("core", 0))),
+                            "uncore_energy_uj": energy_dict.get("UNCORE", energy_dict.get("uncore", 0)),
                             "dram_energy_uj":  0,
                         })
                 if converted:
@@ -1246,9 +1246,9 @@ class ExperimentRunner:
                             timestamp, energy_dict = sample
                             converted.append({
                                 "timestamp_ns":     int(timestamp * 1_000_000_000),
-                                "pkg_energy_uj":    energy_dict.get("package-0", 0),
-                                "core_energy_uj":   energy_dict.get("core", 0),
-                                "uncore_energy_uj": energy_dict.get("uncore", 0),
+                                "pkg_energy_uj":    energy_dict.get("PACKAGE", energy_dict.get("package-0", 0)),
+                                "core_energy_uj":   energy_dict.get("CORE", energy_dict.get("CPU_P", energy_dict.get("core", 0))),
+                                "uncore_energy_uj": energy_dict.get("UNCORE", energy_dict.get("uncore", 0)),
                                 "dram_energy_uj":   0,
                             })
                     if converted:
@@ -1388,9 +1388,9 @@ class ExperimentRunner:
                     timestamp, energy_dict = sample
                     converted.append({
                         "timestamp_ns":     int(timestamp * 1_000_000_000),
-                        "pkg_energy_uj":    energy_dict.get("package-0", 0),
-                        "core_energy_uj":   energy_dict.get("core", 0),
-                        "uncore_energy_uj": energy_dict.get("uncore", 0),
+                        "pkg_energy_uj":    energy_dict.get("PACKAGE", energy_dict.get("package-0", 0)),
+                        "core_energy_uj":   energy_dict.get("CORE", energy_dict.get("CPU_P", energy_dict.get("core", 0))),
+                        "uncore_energy_uj": energy_dict.get("UNCORE", energy_dict.get("uncore", 0)),
                         "dram_energy_uj":   0,
                     })
             if converted:
