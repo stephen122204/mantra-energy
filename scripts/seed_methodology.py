@@ -1288,6 +1288,56 @@ def _load_derived_methods() -> List[Dict]:
             "section":       "Failure Classification",
             "fn":            None,
         },
+                {
+            "id":            "arm_pmu_v1",
+            "name":          "ARM PMU Performance Counter Reader v1",
+            "provenance":    "MEASURED",
+            "layer":         "silicon",
+            "confidence":    0.95,
+            "description":   (
+                "Reads ARM Neoverse V2 performance counters via Linux perf stat. "
+                "Uses generic event names (instructions, cycles) for core IPC "
+                "metrics and armv8_pmuv3/ prefixed events for cache hierarchy. "
+                "Attaches to target process PID during measurement window. "
+                "ARM PMU multiplexing may cause minor undercounting when more "
+                "events are requested than PMU registers available — confidence 0.95."
+            ),
+            "formula_latex": r"\text{IPC} = \frac{\text{instructions}}{\text{cycles}}",
+            "parameters":    {
+                "sampling_mode": "pid-attach or system-wide",
+                "events":        "instructions,cycles,armv8_pmuv3/l1d_cache_refill/,...",
+                "platform":      "aarch64 ARMv8 PMUv3",
+            },
+            "doc":           "07-energy-readers-methodology.md",
+            "section":       "ARM PMU Reader (arm_pmu_v1)",
+            "fn":            None,
+        },
+        {
+            "id":            "arm_cpufreq_v1",
+            "name":          "ARM cpufreq Sysfs Frequency Reader v1",
+            "provenance":    "MEASURED",
+            "layer":         "os",
+            "confidence":    0.90,
+            "description":   (
+                "Reads CPU operating frequency from Linux cpufreq sysfs at 10 Hz "
+                "during measurement window. Path: /sys/devices/system/cpu/cpu*/"
+                "cpufreq/scaling_cur_freq (kHz, converted to MHz). "
+                "Returns time-averaged frequency across all online CPUs. "
+                "Confidence 0.90: sysfs polling has ~100ms granularity vs "
+                "turbostat MSR timestamps at ~10ms on x86. ARM WFI/WFE idle "
+                "states are not mapped to x86 c-states — c2/c3/c6/c7 are NULL."
+            ),
+            "formula_latex": r"\text{Avg\_MHz} = \frac{1}{N \cdot T} \sum_{t,i} f_{t,i}",
+            "parameters":    {
+                "sampling_hz":  10,
+                "path_pattern": "/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq",
+                "unit":         "kHz from sysfs, returned as MHz",
+                "platform":     "aarch64 Linux",
+            },
+            "doc":           "07-energy-readers-methodology.md",
+            "section":       "ARM cpufreq Reader (arm_cpufreq_v1)",
+            "fn":            None,
+        },
         {
             "id":            "failure_injection_v1",
             "name":          "Deterministic Failure Injector",

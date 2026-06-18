@@ -1,0 +1,25 @@
+method_id: arm_pmu_v1
+references:
+  - title: "ARM Architecture Reference Manual for A-profile architecture (PMUv3)"
+    authors: "ARM Limited"
+    year: 2023
+    ref_type: "manual"
+    relevance: >
+      Defines the Performance Monitors Extension (PMUv3) used on Neoverse V2.
+      Specifies event numbers for instructions retired (0x08), CPU cycles (0x11),
+      L1D cache refill (0x03), L2D cache refill (0x17), L3D cache (0x2B).
+  - title: "NVIDIA Grace CPU Superchip Architecture"
+    authors: "NVIDIA Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: >
+      Documents Neoverse V2 core configuration in NVIDIA Grace SoC.
+      Confirms PMUv3 support, 10 P-cores (X925) and 10 E-cores (A725)
+      with separate frequency governors.
+  - title: "Linux perf_events ABI (perf_event_open(2))"
+    authors: "Linux kernel developers"
+    year: 2024
+    ref_type: "manual"
+    relevance: >
+      Defines the userspace perf stat interface used by ARMPMUReader.
+      ARM PMU events accessible via PERF_TYPE_RAW or PMU driver name prefix.

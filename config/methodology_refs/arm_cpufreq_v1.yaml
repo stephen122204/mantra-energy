@@ -1,0 +1,19 @@
+method_id: arm_cpufreq_v1
+references:
+  - title: "Linux CPUFreq Subsystem Documentation"
+    authors: "Linux kernel developers"
+    year: 2024
+    ref_type: "manual"
+    relevance: >
+      Describes /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq.
+      Values reported in kHz, reflecting the current P-state selected by
+      the cpufreq governor. On Neoverse V2, governor is typically schedutil
+      or performance mode during inference workloads.
+  - title: "NVIDIA Grace CPU Superchip Thermal and Power Design Guide"
+    authors: "NVIDIA Corporation"
+    year: 2023
+    ref_type: "manual"
+    relevance: >
+      Documents separate P-core (X925) and E-core (A725) frequency domains
+      on Grace. P-cores: up to 3.1 GHz. E-cores: up to 2.6 GHz.
+      Both exposed via cpufreq sysfs — ARMCPUFreqReader averages all.

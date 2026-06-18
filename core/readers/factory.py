@@ -153,6 +153,9 @@ class ReaderFactory:
         config = config or {}
 
         if caps.os == "Linux":
+            # ARM (GN100): use ARM PMU reader when aarch64 + has_arm_pmu
+            if caps.arch == "aarch64" and caps.has_arm_pmu:
+                return cls._make_arm_pmu_reader(config)
             # PerfReader works on Linux regardless of measurement mode
             # (perf_event_open is available even without RAPL)
             return cls._make_perf_reader(config)
@@ -251,6 +254,10 @@ class ReaderFactory:
             from core.readers.turbostat_reader import TurbostatReader
             return TurbostatReader(config)
  
+        # ARM Linux (GN100): cpufreq sysfs is the turbostat equivalent
+        if caps.os == "Linux" and caps.arch == "aarch64":
+            return cls._make_arm_cpufreq_reader(config)
+
         # macOS, ARM, Windows, unknown — no turbostat/MSR access
         from core.readers.fallback.dummy_turbostat_reader import DummyTurbostatReader
         logger.info(
@@ -373,6 +380,20 @@ class ReaderFactory:
         from core.readers.perf_reader import PerfReader
         logger.debug("ReaderFactory: instantiating PerfReader")
         return PerfReader(config)
+
+    @staticmethod
+    def _make_arm_pmu_reader(config: dict):
+        """Instantiate ARMPMUReader — only reached on aarch64 with has_arm_pmu."""
+        from core.readers.arm_pmu_reader import ARMPMUReader
+        logger.debug("ReaderFactory: instantiating ARMPMUReader")
+        return ARMPMUReader(config)
+
+    @staticmethod
+    def _make_arm_cpufreq_reader(config: dict):
+        """Instantiate ARMCPUFreqReader — only reached on aarch64 Linux."""
+        from core.readers.arm_cpufreq_reader import ARMCPUFreqReader
+        logger.debug("ReaderFactory: instantiating ARMCPUFreqReader")
+        return ARMCPUFreqReader(config)
 
     @staticmethod
     def _make_dummy_cpu(config: dict):

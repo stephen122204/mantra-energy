@@ -408,3 +408,94 @@ This allows per-sample correlation between energy domain values and device state
 ### method_id
 
 `device_telemetry_v1` — confidence 1.0 (MEASURED: direct hardware interface reads)
+
+---
+
+## ARM PMU Reader (arm_pmu_v1)
+
+**Platform:** GN100 (NVIDIA Grace, Neoverse V2, aarch64)
+**method_id:** `arm_pmu_v1`
+**Confidence:** 0.95
+**Provenance:** MEASURED
+**Layer:** silicon
+
+### What It Measures
+
+ARM Neoverse V2 performance counters via Linux `perf stat`. Attaches to the
+target process PID during the measurement window. Uses generic event names
+(`instructions`, `cycles`) for core IPC metrics and `armv8_pmuv3/` prefixed
+events for cache hierarchy where no generic alias exists on ARM Linux.
+
+### Column Mapping
+
+| runs column | ARM PMU event | Notes |
+|---|---|---|
+| instructions | `instructions` | retired instruction count |
+| cycles | `cycles` | CPU cycle count |
+| ipc | derived | instructions / cycles |
+| cache_misses | `armv8_pmuv3/l1d_cache_refill/` | L1D refill count |
+| cache_references | `armv8_pmuv3/l1d_cache/` | L1D access count |
+| l1d_cache_misses_total | `armv8_pmuv3/l1d_cache_refill/` | same as cache_misses |
+| l2_cache_misses_total | `armv8_pmuv3/l2d_cache_refill/` | L2D refill count |
+| l3_cache_hits_total | `armv8_pmuv3/l3d_cache/` | L3D hit count |
+| l3_cache_misses_total | `armv8_pmuv3/l3d_cache_refill/` | L3D refill count |
+
+### Confidence Note
+
+0.95 not 1.0: ARM PMU event multiplexing may cause minor undercounting when
+more events are requested than hardware PMU registers available on the core.
+Neoverse V2 has 6 programmable counters. Seven events are requested — one
+counter slot is time-multiplexed, introducing small statistical error.
+
+### x86 Equivalent
+
+`PerfReader` on UBUNTU2505 and Alex AMD machine. Factory dispatches
+`ARMPMUReader` only when `caps.arch == 'aarch64'` and `caps.has_arm_pmu`.
+
+---
+
+## ARM cpufreq Reader (arm_cpufreq_v1)
+
+**Platform:** GN100 (NVIDIA Grace, Neoverse V2, aarch64)
+**method_id:** `arm_cpufreq_v1`
+**Confidence:** 0.90
+**Provenance:** MEASURED
+**Layer:** os
+
+### What It Measures
+
+CPU operating frequency via Linux cpufreq sysfs at 10 Hz during the
+measurement window. Reads `/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq`
+(kHz, converted to MHz) for all online CPUs and returns the time-averaged
+frequency across all cores and all sample points.
+
+### Column Mapping
+
+| runs column | Source | Notes |
+|---|---|---|
+| frequency_mhz | cpufreq sysfs avg | mean across all CPUs and window |
+| cpu_avg_mhz | cpufreq sysfs avg | same value |
+| c2_time | NULL | ARM WFI/WFE not equivalent to x86 c-states |
+| c3_time | NULL | ARM WFI/WFE not equivalent to x86 c-states |
+| c6_time | NULL | ARM WFI/WFE not equivalent to x86 c-states |
+| c7_time | NULL | ARM WFI/WFE not equivalent to x86 c-states |
+| ring_bus_freq_mhz | NULL | no turbostat on ARM |
+| voltage_vcore_avg | NULL | no MSR on ARM |
+
+### NULL is Correct for C-states
+
+ARM uses WFI (Wait For Interrupt) and WFE (Wait For Event) idle states.
+These are not equivalent to x86 C2/C3/C6/C7 residency states. Storing NULL
+per MIC-1 is scientifically correct — do not estimate or map to zero.
+
+### Confidence Note
+
+0.90 not 1.0: sysfs polling at 10 Hz has ~100ms granularity. TurbostatReader
+on x86 uses MSR timestamps at ~10ms resolution. Frequency transitions faster
+than 100ms are averaged out. On Grace under LLM inference load, frequency is
+typically stable at or near maximum, so the practical impact is small.
+
+### x86 Equivalent
+
+`TurbostatReader` on UBUNTU2505 and Alex AMD machine. Factory dispatches
+`ARMCPUFreqReader` only when `caps.os == 'Linux'` and `caps.arch == 'aarch64'`.

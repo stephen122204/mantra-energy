@@ -205,7 +205,7 @@ class EnergyEngine:
 
         # PAC-2 compliant: TurbostatReader now via factory (Chunk 7 factorisation)
         # Linux x86 -> TurbostatReader, macOS/other -> DummyTurbostatReader
-        self.turbostat = _ReaderFactory.get_turbostat_reader(config)    # not yet factorised (Chunk 7)
+        self.turbostat = ReaderFactory.get_turbostat_reader(config, self._platform_caps)
         # PAC-2 compliant: MSRReader and SchedulerMonitor via factory (Chunk 7)
         # Linux x86 -> MSRReader, macOS/other -> DummyMSRReader
         # Linux     -> SchedulerMonitor, macOS/other -> DummySchedulerMonitor
@@ -758,6 +758,9 @@ class EnergyEngine:
         # <-- MODIFIED: Pass interval_ms to start_monitoring (new signature)
         if self._platform_caps.has_turbostat:
             self.turbostat.start_monitoring(interval_ms=interval_ms)
+        elif self._platform_caps.arch == "aarch64" and self._platform_caps.has_arm_pmu:
+            # ARM: ARMCPUFreqReader is the turbostat equivalent — start unconditionally
+            self.turbostat.start_monitoring(interval_ms=interval_ms)
 
         # EnergyCollector: generic loop replacing _sampling_loop + SPBMSampler (16B3)
         try:
@@ -905,7 +908,11 @@ class EnergyEngine:
         perf_data = self.perf.stop_process_measurement() if self._platform_caps.has_perf else {}
  
         # Stop turbostat and get continuous data
-        turbostat_data = self.turbostat.stop_monitoring() if self._platform_caps.has_turbostat else {"dataframe": None, "num_samples": 0, "duration_seconds": 0.0, "summary": {}}
+        _has_freq_reader = (
+            self._platform_caps.has_turbostat or
+            (self._platform_caps.arch == "aarch64" and self._platform_caps.has_arm_pmu)
+        )
+        turbostat_data = self.turbostat.stop_monitoring() if _has_freq_reader else {"dataframe": None, "num_samples": 0, "duration_seconds": 0.0, "summary": {}}
         thermal_samples = self._stop_thermal_sampling()
         # ====================================================================
         # STEP 2: Capture snapshot readers END values
