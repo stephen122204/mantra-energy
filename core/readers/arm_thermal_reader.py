@@ -152,6 +152,12 @@ class ARMThermalReader(ThermalReaderABC):
         ARMThermalReader discovers zones at __init__ time — no deferred
         initialization needed. Called by energy_engine.py after construction.
         """
+        # available_sensors mirrors SensorReader interface — energy_engine.py
+        # checks len(self.sensor.available_sensors) and bool(self.sensor.available_sensors)
+        self.available_sensors = self._zones.copy()
+        # throttle_thresholds mirrors SensorReader interface — energy_engine.py
+        # calls self.sensor.throttle_thresholds.get(role); empty dict = no throttling
+        self.throttle_thresholds = {}
         logger.debug("ARMThermalReader.initialize(): %d zones ready", len(self._zones))
 
     def is_available(self):
