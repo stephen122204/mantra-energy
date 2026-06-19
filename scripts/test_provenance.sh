@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-DB="${DB:-data/experiments.db}"
+DB="${DB:-$(python3 -c 'from scripts.tools.path_loader import get_alems_db_path; print(get_alems_db_path())' 2>/dev/null || echo 'data/experiments.db')}"
 PASS=0
 FAIL=0
 
