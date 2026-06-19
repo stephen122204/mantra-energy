@@ -307,7 +307,8 @@ class ExperimentRunner:
 
 
     def aggregate_run_stats(
-        self, run_id: int, cpu_samples: List[Dict], interrupt_samples: List[Dict]
+        self, run_id: int, cpu_samples: List[Dict], interrupt_samples: List[Dict],
+        thermal_samples: List[Dict] = None,
     ) -> Dict:
         """
         Compute aggregated statistics for a run from samples.
@@ -331,18 +332,18 @@ class ExperimentRunner:
             avg_freqs = [
                 s.get("cpu_avg_mhz", 0) for s in cpu_samples if s.get("cpu_avg_mhz")
             ]
-            temps = [
-                s.get("package_temp", 0) for s in cpu_samples if s.get("package_temp")
-            ]
-
             if busy_freqs:
                 stats["cpu_busy_mhz"] = sum(busy_freqs) / len(busy_freqs)
             if avg_freqs:
                 stats["cpu_avg_mhz"] = sum(avg_freqs) / len(avg_freqs)
-            if temps:
-                stats["package_temp_celsius"] = sum(temps) / len(temps)
-                stats["max_temp_c"] = max(temps)
-                stats["min_temp_c"] = min(temps)
+        # Temperature from thermal_samples (cpu_temp key) — works on all platforms.
+        # turbostat package_temp empty on ARM and unreliable on x86.
+        _thermal = thermal_samples or []
+        temps = [s.get("cpu_temp") for s in _thermal if s.get("cpu_temp")]
+        if temps:
+            stats["package_temp_celsius"] = sum(temps) / len(temps)
+            stats["max_temp_c"] = max(temps)
+            stats["min_temp_c"] = min(temps)
 
         # Aggregate interrupt samples
         if interrupt_samples:
@@ -814,6 +815,7 @@ class ExperimentRunner:
                     linear_id,
                     linear_result.get("cpu_samples", []),
                     linear_result.get("interrupt_samples", []),
+                    linear_result.get("thermal_samples", []),
                 )
                 # ARM: preserve frequency_mhz from INSERT when cpu_samples empty
                 if not linear_agg.get("cpu_avg_mhz") and \
@@ -897,6 +899,7 @@ class ExperimentRunner:
                     agentic_id,
                     agentic_result.get("cpu_samples", []),
                     agentic_result.get("interrupt_samples", []),
+                    agentic_result.get("thermal_samples", []),
                 )
                 # ARM: preserve frequency_mhz from INSERT when cpu_samples empty
                 if not agentic_agg.get("cpu_avg_mhz") and \
@@ -1299,6 +1302,7 @@ class ExperimentRunner:
                         run_id,
                         result.get("cpu_samples", []),
                         result.get("interrupt_samples", []),
+                        result.get("thermal_samples", []),
                     )
                     db.update_run_stats(run_id, agg)
 
@@ -1422,6 +1426,7 @@ class ExperimentRunner:
                 run_id,
                 result.get("cpu_samples", []),
                 result.get("interrupt_samples", []),
+                result.get("thermal_samples", []),
             )
 
         # Orchestration events — agentic only in practice, safe to call on linear

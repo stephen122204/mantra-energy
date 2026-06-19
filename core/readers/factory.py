@@ -424,6 +424,22 @@ class ReaderFactory:
         from core.readers.arm_thermal_reader import ARMThermalReader
         logger.debug("ReaderFactory: instantiating ARMThermalReader")
         return ARMThermalReader(config)
+ 
+    @staticmethod
+    def _make_thermal_reader_v2(registered_zones: dict):
+        """Import and instantiate ThermalReaderV2 (all Linux platforms, Thermal V2)."""
+        from core.thermal.thermal_reader_v2 import ThermalReaderV2
+        logger.debug("ReaderFactory: instantiating ThermalReaderV2 (%d zones)",
+                     len(registered_zones))
+        return ThermalReaderV2(registered_zones)
+ 
+    @staticmethod
+    def _make_cooling_reader(registered_devices: dict):
+        """Import and instantiate CoolingReader (all Linux platforms)."""
+        from core.thermal.cooling_reader import CoolingReader
+        logger.debug("ReaderFactory: instantiating CoolingReader (%d devices)",
+                     len(registered_devices))
+        return CoolingReader(registered_devices)
 
     @staticmethod
     def _make_dummy_thermal(config: dict):

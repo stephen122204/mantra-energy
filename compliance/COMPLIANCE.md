@@ -694,7 +694,173 @@ run_id is assigned by insert_run() which happens AFTER stop_measurement().
 Any code that tries to use run_id during or before stop_measurement() is wrong.
 Writers receive run_id only via experiment_runner after insert_run() returns.
 
+## 15. Publication-Grade Documentation Standards (PDS)
+
+A-LEMS produces research papers targeting SIGMETRICS, ISPASS, SC, and AAAI.
+Every document, guide, and methodology reference is a potential paper supplement
+or reviewer artifact. Agents must write to that standard unconditionally.
+
+### Rule PDS-1: No Internal Names in Public Documents
+
+WRONG — exposes internal lab structure, student names, machine nicknames:
+  "Alex's AMD machine", "Stephen's M1", "Deepak's GN100", "the Lenovo box"
+  "Chunk 16", "chunk folder", "16D session", "today's run"
+
+RIGHT — use canonical platform identifiers:
+  "AMD Ryzen platform (RTX 2070 Super)", "Apple M1 Pro platform"
+  "NVIDIA Grace GB10 (GN100, aarch64)", "Intel i7-1165G7 platform (x86_64)"
+
+Rule: Every platform reference in a document uses the canonical ID from
+the Platform Matrix in MASTER_SPEC_CHUNK16. Never use hostnames, student
+names, or informal machine nicknames in any document visible outside the lab.
+
+### Rule PDS-2: Every Methodology Document Has These Sections
+
+All methodology documents (docs-src/mkdocs/source/research/*.md) must contain:
+
+  1. ## Overview          — what the method measures, why it exists
+  2. ## Platform Coverage — table: Platform | Source | Canonical Role | Confidence
+  3. ## Schema            — table of all new columns/tables with types and semantics
+  4. ## Method Provenance — method_id, confidence, layer, formula, justification
+  5. ## Query Reference   — copy-paste SQL for every common analysis query
+  6. ## Verification      — step-by-step commands to confirm correct operation
+  7. ## Known Limitations — explicit statement of what this method cannot measure
+
+Missing any section = document is incomplete. Agent must not submit a doc
+without all 7 sections present.
+
+### Rule PDS-3: No Chunk References in Documents
+
+WRONG: "Added in Chunk 16D", "Chunk 7 factorization", "16B fix"
+RIGHT: "Introduced in schema version 65", "Available since platform v2.1"
+
+Documents are read by paper reviewers who have no context for internal
+chunk numbering. Use schema versions and capability flags instead.
+
+### Rule PDS-4: All SQL in Documents Must Be Tested
+
+Every SQL query in a methodology document must be verified to run without
+error on at least one platform DB before the document is committed.
+Untested SQL in a document is a compliance violation (FAD-2 equivalent).
+
+Verification command pattern:
+  sqlite3 $DB "< paste query here >" 2>&1 | head -5
+  # Must return rows or empty set, never an error.
+
+### Rule PDS-5: Platform Coverage Table Is Mandatory
+
+Every methodology document must include a platform coverage table:
+
+| Platform | Architecture | Source | Canonical Role | Confidence | Status |
+|----------|-------------|--------|---------------|------------|--------|
+| NVIDIA Grace GB10 | aarch64 | acpitz sysfs | SOC | 0.92 | VERIFIED |
+| Intel i7-1165G7 | x86_64 | x86_pkg_temp sysfs | CPU_PACKAGE | 0.92 | VERIFIED |
+| AMD Ryzen | x86_64 | k10temp sysfs | CPU_PACKAGE | 0.92 | PENDING |
+| Apple M1 Pro | arm64 | IOKit (future) | CPU_PACKAGE | TBD | PLANNED |
+
+Status values: VERIFIED (tested on real hardware), PENDING (implemented not tested),
+PLANNED (designed not implemented), NOT_SUPPORTED (explicitly excluded).
+
+### Rule PDS-6: Confidence Scores Must Be Justified
+
+Every confidence score in a methodology document must have an explicit
+written justification explaining:
+  (a) Why it is not 1.0 — what uncertainty exists
+  (b) What would need to be true for it to reach 1.0
+  (c) How the uncertainty affects paper results quantitatively if known
+
+WRONG: "Confidence: 0.90 (polling lag)"
+RIGHT: "Confidence 0.92: ACPI thermal zones poll at ~100ms intervals,
+        introducing up to 100ms lag between true silicon temperature and
+        reported value. Under sustained LLM inference (>10s runs) this
+        averages out to <0.5°C error. For sub-second measurements this
+        method should not be used. To reach 1.0 would require direct
+        silicon temperature via MSR (unavailable on ARM)."
+
+### Rule PDS-7: Query Reference Section Is for Researchers
+
+The Query Reference section must be written for a researcher who has never
+seen the codebase. Every query must include:
+  - A plain-English description of what it answers
+  - The exact SQL (tested per PDS-4)
+  - Expected output format and typical values
+  - Which platforms the query applies to
+
+WRONG: "Query thermal data from v_thermal_cpu"
+RIGHT:
+  "**Cross-run thermal trend on GN100** — answers: does the SoC run hotter
+   over time as the hardware ages?
+   Applies to: NVIDIA Grace GB10 (aarch64) only (SOC role zones).
+   Expected output: one row per run, avg_temp typically 40-55°C at load.
+````sql
+   SELECT r.run_id, r.created_at,
+          AVG(ts.temp_celsius) as avg_soc_temp_c,
+          MAX(ts.temp_celsius) as peak_soc_temp_c
+   FROM thermal_samples_v2 ts
+   JOIN runs r ON ts.run_id = r.run_id
+   JOIN thermal_zones tz ON ts.zone_id = tz.zone_id
+   WHERE tz.machine_id = 'gn100-2b96'
+     AND tz.canonical_role = 'SOC'
+     AND ts.quality_flag = 'VALID'
+   GROUP BY r.run_id ORDER BY r.run_id;
+```"
+
+### Rule PDS-8: No Hardcoded Hostnames in Documents
+
+WRONG: "WHERE machine_id = 'gn100-2b96'"
+RIGHT: "WHERE machine_id = '<your-hostname>' -- replace with socket.gethostname()"
+
+Exception: verified example output may show actual hostname as illustration,
+clearly labelled as "Example output from NVIDIA Grace GB10 platform".
+
+### Rule PDS-9: Known Limitations Must Be Honest
+
+Every methodology document must explicitly state what the method CANNOT do.
+Omitting known limitations is a scientific integrity violation.
+
+Required format:
+  ### Known Limitations
+  - **<Limitation name>**: <what cannot be measured and why>
+    Workaround: <alternative if any, or "None — accept NULL">
+
+### Rule PDS-9b: Two-Document Rule — Methodology vs Explanatory
+
+Every measurement method has exactly TWO documents:
+
+  1. config/methodology_refs/<method_id>.yaml
+     — machine-readable, compact
+     — referenced by "doc" field in seed_methodology
+     — contains ONLY: method_id, references, formula, parameters, confidence
+     — NO prose, NO query examples, NO platform war stories
+     — Max 50 lines
+
+  2. docs-src/mkdocs/source/research/<NN>-<topic>.md
+     — human-readable, full explanatory guide
+     — contains: platform coverage, query reference, verification, limitations
+     — written for paper reviewers and researchers unfamiliar with the codebase
+     — NOT referenced by seed_methodology
+
+The "doc" field in seed_methodology entries points to the explanatory .md
+only for the section heading lookup. The YAML is the authoritative method spec.
+A researcher querying the DB sees the YAML content — compact and precise.
+The .md is for humans reading the docs site.
+
+Every methodology document must start with a version header block:
+
+  ---
+  **Method ID:** thermal_zone_sysfs_v2
+  **Schema version:** 65 (thermal_zones), 67 (thermal_samples_v2)
+  **Platforms verified:** NVIDIA Grace GB10 (aarch64), Intel i7-1165G7 (x86_64)
+  **Status:** PRODUCTION
+  **Last updated:** <date>
+  ---
+
+Status values: DRAFT, REVIEW, PRODUCTION, DEPRECATED.
+
 ## Migration Source Control (MSC)
+```
+
+Apply this to `compliance/COMPLIANCE.md`, then commit. After that I produce the thermal methodology document correctly following all 10 PDS rules.
 
 MSC-1: Every file in migrations/schema/ and migrations/seed/ is immutable
        after first commit. Fix forward with a new file. No exceptions.

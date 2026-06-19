@@ -297,15 +297,13 @@ class RunPersistenceService:
         if cpu_samples:
             busy_freqs = [s.get("cpu_busy_mhz", 0) for s in cpu_samples if s.get("cpu_busy_mhz")]
             avg_freqs  = [s.get("cpu_avg_mhz", 0)  for s in cpu_samples if s.get("cpu_avg_mhz")]
-            temps      = [s.get("package_temp", 0)  for s in cpu_samples if s.get("package_temp")]
+            # Temperature NOT read from cpu_samples (turbostat) — unreliable
+            # on x86 after version changes and empty on ARM.
+            # ThermalAggregator reads from v_thermal_cpu after run completes.
             if busy_freqs:
                 stats["cpu_busy_mhz"] = sum(busy_freqs) / len(busy_freqs)
             if avg_freqs:
                 stats["cpu_avg_mhz"] = sum(avg_freqs) / len(avg_freqs)
-            if temps:
-                stats["package_temp_celsius"] = sum(temps) / len(temps)
-                stats["max_temp_c"] = max(temps)
-                stats["min_temp_c"] = min(temps)
 
         if interrupt_samples:
             irq_rates = [

@@ -194,32 +194,41 @@ def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list
     return cpu_samples
 
 
-def calculate_thermal_metrics(cpu_samples) -> tuple:
+def calculate_thermal_metrics(cpu_samples, thermal_samples=None) -> tuple:
     """
-    Calculate thermal metrics from CPU samples.
+    Calculate thermal metrics from thermal_samples (primary) or cpu_samples fallback.
+
+    thermal_samples (from ThermalReaderV2 / SensorReader) is the primary source
+    on all platforms. cpu_samples.package_temp (turbostat) is unreliable on x86
+    after version changes and empty on ARM — used only as last resort.
 
     Returns:
         Tuple of (start_temp_c, max_temp_c, min_temp_c, thermal_delta_c)
     """
-    if cpu_samples and len(cpu_samples) > 0:
+    # Primary: read cpu_temp from thermal_samples (works on all platforms)
+    temps = []
+    if thermal_samples:
+        temps = [
+            s.get("cpu_temp") for s in thermal_samples
+            if s.get("cpu_temp") is not None and s.get("cpu_temp") > 10
+        ]
+
+    # Fallback: turbostat package_temp from cpu_samples (x86 only, unreliable)
+    if not temps and cpu_samples:
         temps = [
             s.get("package_temp") for s in cpu_samples
             if s.get("package_temp") is not None and s.get("package_temp") > 10
         ]
-        if temps:
-            start_temp_c = temps[0]  # First sample
-            max_temp_c = max(temps)  # Maximum during run
-            min_temp_c = min(temps)  # Minimum during run
-            thermal_delta_c = max_temp_c - start_temp_c
-        else:
-            start_temp_c = 0
-            max_temp_c = 0
-            min_temp_c = 0
-            thermal_delta_c = 0
+
+    if temps:
+        start_temp_c    = temps[0]
+        max_temp_c      = max(temps)
+        min_temp_c      = min(temps)
+        thermal_delta_c = max_temp_c - start_temp_c
     else:
-        start_temp_c = 0
-        max_temp_c = 0
-        min_temp_c = 0
+        start_temp_c    = 0
+        max_temp_c      = 0
+        min_temp_c      = 0
         thermal_delta_c = 0
 
     return start_temp_c, max_temp_c, min_temp_c, thermal_delta_c

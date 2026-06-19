@@ -130,6 +130,64 @@ class ExperimentHarness:
         engine_config["settings"] = settings_dict
 
         self.energy_engine = EnergyEngine(engine_config)
+        # ── Thermal V2: discovery and registry (reboot-resilient) ────────────
+        # Called every harness init so zone paths are re-discovered after reboot.
+        # EEI compliant: harness owns DB access, engine does not.
+        try:
+            from core.thermal.thermal_discovery import (
+                discover_thermal_zones, discover_cooling_devices,
+                register_thermal_zones, register_cooling_devices,
+                get_machine_id,
+            )
+            from core.readers.factory import ReaderFactory as _RF
+            from core.thermal.thermal_writer_v2 import ThermalWriterV2
+            from core.thermal.cooling_writer import CoolingWriter
+ 
+            _machine_id = get_machine_id()
+            _raw_zones   = discover_thermal_zones(_machine_id)
+            _raw_devices = discover_cooling_devices(_machine_id)
+ 
+            # register_thermal_zones needs raw sqlite3 conn.
+            # __init__ has no DatabaseManager — open short-lived connection
+            # using same 3-layer path resolution as energy_engine.py lines 628-648.
+            import sqlite3 as _sqlite3
+            from scripts.tools.path_loader import get_alems_db_path as _get_db
+            _db_conn = _sqlite3.connect(_get_db(), timeout=5)
+            self.registered_zones   = register_thermal_zones(_db_conn, _raw_zones)
+            self.registered_cooling = register_cooling_devices(_db_conn, _raw_devices)
+            _db_conn.close()
+ 
+            # Replace the engine's legacy thermal reader with ThermalReaderV2
+            # so read_all_thermal() returns quality-flagged per-zone data
+            if self.registered_zones:
+                self.energy_engine.sensor = _RF._make_thermal_reader_v2(
+                    self.registered_zones
+                )
+                self.energy_engine.thermal_reader = self.energy_engine.sensor
+                self.energy_engine.sensor.initialize()
+ 
+            # Cooling reader (no engine integration needed — harness owns it)
+            self.cooling_reader = _RF._make_cooling_reader(self.registered_cooling) \
+                if self.registered_cooling else None
+ 
+            # Writers set to None here — wired per-run in experiment_runner
+            # when DatabaseManager is available.
+            self.thermal_writer_v2 = None
+            self.cooling_writer    = None
+ 
+            logger.info(
+                "Thermal V2 init: %d zones, %d cooling devices on %s",
+                len(self.registered_zones), len(self.registered_cooling), _machine_id
+            )
+ 
+        except Exception as _exc:
+            logger.warning("Thermal V2 init failed (non-fatal): %s", _exc)
+            self.registered_zones   = {}
+            self.registered_cooling = {}
+            self.cooling_reader     = None
+            self.thermal_writer_v2  = None
+            self.cooling_writer     = None
+
         self.energy_analyzer = EnergyAnalyzer()
         self.sustainability = SustainabilityCalculator(
             config_loader
@@ -417,10 +475,10 @@ class ExperimentHarness:
             thermal_area = sum(temps) / len(temps) * (max(temps) - min(temps))
 
         # ====================================================================
-        # Calculate thermal metrics from CPU samples
+        # Calculate thermal metrics from thermal_samples (primary source)
         # ====================================================================
         start_temp_c, max_temp_c, min_temp_c, thermal_delta_c = (
-            calculate_thermal_metrics(cpu_samples)
+            calculate_thermal_metrics(cpu_samples, thermal_samples)
         )
 
         # ====================================================================
@@ -908,10 +966,10 @@ class ExperimentHarness:
             # Approximate thermal area (integral approximation)
             thermal_area = sum(temps) / len(temps) * (max(temps) - min(temps))
         # ====================================================================
-        # Calculate thermal metrics from CPU samples
+        # Calculate thermal metrics from thermal_samples (primary source)
         # ====================================================================
         start_temp_c, max_temp_c, min_temp_c, thermal_delta_c = (
-            calculate_thermal_metrics(cpu_samples)
+            calculate_thermal_metrics(cpu_samples, thermal_samples)
         )
 
         # ====================================================================

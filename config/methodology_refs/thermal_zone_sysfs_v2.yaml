@@ -1,0 +1,62 @@
+method_id: thermal_zone_sysfs_v2
+references:
+  - title: "Linux Kernel Thermal Subsystem Documentation"
+    authors: "Linux Kernel Contributors"
+    year: 2024
+    ref_type: "manual"
+    url: "https://www.kernel.org/doc/html/latest/driver-api/thermal/sysfs-api.html"
+    relevance: >
+      Defines /sys/class/thermal/thermal_zoneN/ sysfs interface.
+      Each zone exposes a type file (zone identifier string) and a temp file
+      (temperature in millidegrees Celsius). Zone numbering is not stable
+      across reboots — identity must use (zone_type, zone_index) not path.
+
+  - title: "ACPI Specification, Section 11: Thermal Management"
+    authors: "UEFI Forum"
+    year: 2022
+    ref_type: "standard"
+    url: "https://uefi.org/specifications"
+    relevance: >
+      Defines ACPI thermal zones (acpitz driver) used on NVIDIA Grace GN100.
+      All 7 thermal zones on GN100 are type=acpitz, reporting SoC temperature
+      via ACPI thermal zone interface.
+
+  - title: "Intel 64 and IA-32 Architectures Software Developer's Manual"
+    authors: "Intel Corporation"
+    year: 2024
+    ref_type: "manual"
+    url: "https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html"
+    relevance: >
+      Documents x86_pkg_temp thermal zone used on UBUNTU2505 (Intel i7-1165G7).
+      The coretemp driver exposes CPU package temperature via this zone type.
+      Confidence higher than TCPU (CPU_DIE) which reports -273.15 on Lenovo.
+
+notes: >
+  Unified cross-platform thermal zone reader replacing per-platform readers
+  (SensorReader x86 path, ARMThermalReader). Key improvements over v1:
+  (1) All zones discovered dynamically — reboot-resilient via (zone_type, zone_index)
+  identity instead of hardcoded sysfs paths.
+  (2) Quality flags: VALID | OUT_OF_RANGE | READ_FAILED | MISSING — invalid readings
+  stored for audit, never silently discarded or zeroed.
+  (3) canonical_role mapping via THERMAL_ROLE_MAP — cross-platform queries without
+  platform conditionals (CPU_PACKAGE on Intel/AMD, SOC on GN100).
+  (4) Confidence 0.92 vs 0.90 for v1: quality filtering removes broken sensors
+  (TCPU=-273.15 on Lenovo) before they contaminate aggregates.
+  Remaining 0.08: ACPI polling interval (~100ms lag on GN100), zone averaging
+  on GN100 obscures per-cluster P-core vs E-core variation.
+
+platform_notes:
+  gn100_aarch64:
+    zones: 7
+    zone_type: acpitz
+    canonical_role: SOC
+    aggregation: MAX per timestamp (peak SoC temperature)
+    idle_range: "40-45°C"
+  ubuntu2505_x86_64:
+    primary_zone: x86_pkg_temp
+    canonical_role: CPU_PACKAGE
+    broken_zone: "TCPU (-273.15°C, OUT_OF_RANGE)"
+    idle_range: "46-52°C"
+  alex_amd_x86_64:
+    primary_zone: k10temp
+    canonical_role: CPU_PACKAGE

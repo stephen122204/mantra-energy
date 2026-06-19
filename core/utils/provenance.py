@@ -228,6 +228,11 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "thermal_now_active":           ("thermal_sensor",                 "CALCULATED"),
     "thermal_since_boot":           ("thermal_sensor",                 "CALCULATED"),
     "thermal_throttle_flag":        ("thermal_sensor",                 "CALCULATED"),
+    # Thermal V2 normalized schema columns
+    "temp_celsius":                 ("thermal_zone_sysfs_v2",          "MEASURED"),
+    "quality_flag":                 ("thermal_zone_sysfs_v2",          "MEASURED"),
+    "canonical_role":               ("thermal_zone_sysfs_v2",          "MEASURED"),
+    "cur_state":                    ("cooling_sysfs_v1",               "MEASURED"),
     "complexity_score":             ("complexity_score_calculation",   "CALCULATED"),
     "complexity_level":             ("complexity_score_calculation",   "CALCULATED"),
     # ── Chunk 3: CPU fraction attribution ──────────────────
@@ -474,6 +479,8 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "arm_pmu_v1":                    0.95,
     "arm_cpufreq_v1":                0.90,
     "arm_thermal_sysfs_v1":          0.90,   # acpitz sysfs zones, ~100ms ACPI polling lag
+    "thermal_zone_sysfs_v2":         0.92,   # normalized per-zone sysfs, quality-flagged
+    "cooling_sysfs_v1":              1.00,   # cur_state is exact kernel enum value
     "os_scheduler_reader":           1.0,
     "msr_reader":                    1.0,
     "system_clock":                  1.0,

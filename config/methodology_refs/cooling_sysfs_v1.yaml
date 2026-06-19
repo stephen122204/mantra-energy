@@ -1,0 +1,59 @@
+method_id: cooling_sysfs_v1
+references:
+  - title: "Linux Kernel Thermal Subsystem: Cooling Device Interface"
+    authors: "Linux Kernel Contributors"
+    year: 2024
+    ref_type: "manual"
+    url: "https://www.kernel.org/doc/html/latest/driver-api/thermal/sysfs-api.html"
+    relevance: >
+      Defines /sys/class/thermal/cooling_deviceN/ sysfs interface.
+      cur_state: current throttle level (0 = idle, max_state = maximum throttle).
+      max_state: platform-defined maximum throttle level.
+      Negative cur_state values are a kernel bug (GN100 cooling_device26: -231).
+
+  - title: "NVIDIA Grace CPU Superchip Architecture"
+    authors: "NVIDIA Corporation"
+    year: 2023
+    ref_type: "manual"
+    url: "https://resources.nvidia.com/en-us-grace-cpu/grace-cpu-superchip"
+    relevance: >
+      GN100 has 27 cooling devices: 1 Fan (passive), 20 Processor (CPU freq
+      throttle, max_state=3), 6 PCIe_Port_Link_Speed devices. cooling_device25
+      shows cur_state=2 at idle (PCIe link already throttled). cooling_device26
+      shows cur_state=-231 (kernel bug, stored as OUT_OF_RANGE).
+
+  - title: "Intel 64 and IA-32 Architectures Software Developer's Manual: TCC"
+    authors: "Intel Corporation"
+    year: 2024
+    ref_type: "manual"
+    url: "https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html"
+    relevance: >
+      Documents TCC (Thermal Control Circuit) Offset cooling device on UBUNTU2505.
+      cur_state=10 at idle means TCC offset is 10°C below Tjmax.
+      intel_powerclamp cooling device performs duty-cycle injection for power clamping.
+
+notes: >
+  Reads cur_state from all /sys/class/thermal/cooling_device* paths at 1Hz.
+  cur_state is an exact kernel enum value — no measurement uncertainty in the
+  reading itself (confidence 1.0). Uncertainty exists only in physical interpretation:
+  how much frequency reduction corresponds to Processor cur_state=1 vs 2 is
+  platform-specific and documented in cooling_devices registry (max_state column).
+  Throttle detection: any VALID reading with cur_state > 0 for role
+  CPU_FREQ_THROTTLE, POWER_CLAMP, or TCC_OFFSET triggers thermal_during_experiment=True.
+  PCIe link throttle (PCIE_LINK_THROTTLE) recorded but not counted as CPU throttle.
+
+platform_notes:
+  gn100_aarch64:
+    devices: 27
+    cpu_throttle_devices: 20
+    pcie_throttle_devices: 6
+    fan_devices: 1
+    known_bug: "cooling_device26 cur_state=-231, stored as OUT_OF_RANGE"
+    pcie_at_idle: "cooling_device25 cur_state=2/max=3 (PCIe already throttled at idle)"
+  ubuntu2505_x86_64:
+    devices: 13
+    cpu_throttle_devices: 8
+    pcie_throttle_devices: 3
+    power_clamp: "intel_powerclamp max_state=100"
+    tcc_offset: "TCC Offset cur_state=10 at idle"
+    pcie_at_idle: "cooling_device0,1 cur=2/max=2 (fully throttled)"

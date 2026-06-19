@@ -325,6 +325,78 @@ class ThermalReaderABC(BaseReader):
                 Returns empty dict if no sensors available.
         """
         ...
+class ThermalReaderV2ABC(BaseReader):
+    """
+    Interface for normalized per-zone thermal readers (Thermal V2).
+ 
+    Concrete implementations:
+        ThermalReaderV2   — Linux sysfs, all platforms (x86_64 + aarch64)
+        DummyThermalReaderV2 — stub for Darwin / unsupported platforms
+ 
+    Unlike ThermalReaderABC which returns a flat dict, ThermalReaderV2ABC
+    returns a list of per-zone dicts with quality_flag and invalid_reason.
+    """
+ 
+    @abstractmethod
+    def read_all_zones(self) -> List[Dict]:
+        """
+        Read temperature from every registered thermal zone.
+ 
+        Returns:
+            List of dicts, one per zone:
+                zone_id:        int   — FK to thermal_zones table
+                timestamp_ns:   int   — epoch nanoseconds
+                temp_celsius:   float — raw reading (may be invalid)
+                quality_flag:   str   — VALID|OUT_OF_RANGE|READ_FAILED|MISSING
+                invalid_reason: str|None
+        """
+        ...
+ 
+    @abstractmethod
+    def read_all_thermal(self) -> Dict:
+        """Legacy interface: {zone_type: celsius}. VALID readings only."""
+        ...
+ 
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Return True if at least one zone has a readable temp file."""
+        ...
+ 
+ 
+class CoolingReaderABC(BaseReader):
+    """
+    Interface for cooling device state readers.
+ 
+    Concrete implementations:
+        CoolingReader     — Linux sysfs /sys/class/thermal/cooling_device*
+        DummyCoolingReader — stub for Darwin / unsupported platforms
+    """
+ 
+    @abstractmethod
+    def read_all_devices(self) -> List[Dict]:
+        """
+        Read cur_state from every registered cooling device.
+ 
+        Returns:
+            List of dicts, one per device:
+                device_id:      int   — FK to cooling_devices table
+                timestamp_ns:   int   — epoch nanoseconds
+                cur_state:      int   — raw kernel state value
+                quality_flag:   str   — VALID|OUT_OF_RANGE|READ_FAILED|MISSING
+                invalid_reason: str|None
+        """
+        ...
+ 
+    @abstractmethod
+    def detect_throttle(self, readings: List[Dict]) -> bool:
+        """Return True if any throttle-role device has cur_state > 0 (VALID)."""
+        ...
+ 
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Return True if at least one device is readable."""
+        ...
+
 class TurbostatReaderABC(BaseReader):
     """
     ABC for turbostat-based CPU C-state and power metrics reader.
