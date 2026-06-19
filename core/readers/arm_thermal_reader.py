@@ -145,6 +145,15 @@ class ARMThermalReader(ThermalReaderABC):
     # ThermalReaderABC interface
     # ------------------------------------------------------------------
 
+    def initialize(self):
+        # type: () -> None
+        """
+        No-op initialize for interface compatibility with SensorReader.
+        ARMThermalReader discovers zones at __init__ time — no deferred
+        initialization needed. Called by energy_engine.py after construction.
+        """
+        logger.debug("ARMThermalReader.initialize(): %d zones ready", len(self._zones))
+
     def is_available(self):
         # type: () -> bool
         """Return True if at least one thermal zone was discovered."""
