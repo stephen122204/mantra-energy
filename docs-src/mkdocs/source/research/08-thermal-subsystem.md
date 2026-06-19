@@ -417,3 +417,161 @@ sqlite3 $DB \
   detection for completeness, but `cur_state > 0` for TCC\_OFFSET does not
   mean active throttling — it means the offset is configured.
   Workaround: use CPU\_FREQ\_THROTTLE role only for reliable throttle detection.
+
+---
+
+## v_thermal_cpu View — Derivation and Platform Logic
+
+### What the view does
+
+`v_thermal_cpu` filters `thermal_samples_v2` to only the zones relevant for
+CPU package temperature reporting. It joins with `thermal_zones` to apply
+two filters:
+
+1. `canonical_role IN ('CPU_PACKAGE', 'SOC')` — only CPU-relevant zones
+2. `quality_flag = 'VALID'` — only readings within [-10, 125]°C
+3. `active = 1` — only zones found at last discovery
+
+The view returns raw rows — one row per zone per tick. It does NOT average
+or aggregate. Aggregation is the responsibility of `ThermalAggregator` and
+`aggregate_run_stats()`.
+
+### Per-platform derivation logic
+
+**Intel i7-1165G7 (x86\_64) — CPU\_PACKAGE role:**
+
+One zone (`x86_pkg_temp`) has `canonical_role = CPU_PACKAGE`. The view
+returns one row per 1Hz tick. `ThermalAggregator` computes:
+
+```sql
+SELECT cpu_temp FROM v_thermal_cpu
+WHERE run_id = ? AND canonical_role = 'CPU_PACKAGE'
+ORDER BY timestamp_ns
+```
+
+`package_temp_celsius = AVG(cpu_temp)` — direct average of package readings.
+
+**NVIDIA Grace GB10 (aarch64) — SOC role:**
+
+Seven zones all have `canonical_role = SOC`. The view returns 7 rows per
+1Hz tick (one per zone). `ThermalAggregator` computes:
+
+```sql
+SELECT MAX(cpu_temp) FROM v_thermal_cpu
+WHERE run_id = ? AND canonical_role = 'SOC'
+GROUP BY timestamp_ns
+ORDER BY timestamp_ns
+```
+
+`package_temp_celsius = AVG(MAX per tick)` — average of peak SoC temperature
+at each sample point. MAX() is used because all 7 acpitz zones measure
+different SoC locations — the peak represents the hottest point on the die,
+which is the scientifically correct value for thermal stress analysis.
+
+### Why not store the aggregated value directly
+
+The view returns raw per-zone rows so that:
+
+1. Per-zone heating analysis is possible (which zone heats first)
+2. Different aggregation strategies can be applied post-hoc
+3. The raw data is preserved for degradation research
+4. Paper reviewers can verify the derivation from first principles
+
+### Verified output on each platform
+
+**NVIDIA Grace GB10 (aarch64), run 62:**
+```
+COUNT(*) = 28   (7 zones × 4 ticks)
+AVG(cpu_temp) = 43.4°C
+MIN(cpu_temp) = 43.1°C
+MAX(cpu_temp) = 43.5°C
+canonical_role = SOC (all rows)
+```
+
+**Intel i7-1165G7 (x86\_64), run 4561:**
+```
+COUNT(*) = 4    (1 zone × 4 ticks)
+AVG(cpu_temp) = 51.5°C
+MIN(cpu_temp) = 51.0°C
+MAX(cpu_temp) = 52.0°C
+canonical_role = CPU_PACKAGE (all rows)
+```
+
+---
+
+## v_thermal_cpu View — Derivation and Platform Logic
+
+### What the view does
+
+`v_thermal_cpu` filters `thermal_samples_v2` to only the zones relevant for
+CPU package temperature reporting. It joins with `thermal_zones` to apply
+two filters:
+
+1. `canonical_role IN ('CPU_PACKAGE', 'SOC')` — only CPU-relevant zones
+2. `quality_flag = 'VALID'` — only readings within [-10, 125]°C
+3. `active = 1` — only zones found at last discovery
+
+The view returns raw rows — one row per zone per tick. It does NOT average
+or aggregate. Aggregation is the responsibility of `ThermalAggregator` and
+`aggregate_run_stats()`.
+
+### Per-platform derivation logic
+
+**Intel i7-1165G7 (x86\_64) — CPU\_PACKAGE role:**
+
+One zone (`x86_pkg_temp`) has `canonical_role = CPU_PACKAGE`. The view
+returns one row per 1Hz tick. `ThermalAggregator` computes:
+
+```sql
+SELECT cpu_temp FROM v_thermal_cpu
+WHERE run_id = ? AND canonical_role = 'CPU_PACKAGE'
+ORDER BY timestamp_ns
+```
+
+`package_temp_celsius = AVG(cpu_temp)` — direct average of package readings.
+
+**NVIDIA Grace GB10 (aarch64) — SOC role:**
+
+Seven zones all have `canonical_role = SOC`. The view returns 7 rows per
+1Hz tick (one per zone). `ThermalAggregator` computes:
+
+```sql
+SELECT MAX(cpu_temp) FROM v_thermal_cpu
+WHERE run_id = ? AND canonical_role = 'SOC'
+GROUP BY timestamp_ns
+ORDER BY timestamp_ns
+```
+
+`package_temp_celsius = AVG(MAX per tick)` — average of peak SoC temperature
+at each sample point. MAX() is used because all 7 acpitz zones measure
+different SoC locations — the peak represents the hottest point on the die,
+which is the scientifically correct value for thermal stress analysis.
+
+### Why not store the aggregated value directly
+
+The view returns raw per-zone rows so that:
+
+1. Per-zone heating analysis is possible (which zone heats first)
+2. Different aggregation strategies can be applied post-hoc
+3. The raw data is preserved for degradation research
+4. Paper reviewers can verify the derivation from first principles
+
+### Verified output on each platform
+
+**NVIDIA Grace GB10 (aarch64), run 62:**
+```
+COUNT(*) = 28   (7 zones × 4 ticks)
+AVG(cpu_temp) = 43.4°C
+MIN(cpu_temp) = 43.1°C
+MAX(cpu_temp) = 43.5°C
+canonical_role = SOC (all rows)
+```
+
+**Intel i7-1165G7 (x86\_64), run 4561:**
+```
+COUNT(*) = 4    (1 zone × 4 ticks)
+AVG(cpu_temp) = 51.5°C
+MIN(cpu_temp) = 51.0°C
+MAX(cpu_temp) = 52.0°C
+canonical_role = CPU_PACKAGE (all rows)
+```
