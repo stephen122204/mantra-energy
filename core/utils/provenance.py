@@ -473,6 +473,7 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "turbostat_reader":              1.0,
     "arm_pmu_v1":                    0.95,
     "arm_cpufreq_v1":                0.90,
+    "arm_thermal_sysfs_v1":          0.90,   # acpitz sysfs zones, ~100ms ACPI polling lag
     "os_scheduler_reader":           1.0,
     "msr_reader":                    1.0,
     "system_clock":                  1.0,

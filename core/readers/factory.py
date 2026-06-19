@@ -185,10 +185,17 @@ class ReaderFactory:
         caps   = caps or get_platform_capabilities()
         config = config or {}
 
-        if caps.os == "Linux" and caps.has_thermal:
-            return cls._make_sensor_reader(config)
+        if caps.os == "Linux":
+            # ARM (GN100): SensorReader reads hw_config thermal paths which are
+            # x86-specific MSR/hwmon entries — returns {} on Grace.
+            # ARMThermalReader discovers acpitz zones dynamically via sysfs.
+            if caps.arch == "aarch64" and caps.has_thermal:
+                return cls._make_arm_thermal_reader(config)
+            # x86 Linux: SensorReader reads configured hwmon/sysfs paths
+            if caps.has_thermal:
+                return cls._make_sensor_reader(config)
 
-        # macOS / Windows / ARM without thermal zones — stub
+        # macOS / Windows / no thermal zones — stub
         return cls._make_dummy_thermal(config)
     
     @classmethod
@@ -410,6 +417,13 @@ class ReaderFactory:
         reader = SensorReader(config)
         reader.initialize()     # SensorReader requires explicit init call
         return reader
+
+    @staticmethod
+    def _make_arm_thermal_reader(config: dict):
+        """Import and instantiate ARMThermalReader (aarch64 sysfs thermal)."""
+        from core.readers.arm_thermal_reader import ARMThermalReader
+        logger.debug("ReaderFactory: instantiating ARMThermalReader")
+        return ARMThermalReader(config)
 
     @staticmethod
     def _make_dummy_thermal(config: dict):

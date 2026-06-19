@@ -1,0 +1,30 @@
+method_id: arm_thermal_sysfs_v1
+references:
+  - title: "Linux Kernel Thermal Subsystem Documentation"
+    authors: "Linux Kernel Contributors"
+    year: 2024
+    ref_type: "manual"
+    url: "https://www.kernel.org/doc/html/latest/driver-api/thermal/sysfs-api.html"
+    relevance: >
+      Defines the /sys/class/thermal/thermal_zoneN/ sysfs interface.
+      Each zone exposes a type file (zone identifier) and a temp file
+      (temperature in millidegrees Celsius). Used on NVIDIA Grace (GN100)
+      where 7 acpitz zones are available.
+
+  - title: "NVIDIA Grace CPU Superchip Architecture"
+    authors: "NVIDIA Corporation"
+    year: 2023
+    ref_type: "manual"
+    url: "https://resources.nvidia.com/en-us-grace-cpu/grace-cpu-superchip"
+    relevance: >
+      Documents the Grace (Neoverse V2) thermal architecture. ACPI
+      thermal zones are the exposed interface for package temperature
+      monitoring on the Grace SoC. No MSR or hwmon equivalent exists.
+
+notes: >
+  On GN100 (hostname gn100-2b96), 7 zones of type acpitz are present,
+  reporting temperatures in the range 43-45°C at idle. All 7 zones are
+  averaged to produce package_temp_celsius. Confidence 0.90 rather than
+  1.0 because: (1) acpitz zones may lag true silicon temperature by
+  100-200ms due to ACPI polling intervals, and (2) averaging 7 zones
+  obscures per-cluster variation between P-cores and E-cores.

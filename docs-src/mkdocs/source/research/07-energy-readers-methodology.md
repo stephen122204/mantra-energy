@@ -499,3 +499,70 @@ typically stable at or near maximum, so the practical impact is small.
 
 `TurbostatReader` on UBUNTU2505 and Alex AMD machine. Factory dispatches
 `ARMCPUFreqReader` only when `caps.os == 'Linux'` and `caps.arch == 'aarch64'`.
+# ============================================================
+# docs-src/mkdocs/source/research/07-energy-readers-methodology.md
+# APPEND this block at the end of the file (after line 501)
+# ============================================================
+
+---
+
+## ARM Thermal Reader (arm_thermal_sysfs_v1)
+
+### Overview
+
+**method_id:** `arm_thermal_sysfs_v1`
+**confidence:** 0.90
+**platform:** GN100 (aarch64, NVIDIA Grace)
+**reader class:** `ARMThermalReader`
+
+Reads thermal zone temperatures via `/sys/class/thermal/thermal_zone*/temp` on ARM
+Linux. Used on GN100 where `SensorReader` returns empty results because it requires
+x86-specific hwmon paths from `hw_config["thermal"]["paths"]` that are absent on Grace.
+
+### GN100 Thermal Zones (Verified 2026-06-18)
+
+| Zone | Type | Idle Temp |
+|------|------|-----------|
+| thermal_zone0 | acpitz | 44.8°C |
+| thermal_zone1 | acpitz | 43.8°C |
+| thermal_zone2 | acpitz | 43.7°C |
+| thermal_zone3 | acpitz | 43.8°C |
+| thermal_zone4 | acpitz | 43.7°C |
+| thermal_zone5 | acpitz | 43.8°C |
+| thermal_zone6 | acpitz | 44.8°C |
+
+All 7 zones report `type=acpitz` (ACPI thermal zone). No MSR or hwmon thermal
+interface is available on the Grace SoC.
+
+### Column Mapping
+
+| runs column | Source | Notes |
+|-------------|--------|-------|
+| package_temp_celsius | avg(all 7 acpitz zones) | averaged for stability |
+| start_temp_c | first sample in run | from thermal_samples ETL |
+| max_temp_c | max across run | from thermal_samples ETL |
+| min_temp_c | min across run | from thermal_samples ETL |
+| thermal_delta_c | max_temp_c - start_temp_c | derived |
+
+### Why Average 7 Zones
+
+All zones report ACPI package-level temperature derived from the same SoC thermal
+diode network. Averaging gives a stable value robust to per-zone ACPI polling jitter.
+
+### Confidence Note
+
+0.90 not 1.0: ACPI thermal zones have a polling interval of 100-200ms, introducing
+lag relative to true silicon temperature. Under sustained LLM inference this averages
+out. Peak temperature excursions shorter than 200ms may be missed.
+
+### NULL is Correct for GPU Temperature
+
+GPU temperature on GN100 is available via `nvidia-smi` and DCGM. `ARMThermalReader`
+does not populate `gpu_celsius` — it returns 0.0 per the ABC contract. GPU temperature
+attribution is handled separately by the DCGM backend.
+
+### x86 Equivalent
+
+`SensorReader` on UBUNTU2505 and Alex AMD machine. Factory dispatches
+`ARMThermalReader` only when `caps.os == 'Linux'` and `caps.arch == 'aarch64'`
+and `caps.has_thermal`.

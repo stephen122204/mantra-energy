@@ -1313,6 +1313,29 @@ def _load_derived_methods() -> List[Dict]:
             "fn":            None,
         },
         {
+            "id":           "arm_thermal_sysfs_v1",
+            "name":         "ARM Thermal sysfs Reader (acpitz zones)",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "confidence":   0.90,
+            "description":  (
+                "Reads thermal zone temperatures from /sys/class/thermal/thermal_zone*/temp "
+                "on ARM Linux (GN100 Grace). All zones of type acpitz are discovered "
+                "dynamically and averaged to produce package_temp_celsius. "
+                "Used in place of SensorReader which requires x86-specific hwmon paths. "
+                "Confidence 0.90: ACPI polling interval introduces ~100-200ms lag; "
+                "averaging 7 zones obscures per-cluster variation."
+            ),
+            "formula_latex": r"T_{pkg} = \frac{1}{N}\sum_{i=1}^{N} T_i",
+            "parameters":   {
+                "source":           "/sys/class/thermal/thermal_zone*/temp",
+                "unit":             "millidegrees Celsius (divided by 1000)",
+                "zones_on_gn100":   7,
+                "zone_type":        "acpitz",
+                "platform":         "aarch64 Linux (GN100 Grace)",
+            },
+        },        
+        {
             "id":            "arm_cpufreq_v1",
             "name":          "ARM cpufreq Sysfs Frequency Reader v1",
             "provenance":    "MEASURED",
@@ -1652,11 +1675,15 @@ def seed_entry(entry: Dict, conn, doc_map: Dict, code_version: str, dry_run: boo
 def main() -> None:
     """Seed all readers, measured methods, and derived methods."""
     parser = argparse.ArgumentParser(description="Seed measurement_method_registry")
-    parser.add_argument("--db",      default="data/experiments.db")
+    parser.add_argument("--db",      default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    db_path      = BASE / args.db
+    if args.db:
+        db_path = Path(args.db)
+    else:
+        from scripts.tools.path_loader import get_alems_db_path
+        db_path = Path(get_alems_db_path())
     readers      = _load_readers()
     measured     = _load_measured_methods()
     derived      = _load_derived_methods()
