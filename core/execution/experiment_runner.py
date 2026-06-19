@@ -809,6 +809,16 @@ class ExperimentRunner:
                 print(
                     f"🔍 DEBUG - Saving {len(linear_result['thermal_samples'])} thermal samples for run {linear_id}"
                 )
+                # Thermal V2: write per-zone rows to thermal_samples_v2
+                try:
+                    import socket as _socket
+                    db.thermal.insert_thermal_samples_v2(
+                        linear_id,
+                        linear_result["thermal_samples"],
+                        _socket.gethostname().lower(),
+                    )
+                except Exception as _e:
+                    logger.warning("thermal_samples_v2 insert failed (linear): %s", _e)
 
                 # After inserting samples, update runs with aggregated stats
                 linear_agg = self.aggregate_run_stats(
@@ -894,6 +904,16 @@ class ExperimentRunner:
                 print(
                     f"🔍 DEBUG - Saving {len(agentic_result['thermal_samples'])} thermal samples for run {agentic_id}"
                 )
+                # Thermal V2: write per-zone rows to thermal_samples_v2
+                try:
+                    import socket as _socket
+                    db.thermal.insert_thermal_samples_v2(
+                        agentic_id,
+                        agentic_result["thermal_samples"],
+                        _socket.gethostname().lower(),
+                    )
+                except Exception as _e:
+                    logger.warning("thermal_samples_v2 insert failed (agentic): %s", _e)
 
                 agentic_agg = self.aggregate_run_stats(
                     agentic_id,
