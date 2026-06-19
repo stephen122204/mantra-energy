@@ -4,7 +4,7 @@
 # Usage: bash scripts/test_runs_regression_extended.sh
 # =============================================================================
 
-DB="data/experiments.db"
+DB="${DB:-$(python3 -c 'from scripts.tools.path_loader import get_alems_db_path; print(get_alems_db_path())')}"
 RUN_ID=$(sqlite3 "$DB" "SELECT MAX(run_id) FROM runs WHERE workflow_type='agentic';")
 WORKFLOW=$(sqlite3 "$DB" "SELECT workflow_type FROM runs WHERE run_id=$RUN_ID;")
 

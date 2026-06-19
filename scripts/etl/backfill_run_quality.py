@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def backfill_all(db_path: str = "data/experiments.db", force: bool = False) -> int:
+def backfill_all(db_path: str = None, force: bool = False) -> int:
     """
     Score all unscored runs and insert into run_quality.
 
@@ -39,6 +39,9 @@ def backfill_all(db_path: str = "data/experiments.db", force: bool = False) -> i
     Returns:
         Number of runs processed.
     """
+    if db_path is None:
+        from scripts.tools.path_loader import get_alems_db_path
+        db_path = get_alems_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row   # dict-style access by column name
 
@@ -105,8 +108,8 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Backfill run_quality table.")
     parser.add_argument(
         "--db",
-        default="data/experiments.db",
-        help="Path to SQLite DB (default: data/experiments.db)",
+        default=None,
+        help="Path to SQLite DB (default: resolved via get_alems_db_path())",
     )
     parser.add_argument(
         "--force",

@@ -108,8 +108,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Seed task_quality_config table")
     parser.add_argument(
         "--db-path",
-        default="data/experiments.db",
-        help="Path to experiments.db (default: data/experiments.db)",
+        default=None,
+        help="Path to experiments.db (default: resolved via get_alems_db_path())",
     )
     parser.add_argument(
         "--verify",
@@ -118,7 +118,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    db = str(Path(args.db_path).resolve())
+    from scripts.tools.path_loader import get_alems_db_path
+    db = str(Path(args.db_path or get_alems_db_path()).resolve())
     seed(db)
     if args.verify:
         verify(db)

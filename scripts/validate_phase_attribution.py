@@ -13,7 +13,8 @@ Checks:
 import sqlite3
 import sys
 
-DB_PATH = "data/experiments.db"
+from scripts.tools.path_loader import get_alems_db_path
+DB_PATH  = get_alems_db_path()
 
 
 def validate(db_path: str = DB_PATH) -> bool:

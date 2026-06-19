@@ -17,7 +17,8 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DB_PATH  = "data/experiments.db"
+from scripts.tools.path_loader import get_alems_db_path
+DB_PATH  = get_alems_db_path()
 PASS     = "✅"
 FAIL     = "❌"
 WARN     = "⚠️ "

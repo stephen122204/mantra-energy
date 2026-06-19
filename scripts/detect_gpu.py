@@ -23,6 +23,7 @@ import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
+from scripts.tools.path_loader import get_alems_db_path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -203,7 +204,7 @@ def detect_apple_iokit():
 def main():
     parser = argparse.ArgumentParser(
         description="Detect GPU hardware and populate gpu_config for A-LEMS")
-    parser.add_argument('--db', default='data/experiments.db',
+    parser.add_argument('--db', default=None,
                         help="Path to experiments.db")
     parser.add_argument('--hw-config', default='config/hw_config.json',
                         help="Path to hw_config.json")
@@ -244,7 +245,7 @@ def main():
         logger.warning("No GPU detected on this machine. gpu_config will be empty.")
         return
 
-    upsert_gpu_config(args.db, gpu_infos)
+    upsert_gpu_config(args.db or get_alems_db_path(), gpu_infos)
     logger.info("Detection complete: %d GPU(s) registered", len(gpu_infos))
 
 

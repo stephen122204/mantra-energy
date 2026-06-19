@@ -24,7 +24,8 @@ import sys
 logger = logging.getLogger(__name__)
 
 # Default DB path — override with --db-path flag
-DEFAULT_DB_PATH = "data/experiments.db"
+from scripts.tools.path_loader import get_alems_db_path
+DEFAULT_DB_PATH = get_alems_db_path()
 
 
 def process_one(goal_id: int, conn) -> None:

@@ -17,7 +17,8 @@ import sqlite3
 import re
 import os
 
-DB_PATH = os.getenv("ALEMS_DB_PATH", "data/experiments.db")
+from scripts.tools.path_loader import get_alems_db_path
+DB_PATH = os.getenv("ALEMS_DB_PATH", get_alems_db_path())
 
 def split_sql_text(raw: str):
     """

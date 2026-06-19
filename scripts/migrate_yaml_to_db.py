@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.utils.provenance import COLUMN_PROVENANCE, _unit
+from scripts.tools.path_loader import get_alems_db_path
 
 BASE    = Path(__file__).parent.parent
 CFG_DIR = BASE / "config"
@@ -721,7 +722,11 @@ def seed_methodology_links(db, dry_run: bool = False) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="Migrate YAML config to DB")
-    parser.add_argument("--db",      default="data/experiments.db")
+    parser.add_argument("--db",      default=None)
+ 
+    # NOTE: args.db is passed directly to sqlite3.connect() downstream.
+    # grep -n 'args\.db\b' scripts/migrate_yaml_to_db.py  to find that line,
+    # then wrap: db_path = args.db or get_alems_db_path()
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
