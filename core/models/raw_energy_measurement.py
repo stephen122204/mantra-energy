@@ -80,6 +80,7 @@ class RawEnergyMeasurement:
     # GPU PP1 energy via MSR 0x641 (Intel Tiger Lake only)
     # Populated by EnergyEngine.stop_measurement() on UBUNTU2505, None elsewhere
     gpu_total_uj: Optional[int] = None  # raw MSR delta * 61.0352 µJ over full run
+    uncore_unavailable: bool = False  # True on readers with no real core+uncore+dram=package model (SPBM/Grace, future AMD/Apple)
     # Sampling data
     samples: List[tuple] = field(default_factory=list)
     io_samples:        list        = field(default_factory=list)  # Chunk 12

@@ -1178,6 +1178,13 @@ class EnergyEngine:
             # GPU total energy for this run. MSR PP1 on Tiger Lake, falls
             # back to summed GPUCollector samples (DCGM on GN100) otherwise.
             gpu_total_uj=self._resolve_gpu_total_uj(gpu_end_uj),
+            # True unless this reader is genuinely Intel RAPL. The
+            # package=core+uncore+dram decomposition is an Intel-specific
+            # physical model, not a universal one, same class of bug as
+            # the GPU one fixed earlier tonight, fixed here for uncore.
+            uncore_unavailable=(
+                self.rapl is None or self.rapl.get_name() != "RAPLReader"
+            ),
             # Metadata with thermal calculations
             # Metadata with thermal calculations
             metadata={

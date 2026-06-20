@@ -73,9 +73,13 @@ class EnergyAnalyzer:
         core_uj = raw.core_energy_uj  # Energy used by cores
         dram_uj = raw.dram_energy_uj or 0  # Memory energy (if available)
 
-        # Uncore = package - core - dram (cache, memory controller, interconnect)
-        if hasattr(raw, "uncore_uj") and raw.uncore_uj is not None:
-            uncore_uj = raw.uncore_uj
+        # Uncore = package - core - dram. Only true on readers whose
+        # physical model genuinely is core+uncore+dram, Intel RAPL. On
+        # SPBM (Grace) and any future non-RAPL reader this residual would
+        # silently fold E-cores, GPU, memory, and NVLink into a number
+        # mislabeled "uncore", later used downstream as orchestration tax.
+        if getattr(raw, "uncore_unavailable", False):
+            uncore_uj = None
         else:
             uncore_uj = max(0, package_uj - core_uj - dram_uj)
 
@@ -108,8 +112,11 @@ class EnergyAnalyzer:
         # Reasoning energy = core energy - min core baseline
         reasoning_uj = max(0, core_uj - idle_core_uj)
 
-        # Orchestration tax = uncore - min uncore baseline
-        tax_uj = max(0, uncore_uj - idle_uncore_uj)
+        # Orchestration tax = uncore - min uncore baseline. None when
+        # uncore itself is None, no real uncore domain on this reader.
+        tax_uj = (
+            max(0, uncore_uj - idle_uncore_uj) if uncore_uj is not None else None
+        )
 
         # GPU PP1 energy — from raw measurement, baseline-subtracted
         # gpu_total_uj is None on platforms without MSR 0x641

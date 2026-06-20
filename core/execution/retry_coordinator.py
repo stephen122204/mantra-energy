@@ -269,9 +269,9 @@ class RetryCoordinator:
 
             # Energy snapshots for attempt row — zero if run never produced them
             energy_uj        = 0
-            orchestration_uj = 0
-            gpu_energy_uj=gpu_energy_uj,
-            compute_uj       = 0
+            orchestration_uj = None
+            gpu_energy_uj    = gpu_energy_uj
+            compute_uj       = None
             run_id           = None
 
             if result is not None:

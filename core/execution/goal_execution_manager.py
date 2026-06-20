@@ -294,7 +294,7 @@ def execute_goal(
             outcome=outcome,
             energy_uj=energy_uj,
             orchestration_uj=orchestration_uj,
-            compute_uj=0,
+            compute_uj=None,
             failure_type=failure_type,
         )
         prev_attempt_id = attempt_id

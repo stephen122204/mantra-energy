@@ -1156,7 +1156,7 @@ class ExperimentRunner:
             outcome=linear_outcome,
             energy_uj=linear_uj,
             orchestration_uj=linear_orchestration_uj,
-            compute_uj=0,
+            compute_uj=None,
             gpu_energy_uj=linear_gpu_uj,
         )
         agentic_goal_id = self._record_goal_pair(
@@ -1170,7 +1170,7 @@ class ExperimentRunner:
             outcome=agentic_outcome,
             energy_uj=agentic_uj,
             orchestration_uj=agentic_orchestration_uj,
-            compute_uj=0,
+            compute_uj=None,
             gpu_energy_uj=agentic_gpu_uj,
         )
         # ETL runs sync — after both goals recorded so normalization_factors
@@ -1455,7 +1455,7 @@ class ExperimentRunner:
                 outcome=outcome,
                 energy_uj=energy_uj,
                 orchestration_uj=orchestration_uj,
-                compute_uj=0,
+                compute_uj=None,
                 gpu_energy_uj=_gpu_uj,
             )
 
