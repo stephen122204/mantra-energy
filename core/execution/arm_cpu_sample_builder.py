@@ -49,13 +49,16 @@ def _build_arm_cpu_sample_row(run_id, result):
     # Try direct key first (future-proof path)
     perf = result.get("perf_counters")
 
-    # Fall back to raw_energy.perf (current SPBMEnergyData wiring from 16C)
+    # Fall back to raw_energy['perf'] — confirmed live on GN100 (2026-06-20):
+    # raw_energy is a plain dict (not an object), and 'perf' is a nested dict
+    # with keys like instructions_retired, cpu_cycles, l1d_cache_misses, ipc
+    # (ipc is precomputed by the reader, not a method to call).
     if perf is None:
         raw = result.get("raw_energy")
-        if raw is not None and hasattr(raw, "perf"):
-            perf = raw.perf
+        if isinstance(raw, dict):
+            perf = raw.get("perf")
 
-    if perf is None:
+    if not perf:
         # No ARM PMU data in result — not an error on platforms where
         # ARMPMUReader is not available (factory returns DummyCPUReader).
         logger.debug(
@@ -68,13 +71,6 @@ def _build_arm_cpu_sample_row(run_id, result):
     summary = freq_data.get("summary", {}) if isinstance(freq_data, dict) else {}
     freq_mean = summary.get("frequency_mean", 0.0)
 
-    # instructions_per_cycle() is a method on PerformanceCounters — call safely
-    try:
-        ipc_val = perf.instructions_per_cycle()
-    except Exception:
-        # Guard against division by zero inside instructions_per_cycle()
-        ipc_val = 0.0
-
     row = {
         "run_id":           run_id,
         "timestamp_ns":     _time.time_ns(),
@@ -84,14 +80,15 @@ def _build_arm_cpu_sample_row(run_id, result):
         "cpu_busy_mhz":     freq_mean,
         # ARM PMU cache counters — these are the aggregates ETL sums for runs table columns:
         # l1d_cache_misses_total, l2_cache_misses_total, l3_cache_hits_total, l3_cache_misses_total
-        "l1d_cache_misses": perf.l1d_cache_misses,
-        "l2_cache_misses":  perf.l2_cache_misses,
-        "l3_cache_hits":    perf.l3_cache_hits,
-        "l3_cache_misses":  perf.l3_cache_misses,
-        # ARM PMU instruction counters — used by aggregate_hardware_metrics ETL
-        "instructions":     perf.instructions_retired,
-        "cycles":           perf.cpu_cycles,
-        "ipc":              ipc_val,
+        "l1d_cache_misses": perf.get("l1d_cache_misses", 0),
+        "l2_cache_misses":  perf.get("l2_cache_misses", 0),
+        "l3_cache_hits":    perf.get("l3_cache_hits", 0),
+        "l3_cache_misses":  perf.get("l3_cache_misses", 0),
+        # ipc is precomputed by the reader — confirmed in live data (0.7306...).
+        # Note: cpu_samples table has no instructions/cycles columns (confirmed
+        # via pragma_table_info on both platforms) — ipc is the only derived
+        # value from these counters that has a real column to land in.
+        "ipc":              perf.get("ipc", 0.0),
         # package_temp: NULL on ARM at this call site.
         # ThermalAggregator writes thermal columns via update_run_stats() separately.
         "package_temp":     None,
