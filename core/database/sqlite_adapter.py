@@ -82,6 +82,9 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES, CREATE_RUN_QUALI
                      CREATE_SCHEMA_VERSION,
                      CREATE_ENERGY_NORMALIZED_VIEW, 
                      CREATE_ATTRIBUTION_SUMMARY_VIEW,
+                     CREATE_THERMAL_ZONES, CREATE_COOLING_DEVICES,
+                     CREATE_THERMAL_SAMPLES_V2, CREATE_COOLING_SAMPLES,
+                     CREATE_CPU_IDLE_STATES, CREATE_V_THERMAL_CPU,
 
                      )
 
@@ -194,21 +197,17 @@ class SQLiteAdapter(DatabaseInterface):
     def execute_many(self, query: str, params_list: List[Union[tuple, dict]]) -> int:
         """
         Execute a query multiple times with different parameters.
-
         Args:
             query: SQL query string
             params_list: List of parameter sets
-
         Returns:
             Number of rows affected
         """
         if not self.conn:
             raise DatabaseError("Database not connected. Call connect() first.")
-
         try:
             cursor = self.conn.executemany(query, params_list)
             return cursor.rowcount
-
         except sqlite3.Error as e:
             raise DatabaseError(f"Batch execution failed: {e}")
 
@@ -350,6 +349,13 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_VIEW_OUTCOME_EFFICIENCY)
         self.conn.executescript(CREATE_VIEW_FRACTION_VERIFICATION)
         self.conn.executescript(CREATE_SCHEMA_VERSION)
+        # Chunk 16D: Thermal V2 + Cooling + CPU Idle States — registry tables first (FK targets)
+        self.conn.executescript(CREATE_THERMAL_ZONES)
+        self.conn.executescript(CREATE_COOLING_DEVICES)
+        self.conn.executescript(CREATE_THERMAL_SAMPLES_V2)
+        self.conn.executescript(CREATE_COOLING_SAMPLES)
+        self.conn.executescript(CREATE_CPU_IDLE_STATES)
+        self.conn.executescript(CREATE_V_THERMAL_CPU)
         
 
         # Commit explicitly (DDL should be committed)

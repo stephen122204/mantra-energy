@@ -1783,7 +1783,132 @@ CREATE TABLE IF NOT EXISTS energy_attribution (
 CREATE INDEX IF NOT EXISTS idx_energy_attribution_run
     ON energy_attribution(run_id);
 """
- 
+
+# =============================================================================
+# Chunk 16D: Thermal V2 + Cooling + CPU Idle States (v65-v70)
+# =============================================================================
+
+CREATE_THERMAL_ZONES = """
+CREATE TABLE IF NOT EXISTS thermal_zones (
+    zone_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    machine_id          TEXT    NOT NULL,
+    zone_type           TEXT    NOT NULL,
+    zone_index          INTEGER NOT NULL,
+    driver              TEXT,
+    device              TEXT,
+    canonical_role      TEXT    NOT NULL,
+    source_subsystem    TEXT    NOT NULL DEFAULT 'thermal_zone',
+    first_seen          TEXT    NOT NULL,
+    last_seen           TEXT    NOT NULL,
+    active              INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(machine_id, zone_type, zone_index)
+);
+CREATE INDEX IF NOT EXISTS idx_thermal_zones_machine_role
+    ON thermal_zones(machine_id, canonical_role);
+CREATE INDEX IF NOT EXISTS idx_thermal_zones_active
+    ON thermal_zones(machine_id, active);
+"""
+
+CREATE_COOLING_DEVICES = """
+CREATE TABLE IF NOT EXISTS cooling_devices (
+    device_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    machine_id          TEXT    NOT NULL,
+    device_type         TEXT    NOT NULL,
+    device_index        INTEGER NOT NULL,
+    driver              TEXT,
+    device              TEXT,
+    canonical_role      TEXT    NOT NULL,
+    source_subsystem    TEXT    NOT NULL DEFAULT 'thermal_zone',
+    max_state           INTEGER NOT NULL DEFAULT 0,
+    first_seen          TEXT    NOT NULL,
+    last_seen           TEXT    NOT NULL,
+    active              INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(machine_id, device_type, device_index)
+);
+CREATE INDEX IF NOT EXISTS idx_cooling_devices_machine_role
+    ON cooling_devices(machine_id, canonical_role);
+CREATE INDEX IF NOT EXISTS idx_cooling_devices_active
+    ON cooling_devices(machine_id, active);
+"""
+
+CREATE_THERMAL_SAMPLES_V2 = """
+CREATE TABLE IF NOT EXISTS thermal_samples_v2 (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id          INTEGER NOT NULL,
+    zone_id         INTEGER NOT NULL,
+    timestamp_ns    INTEGER NOT NULL,
+    temp_celsius    REAL    NOT NULL,
+    quality_flag    TEXT    NOT NULL DEFAULT 'VALID',
+    invalid_reason  TEXT,
+    global_run_id   TEXT,
+    FOREIGN KEY(run_id)  REFERENCES runs(run_id),
+    FOREIGN KEY(zone_id) REFERENCES thermal_zones(zone_id)
+);
+CREATE INDEX IF NOT EXISTS idx_thermal_v2_run_time
+    ON thermal_samples_v2(run_id, timestamp_ns);
+CREATE INDEX IF NOT EXISTS idx_thermal_v2_zone_time
+    ON thermal_samples_v2(zone_id, timestamp_ns);
+CREATE INDEX IF NOT EXISTS idx_thermal_v2_quality
+    ON thermal_samples_v2(run_id, quality_flag);
+"""
+
+CREATE_COOLING_SAMPLES = """
+CREATE TABLE IF NOT EXISTS cooling_samples (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id          INTEGER NOT NULL,
+    device_id       INTEGER NOT NULL,
+    timestamp_ns    INTEGER NOT NULL,
+    cur_state       INTEGER NOT NULL,
+    quality_flag    TEXT    NOT NULL DEFAULT 'VALID',
+    invalid_reason  TEXT,
+    global_run_id   TEXT,
+    FOREIGN KEY(run_id)    REFERENCES runs(run_id),
+    FOREIGN KEY(device_id) REFERENCES cooling_devices(device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cooling_samples_run_time
+    ON cooling_samples(run_id, timestamp_ns);
+CREATE INDEX IF NOT EXISTS idx_cooling_samples_device_time
+    ON cooling_samples(device_id, timestamp_ns);
+CREATE INDEX IF NOT EXISTS idx_cooling_samples_throttle
+    ON cooling_samples(run_id, quality_flag, cur_state);
+"""
+
+CREATE_CPU_IDLE_STATES = """
+CREATE TABLE IF NOT EXISTS cpu_idle_states (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id              INTEGER NOT NULL REFERENCES runs(run_id),
+    platform            TEXT NOT NULL,
+    state_name          TEXT NOT NULL,
+    depth_rank          INTEGER NOT NULL,
+    residency_seconds   REAL NOT NULL,
+    residency_type      TEXT NOT NULL CHECK(residency_type IN (
+                            'delta', 'cumulative', 'percentage')),
+    measurement_source  TEXT NOT NULL,
+    UNIQUE(run_id, measurement_source, state_name)
+);
+CREATE INDEX IF NOT EXISTS idx_cpu_idle_states_run_id
+    ON cpu_idle_states(run_id);
+CREATE INDEX IF NOT EXISTS idx_cpu_idle_states_platform_depth
+    ON cpu_idle_states(platform, depth_rank);
+"""
+
+CREATE_V_THERMAL_CPU = """
+CREATE VIEW IF NOT EXISTS v_thermal_cpu AS
+SELECT
+    ts.run_id,
+    ts.timestamp_ns,
+    ts.temp_celsius     AS cpu_temp,
+    tz.machine_id,
+    tz.zone_id,
+    tz.zone_type,
+    tz.canonical_role
+FROM thermal_samples_v2 ts
+JOIN thermal_zones tz ON ts.zone_id = tz.zone_id
+WHERE tz.canonical_role IN ('CPU_PACKAGE', 'SOC')
+  AND ts.quality_flag = 'VALID'
+  AND tz.active = 1;
+"""
+
 # =============================================================================
 # Chunk 6: Normalization Factors Table
 # =============================================================================

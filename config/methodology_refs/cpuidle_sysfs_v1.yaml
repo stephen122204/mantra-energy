@@ -1,0 +1,51 @@
+method_id: cpuidle_sysfs_v1
+references:
+  - title: "Linux Kernel cpuidle Subsystem Documentation"
+    authors: "Linux Kernel Contributors"
+    year: 2024
+    ref_type: "manual"
+    url: "https://www.kernel.org/doc/html/latest/admin-guide/pm/cpuidle.html"
+    relevance: >
+      Defines /sys/devices/system/cpu/cpu0/cpuidle/stateN/ sysfs interface.
+      time: cumulative microseconds spent in this idle state since boot.
+      name: human-readable state name reported by the kernel driver
+      (e.g. WFI, HALT). No mapping to x86 C-states is performed — the
+      kernel-reported name is stored verbatim in state_name.
+
+  - title: "NVIDIA Grace CPU Superchip Architecture"
+    authors: "NVIDIA Corporation"
+    year: 2023
+    ref_type: "manual"
+    url: "https://resources.nvidia.com/en-us-grace-cpu/grace-cpu-superchip"
+    relevance: >
+      GN100 (Grace, Neoverse V2 cores) exposes idle states state0 (WFI) and
+      state1 (HALT) under cpuidle sysfs. depth_rank 0 and 1 respectively,
+      assigned by directory ordinal since the kernel does not expose an
+      explicit depth field.
+
+  - title: "ARM Cortex-X925 and Cortex-A725 Technical Reference Manual"
+    authors: "ARM Limited"
+    year: 2023
+    ref_type: "manual"
+    relevance: >
+      Defines Low Power Idle (LPI) state semantics for Grace CPU cores.
+      Used as background reference for idle state depth ordering; the
+      measurement itself reads kernel-reported names, not this spec directly.
+
+notes: >
+  Reads cumulative residency from /sys/devices/system/cpu/cpu0/cpuidle/
+  stateN/time at experiment end (single snapshot, not per-tick). Values are
+  cumulative since boot, not per-run deltas — residency_type='cumulative'
+  in cpu_idle_states makes this explicit so ETL never misinterprets the
+  value as a per-interval delta the way turbostat data is. Confidence 0.85
+  reflects the cumulative-snapshot limitation; per-run delta residency would
+  require a start+end snapshot pair with subtraction, not yet implemented.
+
+platform_notes:
+  gn100_aarch64:
+    states_found: 2
+    state0: "WFI, depth_rank=0"
+    state1: "HALT, depth_rank=1"
+    sysfs_path: "/sys/devices/system/cpu/cpu0/cpuidle/"
+  ubuntu2505_x86_64:
+    states_found: "N/A — x86 uses turbostat path (write_from_turbostat), not cpuidle sysfs"

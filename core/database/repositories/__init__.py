@@ -22,8 +22,9 @@ from .methodology import MethodologyRepository
 from .runs        import RunsRepository
 from .samples     import SamplesRepository
 from .tax         import TaxRepository
-from .thermal     import ThermalRepository
 
+
+from .thermal     import ThermalRepository, CoolingRepository, CPUIdleRepository
 __all__ = [
     "EventsRepository",
     "MethodologyRepository",
@@ -31,4 +32,6 @@ __all__ = [
     "SamplesRepository",
     "TaxRepository",
     "ThermalRepository",
+    "CoolingRepository",
+    "CPUIdleRepository",
 ]

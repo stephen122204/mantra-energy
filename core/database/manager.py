@@ -28,7 +28,8 @@ from .base import DatabaseInterface
 from .factory import DatabaseFactory
 from .repositories import (EventsRepository, MethodologyRepository,
                            RunsRepository, SamplesRepository,
-                           TaxRepository, ThermalRepository)
+                           TaxRepository, ThermalRepository,
+                           CoolingRepository, CPUIdleRepository)
 
 
 class DatabaseManager:
@@ -73,7 +74,9 @@ class DatabaseManager:
         self.events = EventsRepository(self.db)
         self.samples = SamplesRepository(self.db)
         self.tax = TaxRepository(self.db)
-        self.thermal = ThermalRepository(self.db)
+        self.thermal  = ThermalRepository(self.db)
+        self.cooling  = CoolingRepository(self.db)
+        self.cpu_idle = CPUIdleRepository(self.db)
         self.methodology = MethodologyRepository(self.db)
 
     def _connect(self) -> None:

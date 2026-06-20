@@ -190,6 +190,11 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "c3_time_seconds":              ("msr_reader",                     "MEASURED"),
     "c6_time_seconds":              ("msr_reader",                     "MEASURED"),
     "c7_time_seconds":              ("msr_reader",                     "MEASURED"),
+    "cpu_idle_state_name":          ("cpuidle_sysfs_v1",               "MEASURED"),
+    "cpu_idle_depth_rank":          ("cpuidle_sysfs_v1",               "MEASURED"),
+    "cpu_idle_residency_seconds":   ("cpuidle_sysfs_v1",               "MEASURED"),
+    "cpu_idle_residency_type":      ("cpuidle_sysfs_v1",               "MEASURED"),
+    "cpu_idle_measurement_source":  ("cpuidle_sysfs_v1",               "MEASURED"),
     "start_time_ns":                ("system_clock",                   "MEASURED"),
     "end_time_ns":                  ("system_clock",                   "MEASURED"),
 
@@ -481,6 +486,7 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "arm_thermal_sysfs_v1":          0.90,   # acpitz sysfs zones, ~100ms ACPI polling lag
     "thermal_zone_sysfs_v2":         0.92,   # normalized per-zone sysfs, quality-flagged
     "cooling_sysfs_v1":              1.00,   # cur_state is exact kernel enum value
+    "cpuidle_sysfs_v1":              0.85,   # cumulative snapshot only, not per-run delta
     "os_scheduler_reader":           1.0,
     "msr_reader":                    1.0,
     "system_clock":                  1.0,

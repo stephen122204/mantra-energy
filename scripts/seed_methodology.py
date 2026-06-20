@@ -1355,6 +1355,24 @@ def _load_derived_methods() -> List[Dict]:
             "section":      "Method Provenance",
         },
         {
+            "id":           "cpuidle_sysfs_v1",
+            "name":         "ARM cpuidle Sysfs Idle State Residency Reader V1",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "output_metric":"cpu_idle_states.residency_seconds",
+            "output_unit":  "seconds (cumulative since boot)",
+            "applicable_on":["linux_aarch64"],
+            "formula_latex": r"\text{residency}_s = \frac{\sum_{t \in \text{states}} \text{time}_t[\mu s]}{10^6}",
+            "parameters":   {
+                "source":          "/sys/devices/system/cpu/cpu0/cpuidle/stateN/time",
+                "unit":            "cumulative microseconds since boot, converted to seconds",
+                "measurement_point":"end_of_run (single snapshot)",
+                "residency_type":  "cumulative — not a per-run delta",
+            },
+            "doc":          "28-cpu-idle-states.md",
+            "section":      "Method Provenance",
+        },
+        {
             "id":           "cooling_sysfs_v1",
             "name":         "Cooling Device State Reader V1",
             "provenance":   "MEASURED",
@@ -1371,7 +1389,8 @@ def _load_derived_methods() -> List[Dict]:
             },
             "doc":          "08-thermal-subsystem.md",
             "section":      "Method Provenance",
-        },               
+        },
+         
         {
             "id":            "arm_cpufreq_v1",
             "name":          "ARM cpufreq Sysfs Frequency Reader v1",

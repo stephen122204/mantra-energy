@@ -30,6 +30,30 @@ from scripts.etl.ttft_tpot_etl import populate_run as populate_ttft_tpot
 logger = logging.getLogger(__name__)
 
 
+def _get_platform_arch() -> str:
+    """
+    Read cpu_architecture from config/hw_config.json.
+
+    RunPersistenceService is stateless (no self.config), so this reads
+    hw_config.json directly rather than relying on stored state — mirrors
+    ExperimentRunner.get_hardware_info()'s metadata.machine field without
+    requiring access to a config_loader instance.
+
+    Returns 'aarch64' on GN100, 'x86_64' on UBUNTU2505/Alex, '' if unavailable.
+    """
+    import json
+    from pathlib import Path
+    hw_config_path = Path("config/hw_config.json")
+    if not hw_config_path.exists():
+        return ""
+    try:
+        with open(hw_config_path) as f:
+            data = json.load(f)
+        return (data.get("metadata", {}).get("machine") or "").lower()
+    except Exception:
+        return ""
+
+
 class RunPersistenceService:
     """
     Owns the full lifecycle of persisting one harness result to the DB.
@@ -173,6 +197,37 @@ class RunPersistenceService:
 
         if "cpu_samples" in result:
             db.insert_cpu_samples(run_id, result["cpu_samples"])
+
+        # 16D3: ARM — no PerformanceCounters object available in result dict here
+        # (unlike experiment_runner.py's linear_result/agentic_result). The retry
+        # path that calls insert_one_run() does not currently carry raw perf
+        # counters through to this layer. cpu_idle_states still works on both
+        # platforms below since it only needs cpu_samples (x86) or sysfs (ARM).
+        _rp_arch = _get_platform_arch()
+
+        # cpu_idle_states: ARM path — cpuidle sysfs cumulative residency
+        if _rp_arch == "aarch64":
+            try:
+                db.cpu_idle.write_from_cpuidle_sysfs(run_id, platform="grace_aarch64")
+            except Exception as _e:
+                logger.warning("cpu_idle_states ARM insert failed run_id=%d: %s", run_id, _e)
+        else:
+            # cpu_idle_states: x86 path — derive from turbostat cpu_samples
+            try:
+                db.cpu_idle.write_from_turbostat(
+                    run_id,
+                    result.get("cpu_samples", []),
+                    platform="intel_x86_64",
+                )
+            except Exception as _e:
+                logger.warning("cpu_idle_states x86 insert failed run_id=%d: %s", run_id, _e)
+
+        # 16D2a: cooling_samples — end-of-run snapshot
+        try:
+            import socket as _socket_cool
+            db.cooling.snapshot_cooling_state(run_id, _socket_cool.gethostname().lower())
+        except Exception as _e:
+            logger.warning("cooling_samples insert failed run_id=%d: %s", run_id, _e)
 
         if "interrupt_samples" in result:
             db.insert_interrupt_samples(run_id, result["interrupt_samples"])

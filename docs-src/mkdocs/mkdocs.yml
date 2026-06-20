@@ -91,6 +91,9 @@ nav:
     - Energy Attribution Guide:           research/25-energy-attribution-guide.md
     - Unified Energy Schema:              research/26-unified-energy-schema.md
     - Power Rail Schema:                  research/27-power-rail-schema.md
+    - CPU Idle State Residency:           research/28-cpu-idle-states.md
+    - Cooling Device Measurement:         research/29-cooling-subsystem.md
+    - ARM PMU Cache Metrics:              research/30-arm-cpu-samples.md
   
   - API Reference: 
     - Overview: api/reference.md

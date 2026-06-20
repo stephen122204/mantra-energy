@@ -41,6 +41,8 @@ from core.models.baseline_measurement import BaselineMeasurement
 from core.utils.provenance import record_run_provenance
 from scripts.etl.phase_attribution_etl import compute_phase_attribution
 from scripts.etl.aggregate_hardware_metrics import aggregate_hardware_metrics
+# 16D3: ARM PMU cache data → cpu_samples row builder
+from core.execution.arm_cpu_sample_builder import _build_arm_cpu_sample_row
 from scripts.etl.energy_attribution_etl import compute_energy_attribution
 from scripts.etl.duration_fix_etl import fix_run, fix_run_with_pretask
 from scripts.etl.ttft_tpot_etl import populate_run as populate_ttft_tpot
@@ -794,6 +796,35 @@ class ExperimentRunner:
             # Linear CPU samples
             if "cpu_samples" in linear_result:
                 db.insert_cpu_samples(linear_id, linear_result["cpu_samples"])
+            # 16D3: ARM — write summary cpu_samples row from PerformanceCounters.
+            # On x86, turbostat already wrote continuous rows above.
+            # On aarch64, turbostat is absent; ARMPMUReader fills PerformanceCounters.
+            # aggregate_hardware_metrics ETL (called below) reads SUM() from cpu_samples
+            # so one summary row is sufficient for paper-level l1/l2/l3 columns in runs.
+            _hw_info = self.get_hardware_info()
+            _caps_arch = (_hw_info.get('cpu_architecture') or '').lower()
+            if _caps_arch == 'aarch64':
+                _arm_row = _build_arm_cpu_sample_row(linear_id, linear_result)
+                if _arm_row:
+                    db.insert_cpu_samples(linear_id, [_arm_row])
+            # cpu_idle_states: ARM path — cpuidle sysfs cumulative residency
+            if _caps_arch == 'aarch64':
+                try:
+                    db.cpu_idle.write_from_cpuidle_sysfs(linear_id, platform="grace_aarch64")
+                except Exception as _e:
+                    logger.warning("cpu_idle_states ARM insert failed (linear): %s", _e)
+            else:
+                # cpu_idle_states: x86 path — derive from turbostat cpu_samples
+                try:
+                    _cpu_vendor = (_hw_info.get('cpu_vendor') or 'intel').lower()
+                    _idle_platform = "amd_x86_64" if _cpu_vendor == 'amd' else "intel_x86_64"
+                    db.cpu_idle.write_from_turbostat(
+                        linear_id,
+                        linear_result.get("cpu_samples", []),
+                        platform=_idle_platform,
+                    )
+                except Exception as _e:
+                    logger.warning("cpu_idle_states x86 insert failed (linear): %s", _e)
 
             # Linear interrupt samples
             if "interrupt_samples" in linear_result:
@@ -819,6 +850,16 @@ class ExperimentRunner:
                     )
                 except Exception as _e:
                     logger.warning("thermal_samples_v2 insert failed (linear): %s", _e)
+                # 16D2a: cooling_samples — end-of-run snapshot of cooling device state
+                try:
+                    import socket as _socket_cool
+                    _n_cool = db.cooling.snapshot_cooling_state(
+                        linear_id,
+                        _socket_cool.gethostname().lower(),
+                    )
+                    logger.debug("cooling_samples: wrote %d rows for run %d", _n_cool, linear_id)
+                except Exception as _e:
+                    logger.warning("cooling_samples insert failed (linear): %s", _e)
 
                 # After inserting samples, update runs with aggregated stats
                 linear_agg = self.aggregate_run_stats(
@@ -890,6 +931,31 @@ class ExperimentRunner:
             # Agentic CPU samples
             if "cpu_samples" in agentic_result:
                 db.insert_cpu_samples(agentic_id, agentic_result["cpu_samples"])
+            # 16D3: ARM — write summary cpu_samples row from PerformanceCounters.
+            _hw_info = self.get_hardware_info()
+            _caps_arch = (_hw_info.get('cpu_architecture') or '').lower()
+            if _caps_arch == 'aarch64':
+                _arm_row = _build_arm_cpu_sample_row(agentic_id, agentic_result)
+                if _arm_row:
+                    db.insert_cpu_samples(agentic_id, [_arm_row])
+            # cpu_idle_states: ARM path
+            if _caps_arch == 'aarch64':
+                try:
+                    db.cpu_idle.write_from_cpuidle_sysfs(agentic_id, platform="grace_aarch64")
+                except Exception as _e:
+                    logger.warning("cpu_idle_states ARM insert failed (agentic): %s", _e)
+            else:
+                # cpu_idle_states: x86 path
+                try:
+                    _cpu_vendor = (_hw_info.get('cpu_vendor') or 'intel').lower()
+                    _idle_platform = "amd_x86_64" if _cpu_vendor == 'amd' else "intel_x86_64"
+                    db.cpu_idle.write_from_turbostat(
+                        agentic_id,
+                        agentic_result.get("cpu_samples", []),
+                        platform=_idle_platform,
+                    )
+                except Exception as _e:
+                    logger.warning("cpu_idle_states x86 insert failed (agentic): %s", _e)
 
             # Agentic interrupt samples
             if "interrupt_samples" in agentic_result:
@@ -914,6 +980,16 @@ class ExperimentRunner:
                     )
                 except Exception as _e:
                     logger.warning("thermal_samples_v2 insert failed (agentic): %s", _e)
+                # 16D2a: cooling_samples — end-of-run snapshot of cooling device state
+                try:
+                    import socket as _socket_cool
+                    _n_cool = db.cooling.snapshot_cooling_state(
+                        agentic_id,
+                        _socket_cool.gethostname().lower(),
+                    )
+                    logger.debug("cooling_samples: wrote %d rows for run %d", _n_cool, agentic_id)
+                except Exception as _e:
+                    logger.warning("cooling_samples insert failed (agentic): %s", _e)
 
                 agentic_agg = self.aggregate_run_stats(
                     agentic_id,
