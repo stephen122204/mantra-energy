@@ -830,6 +830,33 @@ class EnergyEngine:
                 return None
             return gpu_end - gpu_start
 
+
+    def _resolve_gpu_total_uj(self, gpu_end_uj):
+        # type: (Optional[int]) -> Optional[int]
+        """
+        Total GPU energy in microjoules for this run.
+        MSR PP1 snapshot delta first (Tiger Lake). Falls back to summing
+        GPUCollector's real per-sample deltas (self.last_gpu_samples,
+        populated at line 878 by self.gpu_collector.stop()) when the MSR
+        path has nothing, which is every run on GN100 since SPBMEnergyReader
+        never overrides read_gpu_msr(). Source agnostic by design, works
+        the same way for DCGM, NVML, or any future GPUCollector backend.
+        Never returns 0 for a genuinely unmeasured run, only a real sum
+        or None, per MIC-3.
+        """
+        msr_total = self._compute_gpu_total(
+            self.start_readings.get("gpu_uj"), gpu_end_uj
+        )
+        if msr_total is not None:
+            return msr_total
+        if not self.last_gpu_samples:
+            return None
+        measured = [
+            s.energy_uj for s in self.last_gpu_samples
+            if s.energy_uj is not None
+        ]
+        return sum(measured) if measured else None
+    
     def stop_measurement(self) -> RawEnergyMeasurement:
         """
         Stop measurement and return raw results.
@@ -1148,10 +1175,9 @@ class EnergyEngine:
             thermal_during_experiment=thermal_during_experiment,
             thermal_now_active=thermal_now_active,
             thermal_since_boot=thermal_since_boot,
-            # GPU PP1 total energy for this run — None on non-Tiger-Lake platforms
-            gpu_total_uj=self._compute_gpu_total(
-                self.start_readings.get("gpu_uj"), gpu_end_uj
-            ),
+            # GPU total energy for this run. MSR PP1 on Tiger Lake, falls
+            # back to summed GPUCollector samples (DCGM on GN100) otherwise.
+            gpu_total_uj=self._resolve_gpu_total_uj(gpu_end_uj),
             # Metadata with thermal calculations
             # Metadata with thermal calculations
             metadata={
