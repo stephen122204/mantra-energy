@@ -85,6 +85,16 @@ def process_one(goal_id: int, conn) -> None:
     # overhead_fraction = 1.0 is the correct paper signal: 100% overhead, 0% productive.
     # Must be set explicitly — NULL would be silently excluded from paper Figure 3 aggregations.
     if not winning_attempts:
+        # gpu_pct must be computed here too — failed goals still have
+        # real GPU energy data and should not silently lose this derived
+        # field. Bug found 2026-06-21: this branch passed gpu_total_uj
+        # but never gpu_pct, so gpu_pct_of_pkg defaulted to NULL on every
+        # failed goal regardless of whether the inputs were valid.
+        gpu_pct = (
+            round(gpu_total_uj / total_energy_uj * 100, 2)
+            if gpu_total_uj is not None and total_energy_uj and total_energy_uj > 0
+            else None
+        )
         _update_goal_execution(
             conn, goal_id,
             total_energy_uj=total_energy_uj,
@@ -93,6 +103,7 @@ def process_one(goal_id: int, conn) -> None:
             overhead_fraction=1.0,
             orchestration_fraction=None,
             gpu_total_uj=gpu_total_uj,
+            gpu_pct=gpu_pct,
         )
         run_ids = list({a[1] for a in attempts if a[1] and a[1] != -1})
         for run_id in run_ids:
