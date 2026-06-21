@@ -311,14 +311,64 @@ when `gpu_total_energy_uj IS NULL`.
 ---
 
 ### Method ID: `gpu_dynamic_baseline_v1`
-
+ 
 **Provenance:** CALCULATED  
 **Confidence:** 0.90  
-**Layer:** silicon
-
+**Layer:** silicon  
+**Status:** Secondary method as of 2026-06-21. Used only as fallback when a
+run has zero idle-classified GPU samples for `gpu_dynamic_run_local_v1`
+(below) to build a local reference from.
+ 
 #### Formula
-
+ 
 $$E_{gpu,dyn} = E_{gpu,total} - \dot{E}_{gpu,base} \cdot t$$
+ 
+### Method ID: `gpu_dynamic_run_local_v1`
+ 
+**Provenance:** CALCULATED  
+**Confidence:** 0.90  
+**Layer:** silicon  
+**Status:** Primary method as of 2026-06-21.
+ 
+#### Formula
+ 
+$$P_{idle} = \operatorname{median}(P_i \mid \text{sample classified idle in this run})$$
+ 
+$$E_{gpu,dyn} = \sum_i \max(P_i - P_{idle}, 0)\,\Delta t_i$$
+ 
+#### Description
+ 
+Idle power is estimated from the run's own idle-classified GPU samples,
+not a separately-measured external calibration baseline. This removes
+thermal drift, clock drift, and background load differences between
+calibration time and run time. Median is used instead of mean because
+idle samples occasionally contain scheduler noise or telemetry jitter;
+median gives a robust estimator of steady-state idle power. Dynamic
+energy is the sum of the positive residual above that local idle
+reference, integrated across every sample in the run.
+ 
+A sample is classified idle using whatever GPU activity signal is
+actually available on the current platform, not a hardcoded universal
+rule. On GN100 today, DCGM exposes only `util_gpu_pct`, so idle is
+`util_gpu_pct == 0`. A future platform or backend reporting additional
+signals gets its own classification rule without changing this formula.
+ 
+Falls back to `gpu_dynamic_baseline_v1` only when a run has zero
+idle-classified samples, GPU active the entire run, no local idle
+reference available. Every run records which method was actually used
+(`runs.gpu_dynamic_method`) and the literal idle power value applied
+(`runs.gpu_idle_power_w_used`), so the split between the two methods
+across any set of runs is a direct query, not an estimate.
+ 
+#### Validated against
+ 
+Confirmed on GN100 in two real same-experiment runs: external
+calibration, measured once and separately, produced baseline-exceeds-
+total in opposite directions depending on run duration and idle-time
+fraction within the run, the wrong run looked correct and the right run
+looked like zero. Run-local estimation resolved both by referencing
+each run's own conditions instead of one fixed external number.
+ 
 
 Where:
 - $E_{gpu,total}$ = SUM of gpu_energy_uj across all energy_samples for the run

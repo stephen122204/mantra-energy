@@ -342,7 +342,7 @@ class RunsRepository:
                 rapl_before_pretask_uj, rapl_after_task_uj,
                 post_task_duration_ns, post_task_energy_uj,
                 framework_overhead_energy_uj,gpu_total_energy_uj, gpu_baseline_energy_uj,
-                gpu_dynamic_energy_uj, gpu_pct_of_pkg
+                gpu_dynamic_energy_uj, gpu_pct_of_pkg,gpu_dynamic_method, gpu_idle_power_w_used
 
             ) VALUES (
                 ?, ?, ?, ?, ?,
@@ -377,7 +377,7 @@ class RunsRepository:
                 ? , ?, ?, ?, ?, ?,
                 ?, ?,
                 ?, ?, ?,
-                ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?
             )
         """
 
@@ -507,8 +507,10 @@ class RunsRepository:
             None,   # framework_overhead_energy_uj — ETL populated  
             ml.get("gpu_total_energy_uj"),      # MEASURED via MSR 0x641
             ml.get("gpu_baseline_energy_uj"),   # CALCULATED — idle rate * duration
-            ml.get("gpu_dynamic_energy_uj"),    # CALCULATED — total - baseline
-            ml.get("gpu_pct_of_pkg"),                                         
+            ml.get("gpu_dynamic_energy_uj"),    # CALCULATED — run-local adaptive, primary; external baseline, fallback
+            ml.get("gpu_pct_of_pkg"),
+            ml.get("gpu_dynamic_method"),       # provenance: RUN_LOCAL_IDLE or EXTERNAL_IDLE_BASELINE
+            ml.get("gpu_idle_power_w_used"),    # provenance: actual idle power value used, watts                                         
         )
 
         try:

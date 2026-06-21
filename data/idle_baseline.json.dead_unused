@@ -1,0 +1,17 @@
+{
+  "baseline_id": "baseline_1781509067",
+  "timestamp": 1781509067.6984558,
+  "power_watts": {},
+  "duration_seconds": 4,
+  "sample_count": 2,
+  "std_dev_watts": {},
+  "cpu_temperature_c": 0,
+  "method": "idle_measurement",
+  "metadata": {
+    "governor": "performance",
+    "turbo": "unknown",
+    "processes": 524,
+    "background_cpu": 0.1,
+    "interrupt_rate": 595.682717159449
+  }
+}

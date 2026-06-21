@@ -176,7 +176,17 @@ class LlamaCppAdapter(TextGenABC):
         from llama_cpp import Llama
         logger.info("Loading GGUF model: %s", self._model_path)
         
-        self._llm = Llama(model_path=self._model_path, n_ctx=self.model_config.get("n_ctx", 512))
+        self._llm = Llama(
+            model_path=self._model_path,
+            n_ctx=self.model_config.get("n_ctx", 512),
+            # Library default is 0, CPU-only, even on a CUDA build — confirmed
+            # tonight every prior run paid that cost silently. -1 offloads
+            # every layer to GPU. Config-driven, same pattern as n_ctx above,
+            # so a specific run can still override it if there's ever a real
+            # reason to force CPU-only.
+            n_gpu_layers=self.model_config.get("n_gpu_layers", -1),
+        )
+ 
 
     def _error_result(self, error_msg: str, preprocess_ms: float) -> Dict:
         """

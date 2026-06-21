@@ -430,8 +430,8 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     # GPU PP1 energy columns — runs table
     "gpu_total_energy_uj":    ("gpu_rapl_pp1_v1",          "MEASURED"),
     "gpu_baseline_energy_uj": ("gpu_dynamic_baseline_v1",  "CALCULATED"),
-    "gpu_dynamic_energy_uj":  ("gpu_dynamic_baseline_v1",  "CALCULATED"),
-    "gpu_pct_of_pkg":         ("gpu_dynamic_baseline_v1",  "CALCULATED"),
+    "gpu_dynamic_energy_uj":  ("gpu_dynamic_run_local_v1",  "CALCULATED"),
+    "gpu_pct_of_pkg":         ("gpu_dynamic_run_local_v1",  "CALCULATED"),
     # gpu_samples table columns
     "gpu_samples.energy_uj":          ("gpu_rapl_pp1_v1",             "MEASURED"),
     "gpu_samples.source":             ("gpu_rapl_pp1_v1",             "MEASURED"),
@@ -537,6 +537,7 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "tool_instrumentation_v1":          1.0,
     "gpu_rapl_pp1_v1":                  0.95,  # MSR 0x641, cross-validated vs perf PMU
     "gpu_dynamic_baseline_v1":          0.90,  # baseline subtraction, same as cpu dynamic
+    "gpu_dynamic_run_local_v1":        0.90,  # run-local adaptive idle baseline, primary method as of 2026-06-21
     "gpu_attribution_exclusive_v1":     1.00,  # exclusive workload use, exact attribution
     "gpu_baseline_2sigma_v1":           1.00,  # 2-sigma idle baseline, same as CPU method
     "gpu_phase_alignment_v1":           0.70,  # proxy: CPU phase fractions applied to GPU

@@ -83,7 +83,7 @@ class DerivedEnergyMeasurement:
     idle_energy_uj: int
     workload_energy_uj: int
     reasoning_energy_uj: int
-    orchestration_tax_uj: int
+    orchestration_tax_uj: Optional[int]
     duration_seconds: float
 
     # Optional fields (with defaults) come AFTER
@@ -94,6 +94,8 @@ class DerivedEnergyMeasurement:
     gpu_baseline_energy_uj: Optional[int] = None  # idle GPU rate * duration
     gpu_dynamic_energy_uj:  Optional[int] = None  # gpu_total - gpu_baseline
     gpu_pct_of_pkg:         Optional[float] = None  # gpu_dynamic / pkg_dynamic * 100
+    gpu_dynamic_method:     Optional[str]   = None  # RUN_LOCAL_IDLE (primary) or EXTERNAL_IDLE_BASELINE (fallback)
+    gpu_idle_power_w_used:  Optional[float] = None  # actual idle power value used, whichever method produced it
     # ========================================================================
     # Performance Counters (Req 1.5, 1.6, 1.10)
     # ========================================================================
@@ -168,7 +170,11 @@ class DerivedEnergyMeasurement:
 
     @property
     def orchestration_tax_j(self) -> float:
-        """Orchestration tax in joules."""
+        """Orchestration tax in joules. None when not measurable on this
+        platform, no real uncore domain. Not 0, 0 would falsely claim
+        zero overhead instead of honestly saying it was never measured."""
+        if self.orchestration_tax_uj is None:
+            return None
         return self.orchestration_tax_uj / 1_000_000
 
     @property
@@ -185,7 +191,11 @@ class DerivedEnergyMeasurement:
 
     @property
     def tax_ratio(self) -> float:
-        """Percentage of energy used for orchestration overhead."""
+        """Percentage of energy used for orchestration overhead. None
+        when orchestration_tax_uj itself is None, not measurable on
+        this platform."""
+        if self.orchestration_tax_uj is None:
+            return None
         if self.package_energy_uj == 0:
             return 0.0
         return (self.orchestration_tax_uj / self.package_energy_uj) * 100

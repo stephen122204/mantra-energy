@@ -237,7 +237,20 @@ def _load_measured_methods() -> List[Dict]:
             "doc":          "07-energy-readers-methodology.md",
             "section":      "GPU PP1 Energy Measurement",
         },  
-
+        {
+            "id":           "gpu_dynamic_run_local_v1",
+            "name":         "GPU Dynamic Energy via Run-Local Adaptive Idle Baseline",
+            "provenance":   "CALCULATED",
+            "layer":        "silicon",
+            "output_metric":"gpu_dynamic_energy_uj",
+            "output_unit":  "µJ",
+            "applicable_on":["linux_x86_64", "linux_aarch64"],
+            "formula_latex": r"P_{idle} = \mathrm{median}(P_i \mid \text{sample classified idle}); \quad E_{gpu,dyn} = \sum_i \max(P_i - P_{idle}, 0)\,\Delta t_i",
+            "parameters":   {"idle_classifier": "util_gpu_pct == 0, platform-specific instantiation, see _is_idle_gpu_sample in core/energy_engine.py", "central_tendency": "median", "fallback_method_id": "gpu_dynamic_baseline_v1"},
+            "description":  "GPU dynamic energy via run-local adaptive baseline. Idle power is the median power across this run's own idle-classified GPU samples, not a separately-measured calibration baseline, removing thermal drift, clock drift, and background load differences between calibration time and run time. Dynamic energy is the sum of max(sample_power - idle_power, 0) integrated across every sample in the run. Median chosen over mean because idle samples occasionally contain scheduler noise or telemetry jitter; median gives a robust estimator of steady-state idle power. Falls back to gpu_dynamic_baseline_v1 only when a run has zero idle-classified samples. Primary method as of 2026-06-21, replacing gpu_dynamic_baseline_v1 as the default: confirmed on two same-experiment runs that external calibration, measured once and separately, produced baseline-exceeds-total in opposite directions depending on run duration and idle-time fraction, which the run-local method resolves by referencing the run's own conditions instead of a fixed external number.",
+            "doc":          "07-energy-readers-methodology.md",
+            "section":      "GPU Dynamic Energy Measurement",
+        },
         {
             "id":            "nvml_total_energy_v1",
             "name":          "NVIDIA NVML Cumulative Energy Counter",

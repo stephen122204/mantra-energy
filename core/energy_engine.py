@@ -831,6 +831,86 @@ class EnergyEngine:
             return gpu_end - gpu_start
 
 
+    def _is_idle_gpu_sample(self, sample):
+        # type: (Any) -> Optional[bool]
+        """
+        Idle classification for one GPU sample, based on whatever activity
+        signal is actually available on this platform today. On GN100,
+        DCGM only reports util_gpu_pct (confirmed: read_signals() queries
+        DCGM fields 203 and 150 only, no memory utilization or clock
+        signal), so idle is util_gpu_pct == 0. This is a platform-specific
+        instantiation of "classified idle by the GPU activity signal
+        available on this platform," not a hardcoded universal rule — a
+        future platform or backend reporting fractional or multi-signal
+        utilization gets its own definition here, the formula that
+        consumes this does not change.
+ 
+        Returns None when the signal itself wasn't read this sample
+        (a DCGM read failure on that one sample), meaning unknown, not
+        idle and not active — excluded from classification entirely
+        rather than guessed.
+        """
+        if sample.util_gpu_pct is None:
+            return None
+        return sample.util_gpu_pct == 0.0
+ 
+    def _resolve_gpu_dynamic_local_uj(self, gpu_samples):
+        # type: (List[Any]) -> Tuple[Optional[int], Optional[float]]
+        """
+        Run-local adaptive GPU dynamic energy. Primary method for
+        gpu_dynamic_energy_uj — core/analysis/energy_analyzer.py falls
+        back to the external idle-calibration baseline only when this
+        returns (None, None).
+ 
+            P_idle    = median(P_i | sample classified idle in this run)
+            E_dynamic = sum_i max(P_i - P_idle, 0) * dt_i
+ 
+        Idle power is estimated from this run's own idle-classified
+        samples, not a separately-measured calibration baseline, removing
+        thermal drift, clock drift, and background load differences
+        between calibration time and run time. Median chosen over mean:
+        idle samples occasionally contain scheduler noise or telemetry
+        jitter, median gives a robust estimator of steady-state idle
+        power.
+ 
+        Power is derived from energy_uj / interval_ns directly, not the
+        power_mw field — confirmed empty on every DCGM-backed sample on
+        GN100 in real data, not populated by this backend.
+ 
+        Returns (None, None) if this run has zero idle-classified
+        samples — GPU active the entire run, no local idle reference
+        available, caller falls back to external calibration.
+        """
+        if not gpu_samples:
+            return None, None
+ 
+        sample_powers = []
+        for s in gpu_samples:
+            if s.energy_uj is None or not s.interval_ns or s.interval_ns <= 0:
+                continue
+            power_w = (s.energy_uj / 1_000_000) / (s.interval_ns / 1_000_000_000)
+            sample_powers.append((s, power_w))
+ 
+        if not sample_powers:
+            return None, None
+ 
+        idle_powers = [
+            p for s, p in sample_powers
+            if self._is_idle_gpu_sample(s) is True
+        ]
+        if not idle_powers:
+            return None, None
+ 
+        idle_power_w = statistics.median(idle_powers)
+ 
+        dynamic_uj = 0.0
+        for s, power_w in sample_powers:
+            residual_w  = max(power_w - idle_power_w, 0.0)
+            duration_s  = s.interval_ns / 1_000_000_000
+            dynamic_uj += residual_w * duration_s * 1_000_000
+ 
+        return int(dynamic_uj), idle_power_w
+ 
     def _resolve_gpu_total_uj(self, gpu_end_uj):
         # type: (Optional[int]) -> Optional[int]
         """
@@ -903,6 +983,10 @@ class EnergyEngine:
         # Stop GPU collector and store samples for harness access
         # Returns empty list if NoneBackend or no samples collected
         self.last_gpu_samples = self.gpu_collector.stop()
+        (self.last_gpu_dynamic_local_uj,
+         self.last_gpu_idle_power_w_local) = self._resolve_gpu_dynamic_local_uj(
+            self.last_gpu_samples
+        )
         # SPBMSampler retired (16B3) — EnergyCollector handles GN100 now
         self.last_spbm_samples = []
         self.last_rail_result = (
@@ -1178,6 +1262,8 @@ class EnergyEngine:
             # GPU total energy for this run. MSR PP1 on Tiger Lake, falls
             # back to summed GPUCollector samples (DCGM on GN100) otherwise.
             gpu_total_uj=self._resolve_gpu_total_uj(gpu_end_uj),
+            gpu_dynamic_local_uj=self.last_gpu_dynamic_local_uj,
+            gpu_idle_power_w_local=self.last_gpu_idle_power_w_local,
             # True unless this reader is genuinely Intel RAPL. The
             # package=core+uncore+dram decomposition is an Intel-specific
             # physical model, not a universal one, same class of bug as

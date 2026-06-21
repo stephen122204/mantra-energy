@@ -129,10 +129,27 @@ class EnergyAnalyzer:
         # GPU (SPBM's broad rail) stays separately available for the
         # NVLink-C2C work, untouched, just not used here anymore.
         gpu_baseline_uj = min_energy.get("GPU_DCGM", 0) if baseline else 0
-        gpu_dynamic_uj  = (
-            max(0, gpu_total_uj - gpu_baseline_uj)
-            if gpu_total_uj is not None else None
-        )
+        # Run-local adaptive baseline is primary: idle power estimated from
+        # this run's own idle-classified GPU samples (core/energy_engine.py),
+        # removing thermal drift, clock drift, and background load
+        # differences between a separate calibration window and this run.
+        # External idle calibration (computed above) is the secondary
+        # method, used only when this run had zero idle-classified samples
+        # to build a local reference from.
+        gpu_dynamic_local_uj = getattr(raw, "gpu_dynamic_local_uj", None)
+        if gpu_dynamic_local_uj is not None:
+            gpu_dynamic_uj      = gpu_dynamic_local_uj
+            gpu_dynamic_method  = "RUN_LOCAL_IDLE"
+            gpu_idle_power_used = getattr(raw, "gpu_idle_power_w_local", None)
+        else:
+            gpu_dynamic_uj = (
+                max(0, gpu_total_uj - gpu_baseline_uj)
+                if gpu_total_uj is not None else None
+            )
+            gpu_dynamic_method  = "EXTERNAL_IDLE_BASELINE" if gpu_dynamic_uj is not None else None
+            gpu_idle_power_used = (
+                baseline.power_watts.get("GPU_DCGM") if baseline else None
+            )
         gpu_pct = (
             round(gpu_dynamic_uj / max(1, workload_uj) * 100, 2)
             if gpu_dynamic_uj is not None and workload_uj > 0 else None
@@ -433,6 +450,8 @@ class EnergyAnalyzer:
             gpu_baseline_energy_uj=gpu_baseline_uj if gpu_total_uj is not None else None,
             gpu_dynamic_energy_uj=gpu_dynamic_uj,
             gpu_pct_of_pkg=gpu_pct,
+            gpu_dynamic_method=gpu_dynamic_method,
+            gpu_idle_power_w_used=gpu_idle_power_used,
         )
     def compute_attributed_energy(
         self,
