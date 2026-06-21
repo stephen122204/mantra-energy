@@ -119,9 +119,16 @@ class EnergyAnalyzer:
         )
 
         # GPU PP1 energy — from raw measurement, baseline-subtracted
-        # gpu_total_uj is None on platforms without MSR 0x641
+        # gpu_total_uj is None on platforms without MSR 0x641 or a GPUCollector backend
         gpu_total_uj    = getattr(raw, "gpu_total_uj", None)
-        gpu_baseline_uj = min_energy.get("GPU", min_energy.get("gpu", 0)) if baseline else 0
+        # GPU_DCGM baseline, not GPU. gpu_total_uj is sourced from the same
+        # instrument (DCGM on GN100, MSR PP1 on Tiger Lake) via GPUCollector,
+        # so the baseline has to come from that same instrument too, or total
+        # and baseline are different physical quantities and the subtraction
+        # below compares apples to oranges, the exact bug this fix removes.
+        # GPU (SPBM's broad rail) stays separately available for the
+        # NVLink-C2C work, untouched, just not used here anymore.
+        gpu_baseline_uj = min_energy.get("GPU_DCGM", 0) if baseline else 0
         gpu_dynamic_uj  = (
             max(0, gpu_total_uj - gpu_baseline_uj)
             if gpu_total_uj is not None else None

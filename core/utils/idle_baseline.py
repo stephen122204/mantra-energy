@@ -43,6 +43,7 @@ from typing import Any, Dict, List, Optional
 import psutil
 
 from core.models.baseline_measurement import BaselineMeasurement
+from core.readers.gpu_collector import GPUCollector
 from core.readers.interfaces import EnergyReaderABC       # PAC-2: ABC only, never RAPLReader
 from core.readers.scheduler_monitor import SchedulerMonitor
 from core.utils.core_pinner import CorePinner
@@ -77,6 +78,7 @@ BASELINE_DOMAIN_MAP = {
     'cpu_p':     ('CPU_P',   'core_power_watts',    'core_std'),
     'cpu_e':     ('CPU_E',   None,                  None),       # no legacy column
     'gpu':       ('GPU',     'gpu_power_watts',     'gpu_std'),
+    'gpu_dcgm':  ('GPU_DCGM', 'gpu_dcgm_power_watts', 'gpu_dcgm_std'),
     # ---- Apple IOKit keys (Stephen M1) — Chunk 16F --------------------------
     'cpu':       ('CORE',    'core_power_watts',    'core_std'),
     'gpu_apple': ('GPU_APPLE', None,                None),
@@ -372,13 +374,23 @@ def measure_idle_baseline(
             with open(cache_file) as f:
                 cache_data = json.load(f)
             cached_meta = cache_data.get("metadata", {})
-            # Governor and turbo must match — these change idle power significantly
+            # Governor and turbo must match — these change idle power significantly.
+            # GPU measurement state must also match: if GPU is being requested
+            # now (measure_gpu=True) but the cached baseline predates GPU_DCGM,
+            # or came from a run where the backend wasn't available, the cache
+            # would otherwise look valid forever and silently never pick up
+            # real GPU baseline data.
+            gpu_state_ok = (
+                not measure_gpu
+                or cached_meta.get("measured_gpu_dcgm") is True
+            )
             if (cached_meta.get("governor") == current_state["governor"]
-                    and cached_meta.get("turbo") == current_state["turbo"]):
+                    and cached_meta.get("turbo") == current_state["turbo"]
+                    and gpu_state_ok):
                 dprint("Loaded idle baseline from cache: %s", cache_file)
                 return BaselineMeasurement.from_dict(cache_data)
             else:
-                dprint("Cache invalid (system state changed) — remeasuring")
+                dprint("Cache invalid (system state changed or GPU measurement state mismatch) — remeasuring")
         except Exception as e:
             logger.warning("Failed to load baseline cache, remeasuring: %s", e)
 
@@ -420,24 +432,30 @@ def measure_idle_baseline(
         start_raw = energy_reader.read_energy()
 
         # Optional separate GPU accumulator read (measure_gpu flag controls this ONLY)
-        # This is ADDITIONAL to whatever gpu domain read_energy() already returns
-        gpu_start_uj = None
+        # This is ADDITIONAL to whatever gpu domain read_energy() already returns.
+        # Uses GPUCollector — same backend auto-detection as the run-level total
+        # energy fix earlier this session: DCGM on GN100, MSR PP1 on Tiger Lake,
+        # NVML/ROCm/IOKit elsewhere. Replaces the old direct read_gpu_msr() call,
+        # which only ever worked on Tiger Lake and silently measured nothing on
+        # every other platform, GN100 included.
+        gpu_collector = None
         if measure_gpu:
             try:
-                gpu_start_uj = energy_reader.read_gpu_msr()
+                gpu_collector = GPUCollector(rapl_reader=energy_reader)
+                gpu_collector.start()
             except Exception:
-                gpu_start_uj = None   # MSR not available on this platform — MIC-1
-
+                gpu_collector = None   # no backend available — MIC-1
+ 
         time.sleep(duration_seconds)
-
+ 
         end_raw = energy_reader.read_energy()
-
-        gpu_end_uj = None
-        if measure_gpu:
+ 
+        gpu_samples = []
+        if gpu_collector is not None:
             try:
-                gpu_end_uj = energy_reader.read_gpu_msr()
+                gpu_samples = gpu_collector.stop()
             except Exception:
-                gpu_end_uj = None
+                gpu_samples = []
 
         # Compute per-domain power for this sample
         for raw_key in start_raw:
@@ -449,12 +467,12 @@ def measure_idle_baseline(
                 all_powers[raw_key] = []
             all_powers[raw_key].append(power_w)
 
-        # Separate GPU accumulator sample — only if both reads succeeded
+        # Separate GPU accumulator sample — only if real samples came back.
         # Key 'gpu_dcgm' distinguishes this from the gpu domain in read_energy()
-        if (gpu_start_uj is not None and gpu_end_uj is not None
-                and gpu_end_uj >= gpu_start_uj):
-            gpu_delta_uj = gpu_end_uj - gpu_start_uj
-            gpu_power_w  = (gpu_delta_uj / 1_000_000) / duration_seconds
+        # (SPBM's broad rail, kept separate and unchanged for the NVLink work).
+        measured_uj = [s.energy_uj for s in gpu_samples if s.energy_uj is not None]
+        if measured_uj:
+            gpu_power_w = sum(measured_uj) / 1_000_000 / duration_seconds
             if 'gpu_dcgm' not in all_powers:
                 all_powers['gpu_dcgm'] = []
             all_powers['gpu_dcgm'].append(gpu_power_w)
@@ -505,6 +523,12 @@ def measure_idle_baseline(
     # Determine gpu_method for provenance — stored in metadata, inserted by insert_baseline
     gpu_method = getattr(energy_reader, 'METHOD_ID', None)
     current_state["gpu_method"] = gpu_method
+    # Record whether GPU_DCGM was actually populated this run, not just
+    # requested. A cache hit later must match this, or a stale cache from
+    # before GPU measurement existed, or from a run where the backend
+    # simply wasn't available, would silently look valid forever and never
+    # get remeasured, even when measure_gpu=True was explicitly asked for.
+    current_state["measured_gpu_dcgm"] = "GPU_DCGM" in canonical_power
 
     # ------------------------------------------------------------------
     # Step 6: Construct BaselineMeasurement with canonical keys
