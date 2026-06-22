@@ -1138,6 +1138,97 @@ def _load_derived_methods() -> List[Dict]:
             "doc":           "25-energy-attribution-guide.md",
             "section":       "Section 11.1 — network_wait_energy_uj",
         },
+{
+            "id":            "network_wait_rapl_slice_v2",
+            "name":          "Network Wait Energy — Raw RAPL Slice v2 (No alpha_cpu)",
+            "provenance":    "MEASURED",
+            "layer":         "application",
+            "confidence":    0.93,
+            "description":   (
+                "SPEC_03 Strategy A: Sum RAPL pkg energy within LLM blocking windows "
+                "[request_start_ns, first_token_time_ns]. "
+                "Fixes alpha_cpu=0 bug in network_wait_energy_v1: during network wait "
+                "CPU cores are idle but pkg is non-zero due to NIC DMA, PCH activity, "
+                "DRAM refresh, uncore fabric. AX201 at PCI 00:14.3 is PCH-integrated "
+                "and inside RAPL uncore domain. No cpu_fraction multiplication. "
+                "Applies to: UBUNTU2505 (Intel i7-1165G7, AX201 WiFi, x86_64)."
+            ),
+            "formula_latex": (
+                r"E_{network} = \sum_{i \in \text{interactions}}"
+                r"\sum_{s \in [t^i_{req}, t^i_{first}]} (pkg\_end\_uj_s - pkg\_start\_uj_s)"
+                r"\quad \text{(no } \alpha_{cpu} \text{ — fixes SPEC\_03 bug)}"
+            ),
+            "parameters":    {
+                "primary_source":    "RAPL energy_samples pkg_end_uj - pkg_start_uj in blocking windows",
+                "nic_topology":      "pch_integrated (Intel AX201, PCI bus 0, inside RAPL uncore)",
+                "alpha_cpu":         "NOT applied — key fix over v1",
+                "platform":          "x86_64 Linux, Intel PCH-integrated NIC",
+                "confidence_basis":  "C_source=1.0, C_method=0.95, C_validation=0.80, C_platform=0.90",
+                "replaces":          "network_wait_energy_v1 for Strategy A platforms",
+            },
+            "doc":           "28-network-energy-cross-platform-methodology.md",
+            "section":       "Section 3.1 — Strategy A: RAPL Slice",
+        },
+        {
+            "id":            "network_wait_spbm_fraction_v1",
+            "name":          "Network Wait Energy — SPBM DC_INPUT Fraction (GN100)",
+            "provenance":    "INFERRED",
+            "layer":         "application",
+            "confidence":    0.70,
+            "description":   (
+                "SPEC_03 Strategy B: Sum SPBM DC_INPUT (domain_id=28) energy within "
+                "LLM blocking windows [request_start_ns, first_token_time_ns]. "
+                "GN100 has no RAPL — DC_INPUT captures total board input power. "
+                "Known overestimate: GPU idle draw included during blocking period. "
+                "Conservative upper bound documented in paper. "
+                "v2 improvement: subtract GPU_DCGM domain energy (deferred). "
+                "Applies to: GN100 (NVIDIA Grace GB10, aarch64)."
+            ),
+            "formula_latex": (
+                r"E_{network} = \sum_{i \in \text{interactions}}"
+                r"\sum_{s \in [t^i_{req}, t^i_{first}]} E_{DC\_INPUT,s}"
+                r"\quad \text{(domain\_id=28, conservative upper bound)}"
+            ),
+            "parameters":    {
+                "primary_source":   "energy_sample_domains WHERE domain_id=28 in blocking windows",
+                "domain":           "DC_INPUT (domain_id=28) — total board input power rail",
+                "known_bias":       "Overestimate: GPU idle power included during blocking",
+                "platform":         "aarch64 Linux, NVIDIA Grace GB10 (GN100)",
+                "confidence_basis": "C_source=0.90, C_method=0.75, C_validation=0.60, C_platform=0.60",
+                "future_fix":       "Subtract GPU_DCGM (domain_id=6) energy in v2",
+            },
+            "doc":           "28-network-energy-cross-platform-methodology.md",
+            "section":       "Section 3.2 — Strategy B: SPBM DC_INPUT",
+        },
+        {
+            "id":            "network_wait_time_fraction_v1",
+            "name":          "Network Wait Energy — Time Fraction Fallback (Universal)",
+            "provenance":    "INFERRED",
+            "layer":         "application",
+            "confidence":    0.50,
+            "description":   (
+                "SPEC_03 Strategy C: Time fraction of dynamic_energy_uj during "
+                "network blocking windows. Universal fallback when RAPL and SPBM "
+                "are unavailable. Uses dynamic_energy_uj NOT attributed_energy_uj — "
+                "attributed has alpha_cpu baked in which would double-suppress. "
+                "Conservative lower bound. Applies to: Apple M1 Pro (IOKit stub), "
+                "AMD without RAPL, VMs, unknown platforms."
+            ),
+            "formula_latex": (
+                r"E_{network} = \frac{non\_local\_ms}{task\_duration\_ms}"
+                r"\times E_{dynamic}"
+                r"\quad \text{(lower bound — misses uncore/NIC activity)}"
+            ),
+            "parameters":    {
+                "primary_source":   "runs.dynamic_energy_uj × time fraction",
+                "base_energy":      "dynamic_energy_uj (L1 baseline-subtracted, NOT attributed)",
+                "platform":         "All platforms — universal fallback",
+                "confidence_basis": "C_source=0.70, C_method=0.50, C_validation=0.40, C_platform=0.50",
+                "known_bias":       "Lower bound — CPU-proportional proxy misses NIC/uncore",
+            },
+            "doc":           "28-network-energy-cross-platform-methodology.md",
+            "section":       "Section 3.3 — Strategy C: Time Fraction Fallback",
+        },        
 # ── v10: LLM Wait Energy Attribution ─────────────────────────────────────
         {
             "id":            "llm_wait_attribution_v1",

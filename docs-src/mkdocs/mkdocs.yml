@@ -94,6 +94,7 @@ nav:
     - CPU Idle State Residency:           research/28-cpu-idle-states.md
     - Cooling Device Measurement:         research/29-cooling-subsystem.md
     - ARM PMU Cache Metrics:              research/30-arm-cpu-samples.md
+    - Network Energy Cross-Platform:      research/31-network-energy-cross-platform-methodology.md
   
   - API Reference: 
     - Overview: api/reference.md

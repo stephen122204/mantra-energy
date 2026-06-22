@@ -1,0 +1,23 @@
+# config/methodology_refs/network_wait_rapl_slice_v2.yaml
+# Strategy A: Raw RAPL slice for PCH-integrated NICs
+# Fixes the alpha_cpu=0 bug in network_wait_energy_v1
+
+id: network_wait_rapl_slice_v2
+version: 2
+confidence: 0.93
+measurement_type: MEASURED
+platform: x86_64 Linux, PCH-integrated NIC (Intel AX201)
+description: >
+  Sum RAPL pkg energy samples within LLM API blocking windows
+  [request_start_ns, first_token_time_ns]. No cpu_fraction multiplication.
+  During network wait CPU cores are idle (alpha_cpu≈0) but pkg is non-zero
+  due to NIC DMA, PCH activity, DRAM refresh, uncore fabric maintenance.
+  AX201 at PCI 00:14.3 is PCH-integrated and inside RAPL uncore domain.
+formula: "E_network = SUM(pkg_end_uj - pkg_start_uj) for samples in blocking windows"
+confidence_basis:
+  C_source: 1.0    # Direct hardware MSR counter
+  C_method: 0.95   # No transform, raw delta sum
+  C_validation: 0.80  # cpu≈0 but pkg>0 empirically confirmed
+  C_platform: 0.90  # AX201 PCH topology verified on UBUNTU2505
+replaces: network_wait_energy_v1
+paper_section: "Section 4.1 — Network Wait Energy Attribution"

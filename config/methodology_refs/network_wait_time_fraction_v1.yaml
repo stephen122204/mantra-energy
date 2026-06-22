@@ -1,0 +1,22 @@
+# config/methodology_refs/network_wait_time_fraction_v1.yaml
+# Strategy C: Universal time-fraction fallback
+
+id: network_wait_time_fraction_v1
+version: 1
+confidence: 0.50
+measurement_type: INFERRED
+platform: All platforms (universal fallback)
+description: >
+  Time fraction of dynamic_energy_uj during network blocking windows.
+  Formula: (non_local_ms / task_duration_ms) * dynamic_energy_uj.
+  Uses dynamic_energy_uj NOT attributed_energy_uj — attributed has
+  alpha_cpu baked in which would double-suppress the estimate.
+  Conservative lower bound. Used when RAPL and SPBM are unavailable.
+  Applies to: Apple M1 Pro (IOKit stub), AMD without RAPL, VMs.
+formula: "E_network = (non_local_ms / task_duration_ms) * dynamic_energy_uj"
+confidence_basis:
+  C_source: 0.70   # dynamic_energy_uj is hardware-measured (L1)
+  C_method: 0.50   # Time fraction is a proxy, not direct measurement
+  C_validation: 0.40  # CPU-proportional proxy misses uncore/NIC activity
+  C_platform: 0.50  # Universal, no platform-specific validation
+paper_section: "Section 4.1 — Network Wait Energy Attribution"

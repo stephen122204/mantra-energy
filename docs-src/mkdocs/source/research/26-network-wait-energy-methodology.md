@@ -24,30 +24,38 @@ This is an AXIS 3A physical observable used for:
 When `request_start_ns` and `first_token_time_ns` are available
 (migration 038 or later):
 
-$$E_{network} = \sum_{i \in \text{interactions}} \sum_{s \in [t^i_{req}, t^i_{first}]} \Delta pkg_s \times \alpha_{cpu}$$
+$$E_{network} = \sum_{i \in \text{interactions}} \sum_{s \in [t^i_{req}, t^i_{first}]} \Delta pkg_s$$
 
 where:
 - $t^i_{req}$ = `llm_interactions.request_start_ns` for interaction i
 - $t^i_{first}$ = `llm_interactions.first_token_time_ns` for interaction i
 - $\Delta pkg_s$ = RAPL sample delta at sample s from `energy_samples`
-- $\alpha_{cpu}$ = `runs.cpu_fraction`
+
+**Note:** `alpha_cpu` multiplication removed in SPEC_03 (`network_wait_rapl_slice_v2`).
+During network blocking CPU≈0 so alpha_cpu≈0 — multiplication zeroed out
+the measurement. Raw pkg slice is correct: uncore/PCH/NIC activity is
+non-zero during blocking regardless of CPU utilization.
 
 **Type:** MEASURED
 **Source:** Direct RAPL `energy_samples` slice over wait window timestamps
-
+**Superseded by:** `network_wait_rapl_slice_v2` in `network_energy_attribution` table
+**Platform extension:** Strategy B (`network_wait_spbm_fraction_v1`) covers GN100
+via SPBM DC_INPUT (domain_id=28). See doc 31.
 ---
 
 ## Fallback Formula (MODELED — time-fraction)
 
 When timestamps unavailable (pre-migration-038 runs):
 
-$$E_{network} = \frac{t_{non\_local}}{t_{task}} \times E_{attributed}$$
+$$E_{network} = \frac{t_{non\_local}}{t_{task}} \times E_{dynamic}$$
 
 where `t_non_local` = `SUM(llm_interactions.non_local_ms)` per run.
 
+**Important:** Uses `dynamic_energy_uj` NOT `attributed_energy_uj`.
+attributed_energy_uj has alpha_cpu baked in — would double-suppress.
+
 **Type:** MODELED
 **Triggered by:** `request_start_ns IS NULL`
-**Attribution method stored:** `time_fraction_fallback_v1`
 
 ---
 

@@ -802,7 +802,12 @@ class ExperimentRunner:
                 from scripts.etl.spbm_telemetry_etl import process_run as _pst
                 _pst(linear_id, linear_result, db.db.conn)
             except Exception as _e:
-                logger.warning("spbm_telemetry_etl failed linear run_id=%d: %s", linear_id, _e)                                    
+                logger.warning("spbm_telemetry_etl failed linear run_id=%d: %s", linear_id, _e)
+            try:
+                from scripts.etl.network_energy_etl import process_run as _pne
+                _pne(linear_id, db.db.conn)
+            except Exception as _e:
+                logger.warning("network_energy_etl failed linear run_id=%d: %s", linear_id, _e)
             # Linear CPU samples
             if "cpu_samples" in linear_result:
                 db.insert_cpu_samples(linear_id, linear_result["cpu_samples"])
@@ -947,7 +952,12 @@ class ExperimentRunner:
                 from scripts.etl.spbm_telemetry_etl import process_run as _pst
                 _pst(agentic_id, agentic_result, db.db.conn)
             except Exception as _e:
-                logger.warning("spbm_telemetry_etl failed agentic run_id=%d: %s", agentic_id, _e)                        
+                logger.warning("spbm_telemetry_etl failed agentic run_id=%d: %s", agentic_id, _e)
+            try:
+                from scripts.etl.network_energy_etl import process_run as _pne
+                _pne(agentic_id, db.db.conn)
+            except Exception as _e:
+                logger.warning("network_energy_etl failed agentic run_id=%d: %s", agentic_id, _e)
             # Agentic CPU samples
             if "cpu_samples" in agentic_result:
                 db.insert_cpu_samples(agentic_id, agentic_result["cpu_samples"])
@@ -1411,7 +1421,12 @@ class ExperimentRunner:
                 from scripts.etl.spbm_telemetry_etl import process_run as _pst
                 _pst(run_id, result, db.db.conn)
             except Exception as _e:
-                logger.warning("spbm_telemetry_etl failed single run_id=%d: %s", run_id, _e)                        
+                logger.warning("spbm_telemetry_etl failed single run_id=%d: %s", run_id, _e)
+            try:
+                from scripts.etl.network_energy_etl import process_run as _pne
+                _pne(run_id, db.db.conn)
+            except Exception as _e:
+                logger.warning("network_energy_etl failed single run_id=%d: %s", run_id, _e)
                 if "cpu_samples" in result:
                     db.insert_cpu_samples(run_id, result["cpu_samples"])
 

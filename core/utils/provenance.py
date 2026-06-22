@@ -351,6 +351,14 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "nf.io_wait_ratio":                  ("disk_io_stats",              "CALCULATED"),
     "nf.stall_time_ms":                  ("normalization_factors_v1",   "INFERRED"),
     "nf.sla_violations":                 ("normalization_factors_v1",   "MEASURED"), 
+    # network_energy_attribution: SPEC_03 cross-platform network wait energy
+    "nea.strategy_used":       ("network_wait_rapl_slice_v2",    "MEASURED"),
+    "nea.energy_uj":           ("network_wait_rapl_slice_v2",    "MEASURED"),
+    "nea.confidence":          ("network_wait_rapl_slice_v2",    "CALCULATED"),
+    "nea.measurement_type":    ("network_wait_rapl_slice_v2",    "MEASURED"),
+    "nea.non_local_ms":        ("network_wait_energy_v1",        "MEASURED"),
+    "nea.window_count":        ("network_wait_energy_v1",        "MEASURED"),
+    "nea.coverage_fraction":   ("network_wait_rapl_slice_v2",    "CALCULATED"),    
     # ── v9: Measurement Boundary (Duration Fix) ───────────────────────────────
     # Separates task execution time from A-LEMS instrumentation overhead.
     # See: docs-src/mkdocs/source/research/14-measurement-boundary-methodology.md
@@ -462,7 +470,8 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "gpu_phase_planning_uj":          ("gpu_phase_alignment_v1",       "INFERRED"),
     "gpu_phase_execution_uj":         ("gpu_phase_alignment_v1",       "INFERRED"),
     "gpu_phase_synthesis_uj":         ("gpu_phase_alignment_v1",       "INFERRED"),
-    "gpu_phase_inter_uj":             ("gpu_phase_alignment_v1",       "INFERRED"),    
+    "gpu_phase_inter_uj":             ("gpu_phase_alignment_v1",       "INFERRED"),
+
 }
 
 
@@ -550,7 +559,10 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "iokit_gpu_energy_v1":              0.90,  # Apple powermetrics, not independently validated
     "rocm_smi_energy_v1":               0.85,  # ROCm SMI stub, no hardware validation yet
     "power_rail_sampling_v1":           1.00,  # SPBM hwmon sysfs direct read
-    "power_rail_etl_v1":                0.95,  # power x time integration (ETL derived)    
+    "power_rail_etl_v1":                0.95,  # power x time integration (ETL derived)   
+    "network_wait_rapl_slice_v2":    0.93,   # SPEC_03 Strategy A: raw RAPL slice, no alpha_cpu
+    "network_wait_spbm_fraction_v1": 0.70,   # SPEC_03 Strategy B: SPBM DC_INPUT (GN100)
+    "network_wait_time_fraction_v1": 0.50,   # SPEC_03 Strategy C: universal fallback 
 }
 
 

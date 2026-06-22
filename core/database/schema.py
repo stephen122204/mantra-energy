@@ -2529,3 +2529,21 @@ WHERE oq.score_method != 'needs_review'
       'failure_injection','quality_sweep','ablation','pilot'
   );
 """
+# SPEC_03: Network energy attribution — cross-platform network wait energy
+CREATE_NETWORK_ENERGY_ATTRIBUTION = """
+CREATE TABLE IF NOT EXISTS network_energy_attribution (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id           INTEGER NOT NULL,
+    strategy_used    TEXT    NOT NULL,
+    energy_uj        INTEGER,
+    confidence       REAL    NOT NULL,
+    measurement_type TEXT    NOT NULL,
+    non_local_ms     REAL,
+    window_count     INTEGER NOT NULL DEFAULT 0,
+    coverage_fraction REAL,
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nea_run_id
+    ON network_energy_attribution(run_id);
+"""

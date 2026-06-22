@@ -1,0 +1,21 @@
+# config/methodology_refs/network_wait_spbm_fraction_v1.yaml
+# Strategy B: SPBM DC_INPUT domain energy for GN100
+
+id: network_wait_spbm_fraction_v1
+version: 1
+confidence: 0.70
+measurement_type: INFERRED
+platform: aarch64 Linux, NVIDIA Grace GB10 (GN100), no RAPL
+description: >
+  Sum SPBM DC_INPUT (domain_id=28) energy within LLM API blocking windows.
+  DC_INPUT captures total board input power including GPU, NIC, CPU, DLA.
+  Known overestimate: GPU idle draw included during blocking period.
+  Conservative upper bound documented in paper. v2 improvement: subtract
+  GPU_DCGM domain energy before attribution (deferred to future spec).
+formula: "E_network = SUM(DC_INPUT energy_uj) for energy_sample_domains in blocking windows"
+confidence_basis:
+  C_source: 0.90   # SPBM hardware power rail counter via DCGM
+  C_method: 0.75   # Direct domain sum, but includes non-NIC power
+  C_validation: 0.60  # Not yet validated against known NIC power draw
+  C_platform: 0.60  # GN100 only, NIC topology not verified against SPBM
+paper_section: "Section 4.1 — Network Wait Energy Attribution"
