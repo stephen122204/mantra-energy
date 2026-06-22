@@ -146,7 +146,7 @@ def process_one(run_id: int, conn=None) -> None:
     finally:
         if owns_conn:
             conn.close()
-            
+
 def write_power_limits(run_id: int, limits: dict, conn=None) -> None:
     """
     SPEC_SPBM_FULL_TELEMETRY: persist firmware power-limit snapshot
@@ -178,13 +178,20 @@ def write_power_limits(run_id: int, limits: dict, conn=None) -> None:
         conn = sqlite3.connect(get_alems_db_path())
  
     try:
-        for limit_key, limit_value_mw in limits.items():
-            if limit_value_mw is None:
+        for limit_name, value_mw in limits.items():
+            if value_mw is None:
                 continue  # honest skip, not a fake zero, per MIC-3
+            row = conn.execute(
+                "SELECT limit_id FROM power_limits WHERE limit_name = ?",
+                (limit_name,),
+            ).fetchone()
+            if row is None:
+                logger.warning("write_power_limits: unknown limit_name=%s — skipping", limit_name)
+                continue
             conn.execute(
-                """INSERT INTO run_power_limits (run_id, limit_key, limit_value_mw)
+                """INSERT OR IGNORE INTO run_power_limits (run_id, limit_id, value_mw)
                    VALUES (?, ?, ?)""",
-                (run_id, limit_key, limit_value_mw),
+                (run_id, row[0], value_mw),
             )
         conn.commit()
         logger.info(
