@@ -111,3 +111,4 @@ paper/
 *.pdf
 data/*.bkp_*
 data/*.db.bkp_*
+config/platform.json
