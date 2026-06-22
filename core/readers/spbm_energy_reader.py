@@ -179,15 +179,26 @@ class SPBMEnergyReader(EnergyReaderABC):
     def read_energy(self):
         # type: () -> Dict[str, Optional[int]]
         """
-        Read all four SPBM energy accumulators in µJ.
-        Returns raw channel names — used by SPBMSampler for delta computation.
-        Mirrors RAPLReader.read_energy() interface for sampler compatibility.
+        Read SPBM energy accumulators (µJ, cumulative) and power channels
+        (mW, instantaneous). EnergyCollector reads all domains from this
+        single method — ENERGY_COUNTER domains are delta'd, POWER_RAIL
+        domains are stored as-is per EnergyCollector._loop() branch logic.
+        SPEC_SPBM_FULL_TELEMETRY: 6 power channels added alongside the
+        4 existing cumulative counters.
         """
         return {
-            'pkg':   self._read_uj('pkg'),
-            'cpu_p': self._read_uj('cpu_p'),
-            'cpu_e': self._read_uj('cpu_e'),
-            'gpu':   self._read_uj('gpu'),
+            # Cumulative energy counters (µJ)
+            'pkg':      self._read_uj('pkg'),
+            'cpu_p':    self._read_uj('cpu_p'),
+            'cpu_e':    self._read_uj('cpu_e'),
+            'gpu':      self._read_uj('gpu'),
+            # Instantaneous power channels (mW) — POWER_RAIL type in schema
+            'soc_pkg':  self._read_mw('soc_pkg'),
+            'cpu_gpu':  self._read_mw('cpu_gpu'),
+            'vcore':    self._read_mw('vcore'),
+            'dc_input': self._read_mw('dc_input'),
+            'prereg':   self._read_mw('prereg'),
+            'dla':      self._read_mw('dla'),
         }
 
     def get_measurement_schema(self):

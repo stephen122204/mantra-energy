@@ -127,6 +127,45 @@ SCHEMA_SPBM_ARM = MeasurementSchema(
             domain_type=ENERGY_COUNTER,
             parent_domain=None,             # GPU not a sub-domain of PACKAGE on Grace
         ),
+        # SPEC_SPBM_FULL_TELEMETRY: power-only channels, no hardware cumulative
+        # counter — EnergyCollector stores raw mW reading per tick (POWER_RAIL
+        # branch), NormalizedWriter integrates to energy_uj via power*interval_ns.
+        DomainDescriptor(
+            native_key="soc_pkg",
+            canonical_name="SOC_PKG",
+            domain_type=POWER_RAIL,
+            parent_domain="PACKAGE",
+        ),
+        DomainDescriptor(
+            native_key="cpu_gpu",
+            canonical_name="CPU_GPU",
+            domain_type=POWER_RAIL,
+            parent_domain="PACKAGE",
+        ),
+        DomainDescriptor(
+            native_key="vcore",
+            canonical_name="VCORE",
+            domain_type=POWER_RAIL,
+            parent_domain="PACKAGE",
+        ),
+        DomainDescriptor(
+            native_key="dc_input",
+            canonical_name="DC_INPUT",
+            domain_type=POWER_RAIL,
+            parent_domain=None,             # system boundary, not under PACKAGE
+        ),
+        DomainDescriptor(
+            native_key="prereg",
+            canonical_name="PREREG",
+            domain_type=POWER_RAIL,
+            parent_domain="PACKAGE",
+        ),
+        DomainDescriptor(
+            native_key="dla",
+            canonical_name="DLA",
+            domain_type=POWER_RAIL,
+            parent_domain="PACKAGE",
+        ),
     ),
     sampling_hz=10,
     counter_width_bits=64,                  # SPBM counters are 64-bit, no early wraparound
