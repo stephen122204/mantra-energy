@@ -26,8 +26,7 @@ from scripts.etl.aggregate_hardware_metrics import aggregate_hardware_metrics
 from scripts.etl.energy_attribution_etl import compute_energy_attribution, populate_tool_failure_wasted_energy
 from scripts.etl.duration_fix_etl import fix_run, fix_run_with_pretask
 from scripts.etl.ttft_tpot_etl import populate_run as populate_ttft_tpot
-from scripts.etl.gpu_spbm_etl import process_one as process_gpu_spbm  # SPEC_GPU_DUAL_CHANNEL
-from scripts.etl.spbm_telemetry_etl import process_run as process_spbm_telemetry  # SPEC_SPBM_FULL_TELEMETRY
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,7 +105,7 @@ class RunPersistenceService:
             self._insert_events(db, run_id, result)
 
         # ETL runs outside transaction — each ETL function is idempotent
-        self._run_post_etl(run_id, result)
+        self._run_post_etl(run_id)
         self._apply_duration_fix(run_id, result)
 
         return run_id
@@ -268,7 +267,7 @@ class RunPersistenceService:
                 interaction["run_id"] = run_id  # stamp run_id before insert
                 db.insert_llm_interaction(interaction)
 
-    def _run_post_etl(self, run_id: int, result: dict = None) -> None:
+    def _run_post_etl(self, run_id: int) -> None:
         """
         Run full ETL chain for one run. Same order as save_pair().
         All ETL functions are idempotent — safe to rerun on same run_id.
@@ -279,8 +278,7 @@ class RunPersistenceService:
         populate_tool_failure_wasted_energy(run_id)  # step 3: copy event_energy_uj → tfe.wasted_energy_uj
         compute_energy_attribution(run_id)      # step 4: reads tfe for failed_tool_energy_uj
         populate_ttft_tpot(run_id)              # step 5: token timing metrics
-        process_gpu_spbm(run_id)                # step 6: SPEC_GPU_DUAL_CHANNEL, SPBM broad-rail total/dynamic/residual
-        process_spbm_telemetry(run_id, result)  # step 7: SPEC_SPBM_FULL_TELEMETRY, power limits + coverage + conversion metrics
+
 
     def _apply_duration_fix(self, run_id: int, result: dict) -> None:
         """
