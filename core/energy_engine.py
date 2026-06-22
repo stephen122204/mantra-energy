@@ -736,6 +736,17 @@ class EnergyEngine:
             "msr_thermal": msr_thermal_start,
             "gpu_uj":      gpu_start_uj,   # MSR 0x641 at measurement start
         }
+        # SPEC_SPBM_FULL_TELEMETRY: firmware power limits, captured once
+        # per run (not per-tick). None on non-SPBM platforms — read_power_limits
+        # only exists on SPBMEnergyReader, not the generic EnergyReaderABC
+        # interface, so this must be guarded.
+        self.power_limits_snapshot = None
+        if hasattr(self.energy_reader, "read_power_limits"):
+            try:
+                self.power_limits_snapshot = self.energy_reader.read_power_limits()
+            except Exception as e:
+                logger.warning("start_measurement: read_power_limits failed: %s", e)
+                self.power_limits_snapshot = None
         # ====================================================================
         # Capture C-state counters at START
         # ====================================================================
@@ -989,6 +1000,35 @@ class EnergyEngine:
         )
         # SPBMSampler retired (16B3) — EnergyCollector handles GN100 now
         self.last_spbm_samples = []
+ 
+        # SPEC_SPBM_FULL_TELEMETRY: compute coverage from flushed v2 samples.
+        # Count ticks where domain 25 (SOC_PKG) was actually measured as
+        # proxy for all 6 new power telemetry channels (they're read together
+        # in the same tick). Expected = run_duration * sampling_rate.
+        # Stored on self for harness.py ml_features carry-through.
+        self.spbm_telemetry_coverage = None
+        try:
+            from core.readers.energy_sample_v2 import SOURCE_SPBM
+            spbm_v2 = [
+                s for s in self.last_v2_samples
+                if getattr(s, 'source_id', None) == SOURCE_SPBM
+            ]
+            if spbm_v2:
+                # domain_id 25 = SOC_PKG (SPEC_SPBM_FULL_TELEMETRY, migration v76)
+                observed = sum(1 for s in spbm_v2 if 25 in s.domains)
+                run_dur_s = (time.time() - self.start_time)
+                expected = int(run_dur_s * self.sampling_rate_hz)
+                coverage_pct = round(observed / expected * 100, 2) if expected > 0 else None
+                self.spbm_telemetry_coverage = {
+                    "spbm_power_sampling_freq_hz": float(self.sampling_rate_hz),
+                    "spbm_samples_expected":        expected,
+                    "spbm_samples_observed":        observed,
+                    "spbm_sample_coverage_pct":     coverage_pct,
+                    "spbm_integration_method":      "rectangular",
+                }
+        except Exception as e:
+            logger.warning("stop_measurement: spbm coverage computation failed: %s", e)
+            self.spbm_telemetry_coverage = None
         self.last_rail_result = (
             self.power_rail_sampler.stop() if self.power_rail_sampler else None
         )        

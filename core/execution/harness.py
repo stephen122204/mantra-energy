@@ -627,7 +627,11 @@ class ExperimentHarness:
                 "gpu_dynamic_energy_uj":  derived.gpu_dynamic_energy_uj,
                 "gpu_pct_of_pkg":         derived.gpu_pct_of_pkg,
                 "gpu_dynamic_method":     derived.gpu_dynamic_method,
-                "gpu_idle_power_w_used":  derived.gpu_idle_power_w_used,               
+                "gpu_idle_power_w_used":  derived.gpu_idle_power_w_used,
+                # SPEC_SPBM_FULL_TELEMETRY: in-memory attributes carried
+                # through for _run_post_etl's process_spbm_telemetry step.
+                "power_limits_snapshot":   getattr(self.energy_engine, "power_limits_snapshot", None),
+                "spbm_telemetry_coverage": getattr(self.energy_engine, "spbm_telemetry_coverage", None),               
                 "cycles": derived.cycles,
                 "ipc": derived.ipc,
                 "cache_misses": derived.cache_misses,
@@ -1149,7 +1153,11 @@ class ExperimentHarness:
                 "gpu_dynamic_energy_uj":  derived.gpu_dynamic_energy_uj,
                 "gpu_pct_of_pkg":         derived.gpu_pct_of_pkg,
                 "gpu_dynamic_method":     derived.gpu_dynamic_method,
-                "gpu_idle_power_w_used":  derived.gpu_idle_power_w_used,               
+                "gpu_idle_power_w_used":  derived.gpu_idle_power_w_used,
+                # SPEC_SPBM_FULL_TELEMETRY: in-memory attributes carried
+                # through for _run_post_etl's process_spbm_telemetry step.
+                "power_limits_snapshot":   getattr(self.energy_engine, "power_limits_snapshot", None),
+                "spbm_telemetry_coverage": getattr(self.energy_engine, "spbm_telemetry_coverage", None),               
                 "cycles": derived.cycles,
                 "ipc": derived.ipc,
                 "cache_misses": derived.cache_misses,

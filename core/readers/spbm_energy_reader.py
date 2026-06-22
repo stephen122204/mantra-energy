@@ -42,6 +42,10 @@ SPBM_SAMPLING_HZ = 10
 # Channel names as they appear in spark_hwmon label files
 SPBM_ENERGY_CHANNELS = ['pkg', 'cpu_p', 'cpu_e', 'gpu']
 SPBM_POWER_CHANNELS  = ['sys_total', 'cpu_p', 'cpu_e', 'gpu']
+# SPEC_SPBM_FULL_TELEMETRY: 6 additional power-only channels (no hardware
+# cumulative energy counter — must be integrated from instantaneous power).
+# pl1/pl2/syspl1/syspl2 excluded — firmware limits, not telemetry.
+SPBM_POWER_TELEMETRY_CHANNELS = ['soc_pkg', 'cpu_gpu', 'vcore', 'dc_input', 'prereg', 'dla']
 
 
 class SPBMEnergyReader(EnergyReaderABC):
@@ -221,14 +225,43 @@ class SPBMEnergyReader(EnergyReaderABC):
 
     def read_power(self):
         # type: () -> Dict[str, Optional[int]]
-        """Read instantaneous power channels in mW."""
+        """
+        Read instantaneous power channels in mW.
+        Extended (SPEC_SPBM_FULL_TELEMETRY): 6 new channels added.
+        _read_mw() resolves channel name via self._power_paths, built
+        dynamically by _discover_power_paths() from hwmon power*_label
+        files — all 14 channels auto-discovered, no hardcoding needed.
+        dc_input: physical measurement point not yet vendor-verified —
+        referred to only as "SPBM rail labeled dc_input" until confirmed
+        (SPEC_SPBM_FULL_TELEMETRY Section 7b).
+        """
         return {
             'sys_total': self._read_mw('sys_total'),
             'cpu_p':     self._read_mw('cpu_p'),
             'cpu_e':     self._read_mw('cpu_e'),
             'gpu':       self._read_mw('gpu'),
+            'soc_pkg':   self._read_mw('soc_pkg'),
+            'cpu_gpu':   self._read_mw('cpu_gpu'),
+            'vcore':     self._read_mw('vcore'),
+            'dc_input':  self._read_mw('dc_input'),
+            'prereg':    self._read_mw('prereg'),
+            'dla':       self._read_mw('dla'),
         }
 
+    def read_power_limits(self):
+        # type: () -> Dict[str, Optional[int]]
+        """
+        Read firmware power limit values (mW). Configuration/caps —
+        NOT consumption telemetry. Call once per run, not in the
+        continuous sampling loop (SPEC_SPBM_FULL_TELEMETRY Section 3/6b).
+        """
+        return {
+            'pl1':    self._read_mw('pl1'),
+            'pl2':    self._read_mw('pl2'),
+            'syspl1': self._read_mw('syspl1'),
+            'syspl2': self._read_mw('syspl2'),
+        }
+    
     def read_gpu_msr(self):
         # type: () -> None
         """No MSR on ARM Grace — returns None. EnergyReaderABC compat."""
@@ -383,6 +416,8 @@ class SPBMSampler:
                     from core.readers.energy_sample_v2 import (
                         EnergySampleV2,
                         DOMAIN_PACKAGE, DOMAIN_CPU_P, DOMAIN_CPU_E, DOMAIN_GPU,
+                        DOMAIN_SOC_PKG, DOMAIN_CPU_GPU, DOMAIN_VCORE,
+                        DOMAIN_DC_INPUT, DOMAIN_PREREG, DOMAIN_DLA,
                         SOURCE_SPBM,
                     )
                     domains = {}
@@ -390,6 +425,22 @@ class SPBMSampler:
                     if _delta('cpu_p') is not None: domains[DOMAIN_CPU_P]   = _delta('cpu_p')
                     if _delta('cpu_e') is not None: domains[DOMAIN_CPU_E]   = _delta('cpu_e')
                     if _delta('gpu')   is not None: domains[DOMAIN_GPU]     = _delta('gpu')
+ 
+                    # SPEC_SPBM_FULL_TELEMETRY: integrate power-only channels.
+                    # Rectangular integration: power_mw * interval_s * 1000 = uJ.
+                    # No coverage counters here — SPBMSampler is retired (16B3);
+                    # coverage is tracked from last_v2_samples in stop_measurement().
+                    interval_s = interval_ns / 1_000_000_000
+                    def _tick_uj(ch):
+                        p = power.get(ch)
+                        return int(p * interval_s * 1000) if p is not None else None
+ 
+                    if _tick_uj('soc_pkg')  is not None: domains[DOMAIN_SOC_PKG]  = _tick_uj('soc_pkg')
+                    if _tick_uj('cpu_gpu')  is not None: domains[DOMAIN_CPU_GPU]  = _tick_uj('cpu_gpu')
+                    if _tick_uj('vcore')    is not None: domains[DOMAIN_VCORE]    = _tick_uj('vcore')
+                    if _tick_uj('dc_input') is not None: domains[DOMAIN_DC_INPUT] = _tick_uj('dc_input')
+                    if _tick_uj('prereg')   is not None: domains[DOMAIN_PREREG]   = _tick_uj('prereg')
+                    if _tick_uj('dla')      is not None: domains[DOMAIN_DLA]      = _tick_uj('dla')
  
                     sample = EnergySampleV2(
                         timestamp_ns = self._prev_ts_ns,

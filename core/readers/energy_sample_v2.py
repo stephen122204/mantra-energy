@@ -45,6 +45,25 @@ DOMAIN_DLA        = 20  # Deep Learning Accelerator (GN100 SPBM)
 DOMAIN_NPU        = 21  # Neural Processing Unit (future)
 DOMAIN_STORAGE    = 22  # Storage root
 DOMAIN_NVME       = 23  # NVMe SSD energy
+# DOMAIN_GPU_DCGM = 24 exists in energy_domains table but has no constant
+# here — DCGM samples never flow through energy_sample_domains, they are
+# summed in-memory by GPUCollector (core/energy_engine.py
+# _resolve_gpu_total_uj), so this file never needed the constant.
+# Confirmed 2026-06-21 during SPEC_SPBM_FULL_TELEMETRY prerequisite check.
+# SPEC_SPBM_FULL_TELEMETRY (2026-06-21): power-only channels, no hardware
+# cumulative energy counter — energy values for these domains are
+# integration-derived (power * dt per sample tick) in SPBMSampler._loop(),
+# not delta'd from a counter like the domains above.
+# NOTE: DLA is NOT added here — DOMAIN_DLA = 20 already exists above
+# (line ~37, comment "(GN100 SPBM)"), reserved but never wired up until
+# now. Migration v76 seeds energy_domains.domain_id=20 for it, reusing
+# this existing constant rather than creating a duplicate.
+DOMAIN_SOC_PKG    = 25  # SPBM soc_pkg power rail
+DOMAIN_CPU_GPU    = 26  # SPBM cpu_gpu combined power rail
+DOMAIN_VCORE      = 27  # SPBM vcore voltage rail
+DOMAIN_DC_INPUT   = 28  # SPBM dc_input rail, system boundary — physical
+                        # measurement point not yet vendor-verified
+DOMAIN_PREREG     = 29  # SPBM prereg power rail
 
 # ---------------------------------------------------------------------------
 # Source ID constants — match energy_sources seed data exactly

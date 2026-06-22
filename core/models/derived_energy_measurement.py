@@ -96,6 +96,11 @@ class DerivedEnergyMeasurement:
     gpu_pct_of_pkg:         Optional[float] = None  # gpu_dynamic / pkg_dynamic * 100
     gpu_dynamic_method:     Optional[str]   = None  # RUN_LOCAL_IDLE (primary) or EXTERNAL_IDLE_BASELINE (fallback)
     gpu_idle_power_w_used:  Optional[float] = None  # actual idle power value used, whichever method produced it
+ 
+    # --- GPU: SPBM broad rail (compute + memory + NVLink-C2C + other), SPEC_GPU_DUAL_CHANNEL ---
+    gpu_spbm_total_uj:      Optional[int]   = None  # SUM(energy_sample_domains.energy_uj) WHERE domain_id=7, this run
+    gpu_spbm_dynamic_uj:    Optional[int]   = None  # gpu_spbm_total_uj - gpu_spbm_baseline_uj (domain 7 baseline)
+    gpu_residual_dynamic_uj: Optional[int]  = None  # gpu_spbm_dynamic_uj - gpu_dynamic_energy_uj, NOT clamped to zero
     # ========================================================================
     # Performance Counters (Req 1.5, 1.6, 1.10)
     # ========================================================================
