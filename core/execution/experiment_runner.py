@@ -795,7 +795,7 @@ class ExperimentRunner:
                         logger.warning("power_rail insert failed (linear): %s", e)    
             try:
                 from scripts.etl.gpu_spbm_etl import process_one as _pgs
-                _pgs(linear_id)
+                _pgs(linear_id, db.db.conn)
             except Exception as _e:
                 logger.warning("gpu_spbm_etl failed linear run_id=%d: %s", linear_id, _e)                                    
             # Linear CPU samples
@@ -935,7 +935,7 @@ class ExperimentRunner:
                         logger.warning("power_rail insert failed (agentic): %s", e)
             try:
                 from scripts.etl.gpu_spbm_etl import process_one as _pgs
-                _pgs(agentic_id)
+                _pgs(agentic_id, db.db.conn)
             except Exception as _e:
                 logger.warning("gpu_spbm_etl failed agentic run_id=%d: %s", agentic_id, _e)                        
             # Agentic CPU samples
@@ -1394,7 +1394,7 @@ class ExperimentRunner:
                         logger.warning("power_rail insert failed (single): %s", e)
             try:
                 from scripts.etl.gpu_spbm_etl import process_one as _pgs
-                _pgs(run_id)
+                _pgs(run_id, db.db.conn)
             except Exception as _e:
                 logger.warning("gpu_spbm_etl failed single run_id=%d: %s", run_id, _e)                        
                 if "cpu_samples" in result:
