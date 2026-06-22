@@ -11,6 +11,7 @@ Used by: rapl_slice_estimator.py, spbm_fraction_estimator.py, fallback_estimator
 
 import logging
 from typing import List, Optional, Tuple
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -154,8 +155,8 @@ def sum_domain_energy_in_windows(
             JOIN energy_samples_v2 esv ON esv.sample_id = esd.sample_id
             WHERE esv.run_id = ?
               AND esd.domain_id = ?
-              AND esv.sample_start_ns >= ?
-              AND esv.sample_end_ns <= ?
+              AND esv.timestamp_ns >= ?
+              AND esv.timestamp_ns <= ?
         """, (run_id, domain_id, start_ns, end_ns))
         row = cursor.fetchone()
 
