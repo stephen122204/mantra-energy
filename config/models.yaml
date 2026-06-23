@@ -55,8 +55,8 @@ _legacy_map:
     agentic: {provider: groq,      model_id: llama-3.3-70b-versatile, max_tokens: 2048,  tools_supported: true}
 
     vllm:
-    linear:  {provider: vllm_local, model_id: meta-llama/Llama-3.2-3B-Instruct, max_tokens: 1024,  tools_supported: false}
-    agentic: {provider: vllm_local, model_id: meta-llama/Llama-3.2-3B-Instruct, max_tokens: 2048,  tools_supported: true}
+    linear:  {provider: vllm_local, model_id: mistralai/Mistral-7B-Instruct-v0.3, max_tokens: 1024,  tools_supported: false}
+    agentic: {provider: vllm_local, model_id: mistralai/Mistral-7B-Instruct-v0.3, max_tokens: 2048,  tools_supported: true}
     
   local:
     linear:  {provider: llama_cpp, model_id: tinyllama-1b-gguf,       max_tokens: 1024,  tools_supported: false}
@@ -106,10 +106,16 @@ providers:
     defaults:
       max_tokens: 1024
     models:
-      - id: meta-llama/Llama-3.2-3B-Instruct
-        name: Llama 3.2 3B Instruct (vLLM GPU)
-      - id: meta-llama/Llama-3.1-8B-Instruct
-        name: Llama 3.1 8B Instruct (vLLM GPU)
+      - id: mistralai/Mistral-7B-Instruct-v0.3
+        name: Mistral 7B Instruct (vLLM GPU)
+      - id: Qwen/Qwen3-32B-AWQ
+        name: Qwen3 32B AWQ (vLLM GPU)
+      - id: Qwen/Qwen3-30B-A3B
+        name: Qwen3 30B A3B MoE (vLLM GPU)
+      - id: sarvamai/sarvam-m
+        name: Sarvam M (vLLM GPU)
+      - id: Qwen/Qwen2.5-Coder-32B-Instruct
+        name: Qwen2.5 Coder 32B (vLLM GPU)
     execution_site: host
     transport: loopback_http
     remote_energy_available: false
