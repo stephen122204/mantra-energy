@@ -1,0 +1,13 @@
+id: nic_window_validator_v1
+version: 1
+confidence: 0.90
+measurement_type: CALCULATED
+platform: All platforms
+description: >
+  SPEC_03A: Validates SPEC_03 network energy attribution windows using
+  NIC byte counter deltas from nic_samples table. Adjusts confidence
+  score down by 0.75x penalty for windows where NIC shows no byte
+  movement during LLM blocking period. Returns base confidence
+  unmodified if nic_samples unavailable (graceful degradation).
+formula: "conf_adj = conf_base * (f_active + (1 - f_active) * 0.75)"
+paper_section: "Section 4 — SPEC_03A NIC Observability"

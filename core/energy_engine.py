@@ -37,13 +37,14 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from core.readers.factory import ReaderFactory
 from core.readers.gpu_collector import GPUCollector
 from core.readers.energy_collector import EnergyCollector
 from core.readers.normalized_writer import NormalizedWriter
 from core.readers.legacy_writer import LegacyWriter
 from core.utils.platform import get_platform_capabilities
+from core.readers.nic_collector import NICCollector
 
 import requests
 
@@ -181,6 +182,7 @@ class EnergyEngine:
         # Platform differences declared in reader.get_measurement_schema().
         # Zero platform-specific branching here — collector is generic.
         self._energy_collector = None      # initialized in start_measurement per run
+        self._nic_collector = None         # SPEC_03A: initialized in start_measurement
         self.last_spbm_samples = []        # kept for backward compat, always empty now
 
         # PowerRailSampler: reads all 10 SPBM power rails at 10 Hz — GN100 only
@@ -800,6 +802,13 @@ class EnergyEngine:
         # GPU energy sampling — runs at 10 Hz alongside EnergyCollector
         # GPUCollector.start() is no-op if no backend available (PAC-4 compliant)
         self.gpu_collector.start()
+        # SPEC_03A: NIC byte counter sampling at 100Hz
+        try:
+            self._nic_collector = NICCollector(run_id=self.current_run_id)
+            self._nic_collector.start()
+        except Exception as e:
+            logger.warning("NICCollector start failed (PAC-4): %s", e)
+            self._nic_collector = None
         # PowerRailSampler: 10 SPBM power rails — GN100 only (16B1)
         if self.power_rail_sampler:
             self.power_rail_sampler.start()        
@@ -972,6 +981,12 @@ class EnergyEngine:
             self.last_v2_samples = list(self._energy_collector._flushed_v2_samples)
             self.last_legacy_samples = list(self._energy_collector._flushed_legacy_samples)
             self._energy_collector = None
+        # SPEC_03A: NIC collector stop
+        self.last_nic_samples = []
+        if self._nic_collector is not None:
+            self._nic_collector.stop()
+            self.last_nic_samples = list(self._nic_collector._flushed_nic_samples)
+            self._nic_collector = None
         samples = []   # legacy var kept — downstream code checks len(samples)
 
         interrupt_samples = []

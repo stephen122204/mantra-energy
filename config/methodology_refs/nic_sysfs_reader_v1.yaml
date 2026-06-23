@@ -1,0 +1,12 @@
+id: nic_sysfs_reader_v1
+version: 1
+confidence: 0.99
+measurement_type: MEASURED
+platform: Linux x86_64 and aarch64
+description: >
+  SPEC_03A: Reads cumulative NIC byte/packet counters from
+  /sys/class/net/<iface>/statistics/ at 100Hz during each run.
+  Detects active non-loopback interface via operstate sysfs.
+  No subprocess calls. Counters are kernel-maintained, monotonic.
+formula: "bytes_delta = (tx_bytes + rx_bytes) at t1 - (tx_bytes + rx_bytes) at t0"
+paper_section: "Section 4 — SPEC_03A NIC Observability"

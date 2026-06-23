@@ -358,7 +358,16 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "nea.measurement_type":    ("network_wait_rapl_slice_v2",    "MEASURED"),
     "nea.non_local_ms":        ("network_wait_energy_v1",        "MEASURED"),
     "nea.window_count":        ("network_wait_energy_v1",        "MEASURED"),
-    "nea.coverage_fraction":   ("network_wait_rapl_slice_v2",    "CALCULATED"),    
+    "nea.coverage_fraction":   ("network_wait_rapl_slice_v2",    "CALCULATED"),
+    # nic_samples: SPEC_03A NIC byte counter telemetry
+    "ns.tx_bytes":               ("nic_sysfs_reader_v1",  "MEASURED"),
+    "ns.rx_bytes":               ("nic_sysfs_reader_v1",  "MEASURED"),
+    "ns.tx_packets":             ("nic_sysfs_reader_v1",  "MEASURED"),
+    "ns.rx_packets":             ("nic_sysfs_reader_v1",  "MEASURED"),
+    # network_energy_attribution NIC validation columns
+    "nea.nic_activity_validated":    ("nic_window_validator_v1", "MEASURED"),
+    "nea.nic_adjusted_confidence":   ("nic_window_validator_v1", "CALCULATED"),
+    "nea.nic_coverage_fraction":     ("nic_window_validator_v1", "CALCULATED"),    
     # ── v9: Measurement Boundary (Duration Fix) ───────────────────────────────
     # Separates task execution time from A-LEMS instrumentation overhead.
     # See: docs-src/mkdocs/source/research/14-measurement-boundary-methodology.md
@@ -562,7 +571,9 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "power_rail_etl_v1":                0.95,  # power x time integration (ETL derived)   
     "network_wait_rapl_slice_v2":    0.93,   # SPEC_03 Strategy A: raw RAPL slice, no alpha_cpu
     "network_wait_spbm_fraction_v1": 0.70,   # SPEC_03 Strategy B: SPBM DC_INPUT (GN100)
-    "network_wait_time_fraction_v1": 0.50,   # SPEC_03 Strategy C: universal fallback 
+    "network_wait_time_fraction_v1": 0.50,   # SPEC_03 Strategy C: universal fallback
+    "nic_sysfs_reader_v1":       0.99,   # SPEC_03A: direct kernel counter read
+    "nic_window_validator_v1":   0.90,   # SPEC_03A: byte delta validation 
 }
 
 

@@ -2547,3 +2547,19 @@ CREATE TABLE IF NOT EXISTS network_energy_attribution (
 CREATE INDEX IF NOT EXISTS idx_nea_run_id
     ON network_energy_attribution(run_id);
 """
+# SPEC_03A: NIC byte counter samples
+CREATE_NIC_SAMPLES = """
+CREATE TABLE IF NOT EXISTS nic_samples (
+    sample_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id       INTEGER NOT NULL,
+    sample_ns    INTEGER NOT NULL,
+    interface    TEXT,
+    tx_bytes     INTEGER,
+    rx_bytes     INTEGER,
+    tx_packets   INTEGER,
+    rx_packets   INTEGER,
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nic_samples_run_ns
+    ON nic_samples(run_id, sample_ns);
+"""

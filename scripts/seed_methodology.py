@@ -1199,6 +1199,57 @@ def _load_derived_methods() -> List[Dict]:
             "section":       "Section 3.2 — Strategy B: SPBM DC_INPUT",
         },
         {
+            "id":            "nic_sysfs_reader_v1",
+            "name":          "NIC Byte Counter Reader — Linux sysfs",
+            "provenance":    "MEASURED",
+            "layer":         "silicon",
+            "confidence":    0.99,
+            "description":   (
+                "SPEC_03A: Reads cumulative NIC byte/packet counters from "
+                "/sys/class/net/<iface>/statistics/ at 100Hz. "
+                "Detects active non-loopback interface via operstate sysfs. "
+                "No subprocess calls. Counters are kernel-maintained, monotonic. "
+                "Applies to: Linux platforms with sysfs (UBUNTU2505, GN100)."
+            ),
+            "formula_latex": (
+                r"bytes\_delta = tx\_bytes_{t1} + rx\_bytes_{t1}"
+                r"- tx\_bytes_{t0} - rx\_bytes_{t0}"
+            ),
+            "parameters":    {
+                "source":    "/sys/class/net/<iface>/statistics/",
+                "fields":    "tx_bytes, rx_bytes, tx_packets, rx_packets",
+                "cadence":   "100Hz",
+                "platform":  "Linux x86_64 and aarch64",
+            },
+            "doc":           "31-network-energy-cross-platform-methodology.md",
+            "section":       "Section 4 — SPEC_03A NIC Observability",
+        },
+        {
+            "id":            "nic_window_validator_v1",
+            "name":          "NIC Activity Window Validator",
+            "provenance":    "CALCULATED",
+            "layer":         "application",
+            "confidence":    0.90,
+            "description":   (
+                "SPEC_03A: Validates SPEC_03 network energy attribution windows "
+                "using NIC byte counter deltas from nic_samples. "
+                "Adjusts confidence score down by 0.75x penalty for windows "
+                "where NIC shows no byte movement during LLM blocking period. "
+                "Returns base confidence unmodified if nic_samples unavailable."
+            ),
+            "formula_latex": (
+                r"conf_{adj} = conf_{base} \times "
+                r"(f_{active} + (1 - f_{active}) \times 0.75)"
+            ),
+            "parameters":    {
+                "penalty":   "0.75 for inactive windows",
+                "signal":    "delta(tx_bytes + rx_bytes) per blocking window",
+                "fallback":  "returns base_confidence if nic_samples absent",
+            },
+            "doc":           "31-network-energy-cross-platform-methodology.md",
+            "section":       "Section 4 — SPEC_03A NIC Observability",
+        },        
+        {
             "id":            "network_wait_time_fraction_v1",
             "name":          "Network Wait Energy — Time Fraction Fallback (Universal)",
             "provenance":    "INFERRED",
@@ -1224,7 +1275,7 @@ def _load_derived_methods() -> List[Dict]:
                 "confidence_basis": "C_source=0.70, C_method=0.50, C_validation=0.40, C_platform=0.50",
                 "known_bias":       "Lower bound — CPU-proportional proxy misses NIC/uncore",
             },
-            "doc":           "28-network-energy-cross-platform-methodology.md",
+            "doc":           "31-network-energy-cross-platform-methodology.md",
             "section":       "Section 3.3 — Strategy C: Time Fraction Fallback",
         },        
 # ── v10: LLM Wait Energy Attribution ─────────────────────────────────────

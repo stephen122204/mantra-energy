@@ -60,6 +60,35 @@ _goal_tracker = GoalTracker()   # module-level singleton — stateless class
 _failure_classifier = FailureClassifier()  # stateless — classify failures on normal path
 
 
+
+def _insert_nic_samples(db, run_id: int, samples: list) -> None:
+    """Insert NIC byte counter samples to nic_samples table. Never raises (PAC-4)."""
+    if not samples:
+        return
+    try:
+        rows = [
+            (
+                run_id,
+                s.get("sample_ns"),
+                s.get("interface"),
+                s.get("tx_bytes"),
+                s.get("rx_bytes"),
+                s.get("tx_packets"),
+                s.get("rx_packets"),
+            )
+            for s in samples
+        ]
+        db.db.conn.executemany("""
+            INSERT INTO nic_samples
+                (run_id, sample_ns, interface, tx_bytes, rx_bytes,
+                 tx_packets, rx_packets)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, rows)
+        db.db.conn.commit()
+        logger.debug("_insert_nic_samples: run=%d rows=%d", run_id, len(rows))
+    except Exception as exc:
+        logger.warning("_insert_nic_samples failed run=%d: %s", run_id, exc)
+
 def _convert_gpu_to_telemetry(gpu_samples):
     """Convert GpuSample list to DeviceTelemetrySample list for device_telemetry table.
     PAC-2: wrapped at call site — this function does not raise.
@@ -803,14 +832,12 @@ class ExperimentRunner:
                 _pst(linear_id, linear_result, db.db.conn)
             except Exception as _e:
                 logger.warning("spbm_telemetry_etl failed linear run_id=%d: %s", linear_id, _e)
-            try:
-                from scripts.etl.network_energy_etl import process_run as _pne
-                _pne(linear_id, db.db.conn)
-            except Exception as _e:
-                logger.warning("network_energy_etl failed linear run_id=%d: %s", linear_id, _e)
             # Linear CPU samples
             if "cpu_samples" in linear_result:
                 db.insert_cpu_samples(linear_id, linear_result["cpu_samples"])
+            # SPEC_03A: NIC samples
+            if linear_result.get("nic_samples"):
+                _insert_nic_samples(db, linear_id, linear_result["nic_samples"])
             # 16D3: ARM — write summary cpu_samples row from PerformanceCounters.
             # On x86, turbostat already wrote continuous rows above.
             # On aarch64, turbostat is absent; ARMPMUReader fills PerformanceCounters.
@@ -953,14 +980,12 @@ class ExperimentRunner:
                 _pst(agentic_id, agentic_result, db.db.conn)
             except Exception as _e:
                 logger.warning("spbm_telemetry_etl failed agentic run_id=%d: %s", agentic_id, _e)
-            try:
-                from scripts.etl.network_energy_etl import process_run as _pne
-                _pne(agentic_id, db.db.conn)
-            except Exception as _e:
-                logger.warning("network_energy_etl failed agentic run_id=%d: %s", agentic_id, _e)
             # Agentic CPU samples
             if "cpu_samples" in agentic_result:
                 db.insert_cpu_samples(agentic_id, agentic_result["cpu_samples"])
+            # SPEC_03A: NIC samples
+            if agentic_result.get("nic_samples"):
+                _insert_nic_samples(db, agentic_id, agentic_result["nic_samples"])
             # 16D3: ARM — write summary cpu_samples row from PerformanceCounters.
             _hw_info = self.get_hardware_info()
             _caps_arch = (_hw_info.get('cpu_architecture') or '').lower()
@@ -1057,7 +1082,11 @@ class ExperimentRunner:
                 for interaction in linear_result["pending_interactions"]:
                     interaction["run_id"] = linear_id
                     db.insert_llm_interaction(interaction)
-
+            try:
+                from scripts.etl.network_energy_etl import process_run as _pne
+                _pne(linear_id, db.db.conn)
+            except Exception as _e:
+                logger.warning("network_energy_etl failed linear run_id=%d: %s", linear_id, _e)
             # Save LLM interactions for agentic run
             if (
                 "pending_interactions" in agentic_result
@@ -1069,6 +1098,11 @@ class ExperimentRunner:
                 for interaction in agentic_result["pending_interactions"]:
                     interaction["run_id"] = agentic_id
                     db.insert_llm_interaction(interaction)
+            try:
+                from scripts.etl.network_energy_etl import process_run as _pne
+                _pne(agentic_id, db.db.conn)
+            except Exception as _e:
+                logger.warning("network_energy_etl failed agentic run_id=%d: %s", agentic_id, _e)
             # Tax summary for this pair
             # Use attributed_energy_uj (L2: cpu_fraction x dynamic) — paper unit.
             # layer3_derived["workload"] = dynamic_energy_uj — includes background.
@@ -1422,13 +1456,11 @@ class ExperimentRunner:
                 _pst(run_id, result, db.db.conn)
             except Exception as _e:
                 logger.warning("spbm_telemetry_etl failed single run_id=%d: %s", run_id, _e)
-            try:
-                from scripts.etl.network_energy_etl import process_run as _pne
-                _pne(run_id, db.db.conn)
-            except Exception as _e:
-                logger.warning("network_energy_etl failed single run_id=%d: %s", run_id, _e)
                 if "cpu_samples" in result:
                     db.insert_cpu_samples(run_id, result["cpu_samples"])
+                # SPEC_03A: NIC samples
+                if result.get("nic_samples"):
+                    _insert_nic_samples(db, run_id, result["nic_samples"])
 
                 if "interrupt_samples" in result:
                     db.insert_interrupt_samples(run_id, result["interrupt_samples"])
@@ -1578,3 +1610,8 @@ class ExperimentRunner:
         if "llm_interactions" in result:
             for interaction in result["llm_interactions"]:
                 db.insert_llm_interaction(interaction)
+        try:
+            from scripts.etl.network_energy_etl import process_run as _pne
+            _pne(run_id, db.db.conn)
+        except Exception as _e:
+            logger.warning("network_energy_etl failed single run_id=%d: %s", run_id, _e)

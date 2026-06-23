@@ -86,6 +86,7 @@ from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES, CREATE_RUN_QUALI
                      CREATE_THERMAL_SAMPLES_V2, CREATE_COOLING_SAMPLES,
                      CREATE_CPU_IDLE_STATES, CREATE_V_THERMAL_CPU,
                      CREATE_CPU_IDLE_STATES, CREATE_V_THERMAL_CPU, CREATE_NETWORK_ENERGY_ATTRIBUTION,
+                     CREATE_NIC_SAMPLES,
 
                      )
 
@@ -358,6 +359,7 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_CPU_IDLE_STATES)
         self.conn.executescript(CREATE_V_THERMAL_CPU)
         self.conn.executescript(CREATE_NETWORK_ENERGY_ATTRIBUTION)
+        self.conn.executescript(CREATE_NIC_SAMPLES)
         
 
         # Commit explicitly (DDL should be committed)

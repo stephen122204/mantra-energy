@@ -27,10 +27,12 @@ logger = logging.getLogger(__name__)
 _INSERT_ATTRIBUTION = """
     INSERT OR REPLACE INTO network_energy_attribution
         (run_id, strategy_used, energy_uj, confidence,
-         measurement_type, non_local_ms, window_count, coverage_fraction)
+         measurement_type, non_local_ms, window_count, coverage_fraction,
+         nic_activity_validated, nic_adjusted_confidence, nic_coverage_fraction)
     VALUES
         (:run_id, :strategy_used, :energy_uj, :confidence,
-         :measurement_type, :non_local_ms, :window_count, :coverage_fraction)
+         :measurement_type, :non_local_ms, :window_count, :coverage_fraction,
+         :nic_activity_validated, :nic_adjusted_confidence, :nic_coverage_fraction)
 """
 
 _GET_TOTAL_NON_LOCAL_MS = """
@@ -84,15 +86,31 @@ def process_run(run_id: int, db_conn: sqlite3.Connection) -> None:
         )
 
         # Write attribution row
+        # SPEC_03A: NIC activity validation
+        try:
+            from core.network.nic_validator import validate_windows_with_nic
+            nic_adj_conf, nic_validated, nic_cov = validate_windows_with_nic(
+                run_id, windows, confidence, db_conn,
+            )
+        except Exception as _e:
+            logger.debug("nic_validator skipped: %s", _e)
+            nic_adj_conf  = confidence
+            nic_validated = None
+            nic_cov       = 0.0
+
+        # Write attribution row
         cursor.execute(_INSERT_ATTRIBUTION, {
-            "run_id":           run_id,
-            "strategy_used":    method_id,
-            "energy_uj":        energy_uj,       # None → NULL (MIC-3)
-            "confidence":       confidence,
-            "measurement_type": mtype,
-            "non_local_ms":     total_non_local_ms if total_non_local_ms > 0 else None,
-            "window_count":     len(windows),
-            "coverage_fraction": coverage,
+            "run_id":                  run_id,
+            "strategy_used":           method_id,
+            "energy_uj":               energy_uj,
+            "confidence":              nic_adj_conf,
+            "measurement_type":        mtype,
+            "non_local_ms":            total_non_local_ms if total_non_local_ms > 0 else None,
+            "window_count":            len(windows),
+            "coverage_fraction":       coverage,
+            "nic_activity_validated":  nic_validated if nic_cov > 0 else None,
+            "nic_adjusted_confidence": nic_adj_conf  if nic_cov > 0 else None,
+            "nic_coverage_fraction":   nic_cov       if nic_cov > 0 else None,
         })
         db_conn.commit()
 

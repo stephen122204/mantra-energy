@@ -118,3 +118,45 @@ otherwise                  → Strategy C
 - `measurement_type` — MEASURED | INFERRED
 - `window_count` — number of LLM blocking windows
 - `coverage_fraction` — fraction of windows with energy data
+
+---
+
+## Section 4 — SPEC_03A NIC Observability
+
+### Purpose
+
+Validates SPEC_03 energy attribution using NIC byte counter telemetry.
+Adjusts confidence scores based on observed byte transfer during blocking windows.
+
+### NIC Byte Counter Reader (`nic_sysfs_reader_v1`)
+
+Reads `/sys/class/net/<iface>/statistics/` at 100Hz during each run.
+Collects: `tx_bytes`, `rx_bytes`, `tx_packets`, `rx_packets`.
+Stores in `nic_samples` table (schema v78).
+
+**Platform:** Linux x86_64 (UBUNTU2505) and aarch64 (GN100).
+**Confidence:** 0.99 — direct kernel counter read, no transformation.
+
+### NIC Window Validator (`nic_window_validator_v1`)
+
+For each LLM blocking window `[request_start_ns, first_token_time_ns]`:
+
+$$\Delta bytes = (tx\_bytes + rx\_bytes)_{t1} - (tx\_bytes + rx\_bytes)_{t0}$$
+
+If $\Delta bytes > 0$ → window validated (NIC was active).
+If $\Delta bytes = 0$ → window penalized.
+
+$$conf_{adj} = conf_{base} \times (f_{active} + (1 - f_{active}) \times 0.75)$$
+
+Where $f_{active}$ = fraction of windows with observed NIC activity.
+
+**Confidence:** 0.90
+**Fallback:** If `nic_samples` table empty, returns `conf_base` unchanged.
+
+### DB Schema (v78)
+
+`nic_samples`: one row per 100Hz sample per run.
+`network_energy_attribution` new columns:
+- `nic_activity_validated` — 1/0/NULL
+- `nic_adjusted_confidence` — adjusted confidence score
+- `nic_coverage_fraction` — fraction of windows with NIC data
