@@ -7,12 +7,12 @@ confidence: 0.70
 measurement_type: INFERRED
 platform: aarch64 Linux, NVIDIA Grace GB10 (GN100), no RAPL
 description: >
-  Sum SPBM DC_INPUT (domain_id=28) energy within LLM API blocking windows.
-  DC_INPUT captures total board input power including GPU, NIC, CPU, DLA.
-  Known overestimate: GPU idle draw included during blocking period.
-  Conservative upper bound documented in paper. v2 improvement: subtract
-  GPU_DCGM domain energy before attribution (deferred to future spec).
-formula: "E_network = SUM(DC_INPUT energy_uj) for energy_sample_domains in blocking windows"
+  SPEC_03 Strategy B: Sum SPBM domain energy within LLM blocking windows.
+  Primary: DC_INPUT (domain_id=28) total board input power, available v76+ runs.
+  Fallback: GPU_SPBM (domain_id=7) broad GPU rail, used for pre-v76 groq runs
+  where DC_INPUT was not yet collected.
+  Known overestimate: GPU idle draw included. Conservative upper bound.
+formula: "E_network = SUM(DC_INPUT or GPU_SPBM energy_uj) in blocking windows"
 confidence_basis:
   C_source: 0.90   # SPBM hardware power rail counter via DCGM
   C_method: 0.75   # Direct domain sum, but includes non-NIC power

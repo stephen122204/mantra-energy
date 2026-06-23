@@ -33,6 +33,7 @@ _MEASUREMENT_TYPE = "INFERRED"
 # SPBM domain IDs — must match energy_domains table on GN100
 # DC_INPUT (28) = total board input power rail
 _DOMAIN_DC_INPUT = 28
+_DOMAIN_GPU_SPBM = 7
 
 # energy_sample_domains sysfs path to verify SPBM available
 _SPBM_DOMAIN_CHECK_QUERY = """
@@ -89,9 +90,15 @@ class SpbmFractionEstimator(NetworkEnergyEstimatorABC):
         if not windows:
             return (None, _METHOD_ID, _CONFIDENCE, _MEASUREMENT_TYPE, 0.0)
 
+        # Try DC_INPUT (28) first — available on v76+ runs
+        # Fall back to GPU_SPBM (7) for older groq runs without DC_INPUT data
         total_uj, windows_with_data = sum_domain_energy_in_windows(
             db_conn, run_id, windows, _DOMAIN_DC_INPUT,
         )
+        if total_uj is None:
+            total_uj, windows_with_data = sum_domain_energy_in_windows(
+                db_conn, run_id, windows, _DOMAIN_GPU_SPBM,
+            )
 
         coverage = windows_with_data / len(windows) if windows else 0.0
 

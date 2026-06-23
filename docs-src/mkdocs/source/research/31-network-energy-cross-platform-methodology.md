@@ -68,6 +68,10 @@ DC_INPUT (domain_id=28) captures total board input power.
 Report as conservative upper bound in paper. Future v2: subtract
 GPU_DCGM (domain_id=6) before attribution.
 
+**Fallback:** When DC_INPUT has no data (pre-v76 runs), GPU_SPBM (domain_id=7)
+is used. GPU_SPBM captures the broad GPU power rail and is available for all
+GN100 runs including early groq experiments.
+
 **Confidence:** 0.70
 
 ---

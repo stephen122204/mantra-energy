@@ -1176,13 +1176,11 @@ def _load_derived_methods() -> List[Dict]:
             "layer":         "application",
             "confidence":    0.70,
             "description":   (
-                "SPEC_03 Strategy B: Sum SPBM DC_INPUT (domain_id=28) energy within "
-                "LLM blocking windows [request_start_ns, first_token_time_ns]. "
-                "GN100 has no RAPL — DC_INPUT captures total board input power. "
-                "Known overestimate: GPU idle draw included during blocking period. "
-                "Conservative upper bound documented in paper. "
-                "v2 improvement: subtract GPU_DCGM domain energy (deferred). "
-                "Applies to: GN100 (NVIDIA Grace GB10, aarch64)."
+                "SPEC_03 Strategy B: Sum SPBM domain energy within LLM blocking windows. "
+                "Primary: DC_INPUT (domain_id=28) total board input power (v76+ runs). "
+                "Fallback: GPU_SPBM (domain_id=7) broad GPU rail (pre-v76 groq runs). "
+                "Known overestimate: GPU idle draw included. Conservative upper bound. "
+                "Applies to: GN100 (NVIDIA Grace GB10, aarch64, no RAPL)."
             ),
             "formula_latex": (
                 r"E_{network} = \sum_{i \in \text{interactions}}"
@@ -1190,8 +1188,8 @@ def _load_derived_methods() -> List[Dict]:
                 r"\quad \text{(domain\_id=28, conservative upper bound)}"
             ),
             "parameters":    {
-                "primary_source":   "energy_sample_domains WHERE domain_id=28 in blocking windows",
-                "domain":           "DC_INPUT (domain_id=28) — total board input power rail",
+                "primary_domain":   "DC_INPUT (domain_id=28) — v76+ runs",
+                "fallback_domain":  "GPU_SPBM (domain_id=7) — pre-v76 groq runs",
                 "known_bias":       "Overestimate: GPU idle power included during blocking",
                 "platform":         "aarch64 Linux, NVIDIA Grace GB10 (GN100)",
                 "confidence_basis": "C_source=0.90, C_method=0.75, C_validation=0.60, C_platform=0.60",
