@@ -55,8 +55,8 @@ _legacy_map:
     agentic: {provider: groq,      model_id: llama-3.3-70b-versatile, max_tokens: 2048,  tools_supported: true}
 
     vllm:
-    linear:  {provider: vllm_local, model_id: mistralai/Mistral-7B-Instruct-v0.3, max_tokens: 1024,  tools_supported: false}
-    agentic: {provider: vllm_local, model_id: mistralai/Mistral-7B-Instruct-v0.3, max_tokens: 2048,  tools_supported: true}
+    linear:  {provider: vllm_local, model_id: Mistral-7B-Instruct-v0.3, max_tokens: 1024,  tools_supported: false}
+    agentic: {provider: vllm_local, model_id: Mistral-7B-Instruct-v0.3, max_tokens: 2048,  tools_supported: true}
     
   local:
     linear:  {provider: llama_cpp, model_id: tinyllama-1b-gguf,       max_tokens: 1024,  tools_supported: false}
@@ -106,21 +106,40 @@ providers:
     defaults:
       max_tokens: 1024
     models:
-      - id: mistralai/Mistral-7B-Instruct-v0.3
+      - id: Mistral-7B-Instruct-v0.3
         name: Mistral 7B Instruct (vLLM GPU)
-      - id: Qwen/Qwen3-32B-AWQ
+      - id: Qwen3-32B-AWQ
         name: Qwen3 32B AWQ (vLLM GPU)
-      - id: Qwen/Qwen3-30B-A3B
+      - id: Qwen3-30B-A3B
         name: Qwen3 30B A3B MoE (vLLM GPU)
-      - id: sarvamai/sarvam-m
+      - id: sarvam-m
         name: Sarvam M (vLLM GPU)
-      - id: Qwen/Qwen2.5-Coder-32B-Instruct
+      - id: Qwen2.5-Coder-32B-Instruct
         name: Qwen2.5 Coder 32B (vLLM GPU)
     execution_site: host
     transport: loopback_http
     remote_energy_available: false
   # ---------------------------------------------------------------------------
-
+  vllm_remote:
+    is_local: false
+    access_method: api_http
+    network_type: lan
+    captures_network_io: true
+    energy_side: client_only
+    openai_compat: true
+    base_url: http://gn100-2b96.local:8000/v1
+    api_key_env: null
+    cost_class: free
+    priority: 2
+    rate_limit_tpm: null
+    execution_site: lan_server
+    transport: lan_http
+    remote_energy_available: true
+    models:
+      - id: Mistral-7B-Instruct-v0.3
+        name: Mistral 7B (GN100 vLLM remote)
+      - id: Qwen3-32B-AWQ
+        name: Qwen3 32B AWQ (GN100 vLLM remote)
   # ---------------------------------------------------------------------------
   ollama_remote:
     is_local: false
