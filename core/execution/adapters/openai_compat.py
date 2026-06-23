@@ -121,6 +121,8 @@ class OpenAICompatAdapter(TextGenABC):
         Returns:
             Standard adapter result dict (see TextGenABC.call docstring)
         """
+        # Reset stream metrics — prevents stale bleed between calls (SPEC_04)
+        self._last_stream_metrics = {}
         # ── Phase 1: PRE-PROCESSING — local JSON build ────────────────────────
         t_pre = time.time()
         payload = self._build_payload(prompt, temperature)
@@ -393,6 +395,7 @@ class OpenAICompatAdapter(TextGenABC):
             "streaming_enabled": 1,
             "first_token_time_ns": first_token_ns,
             "last_token_time_ns": last_token_ns,
+            "request_start_ns": request_start_ns,
         }
  
         # Reconstruct a minimal OpenAI-compat response dict so _parse_response
