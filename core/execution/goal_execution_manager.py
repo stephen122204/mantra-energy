@@ -375,6 +375,28 @@ def execute_goal(
         except Exception as exc:
             logger.warning("execute_goal: failed to backfill run_id on attempts: %s", exc)
 
+# Write energy samples and network ETL — mirrors save_pair() path
+    if run_id is not None and final_result is not None:
+        try:
+            if final_result.get("v2_samples"):
+                db.insert_energy_samples_v2(run_id, final_result["v2_samples"])
+            elif final_result.get("spbm_samples"):
+                db.insert_energy_samples_v2(run_id, final_result["spbm_samples"])
+        except Exception as _e:
+            logger.warning("execute_goal: v2_samples insert failed run=%d: %s", run_id, _e)
+        try:
+            if final_result.get("pending_interactions"):
+                for interaction in final_result["pending_interactions"]:
+                    interaction["run_id"] = run_id
+                    db.insert_llm_interaction(interaction)
+        except Exception as _e:
+            logger.warning("execute_goal: llm_interactions insert failed run=%d: %s", run_id, _e)
+        try:
+            from scripts.etl.network_energy_etl import process_run as _pne
+            _pne(run_id, conn)
+        except Exception as _e:
+            logger.warning("execute_goal: network_etl failed run=%d: %s", run_id, _e)
+
     # finish_goal always called — regardless of outcome or exception path
     # finish_goal always called — regardless of outcome or exception path
     goal_tracker.finish_goal(
