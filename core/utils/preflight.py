@@ -78,15 +78,47 @@ def check_local(config):
     print(f"✅ Model file: {model}")
 
 
+def check_vllm(base_url: str):
+    """Check vLLM server is reachable and serving models."""
+    import requests
+    try:
+        r = requests.get(f"{base_url}/models", timeout=3)
+        if r.status_code != 200:
+            sys.exit(f"❌ vLLM server at {base_url} returned {r.status_code} — is it running?")
+        models = r.json().get("data", [])
+        if not models:
+            sys.exit(f"❌ vLLM server at {base_url} has no models loaded")
+        print(f"✅ vLLM provider: OK ({models[0]['id']} loaded at {base_url})")
+    except requests.exceptions.ConnectionError:
+        sys.exit(f"❌ vLLM provider UNREACHABLE at {base_url} — run: bash /opt/ai-stack/scripts/serve_llm.sh <model>")
+    except Exception as e:
+        sys.exit(f"❌ vLLM health check failed: {e}")
+
+
+def check_groq(config):
+    """Check Groq API key is set and reachable."""
+    key = get_env(config.get("api_key_env", "GROQ_API_KEY"))
+    if not key:
+        sys.exit("❌ GROQ_API_KEY not found in environment or core/.env")
+    print("✅ Groq API key: OK")
+
+
 def preflight(executor, provider):
     """Run checks."""
     print("\n🔍 Pre-flight checks:\n")
     check_msr()
     check_configs()
-    if provider == "cloud":
+    if provider in ("vllm_local", "vllm_remote"):
+        base_url = executor.config.get("base_url", "http://localhost:8000/v1")
+        check_vllm(base_url)
+    elif provider == "groq":
+        check_groq(executor.config)
+    elif provider == "cloud":
         check_cloud(executor.config)
-    else:
+    elif provider == "llama_cpp":
         check_local(executor.config)
+    else:
+        print(f"ℹ️  No specific health check for provider '{provider}' — skipping")
     print("\n✅ All checks passed! Ready to run experiments.\n")
 
 
