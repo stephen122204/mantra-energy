@@ -176,7 +176,9 @@ class EnergyCollector:
                 tick_start_ns = time.time_ns()
                 curr = self._reader.read_energy()  # native key dict
                 tick_end_ns = time.time_ns()
-                interval_ns = tick_end_ns - tick_start_ns
+                # interval_ns = time since last tick, not read() duration
+                # read() takes ~0.3ms but scheduled interval is 1/hz seconds
+                interval_ns = int(interval_s * 1_000_000_000)
 
                 # Build canonical domain dict from this tick
                 domains: Dict[str, int] = {}
