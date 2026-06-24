@@ -205,7 +205,21 @@ class SPBMEnergyReader(EnergyReaderABC):
         """Return SPBM ARM schema — 64-bit counters at 10 Hz, GN100 domains."""
         from core.readers.measurement_schema import SCHEMA_SPBM_ARM
         return SCHEMA_SPBM_ARM
-    
+
+    def read_energy_raw(self):
+        # type: () -> Dict[str, Optional[int]]
+        """
+        Raw SPBM accumulator values keyed by SPBM channel name.
+        Used by SPBMSampler._loop() for delta computation.
+        pkg, cpu_p, cpu_e, gpu — direct accumulator reads in µJ.
+        """
+        return {
+            'pkg':   self._read_uj('pkg'),
+            'cpu_p': self._read_uj('cpu_p'),
+            'cpu_e': self._read_uj('cpu_e'),
+            'gpu':   self._read_uj('gpu'),
+        }
+        
     def read_energy_uj(self):
         # type: () -> Dict[str, Optional[int]]
         """
@@ -405,7 +419,7 @@ class SPBMSampler:
         while self._running:
             try:
                 ts_ns    = time.time_ns()
-                readings = self._reader.read_energy()
+                readings = self._reader.read_energy_raw()
                 power    = self._reader.read_power()
 
                 if self._prev is not None and self._prev_ts_ns is not None:
