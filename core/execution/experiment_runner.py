@@ -761,7 +761,8 @@ class ExperimentRunner:
         task_name = task_name or linear_result.get("task_name", task_id)
         task_meta = task_meta or linear_result.get("task_meta", {})
         linear_outcome  = "success" if linear_result.get("execution", {}).get("status") == "success"  else "failure"
-        agentic_outcome = "success" if agentic_result.get("execution", {}).get("status") == "success" else "failure"
+        agentic_exec = agentic_result.get("execution", {})
+        agentic_outcome = "success" if (agentic_exec.get("status") == "success" or agentic_exec.get("execution", {}).get("status") == "success") else "failure"
 
         linear_copy = linear_result.copy()
         agentic_copy = agentic_result.copy()
