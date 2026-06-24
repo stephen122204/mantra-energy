@@ -1,0 +1,43 @@
+study:
+  name: "GN100 vLLM Local Failure Injection Study"
+  experiment_type: "failure_injection"
+  experiment_goal: "Paper2 GPU failure injection — retry amplification with GPU energy, vllm_local, GN100 GB10"
+  experiment_notes: "paper2_gn100 group. GPU via DCGM field 156. SPBM pkg. 30 reps. Start with Mistral-7B."
+  workflow_modes: ["agentic", "linear"]
+  group_id: "paper2_gn100"
+tasks:
+  - id: gsm8k_basic
+  - id: gsm8k_multi_step
+  - id: logical_reasoning
+  - id: factual_qa
+  - id: science_qa
+  - id: commonsense_reasoning
+  - id: tg_single_db
+  - id: tg_sequential_2
+  - id: tg_sequential_3
+providers:
+  - name: vllm_local
+    model_id: Mistral-7B-Instruct-v0.3
+execution:
+  repetitions: 30
+  cool_down_seconds: 30
+  inter_task_cooldown_seconds: 90
+  save_db: true
+retry_policy:
+  name: "aggressive"
+  max_retries: 5
+  retry_on_timeout: true
+  retry_on_tool_error: true
+  retry_on_api_error: true
+  retry_on_wrong_answer: false
+  backoff_seconds: 1.0
+failure_injection:
+  enabled: true
+  mode: deterministic_validation
+  scenario_id: "failure_study_v1"
+  tool_failure_rate: 0.5
+  timeout_rate: 0.5
+  min_failures: 1
+  total_draws_estimate: 2
+quality:
+  enabled: false

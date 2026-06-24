@@ -1,0 +1,37 @@
+study:
+  name: "Ubuntu2505 LlamaCpp Baseline Study"
+  experiment_type: "normal"
+  experiment_goal: "Paper2 clean baseline — CPU+network energy per goal, llama_cpp, post-SPEC_04"
+  experiment_notes: "paper2_ubuntu_fresh group. All channels verified. 30 reps."
+  workflow_modes: ["linear", "agentic"]
+  group_id: "paper2_ubuntu_fresh"
+tasks:
+  - id: gsm8k_basic
+  - id: gsm8k_multi_step
+  - id: logical_reasoning
+  - id: factual_qa
+  - id: science_qa
+  - id: commonsense_reasoning
+  - id: tg_single_db
+  - id: tg_sequential_2
+  - id: tg_sequential_3
+providers:
+  - name: llama_cpp
+    model_id: tinyllama-1b-gguf
+execution:
+  repetitions: 30
+  cool_down_seconds: 30
+  inter_task_cooldown_seconds: 90
+  save_db: true
+retry_policy:
+  name: "no_retry"
+  max_retries: 0
+  retry_on_timeout: false
+  retry_on_tool_error: false
+  retry_on_api_error: false
+  retry_on_wrong_answer: false
+  backoff_seconds: 0.0
+failure_injection:
+  enabled: false
+quality:
+  enabled: false
