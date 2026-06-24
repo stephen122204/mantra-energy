@@ -384,6 +384,12 @@ def execute_goal(
                 db.insert_energy_samples_v2(run_id, final_result["spbm_samples"])
         except Exception as _e:
             logger.warning("execute_goal: v2_samples insert failed run=%d: %s", run_id, _e)
+
+        try:
+            if final_result.get("legacy_samples"):
+                db.insert_energy_samples(run_id, final_result["legacy_samples"])
+        except Exception as _e:
+            logger.warning("execute_goal: legacy_samples insert failed run=%d: %s", run_id, _e)            
         try:
             if final_result.get("pending_interactions"):
                 for interaction in final_result["pending_interactions"]:
