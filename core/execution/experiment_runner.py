@@ -817,12 +817,12 @@ class ExperimentRunner:
             # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in linear_result and linear_result["spbm_samples"]:
                 db.insert_energy_samples_v2(linear_id, linear_result["spbm_samples"])
-                if "rail_result" in linear_result and linear_result["rail_result"]:
-                    try:
-                        db.insert_power_rail_samples(linear_id, linear_result["rail_result"].samples)
-                        db.insert_run_power_limits(linear_id, linear_result["rail_result"].limits_snapshot)
-                    except Exception as e:
-                        logger.warning("power_rail insert failed (linear): %s", e)    
+            if "rail_result" in linear_result and linear_result["rail_result"]:
+                try:
+                    db.insert_power_rail_samples(linear_id, linear_result["rail_result"].samples)
+                    db.insert_run_power_limits(linear_id, linear_result["rail_result"].limits_snapshot)
+                except Exception as e:
+                    logger.warning("power_rail insert failed (linear): %s", e)    
             try:
                 from scripts.etl.gpu_spbm_etl import process_one as _pgs
                 _pgs(linear_id, db.db.conn)
@@ -964,13 +964,13 @@ class ExperimentRunner:
                     logger.warning("device_telemetry insert failed (agentic): %s", e)                
             # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in agentic_result and agentic_result["spbm_samples"]:
-                db.insert_energy_samples_v2(agentic_id, agentic_result["spbm_samples"])                
-                if "rail_result" in agentic_result and agentic_result["rail_result"]:
-                    try:
-                        db.insert_power_rail_samples(agentic_id, agentic_result["rail_result"].samples)
-                        db.insert_run_power_limits(agentic_id, agentic_result["rail_result"].limits_snapshot)
-                    except Exception as e:
-                        logger.warning("power_rail insert failed (agentic): %s", e)
+                db.insert_energy_samples_v2(agentic_id, agentic_result["spbm_samples"])
+            if "rail_result" in agentic_result and agentic_result["rail_result"]:
+                try:
+                    db.insert_power_rail_samples(agentic_id, agentic_result["rail_result"].samples)
+                    db.insert_run_power_limits(agentic_id, agentic_result["rail_result"].limits_snapshot)
+                except Exception as e:
+                    logger.warning("power_rail insert failed (agentic): %s", e)
             try:
                 from scripts.etl.gpu_spbm_etl import process_one as _pgs
                 _pgs(agentic_id, db.db.conn)
@@ -1441,12 +1441,12 @@ class ExperimentRunner:
                 # SPBM samples — EnergySampleV2 list, empty on non-GN100 platforms
             if "spbm_samples" in result and result["spbm_samples"]:
                 db.insert_energy_samples_v2(run_id, result["spbm_samples"])
-                if "rail_result" in result and result["rail_result"]:
-                    try:
-                        db.insert_power_rail_samples(run_id, result["rail_result"].samples)
-                        db.insert_run_power_limits(run_id, result["rail_result"].limits_snapshot)
-                    except Exception as e:
-                        logger.warning("power_rail insert failed (single): %s", e)
+            if "rail_result" in result and result["rail_result"]:
+                try:
+                    db.insert_power_rail_samples(run_id, result["rail_result"].samples)
+                    db.insert_run_power_limits(run_id, result["rail_result"].limits_snapshot)
+                except Exception as e:
+                    logger.warning("power_rail insert failed (single): %s", e)
             try:
                 from scripts.etl.gpu_spbm_etl import process_one as _pgs
                 _pgs(run_id, db.db.conn)
