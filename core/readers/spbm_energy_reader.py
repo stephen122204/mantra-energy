@@ -444,7 +444,10 @@ class SPBMSampler:
                     interval_s = interval_ns / 1_000_000_000
                     def _tick_uj(ch):
                         p = power.get(ch)
-                        return int(p * interval_s * 1000) if p is not None else None
+                        if p is None:
+                            return None
+                        # Clamp negative — SPBM noise on short runs, not real negative energy (MIC-3)
+                        return max(0, int(p * interval_s * 1000))
  
                     if _tick_uj('soc_pkg')  is not None: domains[DOMAIN_SOC_PKG]  = _tick_uj('soc_pkg')
                     if _tick_uj('cpu_gpu')  is not None: domains[DOMAIN_CPU_GPU]  = _tick_uj('cpu_gpu')
