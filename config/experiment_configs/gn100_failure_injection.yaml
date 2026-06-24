@@ -15,8 +15,8 @@ tasks:
   - id: tg_sequential_2
   - id: tg_sequential_3
 providers:
-  - name: groq
-    model_id: llama-3.3-70b-versatile
+  - name: nvidia_nim
+    model_id: meta/llama-3.3-70b-instruct
   - name: vllm_local
     model_id: Mistral-7B-Instruct-v0.3
 execution:

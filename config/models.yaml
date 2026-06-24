@@ -353,6 +353,11 @@ providers:
     rate_limit_tpm: null
     models:
       # Reasoning — compare energy vs quality tradeoff
+      # Size comparison — energy vs model size
+      - id: meta/llama-3.3-70b-instruct
+        name: Llama 3.3 70B
+        max_tokens: 4096
+        tools_supported: true      
       - id: moonshotai/kimi-k2.6
         name: Kimi K2.6 Reasoning
         max_tokens: 16384
@@ -365,11 +370,7 @@ providers:
         name: Nemotron Super 49B
         max_tokens: 4096
         tools_supported: true
-      # Size comparison — energy vs model size
-      - id: meta/llama-3.3-70b-instruct
-        name: Llama 3.3 70B
-        max_tokens: 4096
-        tools_supported: true
+
       - id: meta/llama-3.2-3b-instruct
         name: Llama 3.2 3B
         max_tokens: 2048

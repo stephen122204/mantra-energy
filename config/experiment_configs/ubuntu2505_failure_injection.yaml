@@ -17,8 +17,8 @@ tasks:
 providers:
   - name: llama_cpp
     model_id: tinyllama-1b-gguf
-  - name: groq
-    model_id: llama-3.3-70b-versatile
+  - name: nvidia_nim
+    model_id: meta/llama-3.3-70b-instruct
 execution:
   repetitions: 30
   cool_down_seconds: 30
