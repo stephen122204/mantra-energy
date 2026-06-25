@@ -68,6 +68,7 @@ def execute_goal(
     goal_tracker,
     policy: RetryPolicy,
     failure_injector=None,
+    repetitions: int = 1,
 ) -> Optional[int]:
     """
     Execute one goal (one workflow side) with full retry support.
@@ -122,14 +123,14 @@ def execute_goal(
  
     # Wire exp_id into injector now that experiment exists in DB.
     # SHA-256 stable seed requires exp_id — must be set before any injection calls.
-    if failure_injector is not None and hasattr(failure_injector, "set_exp_id"):
+    if failure_injector is not None and workflow_type == "agentic" and hasattr(failure_injector, "set_exp_id"):
         # Compute exact draw count — total attempts this goal will make.
         # timeout draws = max_attempts (one per attempt).
         # tool draws estimated from task tool_calls field — 0 for pure LLM tasks.
         max_attempts    = policy.max_retries + 1
         tool_calls      = task_meta.get("tool_calls", 0) or 0
         exact_draws     = max_attempts + (max_attempts * tool_calls)
-        failure_injector.set_exp_id(exp_id, total_draws=exact_draws)
+        failure_injector.set_exp_id(exp_id, total_draws=exact_draws * repetitions)
 
     max_attempts    = policy.max_retries + 1
     prev_attempt_id = None
@@ -214,7 +215,7 @@ def execute_goal(
 
         if result is not None:
             # Post-harness injection — result exists, energy captured, now inject failure
-            if failure_injector and failure_injector.is_active():
+            if failure_injector and workflow_type == "agentic" and failure_injector.is_active():
                 if failure_injector.maybe_inject_timeout(
                     rep_num=rep_num, attempt_num=attempt_num
                 ):

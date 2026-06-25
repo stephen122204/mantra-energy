@@ -1,0 +1,164 @@
+# ============================================================
+# A-LEMS Failure Injection — All Modes Reference
+# ============================================================
+# This file documents ALL supported failure_injection modes.
+# Copy the relevant section into your experiment config yaml.
+# Never run this file directly — it is documentation only.
+# ============================================================
+
+# ────────────────────────────────────────────────────────────
+# MODE 1: controlled_retry  (RECOMMENDED for paper data)
+# ────────────────────────────────────────────────────────────
+# What it does:
+#   - target_goal_pct % of goals get injection
+#   - Each injected goal fails exactly per_goal_attempts times
+#   - Then succeeds on the next attempt
+#   - Non-injected goals succeed on attempt 1
+#
+# Example: 30 reps, 40% injection, 2 failures per goal
+#   → 12 goals fail twice then succeed (attempt 3 wins)
+#   → 18 goals succeed immediately (attempt 1 wins)
+#   → Retry amplification clearly visible in energy data
+#
+# Paper claim supported:
+#   "40% of goals experienced retry amplification,
+#    each requiring 2 failed attempts before success."
+#
+failure_injection:
+  enabled: true
+  mode: controlled_retry
+  target_goal_pct: 0.40       # 40% of goals get injection
+  per_goal_attempts: 2        # each injected goal fails exactly 2 times
+  total_draws_estimate: 30    # must match repetitions in execution section
+
+# ────────────────────────────────────────────────────────────
+# MODE 2: deterministic_validation  (for system validation)
+# ────────────────────────────────────────────────────────────
+# What it does:
+#   - Injects failures at evenly spaced positions in draw sequence
+#   - Same schedule every run (fully reproducible)
+#   - Reviewers can audit exact injection positions
+#   - Used for C4 measurement system validation in paper
+#
+# Example: 60 total draws, 12 min_failures
+#   → Injections at draws 2, 7, 12, 17, 22, 27 ... (evenly spaced)
+#   → Verifies measurement system catches failures at known positions
+#
+# Paper claim supported:
+#   "Injection schedule verified: 12 of 60 draws triggered,
+#    at positions [2, 7, 12 ...], all captured by A-LEMS."
+#
+# NOTE: total_draws_estimate = repetitions x draws_per_goal
+#       draws_per_goal = max_attempts + (max_attempts x tool_calls)
+#       For gsm8k_basic with aggressive policy (max_retries=5):
+#         draws_per_goal = 6 + 0 = 6
+#         total_draws_estimate = 30 x 6 = 180
+#         min_failures = round(0.40 x 180) = 72  ← BUG: use controlled_retry instead
+#
+failure_injection:
+  enabled: true
+  mode: deterministic_validation
+  scenario_id: "paper1_validation_v1"   # stable seed for reproducibility
+  min_failures: 12                       # minimum injections required
+  total_draws_estimate: 60              # reps x draws_per_goal (compute manually)
+  tool_failure_rate: 0.3                # used only in statistical mode (ignored here)
+  timeout_rate: 0.3                     # used only in statistical mode (ignored here)
+
+# ────────────────────────────────────────────────────────────
+# MODE 3: statistical  (for realistic failure distributions)
+# ────────────────────────────────────────────────────────────
+# What it does:
+#   - SHA-256 seeded Bernoulli draws per attempt
+#   - Each attempt independently fails with configured probability
+#   - Same scenario_id = same failure schedule across machines
+#   - Requires many reps for meaningful confidence intervals
+#
+# Example: tool_failure_rate=0.3
+#   → Each tool call has 30% chance of failure
+#   → Across 30 reps: roughly 9 goals see at least one failure
+#   → But not guaranteed — statistical, not deterministic
+#
+# Paper claim supported:
+#   "Under 30% statistical failure injection, observed retry
+#    rate was X% (CI: Y-Z%), consistent with Bernoulli(0.3)."
+#
+# Cross-machine fairness:
+#   Same scenario_id on UBUNTU2505 and GN100 = identical
+#   failure schedule, enabling fair OOI comparison.
+#
+failure_injection:
+  enabled: true
+  mode: statistical
+  scenario_id: "paper1_statistical_v1"  # shared across machines for fair comparison
+  tool_failure_rate: 0.30               # 30% of tool calls fail
+  timeout_rate: 0.30                    # 30% of attempts get timeout injected
+
+# ────────────────────────────────────────────────────────────
+# MODE 4: deterministic_stress  (for retry exhaustion testing)
+# ────────────────────────────────────────────────────────────
+# What it does:
+#   - Every single attempt fails
+#   - Agent exhausts all max_retries then gives up
+#   - Used to test full retry exhaustion path
+#   - Verifies energy accounting when success never occurs
+#
+# Example: aggressive policy (max_retries=5)
+#   → All 6 attempts fail
+#   → goal_execution.success = 0
+#   → Energy of all 6 failed attempts captured in EpG denominator
+#
+# Paper claim supported:
+#   "Under stress injection, all goals exhausted retry budget.
+#    A-LEMS correctly excluded these from EpG denominator
+#    and reported success_rate=0%."
+#
+failure_injection:
+  enabled: true
+  mode: deterministic_stress
+  scenario_id: "paper1_stress_v1"
+
+# ────────────────────────────────────────────────────────────
+# DISABLED (baseline runs — no injection)
+# ────────────────────────────────────────────────────────────
+failure_injection:
+  enabled: false
+
+# ────────────────────────────────────────────────────────────
+# RETRY POLICY (required alongside failure_injection)
+# ────────────────────────────────────────────────────────────
+# Must be seeded in DB before running:
+#   sqlite3 <db_path> "INSERT OR REPLACE INTO retry_policy
+#     (policy_name, max_retries, retry_on_timeout, retry_on_tool_error,
+#      retry_on_api_error, retry_on_wrong_answer, backoff_seconds)
+#   VALUES
+#     ('aggressive', 5, 1, 1, 1, 0, 1.0),
+#     ('default',    1, 1, 1, 0, 0, 0.0),
+#     ('no_retry',   0, 0, 0, 0, 0, 0.0);"
+#
+retry_policy:
+  name: "aggressive"    # must match policy_name in retry_policy table
+  max_retries: 5
+  retry_on_timeout: true
+  retry_on_tool_error: true
+  retry_on_api_error: true
+  retry_on_wrong_answer: false
+  backoff_seconds: 1.0
+
+# ────────────────────────────────────────────────────────────
+# KNOWN ISSUES (as of 2026-06-25)
+# ────────────────────────────────────────────────────────────
+# 1. deterministic_validation: total_draws_estimate must be
+#    computed manually (reps x draws_per_goal). If wrong,
+#    min_failures is miscalculated. Use controlled_retry instead
+#    for paper data collection.
+#
+# 2. CLI --repetitions overridden by yaml execution.repetitions
+#    due to apply_config() running after CLI parse in main().
+#    Fix: add "and args.repetitions is None" guard in
+#    experiment_config_loader.py line 138.
+#
+# 3. _initialised guard in FailureInjector.set_exp_id() not
+#    working because set_exp_id is called per-goal not per-
+#    experiment. Workaround: use controlled_retry mode which
+#    does not depend on set_exp_id for slot computation.
+# ────────────────────────────────────────────────────────────

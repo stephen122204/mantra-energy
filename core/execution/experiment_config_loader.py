@@ -135,7 +135,7 @@ def _apply_execution_section(args, execution: dict) -> None:
     Override execution parameters from execution section.
     repetitions and cool_down_seconds only — safety-critical params stay CLI-only.
     """
-    if "repetitions" in execution:
+    if "repetitions" in execution and args.repetitions is None:
         args.repetitions = int(execution["repetitions"])
         logger.debug("apply_config: repetitions = %d", args.repetitions)
 

@@ -426,6 +426,7 @@ def _run_experiment(setup: dict, args) -> tuple:
                             task=task_dict, workflow_type="linear",
                             rep_num=rep + 1, goal_tracker=_goal_tracker,
                             policy=policy, failure_injector=failure_injector,
+                            repetitions=repetitions,
                         )
                         runs_completed += 1
                     if workflow_mode in ("agentic", "comparison"):
@@ -435,6 +436,7 @@ def _run_experiment(setup: dict, args) -> tuple:
                             task=task_dict, workflow_type="agentic",
                             rep_num=rep + 1, goal_tracker=_goal_tracker,
                             policy=policy, failure_injector=failure_injector,
+                            repetitions=repetitions,
                         )
                         runs_completed += 1
                 else:

@@ -39,10 +39,12 @@ logger = logging.getLogger(__name__)
 INJECTION_ALLOWED_TYPES = frozenset({"failure_injection", "retry_study"})
 
 MODE_DETERMINISTIC_VALIDATION = "deterministic_validation"
+MODE_CONTROLLED_RETRY         = "controlled_retry"
 MODE_DETERMINISTIC_STRESS     = "deterministic_stress"
 MODE_STATISTICAL              = "statistical"
 VALID_MODES = frozenset({
     MODE_DETERMINISTIC_VALIDATION,
+    MODE_CONTROLLED_RETRY,
     MODE_DETERMINISTIC_STRESS,
     MODE_STATISTICAL,
 })
@@ -117,7 +119,11 @@ class FailureInjector:
         self._mode            = config.get("mode", MODE_STATISTICAL)
         self._tool_rate       = float(config.get("tool_failure_rate", 0.0))
         self._timeout_rate    = float(config.get("timeout_rate", 0.0))
-        self._min_failures    = int(config.get("min_failures", 1))
+        self._target_injection_pct = float(config.get("target_injection_pct", 0.0))
+        self._min_failures         = int(config.get("min_failures", 1))
+        self._target_goal_pct      = float(config.get("target_goal_pct", 0.0))
+        self._per_goal_attempts    = int(config.get("per_goal_attempts", 1))
+        self._selected_goals: set  = set()
         self._scenario_id     = config.get("scenario_id", None)
 
         # Estimated total draws — set by caller before experiment starts
@@ -132,6 +138,7 @@ class FailureInjector:
         # Pre-computed injection slots for deterministic_validation mode
         # Computed once in set_exp_id() after total draws are known
         self._slots: Dict[str, frozenset] = {}
+        self._initialised = False
 
         # Audit log
         self._audit_log: List[InjectionEvent] = []
@@ -164,8 +171,14 @@ class FailureInjector:
         self._exp_id = exp_id
         if self._scenario_id is None:
             self._scenario_id = str(exp_id)
-
+        if self._initialised:
+            return
+        self._initialised = True
         n = total_draws or self._total_draws_estimate
+        if self._target_injection_pct > 0.0 and n > 0:
+            self._min_failures = max(1, round(self._target_injection_pct * n))
+            logger.info("FailureInjector: target_injection_pct=%.0f%% x n=%d -> min_failures=%d",
+                self._target_injection_pct * 100, n, self._min_failures)
 
         if self._mode == MODE_DETERMINISTIC_VALIDATION:
             # Pre-compute evenly-spaced failure slots — one set per kind
@@ -230,21 +243,28 @@ class FailureInjector:
         }
 
         for kind in (KIND_TIMEOUT, KIND_TOOL_FAILURE):
-            draws   = self._draw_index[kind]
+            draws    = self._draw_index[kind]
             injected = self._counts[kind]
-
             if self._mode == MODE_DETERMINISTIC_VALIDATION:
                 base["by_kind"][kind] = {
-                    "planned_failures":   self._min_failures,
-                    "realized_failures":  injected,
-                    "schedule":           sorted(self._slots.get(kind, [])),
-                    "draws":              draws,
+                    "planned_failures":  self._min_failures,
+                    "realized_failures": injected,
+                    "schedule":          sorted(self._slots.get(kind, [])),
+                    "draws":             draws,
                 }
             elif self._mode == MODE_DETERMINISTIC_STRESS:
                 base["by_kind"][kind] = {
                     "realized_failures": injected,
                     "draws":             draws,
                     "stress_mode":       True,
+                }
+            elif self._mode == MODE_CONTROLLED_RETRY:
+                base["by_kind"][kind] = {
+                    "target_goal_pct":   self._target_goal_pct,
+                    "per_goal_attempts": self._per_goal_attempts,
+                    "selected_goals":    sorted(self._selected_goals),
+                    "realized_failures": injected,
+                    "draws":             draws,
                 }
             else:
                 rate = self._timeout_rate if kind == KIND_TIMEOUT else self._tool_rate
@@ -254,11 +274,9 @@ class FailureInjector:
                     "injected":        injected,
                     "draws":           draws,
                 }
-
         if self._mode == MODE_DETERMINISTIC_VALIDATION:
             base["min_failures"] = self._min_failures
             base["min_met"]      = total_injected >= self._min_failures
-
         return base
 
     def get_audit_log(self) -> List[dict]:
@@ -305,7 +323,15 @@ class FailureInjector:
             slots      = self._slots.get(kind, frozenset())
             inject     = draw_idx in slots
             seed_value = 0.0
-
+        elif self._mode == MODE_CONTROLLED_RETRY:
+            n_reps     = self._total_draws_estimate or 30
+            n_selected = max(1, round(self._target_goal_pct * n_reps))
+            if rep_num not in self._selected_goals:
+                slot = round((rep_num - 0.5) * n_selected / n_reps)
+                if slot < n_selected:
+                    self._selected_goals.add(rep_num)
+            inject     = (rep_num in self._selected_goals) and (attempt_num <= self._per_goal_attempts)
+            seed_value = 0.0
         else:
             # Statistical mode — SHA-256-seeded Bernoulli draw
             key        = f"{kind}:{tool_name or 'none'}"

@@ -33,11 +33,9 @@ retry_policy:
   backoff_seconds: 1.0
 failure_injection:
   enabled: true
-  mode: deterministic_validation
-  scenario_id: "failure_study_v1"
-  tool_failure_rate: 0.5
-  timeout_rate: 0.5
-  min_failures: 1
-  total_draws_estimate: 2
+  mode: controlled_retry
+  target_goal_pct: 0.40
+  per_goal_attempts: 2
+  total_draws_estimate: 30
 quality:
   enabled: false
