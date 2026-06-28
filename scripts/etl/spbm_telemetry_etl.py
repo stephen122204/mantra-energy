@@ -126,28 +126,129 @@ def process_run(run_id: int, result: dict, conn=None) -> None:
             conn.close()
  
  
-def backfill_all(db_path: str = None) -> None:
-    """Reprocess every run for conversion metrics. Power limits cannot
-    be backfilled retroactively — they were never captured for past
-    runs (in-memory snapshot, not persisted before this spec)."""
-    conn = sqlite3.connect(db_path or get_alems_db_path())
-    try:
-        run_ids = [r[0] for r in conn.execute("SELECT run_id FROM runs ORDER BY run_id").fetchall()]
-        logger.info("spbm_telemetry_etl.backfill_all: %d runs (conversion metrics only)", len(run_ids))
-        for rid in run_ids:
-            try:
-                conversion_loss_uj, conversion_efficiency = _compute_conversion_metrics(conn, rid)
-                if conversion_loss_uj is not None:
-                    conn.execute(
-                        """UPDATE runs SET spbm_conversion_loss_uj = ?,
-                               spbm_conversion_efficiency = ? WHERE run_id = ?""",
-                        (conversion_loss_uj, conversion_efficiency, rid),
-                    )
-                    conn.commit()
-            except Exception as e:
-                logger.warning("spbm_telemetry_etl.backfill_all: run_id=%d failed: %s", rid, e)
-    finally:
-        conn.close()
+def _compute_coverage_from_samples(conn, run_id, duration_ns,
+                                    spbm_freq_hz=10.0):
+    # type: (sqlite3.Connection, int, int, float) -> dict
+    """
+    Compute SPBM coverage metrics from energy_sample_domains counts.
+
+    Used for backfill only — at measurement time these come from the
+    in-memory SPBMSampler counters. For historical runs we reconstruct
+    from the persisted sample counts in energy_sample_domains.
+
+    Platform-independent: returns empty dict if no PACKAGE domain rows
+    exist for this run (non-SPBM platform). PAC-4 compliant.
+
+    Args:
+        conn:         Open DB connection
+        run_id:       runs.run_id
+        duration_ns:  run duration in nanoseconds (for expected count)
+        spbm_freq_hz: SPBM sampling frequency (10Hz on GN100)
+
+    Returns:
+        dict with spbm_* keys, or empty dict if no SPBM data.
+    """
+    row = conn.execute(
+        "SELECT COUNT(*) as n FROM energy_sample_domains "
+        "WHERE run_id = ? AND domain_id = ?",
+        (run_id, DOMAIN_PACKAGE),
+    ).fetchone()
+
+    # No PACKAGE domain samples — non-SPBM platform, skip silently
+    if not row or row[0] == 0:
+        return {}
+
+    observed = row[0]
+
+    # Expected samples = duration * frequency, minimum 1
+    duration_s = (duration_ns or 0) / 1_000_000_000.0
+    expected   = max(1, int(duration_s * spbm_freq_hz))
+    coverage   = min(100.0, round(observed * 100.0 / expected, 2))
+
+    return {
+        "spbm_power_sampling_freq_hz": spbm_freq_hz,
+        "spbm_samples_expected":       expected,
+        "spbm_samples_observed":       observed,
+        "spbm_sample_coverage_pct":    coverage,
+        "spbm_integration_method":     "accumulator_delta",
+    }
+
+
+def backfill_all(db_path=None):
+    # type: (Optional[str]) -> None
+    """
+    Backfill all SPBM telemetry fields for all runs.
+
+    Two passes:
+      Pass 1: conversion metrics (dc_input vs pkg domain sums).
+      Pass 2: coverage metrics (reconstructed from energy_sample_domains).
+
+    Power limits not backfillable — in-memory snapshot only.
+    Platform-independent: skips non-SPBM runs automatically. PAC-4.
+    Idempotent — safe to rerun.
+    """
+    db_path = db_path or get_alems_db_path()
+    conn    = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    run_rows = conn.execute(
+        "SELECT run_id, duration_ns FROM runs ORDER BY run_id"
+    ).fetchall()
+
+    logger.info(
+        "spbm_telemetry_etl.backfill_all: %d runs — conversion + coverage",
+        len(run_rows),
+    )
+
+    ok = skip = err = 0
+    for row in run_rows:
+        rid         = row["run_id"]
+        duration_ns = row["duration_ns"] or 0
+        try:
+            # Pass 1: conversion metrics from dc_input vs pkg domain
+            conversion_loss_uj, conversion_efficiency = \
+                _compute_conversion_metrics(conn, rid)
+            if conversion_loss_uj is not None:
+                conn.execute(
+                    "UPDATE runs SET spbm_conversion_loss_uj = ?, "
+                    "spbm_conversion_efficiency = ? WHERE run_id = ?",
+                    (conversion_loss_uj, conversion_efficiency, rid),
+                )
+
+            # Pass 2: coverage metrics from energy_sample_domains counts
+            coverage = _compute_coverage_from_samples(conn, rid, duration_ns)
+            if coverage:
+                conn.execute(
+                    """UPDATE runs SET
+                           spbm_power_sampling_freq_hz = ?,
+                           spbm_samples_expected        = ?,
+                           spbm_samples_observed        = ?,
+                           spbm_sample_coverage_pct     = ?,
+                           spbm_integration_method      = ?
+                       WHERE run_id = ?""",
+                    (
+                        coverage["spbm_power_sampling_freq_hz"],
+                        coverage["spbm_samples_expected"],
+                        coverage["spbm_samples_observed"],
+                        coverage["spbm_sample_coverage_pct"],
+                        coverage["spbm_integration_method"],
+                        rid,
+                    ),
+                )
+                ok += 1
+            else:
+                skip += 1
+
+            conn.commit()
+
+        except Exception as e:
+            logger.warning(
+                "spbm_telemetry_etl.backfill_all: run_id=%d failed: %s", rid, e
+            )
+            err += 1
+
+    conn.close()
+    print("Done: %d spbm ok, %d skipped (non-SPBM), %d errors." % (ok, skip, err))
  
  
 if __name__ == "__main__":

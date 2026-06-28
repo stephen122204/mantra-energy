@@ -567,26 +567,40 @@ class RunsRepository:
 
     def update_run_stats(self, run_id: int, stats: Dict) -> None:
         """Update run with aggregated statistics from samples."""
+        # Round temperatures to 2 decimal places — applies on all platforms.
+        # Full float precision (e.g. 58.2857142857143) is noise not signal.
+        def _r(v, n=2):
+            # type: (object, int) -> object
+            return round(float(v), n) if v is not None and v != 0 else v
+
         self.db.execute(
             """
             UPDATE runs SET
-                cpu_busy_mhz = ?,
-                cpu_avg_mhz = ?,
-                frequency_mhz = ?,
-                package_temp_celsius = ?,
-                max_temp_c = ?,
-                min_temp_c = ?,
-                interrupt_rate = ?
+                cpu_busy_mhz              = ?,
+                cpu_avg_mhz               = ?,
+                frequency_mhz             = ?,
+                package_temp_celsius      = ?,
+                max_temp_c                = ?,
+                min_temp_c                = ?,
+                interrupt_rate            = ?,
+                avg_task_power_watts      = ?,
+                energy_sample_coverage_pct= ?,
+                framework_overhead_energy_uj = ?,
+                gpu_attribution_method    = ?
             WHERE run_id = ?
         """,
             (
                 stats.get("cpu_busy_mhz", 0),
                 stats.get("cpu_avg_mhz", 0),
                 stats.get("cpu_avg_mhz", 0),
-                stats.get("package_temp_celsius", 0),
-                stats.get("max_temp_c", 0),
-                stats.get("min_temp_c", 0),
+                _r(stats.get("package_temp_celsius", 0)),
+                _r(stats.get("max_temp_c", 0)),
+                _r(stats.get("min_temp_c", 0)),
                 stats.get("interrupt_rate", 0),
+                stats.get("avg_task_power_watts"),
+                stats.get("energy_sample_coverage_pct"),
+                stats.get("framework_overhead_energy_uj"),
+                stats.get("gpu_attribution_method"),
                 run_id,
             ),
         )

@@ -116,7 +116,7 @@ def run_provider_task(
     if not models_for_provider:
         print(f"   ❌ No models found for provider '{provider}', skipping...")
         return []
-    model_id = models_for_provider[0]["model_id"]
+    model_id = getattr(runner.args, 'model', None) or models_for_provider[0]["model_id"]
     linear_config  = runner.config.get_model_config_v2(provider, model_id)
     agentic_config = runner.config.get_model_config_v2(provider, model_id)
 

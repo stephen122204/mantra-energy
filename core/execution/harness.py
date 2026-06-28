@@ -437,8 +437,13 @@ class ExperimentHarness:
         throttle_events = 0
         start_time_ns = int(run_start_dt.timestamp() * 1e9)
 
-        if hasattr(raw_energy, "thermal_samples") and raw_energy.thermal_samples:
-            for thermal_tuple in raw_energy.thermal_samples:
+        _raw_thermal = (
+            raw_energy.get("thermal_samples")
+            if isinstance(raw_energy, dict)
+            else getattr(raw_energy, "thermal_samples", None)
+        )
+        if _raw_thermal:
+            for thermal_tuple in _raw_thermal:
                 # Chunk 2 final: unpack 6-tuple
                 # (now, readings, throttled, sample_start_ns, sample_end_ns, interval_ns)
                 ts               = thermal_tuple[0]
@@ -719,10 +724,10 @@ class ExperimentHarness:
                 "baseline_id": self.baseline.baseline_id if self.baseline else None,
                 "turbo_enabled": 1 if turbo == "enabled" else 0,
                 "interrupt_rate": interrupt_rate,
-                "start_temp_c": start_temp_c,
+                "start_temp_c": round(start_temp_c or 0.0, 2),
                 "max_temp_c": max_temp_c,
                 "min_temp_c": min_temp_c,
-                "thermal_delta_c": thermal_delta_c,
+                "thermal_delta_c": round(thermal_delta_c or 0.0, 2),
                 "is_cold_start": 1 if is_cold else 0,
                 "background_cpu_percent": background_cpu,
                 "process_count": process_count,
@@ -936,8 +941,13 @@ class ExperimentHarness:
         throttle_events = 0
         start_time_ns = int(run_start_dt.timestamp() * 1e9)
 
-        if hasattr(raw_energy, "thermal_samples") and raw_energy.thermal_samples:
-            for thermal_tuple in raw_energy.thermal_samples:
+        _raw_thermal = (
+            raw_energy.get("thermal_samples")
+            if isinstance(raw_energy, dict)
+            else getattr(raw_energy, "thermal_samples", None)
+        )
+        if _raw_thermal:
+            for thermal_tuple in _raw_thermal:
                 # Chunk 2 final: unpack 6-tuple
                 # (now, readings, throttled, sample_start_ns, sample_end_ns, interval_ns)
                 ts               = thermal_tuple[0]
@@ -1285,10 +1295,10 @@ class ExperimentHarness:
                 "baseline_id": self.baseline.baseline_id if self.baseline else None,
                 "turbo_enabled": 1 if turbo == "enabled" else 0,
                 "interrupt_rate": interrupt_rate,
-                "start_temp_c": start_temp_c,
+                "start_temp_c": round(start_temp_c or 0.0, 2),
                 "max_temp_c": max_temp_c,
                 "min_temp_c": min_temp_c,
-                "thermal_delta_c": thermal_delta_c,
+                "thermal_delta_c": round(thermal_delta_c or 0.0, 2),
                 "is_cold_start": 1 if is_cold else 0,
                 "background_cpu_percent": background_cpu,
                 "process_count": process_count,

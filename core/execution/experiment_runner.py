@@ -916,6 +916,35 @@ class ExperimentRunner:
                         linear_result.get("ml_features", {}).get("frequency_mhz"):
                     linear_agg["cpu_avg_mhz"] = linear_result["ml_features"]["frequency_mhz"]
                     linear_agg["cpu_busy_mhz"] = linear_result["ml_features"]["frequency_mhz"]
+                # Compute derived fields inline — no separate ETL needed.
+                # Works on all platforms: None when inputs unavailable. PAC-4.
+                _ml = linear_result.get("ml_features") or {}
+                _task_dur_s  = _ml.get("task_duration_sec") or 0
+                _fw_s        = _ml.get("framework_overhead_sec") or 0
+                _attr_uj     = _ml.get("attributed_energy_uj") or 0
+                _spbm_cov    = (_ml.get("spbm_telemetry_coverage") or {}).get(
+                    "spbm_sample_coverage_pct")
+                _phase_cov   = _ml.get("phase_sample_coverage_pct")
+                _gpu_dynamic = _ml.get("gpu_dynamic_energy_uj") or 0
+                _gpu_spbm    = _ml.get("gpu_total_energy_uj") or 0
+                # avg_task_power_watts = attributed_energy_uj / task_duration_s / 1e6
+                if _attr_uj and _task_dur_s:
+                    linear_agg["avg_task_power_watts"] = round(
+                        _attr_uj / 1_000_000.0 / _task_dur_s, 4)
+                # energy_sample_coverage_pct: SPBM preferred, phase fallback
+                linear_agg["energy_sample_coverage_pct"] = (
+                    _spbm_cov if _spbm_cov is not None else _phase_cov)
+                # framework_overhead_energy_uj = avg_power_w * overhead_s * 1e6
+                if linear_agg.get("avg_task_power_watts") and _fw_s:
+                    linear_agg["framework_overhead_energy_uj"] = round(
+                        linear_agg["avg_task_power_watts"] * _fw_s * 1_000_000)
+                # gpu_attribution_method set from live measurement result
+                if _gpu_dynamic > 0:
+                    linear_agg["gpu_attribution_method"] = "dcgm_field156"
+                elif _gpu_spbm > 0:
+                    linear_agg["gpu_attribution_method"] = "spbm_package_v1"
+                else:
+                    linear_agg["gpu_attribution_method"] = "none"
                 db.update_run_stats(linear_id, linear_agg)
 
             # Insert agentic run
@@ -1058,6 +1087,30 @@ class ExperimentRunner:
                         agentic_result.get("ml_features", {}).get("frequency_mhz"):
                     agentic_agg["cpu_avg_mhz"] = agentic_result["ml_features"]["frequency_mhz"]
                     agentic_agg["cpu_busy_mhz"] = agentic_result["ml_features"]["frequency_mhz"]
+                # Compute derived fields inline — no separate ETL needed.
+                _ml = agentic_result.get("ml_features") or {}
+                _task_dur_s  = _ml.get("task_duration_sec") or 0
+                _fw_s        = _ml.get("framework_overhead_sec") or 0
+                _attr_uj     = _ml.get("attributed_energy_uj") or 0
+                _spbm_cov    = (_ml.get("spbm_telemetry_coverage") or {}).get(
+                    "spbm_sample_coverage_pct")
+                _phase_cov   = _ml.get("phase_sample_coverage_pct")
+                _gpu_dynamic = _ml.get("gpu_dynamic_energy_uj") or 0
+                _gpu_spbm    = _ml.get("gpu_total_energy_uj") or 0
+                if _attr_uj and _task_dur_s:
+                    agentic_agg["avg_task_power_watts"] = round(
+                        _attr_uj / 1_000_000.0 / _task_dur_s, 4)
+                agentic_agg["energy_sample_coverage_pct"] = (
+                    _spbm_cov if _spbm_cov is not None else _phase_cov)
+                if agentic_agg.get("avg_task_power_watts") and _fw_s:
+                    agentic_agg["framework_overhead_energy_uj"] = round(
+                        agentic_agg["avg_task_power_watts"] * _fw_s * 1_000_000)
+                if _gpu_dynamic > 0:
+                    agentic_agg["gpu_attribution_method"] = "dcgm_field156"
+                elif _gpu_spbm > 0:
+                    agentic_agg["gpu_attribution_method"] = "spbm_package_v1"
+                else:
+                    agentic_agg["gpu_attribution_method"] = "none"
                 db.update_run_stats(agentic_id, agentic_agg)
             # Agentic orchestration events
             if "orchestration_events" in agentic_result:
@@ -1478,6 +1531,29 @@ class ExperimentRunner:
                         result.get("interrupt_samples", []),
                         result.get("thermal_samples", []),
                     )
+                    _ml = result.get("ml_features") or {}
+                    _task_dur_s  = _ml.get("task_duration_sec") or 0
+                    _fw_s        = _ml.get("framework_overhead_sec") or 0
+                    _attr_uj     = _ml.get("attributed_energy_uj") or 0
+                    _spbm_cov    = (_ml.get("spbm_telemetry_coverage") or {}).get(
+                        "spbm_sample_coverage_pct")
+                    _phase_cov   = _ml.get("phase_sample_coverage_pct")
+                    _gpu_dynamic = _ml.get("gpu_dynamic_energy_uj") or 0
+                    _gpu_spbm    = _ml.get("gpu_total_energy_uj") or 0
+                    if _attr_uj and _task_dur_s:
+                        agg["avg_task_power_watts"] = round(
+                            _attr_uj / 1_000_000.0 / _task_dur_s, 4)
+                    agg["energy_sample_coverage_pct"] = (
+                        _spbm_cov if _spbm_cov is not None else _phase_cov)
+                    if agg.get("avg_task_power_watts") and _fw_s:
+                        agg["framework_overhead_energy_uj"] = round(
+                            agg["avg_task_power_watts"] * _fw_s * 1_000_000)
+                    if _gpu_dynamic > 0:
+                        agg["gpu_attribution_method"] = "dcgm_field156"
+                    elif _gpu_spbm > 0:
+                        agg["gpu_attribution_method"] = "spbm_package_v1"
+                    else:
+                        agg["gpu_attribution_method"] = "none"
                     db.update_run_stats(run_id, agg)
 
                 # Orchestration events — present on agentic side
@@ -1596,12 +1672,37 @@ class ExperimentRunner:
         if "thermal_samples" in result:
             db.insert_thermal_samples(run_id, result["thermal_samples"])
             # Aggregate hardware stats after thermal samples inserted
-            self.aggregate_run_stats(
+            _agg2 = self.aggregate_run_stats(
                 run_id,
                 result.get("cpu_samples", []),
                 result.get("interrupt_samples", []),
                 result.get("thermal_samples", []),
             )
+            _ml2 = result.get("ml_features") or {}
+            _task_dur_s2  = _ml2.get("task_duration_sec") or 0
+            _fw_s2        = _ml2.get("framework_overhead_sec") or 0
+            _attr_uj2     = _ml2.get("attributed_energy_uj") or 0
+            _spbm_cov2    = (_ml2.get("spbm_telemetry_coverage") or {}).get(
+                "spbm_sample_coverage_pct")
+            _phase_cov2   = _ml2.get("phase_sample_coverage_pct")
+            _gpu_dynamic2 = _ml2.get("gpu_dynamic_energy_uj") or 0
+            _gpu_spbm2    = _ml2.get("gpu_total_energy_uj") or 0
+            if _attr_uj2 and _task_dur_s2:
+                _agg2["avg_task_power_watts"] = round(
+                    _attr_uj2 / 1_000_000.0 / _task_dur_s2, 4)
+            _agg2["energy_sample_coverage_pct"] = (
+                _spbm_cov2 if _spbm_cov2 is not None else _phase_cov2)
+            if _agg2.get("avg_task_power_watts") and _fw_s2:
+                _agg2["framework_overhead_energy_uj"] = round(
+                    _agg2["avg_task_power_watts"] * _fw_s2 * 1_000_000)
+            if _gpu_dynamic2 > 0:
+                _agg2["gpu_attribution_method"] = "dcgm_field156"
+            elif _gpu_spbm2 > 0:
+                _agg2["gpu_attribution_method"] = "spbm_package_v1"
+            else:
+                _agg2["gpu_attribution_method"] = "none"
+            if hasattr(db, "update_run_stats"):
+                db.update_run_stats(run_id, _agg2)
 
         # Orchestration events — agentic only in practice, safe to call on linear
         if "orchestration_events" in result:

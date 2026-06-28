@@ -57,6 +57,8 @@ def _build_arm_cpu_sample_row(run_id, result):
         raw = result.get("raw_energy")
         if isinstance(raw, dict):
             perf = raw.get("perf")
+        elif raw is not None:
+            perf = getattr(raw, "perf", None)
 
     if not perf:
         # No ARM PMU data in result — not an error on platforms where
