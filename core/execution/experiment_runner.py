@@ -938,11 +938,13 @@ class ExperimentRunner:
                 if linear_agg.get("avg_task_power_watts") and _fw_s:
                     linear_agg["framework_overhead_energy_uj"] = round(
                         linear_agg["avg_task_power_watts"] * _fw_s * 1_000_000)
-                # gpu_attribution_method set from live measurement result
-                if _gpu_dynamic > 0:
+                _is_spbm     = _ml.get("spbm_telemetry_coverage") is not None
+                if _is_spbm and _gpu_dynamic > 0:
                     linear_agg["gpu_attribution_method"] = "dcgm_field156"
-                elif _gpu_spbm > 0:
+                elif _is_spbm and _gpu_spbm > 0:
                     linear_agg["gpu_attribution_method"] = "spbm_package_v1"
+                elif not _is_spbm and _gpu_spbm > 0:
+                    linear_agg["gpu_attribution_method"] = "pp1_msr"
                 else:
                     linear_agg["gpu_attribution_method"] = "none"
                 db.update_run_stats(linear_id, linear_agg)
@@ -1105,10 +1107,13 @@ class ExperimentRunner:
                 if agentic_agg.get("avg_task_power_watts") and _fw_s:
                     agentic_agg["framework_overhead_energy_uj"] = round(
                         agentic_agg["avg_task_power_watts"] * _fw_s * 1_000_000)
-                if _gpu_dynamic > 0:
+                _is_spbm     = _ml.get("spbm_telemetry_coverage") is not None
+                if _is_spbm and _gpu_dynamic > 0:
                     agentic_agg["gpu_attribution_method"] = "dcgm_field156"
-                elif _gpu_spbm > 0:
+                elif _is_spbm and _gpu_spbm > 0:
                     agentic_agg["gpu_attribution_method"] = "spbm_package_v1"
+                elif not _is_spbm and _gpu_spbm > 0:
+                    agentic_agg["gpu_attribution_method"] = "pp1_msr"
                 else:
                     agentic_agg["gpu_attribution_method"] = "none"
                 db.update_run_stats(agentic_id, agentic_agg)
@@ -1548,10 +1553,13 @@ class ExperimentRunner:
                     if agg.get("avg_task_power_watts") and _fw_s:
                         agg["framework_overhead_energy_uj"] = round(
                             agg["avg_task_power_watts"] * _fw_s * 1_000_000)
-                    if _gpu_dynamic > 0:
+                    _is_spbm     = _ml.get("spbm_telemetry_coverage") is not None
+                    if _is_spbm and _gpu_dynamic > 0:
                         agg["gpu_attribution_method"] = "dcgm_field156"
-                    elif _gpu_spbm > 0:
+                    elif _is_spbm and _gpu_spbm > 0:
                         agg["gpu_attribution_method"] = "spbm_package_v1"
+                    elif not _is_spbm and _gpu_spbm > 0:
+                        agg["gpu_attribution_method"] = "pp1_msr"
                     else:
                         agg["gpu_attribution_method"] = "none"
                     db.update_run_stats(run_id, agg)
@@ -1695,10 +1703,13 @@ class ExperimentRunner:
             if _agg2.get("avg_task_power_watts") and _fw_s2:
                 _agg2["framework_overhead_energy_uj"] = round(
                     _agg2["avg_task_power_watts"] * _fw_s2 * 1_000_000)
-            if _gpu_dynamic2 > 0:
+            _is_spbm2     = _ml2.get("spbm_telemetry_coverage") is not None
+            if _is_spbm2 and _gpu_dynamic2 > 0:
                 _agg2["gpu_attribution_method"] = "dcgm_field156"
-            elif _gpu_spbm2 > 0:
+            elif _is_spbm2 and _gpu_spbm2 > 0:
                 _agg2["gpu_attribution_method"] = "spbm_package_v1"
+            elif not _is_spbm2 and _gpu_spbm2 > 0:
+                _agg2["gpu_attribution_method"] = "pp1_msr"
             else:
                 _agg2["gpu_attribution_method"] = "none"
             if hasattr(db, "update_run_stats"):
