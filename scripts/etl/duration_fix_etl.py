@@ -58,7 +58,8 @@ def _pkg_uj(rapl_dict: dict | None) -> int | None:
     """Extract package energy µJ from a rapl.read_energy() dict. PAC safe."""
     if not rapl_dict:
         return None
-    return rapl_dict.get("package-0") or rapl_dict.get("package")
+    return (rapl_dict.get("package-0") or rapl_dict.get("package")
+            or rapl_dict.get("pkg"))
  
  
 def _compute_window_energy(
@@ -169,15 +170,26 @@ def _fix_run(cursor: sqlite3.Cursor, run_id: int) -> dict | None:
     es = cursor.fetchone()
 
     if not es or es[2] == 0:
-        logger.warning("Run %d has no energy_samples — skipping", run_id)
-        return None
-
-    # sample_start_ns/end_ns only populated post-Chunk2.
-    # Fall back to timestamp_ns for pre-Chunk2 historical runs.
-    first_sample_ns = es[0] if es[0] is not None else es[3]
-    last_sample_ns  = es[1] if es[1] is not None else es[4]
-    sample_count    = es[2]
-
+        # Fallback: SPBM platform — use energy_sample_domains domain_id=1
+        cursor.execute("""
+            SELECT MIN(esv.timestamp_ns), MAX(esv.timestamp_ns), COUNT(*)
+            FROM energy_sample_domains esd
+            JOIN energy_samples_v2 esv ON esv.sample_id = esd.sample_id
+            WHERE esd.run_id = ? AND esd.domain_id = 1
+        """, (run_id,))
+        spbm_es = cursor.fetchone()
+        if not spbm_es or spbm_es[2] == 0:
+            logger.warning("Run %d has no energy_samples or SPBM samples — skipping", run_id)
+            return None
+        first_sample_ns = spbm_es[0]
+        last_sample_ns  = spbm_es[1]
+        sample_count    = spbm_es[2]
+    else:
+        # sample_start_ns/end_ns only populated post-Chunk2.
+        # Fall back to timestamp_ns for pre-Chunk2 historical runs.
+        first_sample_ns = es[0] if es[0] is not None else es[3]
+        last_sample_ns  = es[1] if es[1] is not None else es[4]
+        sample_count    = es[2]
     if first_sample_ns is None or last_sample_ns is None:
         logger.warning("Run %d has no usable sample timestamps — skipping", run_id)
         return None
@@ -371,11 +383,22 @@ def fix_run_with_pretask(
         """, (run_id,))
         es_row = cursor.fetchone()
         if not es_row or es_row[0] is None:
-            logger.warning("Run %d: no energy_samples — skipping pre/post energy", run_id)
-            return True
- 
-        rapl_t0_uj   = es_row[0]   # RAPL at start_measurement()
-        rapl_t1_uj   = es_row[1]   # RAPL at stop_measurement() proxy
+            # Fallback: SPBM platform — use energy_sample_domains domain_id=1
+            cursor.execute("""
+                SELECT MIN(esd.energy_uj), MAX(esd.energy_uj)
+                FROM energy_sample_domains esd
+                JOIN energy_samples_v2 esv ON esv.sample_id = esd.sample_id
+                WHERE esd.run_id = ? AND esd.domain_id = 1
+            """, (run_id,))
+            spbm_row = cursor.fetchone()
+            if not spbm_row or spbm_row[0] is None:
+                logger.warning("Run %d: no energy_samples or SPBM samples — skipping", run_id)
+                return True
+            rapl_t0_uj = int(spbm_row[0])
+            rapl_t1_uj = int(spbm_row[1])
+        else:
+            rapl_t0_uj   = es_row[0]   # RAPL at start_measurement()
+            rapl_t1_uj   = es_row[1]   # RAPL at stop_measurement() proxy
  
         # ── Compute pre-task energy ───────────────────────────────────────
         pre_task_duration_ns = int(pre_task_duration_sec * 1e9)
