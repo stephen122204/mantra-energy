@@ -242,7 +242,69 @@ def check_energy_attribution(conn, run_ids: list) -> list:
 
     return results
 
-
+def check_run_outliers(conn, run_ids: list) -> list:
+    """
+    Verify run_outliers table is reachable and report current flag counts
+    for the given run_ids. This is an EIC-4 registration, not a pass/fail
+    gate: an unflagged run is not an error, most runs should have zero
+    rows here. The check exists so a broken FK, a botched migration, or a
+    detector crash shows up as a warning during integrity checks rather
+    than silently producing an empty table forever.
+ 
+    Args:
+        conn: sqlite3 connection
+        run_ids: run_id list for the experiment being checked
+ 
+    Returns:
+        list of ok()/warn()/fail() formatted strings, consistent with every
+        other check_* function in this file.
+    """
+    results = []
+    if not run_ids:
+        return results
+ 
+    placeholders = ",".join("?" for _ in run_ids)
+ 
+    # DC-3 compliance: explicit try/except, not a bare except, and the
+    # failure is surfaced as fail() rather than silently returning [].
+    try:
+        cur = conn.execute(
+            f"SELECT severity, review_status, COUNT(*) "
+            f"FROM run_outliers WHERE run_id IN ({placeholders}) "
+            f"GROUP BY severity, review_status",
+            run_ids,
+        )
+        rows = cur.fetchall()
+    except Exception as e:
+        results.append(fail(f"run_outliers: query failed ({e})"))
+        return results
+ 
+    if not rows:
+        results.append(ok(f"run_outliers: 0/{len(run_ids)} runs flagged"))
+        return results
+ 
+    total_flagged = sum(count for _, _, count in rows)
+    confirmed = sum(count for sev, status, count in rows if status == "confirmed")
+    extreme_pending = sum(
+        count for sev, status, count in rows
+        if sev == "extreme" and status == "pending"
+    )
+ 
+    if extreme_pending > 0:
+        # Extreme severity sitting in pending review is worth surfacing as
+        # a warning at integrity check time, not just buried in a web page
+        # review queue nobody is required to look at before handoff.
+        results.append(warn(
+            f"run_outliers: {extreme_pending} extreme-severity runs awaiting "
+            f"human review (EIC-3: must be documented before chunk handoff)"
+        ))
+    else:
+        results.append(ok(
+            f"run_outliers: {total_flagged} flagged "
+            f"({confirmed} confirmed excluded) across {len(run_ids)} runs"
+        ))
+ 
+    return results
 def check_run_quality(conn, run_ids: list) -> list:
     results = []
 

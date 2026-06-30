@@ -1409,7 +1409,7 @@ def _load_derived_methods() -> List[Dict]:
             "doc":           "09-derived-metrics-methodology.md",
             "section":       "Streaming Latency Metrics",
         },
-            {
+        {
             "id":            "quality_scorer_v1",
             "name":          "Run Quality Scorer",
             "provenance":    "CALCULATED",
@@ -1426,7 +1426,34 @@ def _load_derived_methods() -> List[Dict]:
             "section":       "Run Quality Scoring",
             "fn":            None,
         },
-            {
+        {
+            "id":           "outlier_detection_v1",
+            "name":         "Statistical and Domain-Rule Outlier Detection",
+            "provenance":   "CALCULATED",
+            "layer":        "orchestration",
+            "output_metric":"run_outliers.severity",
+            "output_unit":  "category",
+            "applicable_on":["any"],
+            "confidence":   0.85,
+            "formula_latex": r"Z_{mod} = 0.6745 \cdot \frac{x_i - \mathrm{median}(X)}{\mathrm{MAD}(X)}, \quad \mathrm{MAD}(X) = \mathrm{median}(|x_i - \mathrm{median}(X)|)",
+            "parameters":   {
+                "config_table": "outlier_detection_config",
+                "config_version": 1,
+                "methods": "domain_rule, mad_zscore, iqr_fence",
+                "z_threshold_suspect": 3.5,
+                "z_threshold_extreme": 5.0,
+                "iqr_multiplier": 2.5,
+                "min_population_size": 10,
+                "population_key": "task_name|workflow_type, computed within a single platform DB",
+                "outlier_class_values": "data_quality_failure, statistical_anomaly (added migration v80)",
+                "analysis_domains": "coverage (foundation), energy, gpu_energy, cpu_perf, thermal, llm_perf, orchestration, timing, system, identity (added migration v80)",
+            },
+            "description":  "Layer 3 of the three layer data selection model (experiments.is_valid is Layer 1, run_quality.experiment_valid is Layer 2). Three independent detection methods: domain rules (deterministic, zero cold start, e.g. overhead energy cannot exceed total energy), modified Z-score via median absolute deviation (robust to the extreme outliers it detects, primary statistical method, requires min_population_size runs), and IQR fence (cross check only, never escalates severity alone, only on agreement with MAD). Detector never auto-excludes: writes review_status='pending', a human must explicitly set 'confirmed' to remove a run from a clean view. Migration v80 added outlier_class (data_quality_failure vs statistical_anomaly) and purpose-conditional, domain-scoped filtering: 12 views (v_runs_clean_<domain> and v_runs_measured_<domain> for energy, cpu, thermal, llm, orchestration, system), plus the unchanged v1 blanket v_runs_clean and v_runs_unfiltered. clean tiers exclude confirmed outliers of either class; measured tiers exclude only confirmed data_quality_failure, retaining confirmed statistical_anomaly rows for distribution/tail/robustness analyses. See core/utils/outlier_detector.py, scripts/etl/compute_outliers.py, scripts/migrations/v80_outlier_v2_views.py.",
+            "doc":          "32-outlier-detection-methodology.md",
+            "section":      "Outlier Detection Methodology",
+        },
+      
+        {
             "id":            "failure_classification_v1",
             "name":          "Failure Type Classifier",
             "provenance":    "CALCULATED",

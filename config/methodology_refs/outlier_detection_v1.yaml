@@ -1,0 +1,31 @@
+method_id: outlier_detection_v1
+references:
+  - title: "Detecting outliers: Do not use standard deviation around the mean, use absolute deviation around the median"
+    authors: "Leys, C., Ley, C., Klein, O., Bernard, P., Licata, L."
+    year: 2013
+    ref_type: "paper"
+    relevance: >
+      Establishes the modified Z-score (median absolute deviation, MAD
+      constant 0.6745) as robust to the same extreme outliers it is meant
+      to detect, unlike classic standard-deviation-based Z-scores which a
+      single extreme value can inflate enough to mask itself.
+  - title: "Exploratory Data Analysis"
+    authors: "Tukey, J. W."
+    year: 1977
+    ref_type: "paper"
+    relevance: >
+      Origin of the IQR fence method (Q1/Q3 plus a multiplier of the
+      interquartile range). Used here only as a cross-check (Layer 3),
+      never as the primary detector, per the spec's severity resolution
+      rules.
+formula:
+  mad_zscore: "Z_mod = 0.6745 * (x_i - median(X)) / MAD(X), where MAD(X) = median(|x_i - median(X)|)"
+  iqr_fence: "lower = Q1 - k*IQR, upper = Q3 + k*IQR, k = 2.5 (configured, not 1.5)"
+parameters:
+  config_table: outlier_detection_config
+  config_version: 1
+  z_threshold_suspect: 3.5
+  z_threshold_extreme: 5.0
+  iqr_multiplier: 2.5
+  min_population_size: 10
+confidence: 0.85

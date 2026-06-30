@@ -398,7 +398,16 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     # run_quality columns — scored by quality_scorer_v1 post-run
     "run_quality.experiment_valid": ("quality_scorer_v1", "CALCULATED"),
     "run_quality.quality_score":    ("quality_scorer_v1", "CALCULATED"),
-    "run_quality.rejection_reason": ("quality_scorer_v1", "CALCULATED"),                   
+    "run_quality.rejection_reason": ("quality_scorer_v1", "CALCULATED"),
+    "run_outliers.severity":           ("outlier_detection_v1", "CALCULATED"),
+    "run_outliers.z_score":            ("outlier_detection_v1", "CALCULATED"),
+    "run_outliers.population_median":  ("outlier_detection_v1", "CALCULATED"),
+    "run_outliers.population_mad":     ("outlier_detection_v1", "CALCULATED"),
+    "run_outliers.iqr_lower_fence":    ("outlier_detection_v1", "CALCULATED"),
+    "run_outliers.iqr_upper_fence":    ("outlier_detection_v1", "CALCULATED"),
+    "run_outliers.threshold_violated": ("outlier_detection_v1", "CALCULATED"),
+    "run_outliers.outlier_class":      ("outlier_detection_v1", "CALCULATED"),
+    "run_outliers.review_status":      (None, "SYSTEM"),                       
     # ── INFERRED ─────────────────────────────────────────────────────────────
     "carbon_g":                     ("carbon_calculation",             "INFERRED"),
     "water_ml":                     ("water_calculation",              "INFERRED"),
@@ -574,6 +583,7 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "network_wait_time_fraction_v1": 0.50,   # SPEC_03 Strategy C: universal fallback
     "nic_sysfs_reader_v1":       0.99,   # SPEC_03A: direct kernel counter read
     "nic_window_validator_v1":   0.90,   # SPEC_03A: byte delta validation 
+    "outlier_detection_v1":    0.85,
 }
 
 

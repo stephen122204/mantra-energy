@@ -95,6 +95,7 @@ nav:
     - Cooling Device Measurement:         research/29-cooling-subsystem.md
     - ARM PMU Cache Metrics:              research/30-arm-cpu-samples.md
     - Network Energy Cross-Platform:      research/31-network-energy-cross-platform-methodology.md
+    - Outlier Detection Methodology:      research/32-outlier-detection-methodology.md
   
   - API Reference: 
     - Overview: api/reference.md

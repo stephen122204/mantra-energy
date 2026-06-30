@@ -1964,6 +1964,94 @@ CREATE TABLE IF NOT EXISTS run_quality (
 CREATE INDEX IF NOT EXISTS idx_run_quality_run_id ON run_quality(run_id);
 CREATE INDEX IF NOT EXISTS idx_run_quality_valid  ON run_quality(experiment_valid);
 """ 
+CREATE_OUTLIER_DETECTION_CONFIG = """
+CREATE TABLE IF NOT EXISTS outlier_detection_config (
+    config_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    config_version      INTEGER NOT NULL,
+    method              TEXT NOT NULL,
+    metric_name         TEXT NOT NULL,
+    parameter_name      TEXT NOT NULL,
+    parameter_value     REAL NOT NULL,
+    description         TEXT,
+    effective_from      TIMESTAMP NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')),
+    effective_to        TIMESTAMP,
+    created_at          TIMESTAMP NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE(config_version, method, metric_name, parameter_name)
+);
+CREATE INDEX IF NOT EXISTS idx_odc_active
+    ON outlier_detection_config(method, metric_name)
+    WHERE effective_to IS NULL;
+"""
+ 
+CREATE_RUN_OUTLIERS = """
+CREATE TABLE IF NOT EXISTS run_outliers (
+    outlier_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id                INTEGER NOT NULL,
+    metric_name           TEXT NOT NULL,
+    detection_method      TEXT NOT NULL,
+    detection_version     INTEGER NOT NULL,
+    population_key        TEXT NOT NULL,
+    population_size       INTEGER NOT NULL,
+    raw_value             REAL NOT NULL,
+    population_median     REAL,
+    population_mad        REAL,
+    z_score               REAL,
+    iqr_lower_fence       REAL,
+    iqr_upper_fence       REAL,
+    threshold_violated    REAL NOT NULL,
+    direction             TEXT,
+    severity              TEXT NOT NULL DEFAULT 'informational',
+    detection_status      TEXT NOT NULL DEFAULT 'flagged',
+    review_status         TEXT NOT NULL DEFAULT 'pending',
+    reviewed_by           TEXT,
+    reviewed_at           TIMESTAMP,
+    review_note           TEXT,
+    detected_at           TIMESTAMP NOT NULL
+        DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')),
+    FOREIGN KEY (run_id) REFERENCES runs(run_id),
+    UNIQUE(run_id, metric_name, detection_method)
+);
+CREATE INDEX IF NOT EXISTS idx_ro_run         ON run_outliers(run_id);
+CREATE INDEX IF NOT EXISTS idx_ro_review      ON run_outliers(review_status);
+CREATE INDEX IF NOT EXISTS idx_ro_severity    ON run_outliers(severity);
+CREATE INDEX IF NOT EXISTS idx_ro_population  ON run_outliers(population_key);
+CREATE INDEX IF NOT EXISTS idx_ro_confirmed   ON run_outliers(run_id)
+    WHERE review_status = 'confirmed';
+"""
+ 
+CREATE_V_RUNS_CLEAN = """
+CREATE VIEW IF NOT EXISTS v_runs_clean AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT run_id FROM run_outliers WHERE review_status = 'confirmed'
+    );
+"""
+ 
+CREATE_V_RUNS_UNFILTERED = """
+CREATE VIEW IF NOT EXISTS v_runs_unfiltered AS
+SELECT r.*,
+    e.is_valid AS exp_is_valid,
+    rq.experiment_valid AS quality_valid,
+    rq.quality_score,
+    CASE WHEN ro.run_id IS NOT NULL THEN 1 ELSE 0 END AS has_outlier_flags,
+    ro.max_severity
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+LEFT JOIN (
+    SELECT run_id,
+        CASE MAX(CASE severity WHEN 'extreme' THEN 3 WHEN 'suspect' THEN 2 ELSE 1 END)
+            WHEN 3 THEN 'extreme' WHEN 2 THEN 'suspect' ELSE 'informational'
+        END AS max_severity
+    FROM run_outliers GROUP BY run_id
+) ro ON r.run_id = ro.run_id;
+"""
 # =============================================================================
 # Chunk 6: Normalisation Views
 # =============================================================================

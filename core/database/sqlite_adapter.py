@@ -33,6 +33,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from .base import DatabaseError, DatabaseInterface
 from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES, CREATE_RUN_QUALITY,
+                     CREATE_OUTLIER_DETECTION_CONFIG, CREATE_RUN_OUTLIERS,
+                     CREATE_V_RUNS_CLEAN, CREATE_V_RUNS_UNFILTERED,
                      CREATE_IDLE_BASELINE_DOMAINS, CREATE_V_IDLE_BASELINES,
                      CREATE_V_IDLE_BASELINE_DOMAINS, CREATE_V_PLATFORM_BASELINE_SUMMARY,
                      CREATE_GPU_SAMPLES, CREATE_GPU_CONFIG,
@@ -285,7 +287,11 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_HALLUCINATION_EVENTS)
         self.conn.executescript(CREATE_OUTPUT_QUALITY)
         self.conn.executescript(CREATE_OUTPUT_QUALITY_JUDGES) 
-        self.conn.executescript(CREATE_TASK_QUALITY_CONFIG)               
+        self.conn.executescript(CREATE_TASK_QUALITY_CONFIG)
+        self.conn.executescript(CREATE_OUTLIER_DETECTION_CONFIG)
+        self.conn.executescript(CREATE_RUN_OUTLIERS)
+        self.conn.executescript(CREATE_V_RUNS_CLEAN)
+        self.conn.executescript(CREATE_V_RUNS_UNFILTERED)               
         self.conn.execute(CREATE_HARDWARE_CONFIG)
         self.conn.execute(CREATE_IDLE_BASELINES)
         self.conn.execute(CREATE_RUNS)
