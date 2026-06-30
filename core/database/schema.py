@@ -1975,7 +1975,9 @@ CREATE TABLE IF NOT EXISTS outlier_detection_config (
     description         TEXT,
     effective_from      TIMESTAMP NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')),
     effective_to        TIMESTAMP,
-    created_at          TIMESTAMP NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')),
+    created_at                       TIMESTAMP NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')),
+    outlier_class                      TEXT DEFAULT 'data_quality_failure',
+
     UNIQUE(config_version, method, metric_name, parameter_name)
 );
 CREATE INDEX IF NOT EXISTS idx_odc_active
@@ -2006,6 +2008,7 @@ CREATE TABLE IF NOT EXISTS run_outliers (
     reviewed_by           TEXT,
     reviewed_at           TIMESTAMP,
     review_note           TEXT,
+    outlier_class         TEXT DEFAULT 'data_quality_failure',
     detected_at           TIMESTAMP NOT NULL
         DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')),
     FOREIGN KEY (run_id) REFERENCES runs(run_id),
@@ -2053,9 +2056,426 @@ LEFT JOIN (
 ) ro ON r.run_id = ro.run_id;
 """
 # =============================================================================
+# Outlier Detection v2 (schema v80): analysis domains, metric mappings,
+# view config, and the 12 purpose-scoped views (6 domains x 2 tiers).
+# Rule SC-1/SC-2: these constants must match the live DB exactly.
+# ALTER TABLE additions (outlier_class on run_outliers and
+# outlier_detection_config) are reflected by updating the CREATE TABLE
+# constants above to include outlier_class in the column list.
+# =============================================================================
+
+CREATE_ANALYSIS_DOMAIN_CONFIG = """
+CREATE TABLE IF NOT EXISTS analysis_domain_config (
+    domain_name         TEXT PRIMARY KEY,
+    is_foundation        INTEGER NOT NULL DEFAULT 0,
+    description            TEXT NOT NULL,
+    column_count             INTEGER NOT NULL,
+    created_at                  TIMESTAMP NOT NULL
+        DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+"""
+
+CREATE_METRIC_ANALYSIS_DOMAINS = """
+CREATE TABLE IF NOT EXISTS metric_analysis_domains (
+    metric_name          TEXT NOT NULL,
+    domain_name            TEXT NOT NULL,
+    rationale                 TEXT,
+    PRIMARY KEY (metric_name, domain_name),
+    FOREIGN KEY (domain_name) REFERENCES analysis_domain_config(domain_name)
+);
+CREATE INDEX IF NOT EXISTS idx_mad_domain ON metric_analysis_domains(domain_name);
+"""
+
+CREATE_ANALYSIS_VIEW_CONFIG = """
+CREATE TABLE IF NOT EXISTS analysis_view_config (
+    view_name             TEXT NOT NULL,
+    domain_name             TEXT NOT NULL,
+    include_foundation         INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (view_name, domain_name),
+    FOREIGN KEY (domain_name) REFERENCES analysis_domain_config(domain_name)
+);
+"""
+# NOTE: The 12 purpose-scoped views (v_runs_clean_<domain>,
+# v_runs_measured_<domain>) are generated dynamically by
+# scripts/migrations/v80_outlier_v2_views.py from the seeded
+# analysis_view_config and analysis_domain_config tables.
+# They are not represented as static constants here because their
+# SQL depends on runtime config (domain membership, foundation
+# propagation flags). Re-run v80_outlier_v2_views.py on any fresh
+# database after seeding to regenerate them. (SC-1 exception,
+# documented here per Rule SC-2.)
+# =============================================================================
 # Chunk 6: Normalisation Views
 # =============================================================================
- 
+
+CREATE_V_RUNS_CLEAN_ENERGY = """
+CREATE VIEW IF NOT EXISTS v_runs_clean_energy AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'energy'
+              )
+              
+                  OR mad.domain_name IN (
+                      SELECT domain_name FROM analysis_domain_config
+                      WHERE is_foundation = 1
+                  )
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_MEASURED_ENERGY = """
+CREATE VIEW IF NOT EXISTS v_runs_measured_energy AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          AND ro.outlier_class = 'data_quality_failure'
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'energy'
+              )
+              
+                  OR mad.domain_name IN (
+                      SELECT domain_name FROM analysis_domain_config
+                      WHERE is_foundation = 1
+                  )
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_CLEAN_CPU = """
+CREATE VIEW IF NOT EXISTS v_runs_clean_cpu AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'cpu'
+              )
+              
+                  OR mad.domain_name IN (
+                      SELECT domain_name FROM analysis_domain_config
+                      WHERE is_foundation = 1
+                  )
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_MEASURED_CPU = """
+CREATE VIEW IF NOT EXISTS v_runs_measured_cpu AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          AND ro.outlier_class = 'data_quality_failure'
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'cpu'
+              )
+              
+                  OR mad.domain_name IN (
+                      SELECT domain_name FROM analysis_domain_config
+                      WHERE is_foundation = 1
+                  )
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_CLEAN_THERMAL = """
+CREATE VIEW IF NOT EXISTS v_runs_clean_thermal AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'thermal'
+              )
+              
+                  OR mad.domain_name IN (
+                      SELECT domain_name FROM analysis_domain_config
+                      WHERE is_foundation = 1
+                  )
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_MEASURED_THERMAL = """
+CREATE VIEW IF NOT EXISTS v_runs_measured_thermal AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          AND ro.outlier_class = 'data_quality_failure'
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'thermal'
+              )
+              
+                  OR mad.domain_name IN (
+                      SELECT domain_name FROM analysis_domain_config
+                      WHERE is_foundation = 1
+                  )
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_CLEAN_LLM = """
+CREATE VIEW IF NOT EXISTS v_runs_clean_llm AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'llm'
+              )
+              
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_MEASURED_LLM = """
+CREATE VIEW IF NOT EXISTS v_runs_measured_llm AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          AND ro.outlier_class = 'data_quality_failure'
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'llm'
+              )
+              
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_CLEAN_ORCHESTRATION = """
+CREATE VIEW IF NOT EXISTS v_runs_clean_orchestration AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'orchestration'
+              )
+              
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_MEASURED_ORCHESTRATION = """
+CREATE VIEW IF NOT EXISTS v_runs_measured_orchestration AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          AND ro.outlier_class = 'data_quality_failure'
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'orchestration'
+              )
+              
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_CLEAN_SYSTEM = """
+CREATE VIEW IF NOT EXISTS v_runs_clean_system AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'system'
+              )
+              
+                  OR mad.domain_name IN (
+                      SELECT domain_name FROM analysis_domain_config
+                      WHERE is_foundation = 1
+                  )
+          )
+    )
+
+;
+"""
+
+CREATE_V_RUNS_MEASURED_SYSTEM = """
+CREATE VIEW IF NOT EXISTS v_runs_measured_system AS
+SELECT r.*
+FROM runs r
+JOIN experiments e ON r.exp_id = e.exp_id
+LEFT JOIN run_quality rq ON r.run_id = rq.run_id
+WHERE
+    e.is_valid = 1
+    AND COALESCE(rq.experiment_valid, 1) = 1
+    AND r.run_id NOT IN (
+        SELECT DISTINCT ro.run_id
+        FROM run_outliers ro
+        JOIN metric_analysis_domains mad
+            ON ro.metric_name = mad.metric_name
+        WHERE ro.review_status = 'confirmed'
+          AND ro.outlier_class = 'data_quality_failure'
+          AND (
+              mad.domain_name IN (
+                  SELECT avc.domain_name FROM analysis_view_config avc
+                  WHERE avc.view_name = 'system'
+              )
+              
+                  OR mad.domain_name IN (
+                      SELECT domain_name FROM analysis_domain_config
+                      WHERE is_foundation = 1
+                  )
+          )
+    )
+
+;
+""" 
+
 CREATE_ENERGY_NORMALIZED_VIEW = """
 CREATE VIEW IF NOT EXISTS v_energy_normalized AS
 SELECT

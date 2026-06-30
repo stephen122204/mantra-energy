@@ -35,6 +35,14 @@ from .base import DatabaseError, DatabaseInterface
 from .schema import (CREATE_CPU_SAMPLES, CREATE_ENERGY_SAMPLES, CREATE_RUN_QUALITY,
                      CREATE_OUTLIER_DETECTION_CONFIG, CREATE_RUN_OUTLIERS,
                      CREATE_V_RUNS_CLEAN, CREATE_V_RUNS_UNFILTERED,
+                     CREATE_ANALYSIS_DOMAIN_CONFIG, CREATE_METRIC_ANALYSIS_DOMAINS,
+                     CREATE_ANALYSIS_VIEW_CONFIG,
+                     CREATE_V_RUNS_CLEAN_ENERGY, CREATE_V_RUNS_MEASURED_ENERGY,
+                     CREATE_V_RUNS_CLEAN_CPU, CREATE_V_RUNS_MEASURED_CPU,
+                     CREATE_V_RUNS_CLEAN_THERMAL, CREATE_V_RUNS_MEASURED_THERMAL,
+                     CREATE_V_RUNS_CLEAN_LLM, CREATE_V_RUNS_MEASURED_LLM,
+                     CREATE_V_RUNS_CLEAN_ORCHESTRATION, CREATE_V_RUNS_MEASURED_ORCHESTRATION,
+                     CREATE_V_RUNS_CLEAN_SYSTEM, CREATE_V_RUNS_MEASURED_SYSTEM,
                      CREATE_IDLE_BASELINE_DOMAINS, CREATE_V_IDLE_BASELINES,
                      CREATE_V_IDLE_BASELINE_DOMAINS, CREATE_V_PLATFORM_BASELINE_SUMMARY,
                      CREATE_GPU_SAMPLES, CREATE_GPU_CONFIG,
@@ -290,6 +298,21 @@ class SQLiteAdapter(DatabaseInterface):
         self.conn.executescript(CREATE_TASK_QUALITY_CONFIG)
         self.conn.executescript(CREATE_OUTLIER_DETECTION_CONFIG)
         self.conn.executescript(CREATE_RUN_OUTLIERS)
+        self.conn.executescript(CREATE_ANALYSIS_DOMAIN_CONFIG)
+        self.conn.executescript(CREATE_METRIC_ANALYSIS_DOMAINS)
+        self.conn.executescript(CREATE_ANALYSIS_VIEW_CONFIG)
+        self.conn.executescript(CREATE_V_RUNS_CLEAN_ENERGY)
+        self.conn.executescript(CREATE_V_RUNS_MEASURED_ENERGY)
+        self.conn.executescript(CREATE_V_RUNS_CLEAN_CPU)
+        self.conn.executescript(CREATE_V_RUNS_MEASURED_CPU)
+        self.conn.executescript(CREATE_V_RUNS_CLEAN_THERMAL)
+        self.conn.executescript(CREATE_V_RUNS_MEASURED_THERMAL)
+        self.conn.executescript(CREATE_V_RUNS_CLEAN_LLM)
+        self.conn.executescript(CREATE_V_RUNS_MEASURED_LLM)
+        self.conn.executescript(CREATE_V_RUNS_CLEAN_ORCHESTRATION)
+        self.conn.executescript(CREATE_V_RUNS_MEASURED_ORCHESTRATION)
+        self.conn.executescript(CREATE_V_RUNS_CLEAN_SYSTEM)
+        self.conn.executescript(CREATE_V_RUNS_MEASURED_SYSTEM)                
         self.conn.executescript(CREATE_V_RUNS_CLEAN)
         self.conn.executescript(CREATE_V_RUNS_UNFILTERED)               
         self.conn.execute(CREATE_HARDWARE_CONFIG)
