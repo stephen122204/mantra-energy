@@ -95,10 +95,11 @@ def load_run_population(conn, metric, exp_type_filter=("normal",)):
     query = """
         SELECT r.run_id, e.task_name, r.workflow_type,
                COALESCE(e.model_name, 'unknown') AS model_name,
-               COALESCE(CAST(e.hw_id AS TEXT), 'unknown') AS hw_id,
+               COALESCE(hc.hostname, CAST(e.hw_id AS TEXT), 'unknown') AS hostname,
                r.{metric}
         FROM runs r
         JOIN experiments e ON r.exp_id = e.exp_id
+        LEFT JOIN hardware_config hc ON e.hw_id = hc.hw_id
         WHERE e.is_valid = 1
           AND r.{metric} IS NOT NULL
           AND e.experiment_type IN ({placeholders})
@@ -109,14 +110,14 @@ def load_run_population(conn, metric, exp_type_filter=("normal",)):
     cur = conn.execute(query, exp_type_filter)
 
     populations = {}  # type: Dict[str, List[tuple]]
-    for run_id, task_name, workflow_type, model_name, hw_id, value in cur.fetchall():
+    for run_id, task_name, workflow_type, model_name, hostname, value in cur.fetchall():
         # gpu_total_energy_uj / gpu_dynamic_energy_uj are 0 on x86 platforms
         # by design (no GPU). Including the long tail of legitimate zeros
         # in a GPU population would bias the median toward zero and bury
         # genuine GPU anomalies. Skip exact zero only for GPU metrics.
         if metric.startswith("gpu_") and value == 0:
             continue
-        key = "{}|{}|{}|{}".format(task_name, workflow_type, model_name, hw_id)
+        key = "{}|{}|{}|{}".format(task_name, workflow_type, model_name, hostname)
         populations.setdefault(key, []).append((run_id, value))
     return populations
 
