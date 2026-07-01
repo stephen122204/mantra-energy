@@ -799,26 +799,50 @@ def get_cpu_info() -> Dict[str, Any]:
     """Get CPU core information, model, vendor, microcode, and TSC frequency."""
     logical = os.cpu_count() or 8
     physical = logical // 2 if logical > 1 else 1
-
     # Get CPU details from /proc/cpuinfo
     cpu_model = "Unknown"
     cpu_vendor = "Unknown"
     microcode = "Unknown"
-
-    try:
-        with open("/proc/cpuinfo", "r") as f:
-            for line in f:
-                if line.startswith("model name"):
-                    cpu_model = line.split(":")[1].strip()
-                # ARM: uses 'Model name' (capital M) not 'model name'
-                elif line.startswith("Model name"):
-                    cpu_model = line.split(":")[1].strip()
-                elif line.startswith("vendor_id"):
-                    cpu_vendor = line.split(":")[1].strip()
-                elif line.startswith("microcode"):
-                    microcode = line.split(":")[1].strip()
-    except:
-        pass
+    import platform as _platform
+    if _platform.system() == "Darwin":
+        try:
+            import subprocess as _subprocess
+            brand = _subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                capture_output=True, text=True, timeout=3
+            ).stdout.strip()
+            if brand:
+                cpu_model = brand
+            perf_cores = _subprocess.run(
+                ["sysctl", "-n", "hw.perflevel0.physicalcpu"],
+                capture_output=True, text=True, timeout=3
+            ).stdout.strip()
+            eff_cores = _subprocess.run(
+                ["sysctl", "-n", "hw.perflevel1.physicalcpu"],
+                capture_output=True, text=True, timeout=3
+            ).stdout.strip()
+            if perf_cores.isdigit() and eff_cores.isdigit():
+                # Apple Silicon has no SMT/hyperthreading, so physical
+                # equals logical, and the P+E split gives the real total.
+                physical = int(perf_cores) + int(eff_cores)
+                logical = physical
+        except Exception:
+            pass
+    else:
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        cpu_model = line.split(":")[1].strip()
+                    # ARM: uses 'Model name' (capital M) not 'model name'
+                    elif line.startswith("Model name"):
+                        cpu_model = line.split(":")[1].strip()
+                    elif line.startswith("vendor_id"):
+                        cpu_vendor = line.split(":")[1].strip()
+                    elif line.startswith("microcode"):
+                        microcode = line.split(":")[1].strip()
+        except:
+            pass
     # ARM fallback: check DMI product name for Grace CPU
     if cpu_model == "Unknown":
         try:
@@ -1395,6 +1419,22 @@ def get_cpu_details():
 def get_gpu_info():
     """Add GPU detection"""
     gpu = {"model": None, "driver": None, "count": 0}
+    import platform as _platform
+    if _platform.system() == "Darwin":
+        try:
+            import subprocess
+            output = subprocess.check_output(
+                ["system_profiler", "SPDisplaysDataType"], text=True, timeout=5
+            )
+            for line in output.split("\n"):
+                line = line.strip()
+                if line.startswith("Chipset Model:"):
+                    gpu["model"] = line.split(":", 1)[1].strip()
+                    gpu["driver"] = "iokit"
+                    gpu["count"] += 1
+        except Exception:
+            pass
+        return gpu
     try:
         import subprocess
 
