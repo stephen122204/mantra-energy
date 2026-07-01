@@ -1698,8 +1698,8 @@ NOTE:
                 if "cpu" not in existing:
                     existing["cpu"] = {}
 
-                # Update core counts (these are detected)
-                for key in ["physical_cores", "logical_cores", "cores_list"]:
+                # Update core counts and model (these are detected, not user-customized)
+                for key in ["physical_cores", "logical_cores", "cores_list", "model"]:
                     if key in new_cpu:
                         existing["cpu"][key] = new_cpu[key]
 
