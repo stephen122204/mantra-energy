@@ -98,3 +98,16 @@ Order of operations:
 6. HuggingFace login + prefetch benchmarks (Gaps 1, 6)
 7. Run migrations
 8. Verify: `bash scripts/test_provenance.sh`
+
+## KG-PROVENANCE-01: 4 methods missing description in measurement_method_registry
+Methods: arm_thermal_sysfs_v1, gpu_attribution_exclusive_v1, gpu_baseline_2sigma_v1, gpu_phase_alignment_v1
+Cause: doc/section fields missing or pointing to wrong file in seed_methodology.py
+Impact: test_provenance.sh FAIL on "Methods missing description"
+Status: pre-existing, not introduced by outlier detection work
+
+## KG-PROVENANCE-02: metric_display_registry empty on GN100
+Cause: migrate_yaml_to_db.py fails on GN100 due to query_registry missing source_yaml column
+Root cause: schema drift between GN100 and UBUNTU2505, source_yaml column exists on UBUNTU2505 but not GN100
+Impact: test_provenance.sh FAIL on "Display registry rows"
+Fix: apply missing ALTER TABLE for source_yaml on GN100, then re-run migrate_yaml_to_db.py
+Status: pre-existing, separate from outlier detection work
