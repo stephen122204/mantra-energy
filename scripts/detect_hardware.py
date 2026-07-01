@@ -429,6 +429,10 @@ def discover_thermal_zones():
     """Map sensor types to paths dynamically (handles duplicates)"""
     base = "/sys/class/thermal"
     mapping = {}
+    if not os.path.exists(base):
+        print("   info: thermal sysfs not present, skipping")
+        return mapping
+
 
     for entry in os.listdir(base):
         if entry.startswith("thermal_zone"):
