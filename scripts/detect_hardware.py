@@ -1299,7 +1299,7 @@ def detect_cpu_vendor_extended(hw_config):
             pass
         return 'intel'  # default x86
  
-    if arch == 'aarch64':
+    if arch in ('aarch64', 'arm64'):
         # Check for NVIDIA Grace via DMI/system info
         try:
             product = open('/sys/class/dmi/id/product_name').read().strip()
