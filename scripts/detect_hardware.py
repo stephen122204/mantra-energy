@@ -1701,15 +1701,39 @@ NOTE:
                 final_config["thermal"] = {}
 
             final_config["thermal"]["discovered_zones"] = thermal_zones
-            final_config["thermal"]["sensors_to_monitor"] = {
-                "cpu_package": "x86_pkg_temp",
-                "cpu_alt": "TCPU",
-                "wifi": "iwlwifi_1",
-                "system": "INT3400 Thermal",
-            }
+            sensors_to_monitor = {}
+            for sensor_type in thermal_zones.keys():
+                sensor_lower = sensor_type.lower()
+                if "x86_pkg_temp" in sensor_type or (
+                    "cpu" in sensor_lower and "temp" in sensor_lower
+                ):
+                    sensors_to_monitor["cpu_package"] = sensor_type
+                elif "tcpu" in sensor_lower:
+                    sensors_to_monitor["cpu_alt"] = sensor_type
+                elif "wifi" in sensor_lower or "iwlwifi" in sensor_lower:
+                    sensors_to_monitor["wifi"] = sensor_type
+                elif "acpi" in sensor_lower or "int3400" in sensor_lower:
+                    sensors_to_monitor["system"] = sensor_type
+                elif "sen" in sensor_lower and sensor_lower[3:].isdigit():
+                    sensors_to_monitor[sensor_type] = sensor_type
+                else:
+                    sensors_to_monitor[sensor_type] = sensor_type
+            final_config["thermal"]["sensors_to_monitor"] = sensors_to_monitor
             final_config["thermal"]["sampling_rate_hz"] = 1
             final_config["config_version"] = 2
-
+            final_config["gpu_vendor_ext"], gpu_model_ext = detect_gpu_vendor_model()
+            if gpu_model_ext and gpu_model_ext != "Unknown GPU":
+                final_config["gpu"]["vendor"] = final_config["gpu_vendor_ext"]
+                final_config["gpu"]["model"] = gpu_model_ext
+                final_config["gpu_model"] = gpu_model_ext
+            del final_config["gpu_vendor_ext"]
+            final_config["cpu"]["vendor"] = detect_cpu_vendor_extended(final_config)
+            final_config["cpu_vendor"] = final_config["cpu"]["vendor"]
+            final_config["spbm"] = detect_spbm()
+            final_config["dcgm"] = detect_dcgm()
+            final_config["arm_pmu"] = detect_arm_pmu()
+            final_config["cpuidle"] = detect_arm_cpuidle()
+            final_config["hardware_hash"] = generate_hardware_hash(final_config)
             if args.verbose:
                 discovered_count = sum(len(v) for v in thermal_zones.values())
                 print(f"   ✅ Discovered {discovered_count} thermal sensors")
