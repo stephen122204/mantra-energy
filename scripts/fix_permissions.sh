@@ -30,7 +30,10 @@ if [ "$(uname -s)" = "Darwin" ]; then
 
     POWERMETRICS_PATH="$(command -v powermetrics || echo /usr/bin/powermetrics)"
     SUDOERS_FILE="/etc/sudoers.d/alems_powermetrics"
-    CURRENT_USER="$(whoami)"
+    # whoami reports 'root' here because this script itself is invoked with
+    # sudo (per the install guide's own instruction), not the real user.
+    # SUDO_USER is set by sudo to the actual invoking account.
+    CURRENT_USER="${SUDO_USER:-$(whoami)}"
     RULE="$CURRENT_USER ALL=(root) NOPASSWD: $POWERMETRICS_PATH"
 
     TMP_FILE="$(mktemp)"
