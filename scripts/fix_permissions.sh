@@ -18,10 +18,9 @@ else
     DISTRO="unknown"
 fi
 
-CPU_VENDOR=$(lscpu | grep "Vendor ID" | awk '{print $3}' 2>/dev/null || echo "unknown")
-
 # ============================================================================
 # DARWIN (macOS) BRANCH — separate permission model, exits early.
+# Placed BEFORE the lscpu call below, lscpu does not exist on macOS.
 # Everything below this block (RAPL, MSR, udev, systemd, setcap, turbostat,
 # perf_event) is Linux-only and does not apply on macOS.
 # ============================================================================
@@ -64,6 +63,8 @@ if [ "$(uname -s)" = "Darwin" ]; then
     echo "================================================================="
     exit 0
 fi
+
+CPU_VENDOR=$(lscpu | grep "Vendor ID" | awk '{print $3}' 2>/dev/null || echo "unknown")
 
 # ============================================================================
 # 1. RAPL PERMISSIONS (Intel only)
