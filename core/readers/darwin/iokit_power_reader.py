@@ -1,165 +1,191 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-IOKIT POWER READER — macOS Power Measurement via IOKit
+IOKIT POWER READER — macOS Power Measurement via IOKit/powermetrics
 ================================================================================
 
-Purpose:
-    Reads real hardware power sensor values on macOS via the IOKit framework.
-    Converts instantaneous power (watts) to cumulative energy (µJ) by
-    integrating over time (energy = power × elapsed_seconds × 1_000_000).
+Apple Silicon CPU/GPU power reader via powermetrics.
+Implements EnergyReaderABC for Darwin, any architecture with powermetrics
+cpu_power/gpu_power/ane_power samplers.
 
-Mode:        MEASURED  (real hardware sensor, not estimated)
-Platform:    macOS (Darwin), any architecture (Intel or Apple Silicon)
-Source:      IOKit HID power sensors (SMC on Intel, PMGR on Apple Silicon)
+Mode: MEASURED (real hardware power sensor, power-integrated to energy)
+Domains: cpu, gpu (per SCHEMA_APPLE_IOKIT, matches Apple's unified memory
+architecture, no separate package or DRAM rail exists to measure)
 
-Why MEASURED and not DERIVED:
-    IOKit reads a real hardware power sensor. The watts→µJ conversion is
-    just unit arithmetic — the underlying measurement is still hardware.
-    RAPLReader also does arithmetic (delta of two counter reads).
+Energy calculation: powermetrics reports instantaneous power (mW) at a
+fixed sampling interval. Energy is the trapezoidal integral of power over
+time: for each new sample, energy_uj += power_mw * dt_s * 1000, where
+dt_s is the elapsed time since the previous sample (capped to avoid
+outliers from any single delayed sample).
 
-Current status:
-    STUB — returns zeros. Full IOKit integration via ctypes/subprocess
-    (powermetrics) is planned. The interface and mode assignment are correct.
+read_energy_uj() is a counter-style call, matches RAPLReader's contract.
+Callers compute deltas between two calls. Never call stop() or reset(),
+sampling runs continuously for the life of the process.
+
+Confirmed real data (session 2026-07-01, macOS 26.3.1, Apple M1 Pro):
+  CPU Power: 205 mW
+  GPU Power: 112 mW  (from CPU Power Stats block, used here)
+  ANE Power: 0 mW    (parsed, not currently written to any column)
+  Combined Power (CPU + GPU + ANE): 317 mW  (not used, no domain fits it)
+  No Package Power line. No DRAM Power line. No numeric temperature.
 
 Author: Deepak Panigrahy
 ================================================================================
 """
 
 import logging
+import re
+import subprocess
+import threading
 import time
-from typing import Dict, List
-from core.utils.formula import formula
+from typing import Dict, List, Optional
 
 from core.readers.interfaces import EnergyReaderABC
 
 logger = logging.getLogger(__name__)
 
+POWERMETRICS_INTERVAL_MS = 500
+POWERMETRICS_SAMPLERS = "cpu_power,gpu_power,ane_power"
+
 
 class IOKitPowerReader(EnergyReaderABC):
     """
-    macOS hardware power reader using IOKit (stub implementation).
-
-    Implements EnergyReaderABC with the same interface as RAPLReader
-    so EnergyEngine works identically on macOS and Linux.
-
-    Energy calculation (when fully implemented):
-        At each read_energy_uj() call:
-            1. Read current power from IOKit sensor (watts)
-            2. Compute elapsed seconds since last read
-            3. energy_uj += power_w × elapsed_s × 1_000_000
-
-    Attributes:
-        _last_read_time (float): timestamp of last read, for Δt calculation
-        _cumulative_uj  (dict):  accumulated energy per domain since init
-        _warned         (bool):  throttle flag for stub warning log
+    Apple Silicon power reader via powermetrics, continuous background
+    sampling with trapezoidal power integration to cumulative energy.
     """
-    # ------------------------------------------------------------------
-    # Methodology attributes — read by scripts/seed_methodology.py
-    # ------------------------------------------------------------------
+
     METHOD_ID          = "iokit_power_reader"
-    METHOD_NAME        = "IOKit Power Reader (macOS)"
+    METHOD_NAME        = "IOKit Power Reader (macOS, powermetrics)"
     METHOD_LAYER       = "silicon"
-    METHOD_CONFIDENCE  = 0.5
+    METHOD_CONFIDENCE  = 0.85   # cpu domain; gpu domain is 0.80, see SPEC_16F2
     METHOD_PROVENANCE  = "MEASURED"
-    METHOD_PARAMS      = {"source": "IOKit HID", "conversion": "W_to_uJ", "stub": True}
+    METHOD_PARAMS      = {
+        "source": "powermetrics cpu_power,gpu_power,ane_power",
+        "conversion": "trapezoidal_power_integration",
+        "sampling_interval_ms": POWERMETRICS_INTERVAL_MS,
+    }
     FALLBACK_METHOD_ID = "ml_energy_estimator"
-    # Domain names to match the energy model expected by the rest of the system
-    DOMAINS = ["package-0", "core"]
+    DOMAINS = ["cpu", "gpu"]   # matches SCHEMA_APPLE_IOKIT native_keys exactly
 
     def __init__(self, config: dict = None):
-        """
-        Initialise the IOKit power reader.
+        self._config = config or {}
+        self._lock = threading.Lock()
+        self._samples: List[Dict] = []
+        self._cumulative_uj = {d: 0 for d in self.DOMAINS}
+        self._proc = None
+        self._reader_thread = None
+        self._available = self._check_available()
+        if self._available:
+            self._start_sampling()
+        else:
+            logger.warning(
+                "IOKitPowerReader: powermetrics unavailable or sudo "
+                "required, energy will remain zero. Check sudo access."
+            )
 
-        Args:
-            config: hw_config dict (accepted for API consistency;
-                    macOS section not yet defined in hw_config schema).
-        """
-        self._config         = config or {}
-        self._last_read_time = time.monotonic()     # start integration clock
-        self._cumulative_uj  = {d: 0 for d in self.DOMAINS}  # energy accumulators
-        self._warned         = False                # warn once per process
+    def _check_available(self) -> bool:
+        try:
+            result = subprocess.run(
+                ["sudo", "powermetrics", "--samplers", "cpu_power",
+                 "-n", "1", "-i", "100"],
+                capture_output=True, timeout=5,
+            )
+            return result.returncode == 0
+        except Exception as e:
+            logger.warning("IOKitPowerReader: availability check failed: %s", e)
+            return False
 
-        logger.warning(
-            "IOKitPowerReader initialised (MEASURED mode, macOS stub). "
-            "Full IOKit integration not yet implemented — returning zeros."
-        )
+    def _start_sampling(self):
+        cmd = [
+            "sudo", "powermetrics",
+            "--samplers", POWERMETRICS_SAMPLERS,
+            "-i", str(POWERMETRICS_INTERVAL_MS),
+            "-n", "0",
+            "--format", "text",
+        ]
+        try:
+            self._proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            self._reader_thread = threading.Thread(
+                target=self._read_loop, daemon=True, name="iokit-power-reader",
+            )
+            self._reader_thread.start()
+        except Exception as e:
+            logger.warning("IOKitPowerReader: failed to start sampling: %s", e)
+            self._proc = None
 
-    # ------------------------------------------------------------------
-    # EnergyReaderABC implementation
-    # ------------------------------------------------------------------
-    @formula(
-        latex=r"E_{pkg} = \sum_{i} P_i \cdot \Delta t_i \times 10^6",
-        variables={
-            "E_pkg":    "Cumulative package energy µJ",
-            "P_i":      "Instantaneous power in watts from IOKit",
-            "Delta_t_i":"Elapsed seconds since last read",
-        }
-    )
+    def _read_loop(self):
+        if not self._proc:
+            return
+        buffer = []
+        last_timestamp = None
+        for line in self._proc.stdout:
+            line = line.strip()
+            if line.startswith("*** Sampled"):
+                if buffer:
+                    self._process_sample(buffer, last_timestamp)
+                    last_timestamp = time.time()
+                buffer = [line]
+                if last_timestamp is None:
+                    last_timestamp = time.time()
+            else:
+                buffer.append(line)
+
+    def _process_sample(self, lines: List[str], prev_timestamp: Optional[float]):
+        now = time.time()
+        dt_s = min(now - prev_timestamp, 2.0) if prev_timestamp else 0.0
+
+        cpu_mw = gpu_mw = None
+        # Only the CPU Power Stats block's GPU Power line is used, not the
+        # later GPU usage block's duplicate value, keeps domains time
+        # aligned to the same sample.
+        in_gpu_usage_block = False
+        for line in lines:
+            if line.startswith("**** GPU usage"):
+                in_gpu_usage_block = True
+                continue
+            if in_gpu_usage_block:
+                continue
+            m = re.search(r"CPU Power:\s+(\d+)\s+mW", line)
+            if m:
+                cpu_mw = int(m.group(1))
+            m = re.search(r"GPU Power:\s+(\d+)\s+mW", line)
+            if m and gpu_mw is None:
+                gpu_mw = int(m.group(1))
+
+        if dt_s <= 0:
+            return  # first sample, no interval to integrate yet
+
+        with self._lock:
+            if cpu_mw is not None:
+                self._cumulative_uj["cpu"] += int(cpu_mw * dt_s * 1000)
+            if gpu_mw is not None:
+                self._cumulative_uj["gpu"] += int(gpu_mw * dt_s * 1000)
+
     def read_energy_uj(self) -> Dict[str, int]:
         """
-        Return cumulative energy in microjoules since initialisation.
-
-        Current stub behaviour:
-            Advances the integration clock but returns zeros.
-
-        Future behaviour:
-            1. Query IOKit HID service for package power (watts)
-            2. Compute Δt since last call
-            3. Accumulate energy_uj += power_w × Δt × 1_000_000
-            4. Return accumulated totals per domain
-
-        Returns:
-            Dict[str, int]: Domain → cumulative µJ (zeros in stub).
+        Return cumulative energy in microjoules since process start.
+        Counter-style, matches RAPLReader. Callers compute deltas.
         """
-        # Update integration timestamp even in stub mode
-        # so real implementation can drop in without clock reset issues
-        now   = time.monotonic()
-        _dt   = now - self._last_read_time          # elapsed seconds (unused in stub)
-        self._last_read_time = now
+        with self._lock:
+            return dict(self._cumulative_uj)
 
-        # Warn once — not on every 100Hz sample tick
-        if not self._warned:
-            logger.warning(
-                "IOKitPowerReader.read_energy_uj() returning zeros — "
-                "stub implementation. Mode is MEASURED (IOKit is real hardware)."
-            )
-            self._warned = True
+    def read_energy_safe(self) -> Dict[str, int]:
+        return self.read_energy_uj()
 
-        # Return current accumulated values (zeros in stub)
-        return dict(self._cumulative_uj)
-    
+    def read_gpu_msr(self):
+        return None   # IOKit GPU handled by GPUCollector IOKitBackend, not here
+
+    def get_domains(self) -> List[str]:
+        return list(self.DOMAINS)
+
     def get_measurement_schema(self):
-        """Return Apple IOKit schema — unified memory CPU + GPU domains."""
         from core.readers.measurement_schema import SCHEMA_APPLE_IOKIT
         return SCHEMA_APPLE_IOKIT
 
-    def get_domains(self) -> List[str]:
-        """
-        Return the list of energy domains this reader provides.
-
-        Returns:
-            List[str]: ['package-0', 'core']
-        """
-        return list(self.DOMAINS)
-
     def is_available(self) -> bool:
-        """
-        Return True — IOKit is always present on macOS.
-
-        Even though this is a stub, the hardware sensor exists.
-        Returns True to indicate MEASURED quality, not INFERRED zeros.
-
-        Returns:
-            bool: True (IOKit is always available on macOS).
-        """
-        return True     # IOKit always present; stub status ≠ unavailable
+        return self._available
 
     def get_name(self) -> str:
-        """
-        Return reader name for logging and platform summaries.
-
-        Returns:
-            str: 'IOKitPowerReader'
-        """
         return "IOKitPowerReader"
