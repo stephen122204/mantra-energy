@@ -21,6 +21,51 @@ fi
 CPU_VENDOR=$(lscpu | grep "Vendor ID" | awk '{print $3}' 2>/dev/null || echo "unknown")
 
 # ============================================================================
+# DARWIN (macOS) BRANCH — separate permission model, exits early.
+# Everything below this block (RAPL, MSR, udev, systemd, setcap, turbostat,
+# perf_event) is Linux-only and does not apply on macOS.
+# ============================================================================
+if [ "$(uname -s)" = "Darwin" ]; then
+    echo -e "\nDetected macOS. Linux-specific steps do not apply, skipped."
+    echo -e "\n[1/1] Granting non-interactive powermetrics access..."
+
+    POWERMETRICS_PATH="$(command -v powermetrics || echo /usr/bin/powermetrics)"
+    SUDOERS_FILE="/etc/sudoers.d/alems_powermetrics"
+    CURRENT_USER="$(whoami)"
+    RULE="$CURRENT_USER ALL=(root) NOPASSWD: $POWERMETRICS_PATH"
+
+    TMP_FILE="$(mktemp)"
+    echo "$RULE" > "$TMP_FILE"
+
+    if sudo visudo -c -f "$TMP_FILE"; then
+        sudo cp "$TMP_FILE" "$SUDOERS_FILE"
+        sudo chmod 0440 "$SUDOERS_FILE"
+        rm -f "$TMP_FILE"
+        echo "  ✅ Sudoers rule installed at $SUDOERS_FILE"
+    else
+        rm -f "$TMP_FILE"
+        echo "  ❌ Generated sudoers rule failed validation, nothing was installed."
+        exit 1
+    fi
+
+    if sudo -n powermetrics --samplers cpu_power -n 1 -i 100 > /dev/null 2>&1; then
+        echo "  ✅ powermetrics runs without a password prompt."
+    else
+        echo "  ⚠️ Verification failed, check $SUDOERS_FILE"
+        exit 1
+    fi
+
+    echo -e "\n================================================================="
+    echo "✅ PERMISSIONS FIXED (macOS)!"
+    echo "================================================================="
+    echo ""
+    echo "Next, run detection:"
+    echo "  python3 scripts/detect_hardware.py --output config/hw_config.json --merge"
+    echo "================================================================="
+    exit 0
+fi
+
+# ============================================================================
 # 1. RAPL PERMISSIONS (Intel only)
 # ============================================================================
 echo -e "\n[1/4] Fixing RAPL permissions..."
