@@ -100,7 +100,8 @@ class IOKitPowerReader(EnergyReaderABC):
             "sudo", "powermetrics",
             "--samplers", POWERMETRICS_SAMPLERS,
             "-i", str(POWERMETRICS_INTERVAL_MS),
-            "-n", "0",
+            "-n", "-1",   # -1 means infinite per powermetrics --help,
+                          # 0 means zero samples and exit immediately
             "--format", "text",
         ]
         try:
