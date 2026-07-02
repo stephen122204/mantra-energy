@@ -195,9 +195,18 @@ class ReaderFactory:
             if caps.has_thermal:
                 return cls._make_sensor_reader(config)
 
-        # macOS / Windows / no thermal zones — stub
+        if caps.os == "Darwin":
+            return cls._make_iokit_thermal_reader(config)
+
+        # Windows / no thermal zones — stub
         return cls._make_dummy_thermal(config)
-    
+
+    @classmethod
+    def _make_iokit_thermal_reader(cls, config: dict):
+        from core.readers.darwin.iokit_thermal_reader import IOKitThermalReader
+        logger.debug("ReaderFactory: instantiating IOKitThermalReader")
+        return IOKitThermalReader(config)
+        
     @classmethod
     def get_disk_reader(
         cls,
