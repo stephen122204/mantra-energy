@@ -56,17 +56,13 @@ echo "  ✅ Hardware detected correctly: cpu_vendor=apple"
 
 echo -e "\n[6/7] Building vendored thermal sensor helper (Koan-Sin Tan, BSD 3-Clause)..."
 VENDOR_DIR="core/readers/darwin/vendor"
-mkdir -p "$VENDOR_DIR"
-if [ ! -f "$VENDOR_DIR/sensors.m" ]; then
-    TMP_CLONE="$(mktemp -d)"
-    git clone --quiet https://github.com/freedomtan/sensors_cmdline.git "$TMP_CLONE"
-    cp "$TMP_CLONE/sensors.m" "$VENDOR_DIR/sensors.m"
-    cp "$TMP_CLONE/LICENSE" "$VENDOR_DIR/LICENSE"
-    rm -rf "$TMP_CLONE"
-    echo "  ✅ Vendored sensors.m and LICENSE from upstream"
-else
-    echo "  ✅ sensors.m already vendored"
+if [ ! -f "$VENDOR_DIR/sensors.m" ] || [ ! -f "$VENDOR_DIR/LICENSE" ]; then
+    echo "  ❌ Vendored sensors.m/LICENSE missing from repo at $VENDOR_DIR"
+    echo "     These are committed source files, not fetched at setup time."
+    echo "     Check the repo checkout, git pull may be needed."
+    exit 1
 fi
+echo "  ✅ sensors.m and LICENSE present (vendored in repo)"
 clang -Wall -O2 -g -c -o "$VENDOR_DIR/sensors.o" "$VENDOR_DIR/sensors.m"
 clang -o "$VENDOR_DIR/sensors" "$VENDOR_DIR/sensors.o" -framework Foundation -framework IOKit
 rm -f "$VENDOR_DIR/sensors.o"
