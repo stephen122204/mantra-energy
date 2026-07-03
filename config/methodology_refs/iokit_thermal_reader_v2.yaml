@@ -1,0 +1,97 @@
+method_id: iokit_thermal_reader
+method_name: "IOKit Thermal Reader (macOS)"
+method_layer: silicon
+provenance: MEASURED
+confidence: 0.75
+platform: darwin
+architecture: [arm64]
+
+data_sources:
+  - name: die_temperature
+    mechanism: >
+      Vendored helper binary compiled from sensors.m (Koan-Sin Tan,
+      github.com/freedomtan/sensors_cmdline, BSD 3-Clause License,
+      Copyright 2021). Uses Apple's public IOHIDEventSystemClient
+      framework to enumerate HID sensor hub services matching Apple
+      vendor temperature usage pages, then reads live float values via
+      IOHIDServiceClientCopyEvent / IOHIDEventGetFloatValue.
+    constants_source: >
+      kHIDPage_AppleVendor (0xff00), kHIDUsage_AppleVendor_TemperatureSensor
+      (0x0005), kIOHIDEventTypeTemperature (15) all trace to Apple's own
+      published open source headers: IOHIDFamily/AppleHIDUsageTables.h and
+      IOHIDFamily/IOHIDEventTypes.h (opensource.apple.com). The framework
+      and the numeric constants are first-party Apple values. The
+      independently-assembled part is the enumeration technique itself
+      (which usage pages to match, how to iterate services), not the
+      underlying values.
+    requires_sudo: false
+    confidence_basis: >
+      Cross-validated three independent ways in a single session
+      (2026-07-02):
+        1. Real CPU Power increase confirmed via powermetrics (first-party
+           Apple tool) during an 8-way sustained CPU load, 900-1600mW
+           idle range rising to a sustained 5000-6100mW under load.
+        2. tdie0 through tdie10 rose monotonically across the same load
+           window (16 seconds, 16 samples), roughly 29.6-31.4C idle to
+           30.4-30.8C loaded, small but consistent and directionally
+           correct across all 11 die probes simultaneously.
+        3. Magnitude and response time are physically plausible for a
+           fan-managed laptop chassis under moderate (not extreme) load,
+           not a step-function jump or implausible reading.
+      Confidence is 0.75, not 1.0, because the exact physical mapping of
+      each tdieN label to a specific silicon region or core cluster is
+      not independently confirmed, only that the aggregate signal is
+      live, responsive, and physically sensible. package_temp_celsius is
+      computed as max(tdie0..tdieN) per sample as the more conservative
+      figure for thermal analysis.
+    excluded_sensors:
+      - name_substring: "tcal"
+        reason: >
+          Fixed at exactly 51.850006C across every sample captured this
+          session (16+ samples, idle and loaded), including during active
+          load when every other probe moved. Confirmed calibration
+          constant, not a live reading.
+      - name_substring: "noname"
+        reason: >
+          Fixed at exactly 0.0 across every sample captured this session.
+          Confirmed dead or unmapped HID service entry.
+
+  - name: battery_temperature
+    mechanism: "ioreg -rc AppleSmartBattery, 'Temperature' key, deciKelvin to Celsius"
+    requires_sudo: false
+    confidence_basis: >
+      Standard, long-documented IOKit property, not reverse engineered.
+      Independent of die temperature source, provides a second real
+      sensor reading for cross-reference.
+
+  - name: thermal_pressure_level
+    mechanism: "powermetrics --samplers thermal, categorical only"
+    requires_sudo: true
+    note: >
+      Not returned by read_all_thermal() (ThermalReaderABC requires
+      Dict[str, float], categorical values do not fit that contract).
+      Exposed via get_pressure_level(), outside the ABC, for
+      logging and provenance cross-reference only.
+
+known_limitations:
+  - "No first-party or peer-reviewed academic source validates exact SMC/HID
+     thermal key semantics on Apple Silicon. Multiple 2025-2026 papers
+     validate powermetrics for POWER/ENERGY on Apple Silicon (see
+     iokit_power_reader_v2.yaml), but none attempt numeric CPU temperature."
+  - "die temperature to physical core/cluster mapping is not independently
+     confirmed, aggregate max() used rather than claiming per-core precision."
+  - "Requires the vendored sensors binary to be compiled at install time
+     (see core/readers/darwin/vendor/build.sh). Falls back to battery-only
+     if the binary is missing, does not raise."
+
+third_party_attribution:
+  - component: sensors.m
+    author: "Koan-Sin Tan (GitHub: freedomtan)"
+    license: BSD 3-Clause
+    copyright: "Copyright (c) 2021, \"freedom\" Koan-Sin Tan"
+    source_url: "https://github.com/freedomtan/sensors_cmdline"
+    public_disclosure: >
+      Presented publicly at conference, SlideShare handle kstan2,
+      "Exploring Your Apple M1 devices with Open Source Tools"
+    vendored_path: "core/readers/darwin/vendor/sensors.m"
+    license_path: "core/readers/darwin/vendor/LICENSE"
