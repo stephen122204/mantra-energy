@@ -223,6 +223,33 @@ class IOKitThermalReader(ThermalReaderABC):
         level = self.get_pressure_level()
         return PRESSURE_LEVEL_RANK.get(level, 0) >= 2 if level else False
 
+    def initialize(self):
+        # type: () -> None
+        """
+        No-op initialize for interface compatibility with SensorReader/
+        ARMThermalReader. IOKitThermalReader discovers everything (die
+        temp binary, battery ioreg, pressure sampler) at __init__ time,
+        no deferred initialization needed. Called by energy_engine.py
+        after construction (line 228).
+        """
+        # available_sensors mirrors SensorReader/ARMThermalReader interface,
+        # energy_engine.py checks len(self.sensor.available_sensors) > 0
+        # (line 310) and truthiness (line 1600).
+        self.available_sensors = []
+        if self._binary_available:
+            self.available_sensors.append("package_temp_celsius")
+        if self._available:
+            self.available_sensors.append("battery_celsius")
+        # throttle_thresholds mirrors SensorReader/ARMThermalReader interface,
+        # energy_engine.py calls self.sensor.throttle_thresholds.get(role)
+        # (line 352), empty dict means no throttling data configured, same
+        # as ARMThermalReader's own no-op value.
+        self.throttle_thresholds = {}
+        logger.debug(
+            "IOKitThermalReader.initialize(): %d sensors ready: %s",
+            len(self.available_sensors), self.available_sensors,
+        )
+
     def is_available(self) -> bool:
         return self._available
 
