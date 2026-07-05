@@ -1,0 +1,48 @@
+-- v9000_baseline_adoption.sql
+--
+-- BASELINE ADOPTION, not a sequential migration. Numbered far outside the
+-- historical range (1-80) deliberately, to avoid implying it precedes or
+-- follows any legacy migration in sequence. Legacy history and this
+-- framework are different eras, not one continuous chain.
+--
+-- WHY THIS EXISTS:
+-- Schema equivalence was directly verified across three independent
+-- machines on 2026-07-05:
+--   GN100        (aarch64, NVIDIA Grace)    100 core tables
+--   UBUNTU2505   (x86_64, Intel)            100 core tables (excluding
+--                                            27 UI-managed tables created
+--                                            by a Directus instance that
+--                                            has only ever pointed at this
+--                                            machine, not part of A-LEMS
+--                                            core schema)
+--   Fresh Mac    (arm64, Apple M1 Pro, built purely via create_tables(),
+--                zero legacy migrations applied)
+-- All three produced an identical set of 100 tables, verified via direct
+-- diff, not inferred. See core/database/schema.py's create_tables() as
+-- the confirmed single source of structural truth as of this date.
+--
+-- WHAT THIS MEANS:
+-- The approximately 76 legacy migration files that built this schema
+-- over time (scripts/migrations/, dated 2026-04 through 2026-06) are
+-- preserved unchanged at migrations/deprecated/legacy/ for historical
+-- reference and provenance lookup. They are NOT individually classified,
+-- checksummed, or ever executed again. Several mix PostgreSQL syntax
+-- with SQLite syntax and would fail if run directly; see
+-- migrations/deprecated/README.md.
+--
+-- This was a deliberate choice, not an oversight: reconstructing exactly
+-- which manual SQL statements ran in which order over several months of
+-- ad hoc development is not reliably possible, and fabricating that
+-- history as migration_history rows would make the tracking table less
+-- trustworthy, not more. Where legacy migration content was still needed
+-- going forward (the seed data half of energy_sources/energy_domains),
+-- it was split into real, evidence-verified schema/seed files, see
+-- v049_create_energy_sources.sql, s001_energy_sources.sql,
+-- v050_create_energy_domains.sql, s002_energy_domains.sql, each
+-- confirmed against real live data on GN100 and UBUNTU2505 before being
+-- adopted, not assumed.
+--
+-- No schema changes. This migration only exists to be checksummed and
+-- recorded in migration_history as the framework's starting point.
+
+SELECT 1;

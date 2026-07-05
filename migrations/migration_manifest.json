@@ -1,0 +1,14 @@
+{
+    "schema_versions": [
+        49,
+        50,
+        9000
+    ],
+    "seed_versions": [
+        1,
+        2
+    ],
+    "tool_version": "alems-migrate-1.0",
+    "generated_at": "2026-07-05T20:24:12Z",
+    "generated_by": "gn100-2b96"
+}
