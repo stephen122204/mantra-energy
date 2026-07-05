@@ -1331,7 +1331,11 @@ class EnergyEngine:
             metadata={
                 "hostname": platform.node(),
                 "python_version": sys.version.split()[0],
-                "cpu_affinity": list(os.sched_getaffinity(0)),
+                "cpu_affinity": (
+                    list(os.sched_getaffinity(0))
+                    if hasattr(os, "sched_getaffinity")
+                    else []
+                ),
                 "pinned_cores": self.pinned_cores,
                 "turbostat_version": self.turbostat.turbostat_version if self._platform_caps.has_turbostat else None,
                 "cpu_topology": self.turbostat.cpu_topology if self._platform_caps.has_turbostat else {},

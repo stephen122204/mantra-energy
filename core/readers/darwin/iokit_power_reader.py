@@ -172,6 +172,15 @@ class IOKitPowerReader(EnergyReaderABC):
         with self._lock:
             return dict(self._cumulative_uj)
 
+    def read_energy(self) -> Dict[str, int]:
+        """
+        Alias for read_energy_uj(), matching RAPLReader's real method
+        name used by energy_engine.py (self.rapl.read_energy(), lines
+        709/1086). Discovered by constructing a real EnergyEngine and
+        calling start_measurement() for the first time this session.
+        """
+        return self.read_energy_uj()
+
     def read_energy_safe(self) -> Dict[str, int]:
         return self.read_energy_uj()
 
