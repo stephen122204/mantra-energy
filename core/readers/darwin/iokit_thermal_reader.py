@@ -212,7 +212,31 @@ class IOKitThermalReader(ThermalReaderABC):
             logger.warning("IOKitThermalReader.read_all_thermal battery read failed: %s", e)
 
         return temps
-
+    def read_temperatures(self):
+        # type: () -> Dict
+        """
+        Return ThermalReadings-compatible dict for callers expecting that
+        shape (energy_engine.py lines 737/1141, energy_analyzer consumes
+        this). Harness uses read_all_thermal() for its own sampling loop
+        (line 346); this method satisfies the ABC contract and any caller
+        that checks read_temperatures() directly, same pattern as
+        ARMThermalReader.
+        """
+        thermal = self.read_all_thermal()
+        package_temp = thermal.get("package_temp_celsius")
+        return {
+            # package_celsius is the key consumed by energy_analyzer
+            "package_celsius":  package_temp if package_temp is not None else 0.0,
+            "core_temps":       [],
+            "gpu_celsius":      0.0,   # no separate GPU thermal source, see 16F3 known limitations
+            "pch_celsius":      0.0,
+            "throttle_events":  0,
+            "prochot_events":   0,
+            # Real data available here unlike ARMThermalReader's static
+            # False, we have an actual categorical pressure signal
+            "is_throttling":    self.is_throttling(),
+        }
+    
     def get_pressure_level(self) -> Optional[str]:
         """Not part of ThermalReaderABC. Categorical, logging/provenance only."""
         with self._lock:
