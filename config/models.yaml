@@ -54,7 +54,7 @@ _legacy_map:
     linear:  {provider: groq,      model_id: llama-3.3-70b-versatile, max_tokens: 1024,  tools_supported: false}
     agentic: {provider: groq,      model_id: llama-3.3-70b-versatile, max_tokens: 2048,  tools_supported: true}
 
-    vllm:
+  vllm:
     linear:  {provider: vllm_local, model_id: Mistral-7B-Instruct-v0.3, max_tokens: 1024,  tools_supported: false}
     agentic: {provider: vllm_local, model_id: Mistral-7B-Instruct-v0.3, max_tokens: 2048,  tools_supported: true}
     
