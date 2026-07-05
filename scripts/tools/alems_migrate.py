@@ -546,7 +546,7 @@ def cmd_plan(conn, hostname: str) -> None:
         print("Run 'alems migrate' to execute.")
 
 
-def cmd_adopt(conn, hostname: str, machine_id, commit) -> None:
+def cmd_adopt(conn, hostname: str, machine_id, commit, skip_confirmation=False) -> None:
     """One time explicit adoption for UBUNTU2505 and GN100, spec Section
     8.2/8.3. No auto detection, every file currently in schema/ and
     seed/ is marked applied as is. This assumes schema_version on this
@@ -564,6 +564,18 @@ def cmd_adopt(conn, hostname: str, machine_id, commit) -> None:
             "one time transition from schema_version only. Refusing to run "
             "again, use 'alems migrate' for normal operation."
         )
+
+    if not skip_confirmation:
+        print(
+            f"--adopt will mark {len(schema_files)} schema + {len(seed_files)} seed "
+            f"files as already applied, without re-running them.\n"
+            f"schema_version will be RENAMED to schema_version_archived (not deleted).\n"
+            f"This cannot be run again on this machine once it succeeds.\n"
+        )
+        answer = input("Type ADOPT to continue: ")
+        if answer.strip() != "ADOPT":
+            print("Aborted, nothing changed.")
+            return
 
     for version, filepath in sorted(schema_files.items()):
         checksum = sha256_file(filepath)
@@ -585,15 +597,22 @@ def cmd_adopt(conn, hostname: str, machine_id, commit) -> None:
         )
     conn.commit()
 
-    # drop schema_version last, only after every record is committed,
-    # two sources of truth is worse than one
-    conn.execute("DROP TABLE IF EXISTS schema_version")
-    conn.commit()
+    # RENAME schema_version, never drop. A real incident on 2026-07-05
+    # (GN100) showed schema_version was still a live dependency,
+    # environment_config.schema_version reads MAX(rowid) from it.
+    # Dropping broke that until manually restored from a backup.
+    existing = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
+    ).fetchone()
+    if existing:
+        conn.execute("ALTER TABLE schema_version RENAME TO schema_version_archived")
+        conn.commit()
 
     generate_manifest(conn, hostname)
     print(
         f"Adopted {len(schema_files)} schema + {len(seed_files)} seed migrations as "
-        f"applied. schema_version table dropped. migration_manifest.json generated."
+        f"applied. schema_version renamed to schema_version_archived (not deleted). "
+        f"migration_manifest.json generated."
     )
 
 
@@ -616,11 +635,36 @@ def main() -> int:
         prog="alems_migrate.py",
         description="A-LEMS migration runner, SQLite only, set based version tracking.",
     )
-    parser.add_argument("--check", action="store_true")
-    parser.add_argument("--verify", action="store_true")
-    parser.add_argument("--status", action="store_true")
-    parser.add_argument("--plan", action="store_true")
-    parser.add_argument("--adopt", action="store_true")
+    parser.add_argument(
+        "--check", action="store_true",
+        help="Compare applied migrations against migration_manifest.json. Read only.",
+    )
+    parser.add_argument(
+        "--verify", action="store_true",
+        help="Recompute checksums for every applied migration. Read only. Catches a "
+             "file edited after being applied.",
+    )
+    parser.add_argument(
+        "--status", action="store_true",
+        help="Print migration_history and machine_setup_history in full. Read only.",
+    )
+    parser.add_argument(
+        "--plan", action="store_true",
+        help="Show pending schema/seed/machine setup files. Read only. Always run "
+             "this before migrate or --adopt.",
+    )
+    parser.add_argument(
+        "--adopt", action="store_true",
+        help="ONE TIME ONLY, for a machine with existing schema_version history and "
+             "no migration_history yet. Marks files in schema/ and seed/ as already "
+             "applied without re-running them. Renames (never deletes) schema_version. "
+             "Asks for confirmation unless --yes is passed. Refuses if "
+             "migration_history already has applied records.",
+    )
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="Skip the --adopt confirmation prompt. Scripted use only.",
+    )
     args = parser.parse_args()
 
     hostname = get_hostname()
@@ -642,7 +686,7 @@ def main() -> int:
             cmd_plan(conn, hostname)
             return 0
         if args.adopt:
-            cmd_adopt(conn, hostname, machine_id, commit)
+            cmd_adopt(conn, hostname, machine_id, commit, skip_confirmation=args.yes)
             return 0
         cmd_migrate(conn, hostname, machine_id, commit)
         return 0
