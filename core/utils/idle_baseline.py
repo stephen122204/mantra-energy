@@ -501,20 +501,55 @@ def measure_idle_baseline(
     # Step 5: Normalize raw keys to canonical names (BDC-6)
     # This is the ONLY place in A-LEMS where raw keys become canonical names.
     # After this point, no code anywhere sees pkg, package-0, cpu_p etc.
+    #
+    # Resolved via energy_reader.get_measurement_schema(), the same
+    # mechanism EnergyCollector already uses (energy_collector.py line
+    # 78-81), so a given raw_key resolves per-reader, not globally.
+    # This replaces BASELINE_DOMAIN_MAP as the primary path (2026-07-06,
+    # real collision found: SPBM and Apple IOKit both emit raw_key 'gpu',
+    # a global flat dict cannot distinguish them, per-reader schema can).
+    #
+    # BASELINE_DOMAIN_MAP kept only as a fallback for any reader not yet
+    # confirmed to implement get_measurement_schema() correctly.
+    # TODO: remove BASELINE_DOMAIN_MAP entirely once every reader in
+    # ReaderFactory is confirmed (RAPLReader, SPBMEnergyReader,
+    # IOKitPowerReader all confirmed present 2026-07-06, AMD/future
+    # readers not yet audited).
     # ------------------------------------------------------------------
     canonical_power = {}   # type: Dict[str, float]
     canonical_std   = {}   # type: Dict[str, float]
 
+    schema = getattr(energy_reader, "get_measurement_schema", lambda: None)()
+    if schema and schema.domains:
+        schema_map = {d.native_key: d.canonical_name for d in schema.domains}
+    else:
+        schema_map = None
+        logger.warning(
+            "measure_idle_baseline: %s has no measurement schema, "
+            "falling back to BASELINE_DOMAIN_MAP (deprecated path, see TODO)",
+            type(energy_reader).__name__,
+        )
+
     for raw_key, power in raw_power.items():
-        if raw_key not in BASELINE_DOMAIN_MAP:
-            # Unknown key — log warning, do not store (BDC-7: only skip truly unmapped keys)
-            logger.warning(
-                "measure_idle_baseline: raw_key '%s' not in BASELINE_DOMAIN_MAP "
-                "— add it to maintain BDC-7 completeness",
-                raw_key,
-            )
-            continue
-        canonical_name = BASELINE_DOMAIN_MAP[raw_key][0]
+        if schema_map is not None:
+            canonical_name = schema_map.get(raw_key)
+            if canonical_name is None:
+                logger.warning(
+                    "measure_idle_baseline: raw_key '%s' not in %s's "
+                    "measurement schema",
+                    raw_key, type(energy_reader).__name__,
+                )
+                continue
+        else:
+            if raw_key not in BASELINE_DOMAIN_MAP:
+                # Unknown key — log warning, do not store (BDC-7: only skip truly unmapped keys)
+                logger.warning(
+                    "measure_idle_baseline: raw_key '%s' not in BASELINE_DOMAIN_MAP "
+                    "— add it to maintain BDC-7 completeness",
+                    raw_key,
+                )
+                continue
+            canonical_name = BASELINE_DOMAIN_MAP[raw_key][0]
         # If two raw_keys map to same canonical (e.g. 'core' and 'cpu' both -> CORE)
         # only one platform sends each key so this will not collide in practice
         canonical_power[canonical_name] = power
