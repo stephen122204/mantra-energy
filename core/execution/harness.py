@@ -647,13 +647,13 @@ class ExperimentHarness:
                     else 0
                 ),
                 "page_faults": (
-                    raw_energy.perf.minor_page_faults + raw_energy.perf.major_page_faults
+                    raw_energy.perf.get("minor_page_faults", 0) + raw_energy.perf.get("major_page_faults", 0)
                 ),
                 "major_page_faults": (
-                    raw_energy.perf.major_page_faults
+                    raw_energy.perf.get("major_page_faults", 0)
                 ),
                 "minor_page_faults": (
-                    raw_energy.perf.minor_page_faults
+                    raw_energy.perf.get("minor_page_faults", 0)
                 ),
                 "context_switches_voluntary": derived.context_switches_voluntary,
                 "context_switches_involuntary": derived.context_switches_involuntary,
@@ -1179,13 +1179,13 @@ class ExperimentHarness:
                     else 0
                 ),
                 "page_faults": (
-                    raw_energy.perf.minor_page_faults + raw_energy.perf.major_page_faults
+                    raw_energy.perf.get("minor_page_faults", 0) + raw_energy.perf.get("major_page_faults", 0)
                 ),
                 "major_page_faults": (
-                    raw_energy.perf.major_page_faults
+                    raw_energy.perf.get("major_page_faults", 0)
                 ),
                 "minor_page_faults": (
-                    raw_energy.perf.minor_page_faults
+                    raw_energy.perf.get("minor_page_faults", 0)
                 ),
                 "context_switches_voluntary": derived.context_switches_voluntary,
                 "context_switches_voluntary": derived.context_switches_voluntary,
