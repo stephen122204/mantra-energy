@@ -1028,6 +1028,22 @@ CREATE TABLE IF NOT EXISTS runs (
     global_run_id                 TEXT,               -- cross-machine run correlation ID
     sync_status                   INTEGER NOT NULL DEFAULT 0,  -- 0=local only, 1=synced
     sync_samples_status           INTEGER NOT NULL DEFAULT 0,  -- 0=local only, 1=synced
+        -- ── LLM streaming timing (universal, all platforms) ──────────────────────
+    ttft_ms                        REAL,     -- time to first token
+    tpot_ms                        REAL,     -- time per output token
+    -- ── SPBM-specific (GN100/Grace only, NULL on all other platforms) ────────
+    gpu_dynamic_method             TEXT,     -- provenance: RUN_LOCAL_IDLE | EXTERNAL_IDLE_BASELINE
+    gpu_idle_power_w_used          REAL,     -- idle baseline power actually used for this run
+    gpu_spbm_total_uj              INTEGER,  -- SPBM broad-rail GPU energy (includes memory+NVLink)
+    gpu_spbm_dynamic_uj            INTEGER,  -- SPBM dynamic (baseline-subtracted)
+    gpu_residual_dynamic_uj        INTEGER,  -- SPBM dynamic minus DCGM dynamic, not clamped to zero
+    spbm_power_sampling_freq_hz    REAL,     -- actual SPBM sample rate achieved this run
+    spbm_samples_expected          INTEGER,  -- coverage: expected sample count
+    spbm_samples_observed          INTEGER,  -- coverage: actual sample count
+    spbm_sample_coverage_pct       REAL,     -- samples_observed / samples_expected * 100
+    spbm_integration_method        TEXT,     -- how power channels were integrated to energy
+    spbm_conversion_loss_uj        INTEGER,  -- dc_input minus pkg, conversion loss estimate
+    spbm_conversion_efficiency     REAL,     -- pkg / dc_input
 
     FOREIGN KEY(exp_id) REFERENCES experiments(exp_id),
     FOREIGN KEY(hw_id) REFERENCES hardware_config(hw_id),
