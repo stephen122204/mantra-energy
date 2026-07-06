@@ -605,7 +605,9 @@ CREATE TABLE IF NOT EXISTS energy_domains (
     parent_domain_id      INTEGER REFERENCES energy_domains(domain_id),
     is_leaf               BOOLEAN NOT NULL DEFAULT 1,
     is_cumulative         BOOLEAN NOT NULL DEFAULT 1,
-    unit                  TEXT    NOT NULL DEFAULT 'uj'
+    unit                  TEXT    NOT NULL DEFAULT 'uj',
+    reader_keys           TEXT,
+    legacy_column         TEXT
 );
 """
  
