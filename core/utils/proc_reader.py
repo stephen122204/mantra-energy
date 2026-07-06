@@ -7,14 +7,19 @@ Formula:
     attributed_energy_uj = cpu_fraction × dynamic_energy_uj
 """
 import os
+import platform
 def read_total_cpu_ticks() -> int:
     """
     Read aggregate CPU ticks from /proc/stat (first 'cpu' line).
     Sums user + nice + system ticks only — excludes idle/iowait/irq
     so the denominator reflects active CPU time, not wall-clock time.
+    Returns 0 on Darwin, /proc does not exist there, no equivalent
+    tick counter, real limitation not a bug (MIC-3).
     Returns:
-        int: total active CPU ticks since boot
+        int: total active CPU ticks since boot, 0 if unavailable
     """
+    if platform.system() != "Linux":
+        return 0
     with open("/proc/stat", "r") as f:
         line = f.readline()          # always 'cpu  user nice system idle ...'
     parts = line.split()
@@ -27,11 +32,14 @@ def read_process_cpu_ticks(pid: int) -> int:
     Read CPU ticks consumed by a single process from /proc/[pid]/stat.
     Fields 14 (utime) and 15 (stime) are 0-indexed as parts[13] and parts[14].
     Both are in clock ticks (USER_HZ, typically 100/s on Linux).
+    Returns 0 on Darwin, no /proc filesystem, no equivalent (MIC-3).
     Args:
         pid: process ID to read
     Returns:
-        int: utime + stime ticks for the process
+        int: utime + stime ticks for the process, 0 if unavailable
     """
+    if platform.system() != "Linux":
+        return 0
     with open(f"/proc/{pid}/stat", "r") as f:
         parts = f.read().split()
     utime = int(parts[13])
