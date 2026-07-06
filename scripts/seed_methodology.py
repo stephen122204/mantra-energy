@@ -49,9 +49,10 @@ def _load_readers() -> List[Any]:
     """Import and return all reader classes to seed."""
     from core.readers.rapl_reader                  import RAPLReader
     from core.readers.darwin.iokit_power_reader    import IOKitPowerReader
+    from core.readers.darwin.iokit_thermal_reader  import IOKitThermalReader
     from core.readers.fallback.energy_estimator    import EnergyEstimator
     from core.readers.fallback.dummy_energy_reader import DummyEnergyReader
-    return [RAPLReader, IOKitPowerReader, EnergyEstimator, DummyEnergyReader]
+    return [RAPLReader, IOKitPowerReader, IOKitThermalReader, EnergyEstimator, DummyEnergyReader]
 
 
 # =============================================================================
