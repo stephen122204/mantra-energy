@@ -127,7 +127,7 @@ providers:
     captures_network_io: true
     energy_side: client_only
     openai_compat: true
-    base_url: http://gn100-2b96.local:8000/v1
+    base_url: http://100.84.85.2:8000/v1
     api_key_env: null
     cost_class: free
     priority: 2
