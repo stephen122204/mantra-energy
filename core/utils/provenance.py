@@ -499,7 +499,8 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
 
 METHOD_CONFIDENCE: Dict[str, float] = {
     "rapl_msr_pkg_energy":           1.0,
-    "iokit_power_reader":            0.5,
+    "iokit_power_reader":            0.85,
+    "iokit_thermal_reader":          0.75,
     "ml_energy_estimator":           0.0,
     "dummy_energy_reader":           0.0,
     "perf_counters":                 1.0,

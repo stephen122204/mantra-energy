@@ -1927,13 +1927,15 @@ def seed_reader(cls, conn, doc_map: Dict, code_version: str, dry_run: bool) -> N
     """Seed one hardware reader class."""
     method_id = cls.METHOD_ID
 
-    # Formula from @formula decorator
+    # Formula from @formula decorator, fallback to class attribute
     formula_latex = ""
     for fn_name in ("get_energy_delta", "read_energy_uj"):
         fn = getattr(cls, fn_name, None)
         if fn and hasattr(fn, "_formula_latex"):
             formula_latex = fn._formula_latex
             break
+    if not formula_latex:
+        formula_latex = getattr(cls, "METHOD_FORMULA_LATEX", "")
 
     # Full file as code_snapshot for readers
     try:
