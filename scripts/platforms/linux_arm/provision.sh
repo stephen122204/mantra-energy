@@ -9,6 +9,15 @@ SUBCOMMAND="${1:-all}"
 
 case "$SUBCOMMAND" in
     deps)
+        echo "  GN100 ARM: installing system build dependencies..."
+        sudo apt install -y libjpeg-dev zlib1g-dev libfreetype-dev \
+            liblcms2-dev libwebp-dev libxml2-dev libxslt1-dev \
+            python3-dev build-essential sqlite3 2>/dev/null || true
+
+        echo "  Installing Python dependencies..."
+        pip install --upgrade pip --quiet
+        pip install -r requirements.txt --quiet
+
         echo "  GN100 ARM: checking CUDA/vLLM dependencies..."
         # vllm_local is the primary local provider on GN100
         if python3 -c "import vllm" 2>/dev/null; then

@@ -52,16 +52,14 @@ fi
 # shellcheck disable=SC1091
 source venv/bin/activate
 
-pip install --upgrade pip --quiet
-pip install -r requirements.txt --quiet
-echo "  Base dependencies installed"
-
-# ── Step 2: Platform-specific dependencies ───────────────────────────
-echo "[2/12] Platform-specific dependencies..."
+# ── Step 2: System deps + Python packages (platform handles both) ────
+echo "[2/12] System and Python dependencies..."
 if [ -f "${PLATFORM_DIR}/provision.sh" ]; then
     bash "${PLATFORM_DIR}/provision.sh" deps
 else
-    echo "  No platform deps script, skipping"
+    echo "  No platform deps script, installing base requirements..."
+    pip install --upgrade pip --quiet
+    pip install -r requirements.txt --quiet
 fi
 
 # ── Step 3: Permissions ──────────────────────────────────────────────

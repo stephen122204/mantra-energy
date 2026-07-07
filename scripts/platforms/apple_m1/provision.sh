@@ -9,6 +9,19 @@ SUBCOMMAND="${1:-all}"
 
 case "$SUBCOMMAND" in
     deps)
+        echo "  Apple Silicon: installing system build dependencies..."
+        if command -v brew &>/dev/null; then
+            brew install libjpeg libxml2 libxslt freetype lcms2 webp 2>/dev/null || true
+        else
+            echo "  WARNING: Homebrew not found. Install from https://brew.sh"
+            echo "  Then re-run: bash scripts/platforms/apple_m1/provision.sh deps"
+            exit 1
+        fi
+
+        echo "  Installing Python dependencies..."
+        pip install --upgrade pip --quiet
+        pip install -r requirements.txt --quiet
+
         echo "  Installing llama-cpp-python with Metal backend..."
         CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python \
             --force-reinstall --no-cache-dir --quiet 2>&1 | tail -3

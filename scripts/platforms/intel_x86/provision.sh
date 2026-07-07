@@ -9,7 +9,15 @@ SUBCOMMAND="${1:-all}"
 
 case "$SUBCOMMAND" in
     deps)
-        echo "  Intel x86: no extra pip dependencies required"
+        echo "  Intel x86: installing system build dependencies..."
+        sudo apt install -y libjpeg-dev zlib1g-dev libfreetype-dev \
+            liblcms2-dev libwebp-dev libxml2-dev libxslt1-dev \
+            python3-dev build-essential sqlite3 2>/dev/null || true
+
+        echo "  Installing Python dependencies..."
+        pip install --upgrade pip --quiet
+        pip install -r requirements.txt --quiet
+
         # Intel-specific requirements file if it exists
         if [ -f "${PROJECT_ROOT}/requirements-intel.txt" ]; then
             pip install -r "${PROJECT_ROOT}/requirements-intel.txt" --quiet

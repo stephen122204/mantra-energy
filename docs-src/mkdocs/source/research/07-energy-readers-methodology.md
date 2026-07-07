@@ -108,13 +108,21 @@ A-LEMS captures four energy domains when available:
 
 ---
 
+---
+**Method ID:** iokit_power_reader
+**Schema version:** runs (152 columns, confirmed identical across NVIDIA Grace GB10, Intel i7-1165G7, and Apple M1 Pro platforms)
+**Platforms verified:** Apple M1 Pro (arm64)
+**Status:** PRODUCTION
+**Last updated:** 2026-07-06
+---
+
 ## IOKit Power Reader
 
 ### Overview
-
 On macOS, hardware power sensors are accessible via Apple's IOKit framework.
-A-LEMS reads instantaneous power (watts) from IOKit HID services and
-integrates over time to produce cumulative energy values:
+A-LEMS reads instantaneous power (watts) from IOKit HID services through
+the powermetrics utility and integrates over time to produce cumulative
+energy values:
 
 $$E_{pkg} = \sum_{i} P_i \cdot \Delta t_i \times 10^6$$
 
@@ -123,15 +131,225 @@ Where:
 - $\Delta t_i$ = Elapsed seconds since last read
 - Result in µJ (multiply by $10^6$)
 
-### Hardware Interface
+### Platform Coverage
 
-**Intel Macs**: System Management Controller (SMC) via IOKit HID
-**Apple Silicon**: Power Management Unit (PMGR) via IOKit
+| Platform | Architecture | Source | Canonical Role | Confidence | Status |
+|----------|-------------|--------|---------------|------------|--------|
+| Apple M1 Pro | arm64 | powermetrics cpu_power/gpu_power/ane_power samplers | CPU_APPLE / GPU_APPLE | 0.85 | VERIFIED |
+| Intel Mac | x86_64 | SMC via IOKit HID (same mechanism, untested) | CPU_APPLE / GPU_APPLE | TBD | PLANNED |
 
-### Current Status
+### Schema
 
-**Stub implementation** — returns zeros pending full IOKit integration
-(planned for Chunk 1.1 when Mac hardware is available for testing).
+| Column | Table | Type | Semantics |
+|--------|-------|------|-----------|
+| core_energy_uj | runs | INTEGER | Cumulative CPU energy, µJ, per run |
+| gpu_total_energy_uj | runs | INTEGER | Cumulative GPU energy, µJ, secondary channel on this platform (primary is IOKit GPU backend, 15-B) |
+| pkg_energy_uj | runs | INTEGER | Always NULL on this platform, no separate package rail on Apple's unified memory architecture |
+| dram_energy_uj | runs | INTEGER | Always NULL on this platform, same reason |
+
+### Method Provenance
+
+method_id: `iokit_power_reader`
+provenance: MEASURED
+layer: silicon
+confidence: 0.85
+
+**Confidence 0.85**: powermetrics reports instantaneous power at a fixed
+sampling interval (500ms in the current implementation), not a cumulative
+hardware energy counter. Energy is derived via trapezoidal integration
+between successive samples. This introduces sensitivity to power
+transients shorter than the sampling window, most relevant for sub-second
+inference calls. To reach 1.0 would require a true cumulative hardware
+energy counter, which IOKit does not expose on this platform. Under
+sustained inference runs (multiple seconds or longer), integration error
+is expected to be small; this has not yet been quantified against a
+higher-frequency reference measurement.
+
+### Query Reference
+
+**Real energy for a specific run on Apple Silicon** — answers: how much
+CPU and GPU energy did this run consume?
+Applies to: Apple M1 Pro (arm64) only.
+Expected output: one row, core_energy_uj and gpu_total_energy_uj in
+microjoules, pkg_energy_uj and dram_energy_uj NULL (architectural, not
+a gap).
+
+```sql
+SELECT run_id, core_energy_uj, gpu_total_energy_uj, pkg_energy_uj, dram_energy_uj
+FROM runs
+WHERE run_id = <your-run-id>;
+```
+
+Note: this query has not yet been re-verified against the current schema
+per PDS-4 following the 2026-07-06 schema changes (14 columns added to
+runs). Re-run and confirm before treating this section as fully compliant.
+
+### Verification
+
+```bash
+# Confirm the reader dispatches correctly
+python3 -c "
+from core.readers.factory import ReaderFactory
+from core.utils.platform import get_platform_capabilities
+caps = get_platform_capabilities()
+reader = ReaderFactory.get_energy_reader({}, caps)
+print(type(reader).__name__)
+"
+# Expected: IOKitPowerReader
+
+# Confirm real energy accumulates under load
+python3 -c "
+from core.readers.darwin.iokit_power_reader import IOKitPowerReader
+import time
+r = IOKitPowerReader({})
+time.sleep(3)
+print(r.read_energy_uj())
+"
+# Expected: {'cpu': <positive integer>, 'gpu': <non-negative integer>}
+```
+
+### Known Limitations
+
+- **No package-level energy**: Apple's unified memory architecture has
+  no equivalent to a package rail. `pkg_energy_uj` is NULL.
+  Workaround: None — accept NULL.
+- **No DRAM energy**: same architectural reason. `dram_energy_uj` is NULL.
+  Workaround: None — accept NULL.
+- **500ms sampling window**: sub-second LLM calls may have their true
+  power profile smoothed by the integration window.
+  Workaround: None at the powermetrics layer; a shorter sampling interval
+  reduces but does not eliminate this, at the cost of higher overhead.
+  Not yet attempted.
+- **Confidence not independently validated against a reference meter**:
+  0.85 reflects the known integration methodology limitation, not a
+  measured error bound against ground truth.
+  Workaround: None currently; would require an external power meter.
+
+---
+**Method ID:** iokit_thermal_reader
+**Schema version:** runs (152 columns, same cross-platform baseline as above)
+**Platforms verified:** Apple M1 Pro (arm64)
+**Status:** PRODUCTION
+**Last updated:** 2026-07-06
+---
+
+## IOKit Thermal Reader
+
+### Overview
+Apple Silicon thermal data draws from three independent sources: die
+temperature, battery temperature, and a categorical thermal pressure
+level. Package temperature is computed as the maximum across all
+available die probes:
+
+$$T_{package} = \max(T_{die,0}, T_{die,1}, \ldots, T_{die,N})$$
+
+### Platform Coverage
+
+| Platform | Architecture | Source | Canonical Role | Confidence | Status |
+|----------|-------------|--------|---------------|------------|--------|
+| Apple M1 Pro | arm64 | Vendored sensors.m via IOHIDEventSystemClient | CPU_APPLE (package proxy) | 0.75 | VERIFIED |
+
+### Schema
+
+| Column | Table | Type | Semantics |
+|--------|-------|------|-----------|
+| package_temp_celsius | runs | REAL | Max of all live die probe readings for the run |
+
+Battery temperature and categorical pressure level are captured at
+measurement time but are not currently persisted as separate `runs`
+columns; they are available via `get_pressure_level()` for logging and
+provenance cross-reference only, not stored per-run in the schema today.
+This is a real, current gap, not a design decision to hide the data;
+adding dedicated columns for these is unimplemented future work.
+
+### Method Provenance
+
+method_id: `iokit_thermal_reader`
+provenance: MEASURED
+layer: silicon
+confidence: 0.75
+
+**Hardware interface, real mechanism, not the Python wrapper alone**: die
+temperature is NOT read directly by A-LEMS's own Python code. A vendored,
+compiled Objective-C helper (`sensors.m`, author Koan-Sin Tan, BSD
+3-Clause license, source at github.com/freedomtan/sensors_cmdline,
+vendored at `core/readers/darwin/vendor/sensors.m`) performs the actual
+sensor enumeration via Apple's public IOHIDEventSystemClient framework,
+using constants published in Apple's own open source IOHIDFamily headers
+(AppleHIDUsageTables.h, IOHIDEventTypes.h). The Python reader invokes
+this binary as a subprocess and parses its text output. The registry's
+`code_snapshot` column reflects only the Python wrapper file; the
+vendored source at the path above is the actual measurement
+implementation and is not embedded in `code_snapshot`.
+
+Two sensor entries returned by the underlying enumeration are excluded
+from aggregation, confirmed not to be live readings: one entry is fixed
+at an identical value across every observed sample regardless of thermal
+load (a calibration constant, not a temperature), and one entry has no
+corresponding physical sensor and is fixed at zero.
+
+**Confidence 0.75**: die temperature is real and responds to load (rose
+monotonically under sustained multi-core saturation in testing), but the
+exact physical mapping of each individual probe to a specific core
+cluster or silicon region is not independently confirmed, only that the
+aggregate maximum is a live, physically plausible signal. Battery
+temperature and categorical pressure level are independent, real, lower
+weight cross-reference signals, not the primary basis for this score.
+
+### Query Reference
+
+**Package temperature for a specific run** — answers: what was the peak
+die temperature during this run?
+Applies to: Apple M1 Pro (arm64) only.
+Expected output: one row, package_temp_celsius as a real number, typically
+in the 25-45°C range at light to moderate load based on observed testing.
+
+```sql
+SELECT run_id, package_temp_celsius
+FROM runs
+WHERE run_id = <your-run-id>;
+```
+
+Note: not yet re-verified against the current schema per PDS-4 following
+the 2026-07-06 schema changes. Re-run and confirm before treating this
+section as fully compliant.
+
+### Verification
+
+```bash
+python3 -c "
+from core.readers.darwin.iokit_thermal_reader import IOKitThermalReader
+r = IOKitThermalReader({})
+print(r.read_all_thermal())
+print('pressure level:', r.get_pressure_level())
+"
+# Expected: {'package_temp_celsius': <real float>, 'battery_celsius': <real float>}
+# pressure level: one of Nominal/Fair/Serious/Critical
+```
+
+### Known Limitations
+
+- **No numeric CPU temperature via powermetrics itself**: the thermal
+  pressure sampler only reports a four-level categorical value, not
+  degrees. Die temperature comes from the separate vendored sensor path,
+  not powermetrics.
+  Workaround: use the vendored sensors.m die temperature reading as the
+  primary numeric signal; treat pressure level as cross-reference only.
+- **Per-probe physical mapping not independently confirmed**: it is not
+  established which specific silicon region each `tdie` probe
+  corresponds to.
+  Workaround: None currently; aggregate maximum used as a conservative
+  proxy for package temperature.
+- **Battery and pressure signals not persisted per-run**: currently
+  available only via method calls at measurement time, not stored as
+  dedicated `runs` columns.
+  Workaround: None currently; would require a schema addition, not yet
+  implemented.
+- **Third-party vendored code dependency**: die temperature measurement
+  depends on a third-party compiled binary, not audited beyond the
+  cross-validation described above.
+  Workaround: None currently; BSD 3-Clause license and public framework
+  usage reduce but do not eliminate this dependency risk.
 
 ### Platform Availability
 
