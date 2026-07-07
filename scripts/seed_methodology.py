@@ -1970,6 +1970,7 @@ def seed_reader(cls, conn, doc_map: Dict, code_version: str, dry_run: bool) -> N
         "layer":             cls.METHOD_LAYER,
         "applicable_on":     applicable_on,
         "fallback_method_id": cls.FALLBACK_METHOD_ID,
+        "confidence":        getattr(cls, "METHOD_CONFIDENCE", 1.0),
     }
 
     _insert_registry(conn, row, dry_run)
