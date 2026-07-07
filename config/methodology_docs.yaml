@@ -35,6 +35,9 @@ methods:
   iokit_power_reader:
     doc: "07-energy-readers-methodology.md"
     section: "IOKit Power Reader"
+  iokit_thermal_reader:
+    doc: "07-energy-readers-methodology.md"
+    section: "IOKit Thermal Reader"
 
   ml_energy_estimator:
     doc: "07-energy-readers-methodology.md"
