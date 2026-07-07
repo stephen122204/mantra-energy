@@ -1928,12 +1928,19 @@ def seed_reader(cls, conn, doc_map: Dict, code_version: str, dry_run: bool) -> N
     method_id = cls.METHOD_ID
 
     # Formula from @formula decorator, fallback to class attribute
+    # Formula from @formula decorator, fallback to per-reader hardcoded map
+    _READER_FORMULAS = {
+        "iokit_power_reader":   r"E = \sum_{i} \frac{P_i + P_{i+1}}{2} \cdot \Delta t_i \times 10^6",
+        "iokit_thermal_reader": r"T_{die} = \max(T_{tdie0}, \ldots, T_{tdie10})",
+    }
     formula_latex = ""
     for fn_name in ("get_energy_delta", "read_energy_uj"):
         fn = getattr(cls, fn_name, None)
         if fn and hasattr(fn, "_formula_latex"):
             formula_latex = fn._formula_latex
             break
+    if not formula_latex:
+        formula_latex = _READER_FORMULAS.get(cls.METHOD_ID, "")
     if not formula_latex:
         formula_latex = getattr(cls, "METHOD_FORMULA_LATEX", "")
 
