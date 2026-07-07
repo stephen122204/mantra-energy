@@ -85,6 +85,17 @@ compute_cpu_fraction,
 
 logger = logging.getLogger(__name__)
 
+def _perf_field(perf, field, default=0):
+    """
+    raw_energy.perf is a dict {} on platforms without perf (Darwin,
+    has_perf=False), but a real PerformanceCounters object with
+    attributes on Linux (has_perf=True). Handles both shapes, fixes
+    a regression introduced 2026-07-06 that assumed dict-only and
+    broke the working Linux path.
+    """
+    if isinstance(perf, dict):
+        return perf.get(field, default)
+    return getattr(perf, field, default)
 
 def get_workflow_order(rep_num):
     """Return (first, second) workflow order for repetition (1-based)."""
@@ -647,13 +658,14 @@ class ExperimentHarness:
                     else 0
                 ),
                 "page_faults": (
-                    raw_energy.perf.get("minor_page_faults", 0) + raw_energy.perf.get("major_page_faults", 0)
+                    _perf_field(raw_energy.perf, "minor_page_faults") +
+                    _perf_field(raw_energy.perf, "major_page_faults")
                 ),
                 "major_page_faults": (
-                    raw_energy.perf.get("major_page_faults", 0)
+                    _perf_field(raw_energy.perf, "major_page_faults")
                 ),
                 "minor_page_faults": (
-                    raw_energy.perf.get("minor_page_faults", 0)
+                    _perf_field(raw_energy.perf, "minor_page_faults")
                 ),
                 "context_switches_voluntary": derived.context_switches_voluntary,
                 "context_switches_involuntary": derived.context_switches_involuntary,
@@ -1179,13 +1191,14 @@ class ExperimentHarness:
                     else 0
                 ),
                 "page_faults": (
-                    raw_energy.perf.get("minor_page_faults", 0) + raw_energy.perf.get("major_page_faults", 0)
+                    _perf_field(raw_energy.perf, "minor_page_faults") +
+                    _perf_field(raw_energy.perf, "major_page_faults")
                 ),
                 "major_page_faults": (
-                    raw_energy.perf.get("major_page_faults", 0)
+                    _perf_field(raw_energy.perf, "major_page_faults")
                 ),
                 "minor_page_faults": (
-                    raw_energy.perf.get("minor_page_faults", 0)
+                    _perf_field(raw_energy.perf, "minor_page_faults")
                 ),
                 "context_switches_voluntary": derived.context_switches_voluntary,
                 "context_switches_voluntary": derived.context_switches_voluntary,
