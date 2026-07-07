@@ -296,6 +296,7 @@ CREATE TABLE IF NOT EXISTS hallucination_events (
     expected_output         TEXT,
     actual_output           TEXT,
     wasted_energy_uj        INTEGER,
+    wasted_energy_uj_real   INTEGER,  -- populated by energy_attribution_etl.py, NULL at insert
 
     detected_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (attempt_id)             REFERENCES goal_attempt(attempt_id),
@@ -3067,6 +3068,9 @@ CREATE TABLE IF NOT EXISTS network_energy_attribution (
     non_local_ms     REAL,
     window_count     INTEGER NOT NULL DEFAULT 0,
     coverage_fraction REAL,
+    nic_activity_validated   INTEGER,  -- SPEC_03A: 1=NIC byte movement confirmed during window, 0=not, NULL=not checked
+    nic_adjusted_confidence  REAL,     -- SPEC_03A: confidence penalized 0.75x if no NIC activity during blocking window
+    nic_coverage_fraction    REAL,     -- SPEC_03A: fraction of window covered by nic_samples
     created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (run_id) REFERENCES runs(run_id)
 );
