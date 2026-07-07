@@ -114,26 +114,32 @@ class RawEnergyMeasurement:
     @property
     def package_energy_uj(self) -> int:
         """Compute raw package energy delta in microjoules.
-        Supports RAPL key 'package-0' (x86) and SPBM key 'pkg' (GN100 aarch64).
+        Supports RAPL key 'package-0' (x86), SPBM key 'pkg' (GN100 aarch64),
+        and IOKit key 'cpu' (Apple Silicon unified CPU rail).
         """
         start = self.rapl_start_uj.get("package-0",
-                self.rapl_start_uj.get("pkg", 0))
+                self.rapl_start_uj.get("pkg",
+                self.rapl_start_uj.get("cpu", 0)))
         end   = self.rapl_end_uj.get("package-0",
-                self.rapl_end_uj.get("pkg", 0))
+                self.rapl_end_uj.get("pkg",
+                self.rapl_end_uj.get("cpu", 0)))
         return max(0, end - start)
 
     @property
     def core_energy_uj(self) -> int:
         """Compute raw core energy delta in microjoules.
-        Supports RAPL key 'core' (x86) and SPBM key 'cpu_p' (GN100 P-cores).
+        Supports RAPL key 'core' (x86), SPBM key 'cpu_p' (GN100 P-cores),
+        and IOKit key 'cpu' (Apple Silicon — same rail as package, no sub-domain).
         """
         start = self.rapl_start_uj.get("core",
-                self.rapl_start_uj.get("cpu_p", 0))
+                self.rapl_start_uj.get("cpu_p",
+                self.rapl_start_uj.get("cpu", 0)))
         end   = self.rapl_end_uj.get("core",
-                self.rapl_end_uj.get("cpu_p", 0))
+                self.rapl_end_uj.get("cpu_p",
+                self.rapl_end_uj.get("cpu", 0)))
         return max(0, end - start)
-
     @property
+    
     def dram_energy_uj(self) -> Optional[int]:
         """Compute raw DRAM energy delta if available.
         Returns None on GN100 — Grace has no DRAM RAPL domain (MIC-1).
