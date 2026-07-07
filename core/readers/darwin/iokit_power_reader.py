@@ -185,7 +185,11 @@ class IOKitPowerReader(EnergyReaderABC):
         return self.read_energy_uj()
 
     def read_gpu_msr(self):
-        return None   # IOKit GPU handled by GPUCollector IOKitBackend, not here
+        # Return cumulative GPU energy in µJ from the powermetrics sampler.
+        # Called by ReaderFactory.get_gpu_energy_uj() at measurement start/end.
+        # Delta is computed by _resolve_gpu_total_uj() in energy_engine.py.
+        with self._lock:
+            return self._cumulative_uj.get("gpu", 0)
 
     def get_domains(self) -> List[str]:
         return list(self.DOMAINS)
