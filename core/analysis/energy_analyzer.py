@@ -38,6 +38,7 @@ from typing import Optional
 from core.models.baseline_measurement import BaselineMeasurement
 from core.models.derived_energy_measurement import DerivedEnergyMeasurement
 from core.models.raw_energy_measurement import RawEnergyMeasurement
+from core.readers.measurement_schema import find_idle_uj, find_idle_core_uj
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +95,8 @@ class EnergyAnalyzer:
         if baseline:
             # Use minimum baseline (2nd percentile) instead of mean
             min_energy = baseline.min_energy_uj(raw.duration_seconds)
-            idle_uj = min_energy.get("PACKAGE", min_energy.get("package-0", 0))
-            idle_core_uj = min_energy.get("CORE", min_energy.get("CPU_P", min_energy.get("core", 0)))
+            idle_uj = find_idle_uj(min_energy)
+            idle_core_uj = find_idle_core_uj(min_energy)
             idle_uncore_uj = min_energy.get("UNCORE", min_energy.get("uncore", 0))
             baseline_id = baseline.baseline_id
 

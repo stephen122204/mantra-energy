@@ -217,3 +217,81 @@ SCHEMA_DUMMY = MeasurementSchema(
     sampling_hz=10,
     counter_width_bits=64,
 )
+
+# ---------------------------------------------------------------------------
+# Role constants for cross-platform domain resolution.
+# Set on DomainDescriptor.canonical_role (field added below) to allow
+# energy_analyzer.py to find the right domain on any platform without
+# hardcoding domain name strings per-platform.
+# ---------------------------------------------------------------------------
+ROLE_TOTAL = "TOTAL"   # package / SoC root — used for idle_uj subtraction
+ROLE_CPU   = "CPU"     # CPU-cores child domain — used for idle_core_uj subtraction
+ROLE_GPU   = "GPU"     # GPU child domain
+
+# Role assignments for every known schema.
+# Keyed by canonical_name. Any name not listed here gets role=None.
+_CANONICAL_ROLE_MAP: dict = {
+    # RAPL x86
+    "PACKAGE":   ROLE_TOTAL,
+    "CORE":      ROLE_CPU,
+    # SPBM ARM (GN100)
+    # CPU_P = performance cores, the CPU energy domain for baseline subtraction.
+    # CPU_E = efficiency cores, intentionally None — folded into PACKAGE total.
+    "CPU_P":     ROLE_CPU,
+    # Apple IOKit
+    # UNIFIED root is not declared as a DomainDescriptor in SCHEMA_APPLE_IOKIT
+    # (Apple does not expose a unified total counter directly). CPU_APPLE is
+    # the closest available total on Apple — assign TOTAL so idle_uj resolves.
+    "CPU_APPLE": ROLE_TOTAL,
+    "GPU_APPLE": ROLE_GPU,
+    # AMD (same RAPL naming as x86 Intel)
+    # PACKAGE and CORE already covered above.
+}
+
+def validate_schema_roles(schema: MeasurementSchema) -> None:
+    """Call once after defining any new schema object.
+    Raises ValueError if a domain's canonical_name is not in _CANONICAL_ROLE_MAP
+    and has no parent_domain=None (i.e. it is a root domain that needs a role).
+    """
+    for d in schema.domains:
+        if d.parent_domain is None and d.canonical_name not in _CANONICAL_ROLE_MAP:
+            raise ValueError(
+                f"Schema '{schema.source}': root domain '{d.canonical_name}' "
+                f"has no entry in _CANONICAL_ROLE_MAP. Add it before shipping."
+            )
+        
+def find_idle_uj(min_energy: dict) -> int:
+    """Return the idle baseline energy for the TOTAL/package domain.
+
+    Searches min_energy keys against the role map. Falls back to the
+    historical hardcoded name list for any reader not yet in the role map.
+    Works on all platforms with zero platform-specific branching in callers.
+
+    Args:
+        min_energy: dict mapping canonical_name -> baseline energy in µJ,
+                    from BaselineMeasurement.min_energy_uj().
+
+    Returns:
+        Idle energy in µJ, or 0 if no matching domain found.
+    """
+    for name, role in _CANONICAL_ROLE_MAP.items():
+        if role == ROLE_TOTAL and name in min_energy:
+            return min_energy[name]
+    # Defensive fallback for any reader not yet in the role map
+    return min_energy.get("PACKAGE", min_energy.get("package-0", 0))
+
+
+def find_idle_core_uj(min_energy: dict) -> int:
+    """Return the idle baseline energy for the CPU-cores domain.
+
+    Args:
+        min_energy: dict mapping canonical_name -> baseline energy in µJ.
+
+    Returns:
+        Idle core energy in µJ, or 0 if no matching domain found.
+    """
+    for name, role in _CANONICAL_ROLE_MAP.items():
+        if role == ROLE_CPU and name in min_energy:
+            return min_energy[name]
+    # Defensive fallback
+    return min_energy.get("CORE", min_energy.get("CPU_P", min_energy.get("core", 0)))
