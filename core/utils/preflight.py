@@ -72,7 +72,9 @@ def check_local(config):
         sys.exit("❌ llama-cpp-python not installed. Run: pip install llama-cpp-python")
     print("✅ llama-cpp-python: OK")
     
-    model = config.get("model_path")
+    from scripts.tools.path_loader import get_models_dir
+    raw = config.get("model_path", "")
+    model = raw.replace("{models_dir}", get_models_dir())
     if model and not Path(model).exists():
         sys.exit(f"❌ Model not found: {model}")
     print(f"✅ Model file: {model}")
