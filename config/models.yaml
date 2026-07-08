@@ -323,17 +323,17 @@ providers:
       - id: tinyllama-1b-gguf
         name: TinyLlama 1B GGUF
         file_params:
-          model_path: /home/dpani/mydrive/models/tinyllama.gguf
+          model_path: "{models_dir}/tinyllama.gguf"
           n_ctx: 2048
       - id: phi-2-gguf
         name: Phi-2 GGUF
         file_params:
-          model_path: /home/dpani/mydrive/models/phi-2.gguf
+          model_path: "{models_dir}/phi-2.gguf"
       - id: llama-3.2-3b-gguf
         name: Llama 3.2 3B GGUF
         max_tokens: 2048
         file_params:
-          model_path: /home/dpani/mydrive/models/llama-3.2-3b.gguf
+          model_path: "{models_dir}/llama-3.2-3b.gguf"
 
 # ---------------------------------------------------------------------------
   nvidia_nim:

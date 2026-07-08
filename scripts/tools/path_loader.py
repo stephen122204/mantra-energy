@@ -58,6 +58,27 @@ def get_alems_db_path():
         return f"{base}/{machine_id}/experiments.db"
     return "data/experiments.db"
 
+def get_models_dir():
+    # type: () -> str
+    """
+    Resolve the models directory for this machine.
+
+    Priority:
+      Layer 1: ALEMS_MODELS_DIR env var (set in ~/.alemsrc per machine)
+      Layer 2: ALEMS_DATA_ROOT env var + /models
+      Layer 3: hardcoded fallback -> ~/mydrive/models
+
+    Returns:
+        Path string for the models directory on this machine.
+    """
+    _source_alemsrc()
+    models_dir = os.environ.get("ALEMS_MODELS_DIR")
+    if models_dir:
+        return models_dir
+    base = os.environ.get("ALEMS_DATA_ROOT")
+    if base:
+        return os.path.join(base, "models")
+    return str(Path.home() / "mydrive" / "models")
 
 def get_baseline_cache_path():
     # type: () -> str

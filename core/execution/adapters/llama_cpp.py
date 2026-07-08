@@ -39,7 +39,10 @@ class LlamaCppAdapter(TextGenABC):
             model_config:    model block (model_path, max_tokens, temperature)
         """
         super().__init__(provider_config, model_config)
-        self._model_path = model_config.get("model_path", "")
+        from scripts.tools.path_loader import get_models_dir
+        raw_path = model_config.get("model_path", "")
+        # Resolve {models_dir} token — machine-aware path via path_loader
+        self._model_path = raw_path.replace("{models_dir}", get_models_dir())
         self._llm = None   # lazy-loaded on first call — avoids cold start on import
 
     def get_name(self) -> str:
