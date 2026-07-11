@@ -72,6 +72,7 @@ class IOKitPowerReader(EnergyReaderABC):
         self._lock = threading.Lock()
         self._samples: List[Dict] = []
         self._cumulative_uj = {d: 0 for d in self.DOMAINS}
+        self._latest_freq_mhz = 0  # latest P-cluster frequency from powermetrics
         self._proc = None
         self._reader_thread = None
         self._available = self._check_available()
@@ -138,6 +139,7 @@ class IOKitPowerReader(EnergyReaderABC):
         dt_s = min(now - prev_timestamp, 2.0) if prev_timestamp else 0.0
 
         cpu_mw = gpu_mw = None
+        p_cluster_mhz = None
         # Only the CPU Power Stats block's GPU Power line is used, not the
         # later GPU usage block's duplicate value, keeps domains time
         # aligned to the same sample.
@@ -155,14 +157,18 @@ class IOKitPowerReader(EnergyReaderABC):
             if m and gpu_mw is None:
                 gpu_mw = int(m.group(1))
 
+            m = re.search(r"P\d+-Cluster HW active frequency:\s+(\d+)\s+MHz", line)
+            if m and p_cluster_mhz is None:
+                p_cluster_mhz = int(m.group(1))
         if dt_s <= 0:
             return  # first sample, no interval to integrate yet
-
         with self._lock:
             if cpu_mw is not None:
                 self._cumulative_uj["cpu"] += int(cpu_mw * dt_s * 1000)
             if gpu_mw is not None:
                 self._cumulative_uj["gpu"] += int(gpu_mw * dt_s * 1000)
+            if p_cluster_mhz is not None:
+                self._latest_freq_mhz = p_cluster_mhz
 
     def read_energy_uj(self) -> Dict[str, int]:
         """
@@ -190,6 +196,14 @@ class IOKitPowerReader(EnergyReaderABC):
         # Delta is computed by _resolve_gpu_total_uj() in energy_engine.py.
         with self._lock:
             return self._cumulative_uj.get("gpu", 0)
+
+    def get_frequency_mhz(self) -> int:
+        """Return latest P-cluster HW active frequency in MHz.
+        P-cluster = performance cores where LLM inference runs on Apple Silicon.
+        Returns 0 until first powermetrics sample arrives.
+        """
+        with self._lock:
+            return self._latest_freq_mhz
 
     def get_domains(self) -> List[str]:
         return list(self.DOMAINS)
