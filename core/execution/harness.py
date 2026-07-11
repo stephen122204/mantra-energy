@@ -752,6 +752,7 @@ class ExperimentHarness:
                 "country_code": country_code,
                 "workflow_type": "linear",
                 "reader_mode": self.energy_engine.energy_reader.METHOD_PROVENANCE,
+                "reader_method_id": self.energy_engine.energy_reader.METHOD_ID,
                 # ====================================================================
                 # TARGETS (what we want to predict)
                 # ====================================================================
@@ -1324,6 +1325,7 @@ class ExperimentHarness:
                 "country_code": country_code,
                 "workflow_type": "agentic",
                 "reader_mode": self.energy_engine.energy_reader.METHOD_PROVENANCE,
+                "reader_method_id": self.energy_engine.energy_reader.METHOD_ID,
                 # ====================================================================
                 # TARGETS
                 # ====================================================================

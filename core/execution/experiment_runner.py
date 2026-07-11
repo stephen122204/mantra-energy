@@ -857,15 +857,23 @@ class ExperimentRunner:
                 except Exception as _e:
                     logger.warning("cpu_idle_states ARM insert failed (linear): %s", _e)
             else:
-                # cpu_idle_states: x86 path — derive from turbostat cpu_samples
+                # cpu_idle_states: x86 path — prefer turbostat, fall back to cpuidle sysfs
+                # AMD Zen 2 turbostat crashes (SIGABRT in rapl_perf_init),
+                # cpu_samples is empty. cpuidle sysfs verified working on AMD.
                 try:
                     _cpu_vendor = (_hw_info.get('cpu_vendor') or 'intel').lower()
                     _idle_platform = "amd_x86_64" if _cpu_vendor == 'amd' else "intel_x86_64"
-                    db.cpu_idle.write_from_turbostat(
-                        linear_id,
-                        linear_result.get("cpu_samples", []),
-                        platform=_idle_platform,
-                    )
+                    _cpu_samples = linear_result.get("cpu_samples", [])
+                    if _cpu_samples:
+                        db.cpu_idle.write_from_turbostat(
+                            linear_id,
+                            _cpu_samples,
+                            platform=_idle_platform,
+                        )
+                    elif os.path.exists("/sys/devices/system/cpu/cpu0/cpuidle/state0"):
+                        db.cpu_idle.write_from_cpuidle_sysfs(linear_id, platform=_idle_platform)
+                    else:
+                        logger.info("cpu_idle_states: no turbostat data and no cpuidle sysfs, skipping")
                 except Exception as _e:
                     logger.warning("cpu_idle_states x86 insert failed (linear): %s", _e)
 
@@ -943,6 +951,8 @@ class ExperimentRunner:
                     linear_agg["gpu_attribution_method"] = "dcgm_field156"
                 elif _is_spbm and _gpu_spbm > 0:
                     linear_agg["gpu_attribution_method"] = "spbm_package_v1"
+                elif _ml.get("reader_method_id") == "iokit_power_reader" and _gpu_spbm > 0:
+                    linear_agg["gpu_attribution_method"] = "iokit_powermetrics"
                 elif not _is_spbm and _gpu_spbm > 0:
                     linear_agg["gpu_attribution_method"] = "pp1_msr"
                 else:
@@ -1032,15 +1042,23 @@ class ExperimentRunner:
                 except Exception as _e:
                     logger.warning("cpu_idle_states ARM insert failed (agentic): %s", _e)
             else:
-                # cpu_idle_states: x86 path
+                # cpu_idle_states: x86 path — prefer turbostat, fall back to cpuidle sysfs
+                # AMD Zen 2 turbostat crashes (SIGABRT in rapl_perf_init),
+                # cpu_samples is empty. cpuidle sysfs verified working on AMD.
                 try:
                     _cpu_vendor = (_hw_info.get('cpu_vendor') or 'intel').lower()
                     _idle_platform = "amd_x86_64" if _cpu_vendor == 'amd' else "intel_x86_64"
-                    db.cpu_idle.write_from_turbostat(
-                        agentic_id,
-                        agentic_result.get("cpu_samples", []),
-                        platform=_idle_platform,
-                    )
+                    _cpu_samples = agentic_result.get("cpu_samples", [])
+                    if _cpu_samples:
+                        db.cpu_idle.write_from_turbostat(
+                            agentic_id,
+                            _cpu_samples,
+                            platform=_idle_platform,
+                        )
+                    elif os.path.exists("/sys/devices/system/cpu/cpu0/cpuidle/state0"):
+                        db.cpu_idle.write_from_cpuidle_sysfs(agentic_id, platform=_idle_platform)
+                    else:
+                        logger.info("cpu_idle_states: no turbostat data and no cpuidle sysfs, skipping")
                 except Exception as _e:
                     logger.warning("cpu_idle_states x86 insert failed (agentic): %s", _e)
 
@@ -1112,6 +1130,8 @@ class ExperimentRunner:
                     agentic_agg["gpu_attribution_method"] = "dcgm_field156"
                 elif _is_spbm and _gpu_spbm > 0:
                     agentic_agg["gpu_attribution_method"] = "spbm_package_v1"
+                elif _ml.get("reader_method_id") == "iokit_power_reader" and _gpu_spbm > 0:
+                    agentic_agg["gpu_attribution_method"] = "iokit_powermetrics"
                 elif not _is_spbm and _gpu_spbm > 0:
                     agentic_agg["gpu_attribution_method"] = "pp1_msr"
                 else:
@@ -1558,6 +1578,8 @@ class ExperimentRunner:
                         agg["gpu_attribution_method"] = "dcgm_field156"
                     elif _is_spbm and _gpu_spbm > 0:
                         agg["gpu_attribution_method"] = "spbm_package_v1"
+                    elif _ml.get("reader_method_id") == "iokit_power_reader" and _gpu_spbm > 0:
+                        agg["gpu_attribution_method"] = "iokit_powermetrics"
                     elif not _is_spbm and _gpu_spbm > 0:
                         agg["gpu_attribution_method"] = "pp1_msr"
                     else:
@@ -1708,6 +1730,8 @@ class ExperimentRunner:
                 _agg2["gpu_attribution_method"] = "dcgm_field156"
             elif _is_spbm2 and _gpu_spbm2 > 0:
                 _agg2["gpu_attribution_method"] = "spbm_package_v1"
+            elif _ml2.get("reader_method_id") == "iokit_power_reader" and _gpu_spbm2 > 0:
+                _agg2["gpu_attribution_method"] = "iokit_powermetrics"
             elif not _is_spbm2 and _gpu_spbm2 > 0:
                 _agg2["gpu_attribution_method"] = "pp1_msr"
             else:
