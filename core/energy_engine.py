@@ -207,7 +207,7 @@ class EnergyEngine:
 
         # PAC-2 compliant: TurbostatReader now via factory (Chunk 7 factorisation)
         # Linux x86 -> TurbostatReader, macOS/other -> DummyTurbostatReader
-        self.turbostat = ReaderFactory.get_turbostat_reader(config, self._platform_caps)
+        self.turbostat = ReaderFactory.get_turbostat_reader(config, self._platform_caps, self.energy_reader)
         # PAC-2 compliant: MSRReader and SchedulerMonitor via factory (Chunk 7)
         # Linux x86 -> MSRReader, macOS/other -> DummyMSRReader
         # Linux     -> SchedulerMonitor, macOS/other -> DummySchedulerMonitor

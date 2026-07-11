@@ -245,8 +245,9 @@ class ReaderFactory:
     @classmethod
     def get_turbostat_reader(
         cls,
-        config=None,  # type: Optional[dict]
-        caps=None,    # type: Optional[PlatformCapabilities]
+        config=None,        # type: Optional[dict]
+        caps=None,          # type: Optional[PlatformCapabilities]
+        energy_reader=None, # type: Optional[object]  # passed on Darwin to avoid second IOKit instance
     ):
         """
         Return correct turbostat reader for current platform.
@@ -274,7 +275,15 @@ class ReaderFactory:
         if caps.os == "Linux" and caps.arch == "aarch64":
             return cls._make_arm_cpufreq_reader(config)
 
-        # macOS, ARM, Windows, unknown — no turbostat/MSR access
+        # macOS Apple Silicon — wrap existing IOKitPowerReader for P-cluster frequency
+        if caps.os == "Darwin" and energy_reader is not None:
+            try:
+                from core.readers.darwin.darwin_cpufreq_reader import DarwinCPUFreqReader
+                logger.info("get_turbostat_reader: Darwin -> DarwinCPUFreqReader")
+                return DarwinCPUFreqReader(energy_reader)
+            except Exception as e:
+                logger.warning("DarwinCPUFreqReader unavailable: %s", e)
+        # Windows, unknown — no turbostat/MSR access
         from core.readers.fallback.dummy_turbostat_reader import DummyTurbostatReader
         logger.info(
             "get_turbostat_reader: platform=%s arch=%s -> DummyTurbostatReader (LIMITED)",
