@@ -196,7 +196,9 @@ class IOKitThermalReader(ThermalReaderABC):
 
         die_temps = self._read_die_temps()
         if die_temps:
-            temps["package_temp_celsius"] = round(max(die_temps.values()), 2)
+            _pkg_temp = round(max(die_temps.values()), 2)
+            temps["cpu_temp"] = _pkg_temp              # ABC contract key consumed by harness
+            temps["package_temp_celsius"] = _pkg_temp  # legacy alias for read_temperatures()
 
         try:
             result = subprocess.run(
