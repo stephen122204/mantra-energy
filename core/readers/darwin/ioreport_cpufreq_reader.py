@@ -276,7 +276,7 @@ class IOReportCPUFreqReader:
 
                 duration_s = time.monotonic() - self._start_time
                 wall_ns = int(duration_s * 1e9)
-                freq_mean, freq_min, freq_max = self._extract_weighted_frequency(delta, wall_ns)
+                freq_mean, freq_min, freq_max, cpu_active_ratio = self._extract_weighted_frequency(delta, wall_ns)
 
             except Exception as e:
                 logger.warning("stop_monitoring failed: %s", e)
@@ -293,9 +293,10 @@ class IOReportCPUFreqReader:
             "num_samples": 1,
             "duration_seconds": duration_s,
             "summary": {
-                "frequency_mean": float(freq_mean),
-                "frequency_min":  float(freq_min) if freq_min != float("inf") else 0.0,
-                "frequency_max":  float(freq_max),
+                "frequency_mean":   float(freq_mean),
+                "frequency_min":    float(freq_min) if freq_min != float("inf") else 0.0,
+                "frequency_max":    float(freq_max),
+                "cpu_active_ratio": cpu_active_ratio,
             },
         }
 
@@ -424,6 +425,7 @@ class IOReportCPUFreqReader:
         chip_brand = self._chip_brand
 
         total_weighted_sum: float = 0.0
+        total_active_residency: int = 0
         min_active_freq: float = float("inf")
         max_active_freq: float = 0.0
         num_p_cores: int = 0
@@ -474,29 +476,34 @@ class IOReportCPUFreqReader:
 
             for state_idx in range(state_count):
                 residency = _ior.IOReportStateGetResidency(channel_ref, state_idx)
-                pass  # residency counted via wall_ns denominator
+                pass  # IDLE state: not counted in active residency
 
                 if state_idx > 0 and (state_idx - 1) < usable_states:
                     freq = freq_table[state_idx - 1]
                     total_weighted_sum += freq * residency
+                    total_active_residency += residency
                     if residency > 0:
                         if freq < min_active_freq:
                             min_active_freq = freq
                         if freq > max_active_freq:
                             max_active_freq = freq
 
-        # Use wall_ns * num_p_cores as denominator (not sum of residency).
-        # IOReport DVFS channels only count active time; IDLE residency=0.
-        # Wall-clock denominator gives true effective frequency:
-        # if CPU idle 90% of window, effective freq = 10% of active freq.
-        # Denominator is wall_ns only — residency is already summed across
-        # all P-cores so dividing by num_p_cores would double-deflate.
-        if wall_ns > 0:
-            freq_mean = total_weighted_sum / wall_ns
+        # Active-weighted frequency: sum(f_i * r_i) / sum(r_i for active states).
+        # Matches macmon/powermetrics semantics. P-cluster is fully off when idle
+        # on Apple Silicon — IOReport only counts active execution residency.
+        if total_active_residency > 0:
+            freq_mean = total_weighted_sum / total_active_residency
         else:
             freq_mean = 0.0
 
-        return freq_mean, min_active_freq, max_active_freq
+        # cpu_active_ratio: fraction of wall-clock window P-cluster was active.
+        # Divided by num_p_cores so ratio is per-core, not aggregate.
+        cpu_active_ratio = (
+            total_active_residency / (wall_ns * max(num_p_cores, 1))
+            if wall_ns > 0 else None
+        )
+
+        return freq_mean, min_active_freq, max_active_freq, cpu_active_ratio
 
     def _cf_release_safe(self, cf_obj) -> None:
         if cf_obj and _cf is not None:
