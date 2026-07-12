@@ -275,7 +275,8 @@ class IOReportCPUFreqReader:
                     return empty
 
                 duration_s = time.monotonic() - self._start_time
-                freq_mean, freq_min, freq_max = self._extract_weighted_frequency(delta)
+                wall_ns = int(duration_s * 1e9)
+                freq_mean, freq_min, freq_max = self._extract_weighted_frequency(delta, wall_ns)
 
             except Exception as e:
                 logger.warning("stop_monitoring failed: %s", e)
@@ -403,7 +404,7 @@ class IOReportCPUFreqReader:
                 _cf.CFRelease(channels_mut)
 
     def _extract_weighted_frequency(
-        self, delta: int
+        self, delta: int, wall_ns: int
     ) -> Tuple[float, float, float]:
         """Compute wall-clock-weighted P-cluster frequency from delta dict.
 
@@ -413,14 +414,19 @@ class IOReportCPUFreqReader:
 
         The delta dict contains "IOReportChannels" -> CFArray of channel dicts.
         Each channel dict responds to IOReportStateGetCount/GetResidency.
+
+        Wall-clock denominator: IOReport DVFS channels only count active
+        time (IDLE state residency is always 0). Using sum(residency) as
+        denominator would give HW-active-weighted freq (same as powermetrics).
+        Using wall_ns as denominator gives true wall-clock-weighted freq.
         """
         freq_table = self._freq_table
         chip_brand = self._chip_brand
 
         total_weighted_sum: float = 0.0
-        total_residency: int = 0
         min_active_freq: float = float("inf")
         max_active_freq: float = 0.0
+        num_p_cores: int = 0
 
         # Direct CFArray access — callback-free iteration of channel entries
         channels_array = _cf.CFDictionaryGetValue(
@@ -464,6 +470,7 @@ class IOReportCPUFreqReader:
                 continue
 
             usable_states = len(freq_table)
+            num_p_cores += 1
 
             for state_idx in range(state_count):
                 residency = _ior.IOReportStateGetResidency(channel_ref, state_idx)
@@ -478,8 +485,13 @@ class IOReportCPUFreqReader:
                         if freq > max_active_freq:
                             max_active_freq = freq
 
-        if total_residency > 0:
-            freq_mean = total_weighted_sum / total_residency
+        # Use wall_ns * num_p_cores as denominator (not sum of residency).
+        # IOReport DVFS channels only count active time; IDLE residency=0.
+        # Wall-clock denominator gives true effective frequency:
+        # if CPU idle 90% of window, effective freq = 10% of active freq.
+        total_wall_ns = wall_ns * max(num_p_cores, 1)
+        if total_wall_ns > 0:
+            freq_mean = total_weighted_sum / total_wall_ns
         else:
             freq_mean = 0.0
 
