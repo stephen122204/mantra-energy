@@ -451,23 +451,19 @@ class IOReportCPUFreqReader:
 
             name = name_bytes.decode("utf-8", errors="replace")
 
-            # Skip E-cluster cores; only P-cluster cores contribute to freq_mhz
-            if not name.startswith(self.PRIMARY_CLUSTER_PREFIX):
-                continue
-
             state_count = _ior.IOReportStateGetCount(channel_ref)
 
-            # State 0 = IDLE, states 1..N map to freq_table[0..N-1]
-            # This invariant is confirmed on M1-M4 by socpowerbud and agtop
-            if state_count != len(freq_table) + 1:
-                logger.warning(
-                    "DVFS state count mismatch on '%s': %d states, "
-                    "freq_table has %d entries. Chip: %s.",
-                    name, state_count, len(freq_table), chip_brand,
-                )
-                usable_states = min(state_count - 1, len(freq_table))
-            else:
-                usable_states = len(freq_table)
+            # Filter P-cluster channels by state count matching freq_table.
+            # On M1 Pro: P-cluster has 16 states (15 freq steps + IDLE),
+            # E-cluster has 6 states. IOReportChannelGetDriverName returns
+            # the same driver string for all channels so name-based filtering
+            # is not available — state count is the correct discriminator.
+            expected_states = len(freq_table) + 1
+            if state_count != expected_states:
+                # Not a P-cluster channel — skip silently
+                continue
+
+            usable_states = len(freq_table)
 
             for state_idx in range(state_count):
                 residency = _ior.IOReportStateGetResidency(channel_ref, state_idx)
