@@ -474,7 +474,7 @@ class IOReportCPUFreqReader:
 
             for state_idx in range(state_count):
                 residency = _ior.IOReportStateGetResidency(channel_ref, state_idx)
-                total_residency += residency
+                pass  # residency counted via wall_ns denominator
 
                 if state_idx > 0 and (state_idx - 1) < usable_states:
                     freq = freq_table[state_idx - 1]
