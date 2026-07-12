@@ -489,9 +489,10 @@ class IOReportCPUFreqReader:
         # IOReport DVFS channels only count active time; IDLE residency=0.
         # Wall-clock denominator gives true effective frequency:
         # if CPU idle 90% of window, effective freq = 10% of active freq.
-        total_wall_ns = wall_ns * max(num_p_cores, 1)
-        if total_wall_ns > 0:
-            freq_mean = total_weighted_sum / total_wall_ns
+        # Denominator is wall_ns only — residency is already summed across
+        # all P-cores so dividing by num_p_cores would double-deflate.
+        if wall_ns > 0:
+            freq_mean = total_weighted_sum / wall_ns
         else:
             freq_mean = 0.0
 
