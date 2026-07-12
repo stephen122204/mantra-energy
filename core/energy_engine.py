@@ -774,6 +774,9 @@ class EnergyEngine:
         elif self._platform_caps.arch == "aarch64" and self._platform_caps.has_arm_pmu:
             # ARM: ARMCPUFreqReader is the turbostat equivalent — start unconditionally
             self.turbostat.start_monitoring(interval_ms=interval_ms)
+        elif self.turbostat.is_available():
+            # Darwin: IOReportCPUFreqReader — start unconditionally when available
+            self.turbostat.start_monitoring(interval_ms=interval_ms)
 
         # EnergyCollector: generic loop replacing _sampling_loop + SPBMSampler (16B3)
         try:
