@@ -1076,7 +1076,8 @@ class EnergyEngine:
         # Stop turbostat and get continuous data
         _has_freq_reader = (
             self._platform_caps.has_turbostat or
-            (self._platform_caps.arch == "aarch64" and self._platform_caps.has_arm_pmu)
+            (self._platform_caps.arch == "aarch64" and self._platform_caps.has_arm_pmu) or
+            self.turbostat.is_available()  # IOReportCPUFreqReader on Darwin
         )
         turbostat_data = self.turbostat.stop_monitoring() if _has_freq_reader else {"dataframe": None, "num_samples": 0, "duration_seconds": 0.0, "summary": {}}
         thermal_samples = self._stop_thermal_sampling()
