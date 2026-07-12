@@ -211,6 +211,36 @@ def _load_measured_methods() -> List[Dict]:
             "section":      "Hardware Telemetry Metrics (Chunk 12)",
         },
         {
+            "id":           "ioreport_cpufreq_v1",
+            "name":         "IOReport DVFS Residency Weighted CPU Frequency",
+            "provenance":   "MEASURED",
+            "layer":        "silicon",
+            "output_metric":"frequency_mhz",
+            "output_unit":  "MHz",
+            "applicable_on":["darwin_arm64"],
+            "formula_latex": (
+                r"f_{\text{weighted}} = "
+                r"\frac{\sum_{i=0}^{N-1} f_i \cdot r_{i+1}}"
+                r"{\sum_{j=0}^{N} r_j}"
+            ),
+            "parameters":   {
+                "f_i": "DVFS state frequency in MHz from IORegistry voltage-states blob",
+                "r_j": "IOReport residency in nanoseconds for state j (r_0 = IDLE)",
+                "N":   "Number of active DVFS states for the primary compute cluster",
+            },
+            "description":  (
+                "Reads per-core DVFS residency counters from Apple's IOReport "
+                "library (the same data source used internally by powermetrics). "
+                "Computes wall-clock-weighted average frequency for the primary "
+                "compute cluster (P-cluster on Apple Silicon) over the measurement "
+                "window. Residency counters are cumulative hardware counters "
+                "providing exact state accounting, not sampled data. "
+                "No sudo required. No subprocess. Pure Python ctypes."
+            ),
+            "doc":          "07-energy-readers-methodology.md",
+            "section":      "IOReport CPU Frequency (ioreport_cpufreq_v1)",
+        },        
+        {
             "id":           "gpu_rapl_pp1_v1",
             "name":         "Intel Iris Xe GPU Energy via MSR 0x641",
             "provenance":   "MEASURED",

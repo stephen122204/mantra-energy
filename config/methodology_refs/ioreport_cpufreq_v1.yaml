@@ -1,0 +1,42 @@
+method_id: ioreport_cpufreq_v1
+references:
+  - title: "IOReport Private API (decompiled function signatures)"
+    authors: "dehydratedpotato"
+    year: 2023
+    ref_type: "internal"
+    url: "https://github.com/dehydratedpotato/IOReport_decompile"
+    relevance: "IOReport function signatures and channel semantics used for ctypes binding"
+  - title: "agtop: Apple GPU Top (Python ctypes IOReport implementation)"
+    authors: "binlecode"
+    year: 2025
+    ref_type: "internal"
+    url: "https://github.com/binlecode/agtop"
+    relevance: "Reference Python ctypes binding pattern and DVFS table parsing from IORegistry"
+  - title: "macmon: Real-time system monitor for Apple Silicon Macs"
+    authors: "vladkens"
+    year: 2024
+    ref_type: "internal"
+    url: "https://github.com/vladkens/macmon"
+    relevance: "DVFS residency computation and voltage-states key naming convention"
+  - title: "SiliconScope: Sudoless Apple Silicon system monitor"
+    authors: "kennss"
+    year: 2026
+    ref_type: "internal"
+    url: "https://github.com/kennss/SiliconScope"
+    relevance: "Confirmed voltage-states binary blob format and no-sudo requirement for DVFS channels"
+  - title: "socpowerbud: Sudoless alternative to powermetrics for Apple Silicon"
+    authors: "dehydratedpotato"
+    year: 2023
+    ref_type: "internal"
+    url: "https://github.com/dehydratedpotato/socpowerbud"
+    relevance: "Channel group naming, per-state residency extraction, per-core vs per-cluster rationale"
+formula: >
+  f_weighted = sum(f_i * r_{i+1}) / sum(r_j for j=0..N)
+  where f_i is DVFS state frequency in MHz, r_j is IOReport residency
+  in nanoseconds for state j, r_0 is IDLE residency, N is number of
+  active DVFS states for the primary compute cluster.
+parameters:
+  f_i: "DVFS state frequency in MHz from IORegistry voltage-states blob"
+  r_j: "IOReport residency nanoseconds for state j (r_0 = IDLE)"
+  N: "Number of active DVFS states for the primary compute cluster"
+confidence: 0.95

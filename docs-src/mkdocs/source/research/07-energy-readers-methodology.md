@@ -373,6 +373,93 @@ print('pressure level:', r.get_pressure_level())
 
 ---
 
+## IOReport CPU Frequency (ioreport_cpufreq_v1)
+
+---
+**Method ID:** ioreport_cpufreq_v1
+**Schema version:** No schema change (frequency_mhz column exists)
+**Platforms verified:** Apple M1 Pro (arm64)
+**Status:** PRODUCTION
+**Last updated:** 2026-07
+---
+
+### Overview
+
+Reads per-core DVFS residency counters from Apple's `libIOReport.dylib`
+— the same library that `powermetrics` links against internally (confirmed
+via `otool -L /usr/bin/powermetrics`). Computes the true wall-clock-weighted
+average P-cluster frequency over any measurement window.
+
+`powermetrics` reports HW-active-weighted frequency: averaged only over
+active cycles, ignoring idle time. Under any real workload this always
+reads near maximum (3036 MHz on M1 Pro) even when the CPU is mostly idle.
+IOReport DVFS residency counters include idle time, giving the true
+effective frequency that correlates correctly with measured energy.
+
+No sudo required. No subprocess spawned. No compilation. Pure Python ctypes.
+
+### Platform Coverage
+
+| Platform | Architecture | Source | Confidence | Status |
+|---|---|---|---|---|
+| Apple M1 Pro | arm64/Darwin | IOReport DVFS residency (libIOReport.dylib) | 0.95 | VERIFIED |
+| Intel i7-1165G7 | x86_64/Linux | turbostat (not applicable) | 0.92 | VERIFIED |
+| NVIDIA Grace GB10 | aarch64/Linux | DummyTurbostatReader | N/A | NOT_SUPPORTED |
+
+### Schema
+
+No new columns. The existing `runs.frequency_mhz` column is populated by
+this reader on Darwin. All other platforms continue to use their existing
+readers unchanged.
+
+### Method Provenance
+
+| Field | Value |
+|---|---|
+| method_id | ioreport_cpufreq_v1 |
+| provenance | MEASURED |
+| layer | silicon |
+| confidence | 0.95 |
+| formula | f_weighted = sum(f_i * r_{i+1}) / sum(r_j for j=0..N) |
+
+**Confidence Rationale (0.95):** IOReport DVFS residency counters are exact
+hardware-level state accounting. The 0.05 deduction reflects that IOReport
+is a private undocumented Apple API. Stable from macOS 11 (2020) through
+macOS 16 (2026) but no formal API stability guarantee.
+
+### Query Reference
+
+```sql
+SELECT run_id, frequency_mhz, total_energy_uj / 1e6 AS total_j
+FROM runs
+WHERE frequency_mhz IS NOT NULL AND frequency_mhz > 0
+ORDER BY run_id DESC LIMIT 20;
+```
+
+### Verification
+
+```bash
+python3 scripts/tests/test_ioreport_standalone.py
+
+python -m core.execution.tests.test_harness \
+    --task-id gsm8k_basic --repetitions 1 --provider llama_cpp --save-db
+
+DB=$(python3 -c "from scripts.tools.path_loader import get_alems_db_path; \
+                 print(get_alems_db_path())")
+sqlite3 "$DB" "SELECT run_id, frequency_mhz FROM runs ORDER BY run_id DESC LIMIT 2;"
+```
+
+### Known Limitations
+
+- **Private API**: IOReport is undocumented. Three-tier fallback ensures
+  A-LEMS never crashes if the API changes.
+- **No per-sample time series**: IOReport provides interval aggregates only.
+  `num_samples` is always 1.
+- **Future chip compatibility**: Key `voltage-states5-sram` confirmed on M1
+  through M4. Heuristic scan handles unknown chips automatically.
+
+---
+
 ## Estimator (ML-Based Energy Estimation)
 
 ### Overview

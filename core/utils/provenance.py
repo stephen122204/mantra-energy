@@ -501,6 +501,7 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "rapl_msr_pkg_energy":           1.0,
     "iokit_power_reader":            0.85,
     "iokit_thermal_reader":          0.75,
+    "ioreport_cpufreq_v1":           0.95,
     "ml_energy_estimator":           0.0,
     "dummy_energy_reader":           0.0,
     "perf_counters":                 1.0,

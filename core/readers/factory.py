@@ -275,14 +275,42 @@ class ReaderFactory:
         if caps.os == "Linux" and caps.arch == "aarch64":
             return cls._make_arm_cpufreq_reader(config)
 
-        # macOS Apple Silicon — wrap existing IOKitPowerReader for P-cluster frequency
-        if caps.os == "Darwin" and energy_reader is not None:
-            try:
-                from core.readers.darwin.darwin_cpufreq_reader import DarwinCPUFreqReader
-                logger.info("get_turbostat_reader: Darwin -> DarwinCPUFreqReader")
-                return DarwinCPUFreqReader(energy_reader)
-            except Exception as e:
-                logger.warning("DarwinCPUFreqReader unavailable: %s", e)
+        # macOS Apple Silicon — ordered candidate list, first available wins.
+        # IOReportCPUFreqReader: residency-weighted exact frequency, no sudo.
+        # DarwinCPUFreqReader: powermetrics HW-active freq, always near max.
+        # DummyTurbostatReader: returns None, scientifically correct fallback.
+        if caps.os == "Darwin":
+            darwin_candidates = [
+                ("IOReportCPUFreqReader",
+                 "core.readers.darwin.ioreport_cpufreq_reader"),
+                ("DarwinCPUFreqReader",
+                 "core.readers.darwin.darwin_cpufreq_reader"),
+            ]
+            for cls_name, module_path in darwin_candidates:
+                try:
+                    import importlib
+                    mod = importlib.import_module(module_path)
+                    cls = getattr(mod, cls_name)
+                    if cls_name == "DarwinCPUFreqReader":
+                        if energy_reader is None:
+                            continue
+                        reader = cls(energy_reader)
+                    else:
+                        reader = cls(config)
+                    if reader.is_available():
+                        logger.info(
+                            "get_turbostat_reader: Darwin -> %s", cls_name
+                        )
+                        return reader
+                    logger.debug(
+                        "get_turbostat_reader: %s not available, trying next",
+                        cls_name,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "get_turbostat_reader: %s failed to load: %s",
+                        cls_name, e,
+                    )
         # Windows, unknown — no turbostat/MSR access
         from core.readers.fallback.dummy_turbostat_reader import DummyTurbostatReader
         logger.info(
