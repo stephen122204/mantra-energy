@@ -952,6 +952,7 @@ CREATE TABLE IF NOT EXISTS runs (
     is_cold_start BOOLEAN,
     background_cpu_percent REAL,
     process_count INTEGER,
+    cpu_active_ratio REAL,
 
     -- Agentic‑specific metrics (NULL for linear runs)
     planning_time_ms REAL,

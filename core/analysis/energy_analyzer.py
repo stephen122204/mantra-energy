@@ -222,6 +222,7 @@ class EnergyAnalyzer:
         c_states = {}
         freq = 0
         gpu_freq = 0
+        cpu_active_ratio = None
         gpu_rc6 = 0
 
         # Check if turbostat data exists (this is where the data is!)
@@ -234,6 +235,7 @@ class EnergyAnalyzer:
 
                     # Get frequency
                     freq = summary.get("frequency_mean", 0)
+                    cpu_active_ratio = summary.get("cpu_active_ratio")
 
                     # Get C-states (keys like 'C1_mean', 'C2_mean', etc.)
                     for key, value in summary.items():
@@ -413,6 +415,7 @@ class EnergyAnalyzer:
             c_state_residencies=c_states,
             frequency_mhz=freq,
             gpu_frequency_mhz=gpu_freq,
+            cpu_active_ratio=cpu_active_ratio,
             gpu_rc6_percent=gpu_rc6,
             # Thermal
             package_temp_celsius=package_temp,

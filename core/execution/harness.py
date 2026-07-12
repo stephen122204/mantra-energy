@@ -675,6 +675,7 @@ class ExperimentHarness:
                 "kernel_time_ms": derived.kernel_time_ms,
                 "user_time_ms": derived.user_time_ms,
                 "frequency_mhz": derived.frequency_mhz if derived.frequency_mhz else 0,
+                "cpu_active_ratio": derived.cpu_active_ratio,
                 "package_temp_celsius": derived.package_temp_celsius,
                 "baseline_temp_celsius": (
                     self.baseline.cpu_temperature_c if self.baseline else None
@@ -1210,6 +1211,7 @@ class ExperimentHarness:
                 "kernel_time_ms": derived.kernel_time_ms,
                 "user_time_ms": derived.user_time_ms,
                 "frequency_mhz": derived.frequency_mhz if derived.frequency_mhz else 0,
+                "cpu_active_ratio": derived.cpu_active_ratio,
                 "package_temp_celsius": derived.package_temp_celsius,
                 "baseline_temp_celsius": (
                     self.baseline.cpu_temperature_c if self.baseline else None

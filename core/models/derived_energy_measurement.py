@@ -57,6 +57,7 @@ class DerivedEnergyMeasurement:
         frequency_mhz: float = 0.0                     # CPU frequency
         gpu_frequency_mhz: float = 0.0                  # iGPU frequency
         gpu_rc6_percent: float = 0.0                     # iGPU RC6 residency
+        cpu_active_ratio: Optional[float] = None         # Apple Silicon only: active residency / wall_ns
 
     Thermal (Req 1.9):
         package_temp_celsius: float = 0.0                # Package temperature
@@ -120,6 +121,7 @@ class DerivedEnergyMeasurement:
     frequency_mhz: float = 0.0
     gpu_frequency_mhz: float = 0.0
     gpu_rc6_percent: float = 0.0
+    cpu_active_ratio: Optional[float] = None
 
     # ========================================================================
     # Thermal (Req 1.9)
@@ -272,6 +274,7 @@ class DerivedEnergyMeasurement:
                 "c_state_residencies": self.c_state_residencies,
                 "frequency_mhz": self.frequency_mhz,
                 "gpu_frequency_mhz": self.gpu_frequency_mhz,
+                "cpu_active_ratio": self.cpu_active_ratio,
                 "gpu_rc6_percent": self.gpu_rc6_percent,
             },
             # ====================================================================

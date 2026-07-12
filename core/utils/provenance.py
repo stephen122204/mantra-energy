@@ -185,6 +185,7 @@ COLUMN_PROVENANCE: Dict[str, Tuple[Optional[str], str]] = {
     "interrupts_per_second":        ("os_scheduler_reader",            "MEASURED"),
     "wakeup_latency_us":            ("os_scheduler_reader",            "MEASURED"),
     "background_cpu_percent":       ("os_scheduler_reader",            "MEASURED"),
+    "cpu_active_ratio":             ("ioreport_cpufreq_v1",            "MEASURED"),
     "process_count":                ("os_scheduler_reader",            "MEASURED"),
     "c2_time_seconds":              ("msr_reader",                     "MEASURED"),
     "c3_time_seconds":              ("msr_reader",                     "MEASURED"),
