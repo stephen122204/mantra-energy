@@ -188,6 +188,7 @@ class RunsRepository:
             "is_cold_start": ml.get("is_cold_start", False),
             "background_cpu_percent": ml.get("background_cpu_percent", 0),
             "process_count": ml.get("process_count", 0),
+            "cpu_active_ratio": ml.get("cpu_active_ratio"),
             # Agentic-specific
             "planning_time_ms": ml.get("planning_time_ms"),
             "execution_time_ms": ml.get("execution_time_ms"),
