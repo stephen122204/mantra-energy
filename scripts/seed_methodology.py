@@ -211,6 +211,31 @@ def _load_measured_methods() -> List[Dict]:
             "section":      "Hardware Telemetry Metrics (Chunk 12)",
         },
         {
+            "id":           "cpu_active_ratio_v1",
+            "name":         "CPU Active Ratio (cross-platform)",
+            "provenance":   "MEASURED",
+            "layer":        "os",
+            "output_metric":"cpu_active_ratio",
+            "output_unit":  "ratio",
+            "applicable_on":["any"],
+            "formula_latex": r"\text{cpu\_active\_ratio} = \frac{\text{active\_ticks}}{\text{wall\_ticks}}",
+            "parameters":   {
+                "Darwin":  "IOReport active residency / (wall_ns * num_p_cores)",
+                "Linux x86": "turbostat Avg_MHz / Bzy_MHz",
+                "Linux ARM": "/proc/stat active ticks / wall ticks",
+            },
+            "description":  (
+                "Fraction of wall-clock measurement window during which the "
+                "primary compute cluster was actively executing. On Apple Silicon "
+                "computed from IOReport DVFS residency. On Linux x86 computed from "
+                "turbostat Avg_MHz / Bzy_MHz ratio. On Linux ARM computed from "
+                "/proc/stat tick delta / wall ticks. NULL on platforms where "
+                "neither source is available."
+            ),
+            "doc":          "07-energy-readers-methodology.md",
+            "section":      "IOReport CPU Frequency (ioreport_cpufreq_v1)",
+        },
+        {
             "id":           "ioreport_cpufreq_v1",
             "name":         "IOReport DVFS Residency Weighted CPU Frequency",
             "provenance":   "MEASURED",
