@@ -160,6 +160,11 @@ class ARMCPUFreqReader(TurbostatReaderABC):
             name='arm-cpufreq-sampler'
         )
         self._thread.start()
+        # Snapshot active ticks at start for cpu_active_ratio computation
+        import time as _time
+        from core.utils.proc_reader import read_total_cpu_ticks
+        self._start_ticks = read_total_cpu_ticks()
+        self._start_time = _time.monotonic()
         logger.debug("ARMCPUFreqReader: monitoring started, %d CPUs",
                      len(self._cpu_paths))
 
@@ -206,10 +211,27 @@ class ARMCPUFreqReader(TurbostatReaderABC):
         logger.debug("ARMCPUFreqReader: %d snapshots, %.1f avg MHz",
                      len(samples), avg_mhz)
 
+        # Compute cpu_active_ratio from /proc/stat tick delta / wall ticks.
+        # read_total_cpu_ticks() returns user+nice+system (active only, not idle).
+        # wall_ticks = wall_seconds * USER_HZ (100 on Linux).
+        cpu_active_ratio = None
+        try:
+            import time as _time
+            from core.utils.proc_reader import read_total_cpu_ticks
+            end_ticks = read_total_cpu_ticks()
+            end_time = _time.monotonic()
+            tick_delta = end_ticks - getattr(self, '_start_ticks', 0)
+            wall_s = end_time - getattr(self, '_start_time', end_time)
+            wall_ticks = wall_s * 100  # USER_HZ = 100
+            if wall_ticks > 0 and tick_delta >= 0:
+                cpu_active_ratio = min(tick_delta / wall_ticks, 1.0)
+        except Exception:
+            pass
         summary = {
-            'frequency_mean': avg_mhz,
-            'frequency_max':  max(all_freqs) if all_freqs else avg_mhz,
-            'frequency_min':  min(all_freqs) if all_freqs else avg_mhz,
+            'frequency_mean':   avg_mhz,
+            'frequency_max':    max(all_freqs) if all_freqs else avg_mhz,
+            'frequency_min':    min(all_freqs) if all_freqs else avg_mhz,
+            'cpu_active_ratio': cpu_active_ratio,
         }
         return {
             'Avg_MHz':          avg_mhz,

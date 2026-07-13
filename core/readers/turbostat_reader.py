@@ -374,6 +374,25 @@ class TurbostatReader:
             universal_newlines=True,
         )
 
+        # Health check: give process 0.5s to crash, then verify alive.
+        # AMD Zen 2 turbostat dies immediately with SIGABRT in rapl_perf_init.
+        # Without this check, available stays True and drainer reads nothing.
+        time.sleep(0.5)
+        if self.turbostat_process.poll() is not None:
+            rc = self.turbostat_process.returncode
+            stderr_out = ""
+            if self.turbostat_process.stderr:
+                stderr_out = self.turbostat_process.stderr.read()
+            logger.warning(
+                "TurbostatReader: process exited immediately (rc=%s). "
+                "C-state columns will be NULL. stderr: %s",
+                rc, stderr_out[:200]
+            )
+            self.turbostat_process = None
+            self.available = False
+            self._monitoring_active = False
+            return
+
         # Start the drainer thread to collect output as it arrives
         self._reader_thread = threading.Thread(target=self._drain_output, daemon=True)
         self._reader_thread.start()
@@ -627,6 +646,15 @@ class TurbostatReader:
             except Exception as e:
                 logger.debug(f"Could not process column {col}: {e}")
 
+        # cpu_active_ratio = Avg_MHz / Bzy_MHz
+        # Avg_MHz is wall-clock weighted, Bzy_MHz is active-only weighted.
+        # Their ratio gives the fraction of wall time the CPU was active.
+        avg = summary.get("frequency_avg_mhz") or summary.get("frequency_mean")
+        bzy = summary.get("frequency_busy_mhz")
+        if avg and bzy and bzy > 0:
+            summary["cpu_active_ratio"] = min(avg / bzy, 1.0)
+        else:
+            summary["cpu_active_ratio"] = None
         return summary
 
     def save_raw_data(self, df: pd.DataFrame, experiment_id: str) -> Optional[str]:

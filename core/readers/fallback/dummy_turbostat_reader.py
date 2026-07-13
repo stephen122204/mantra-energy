@@ -60,7 +60,7 @@ class DummyTurbostatReader:
             "dataframe":        None,   # callers check for None before processing
             "num_samples":      0,
             "duration_seconds": 0.0,
-            "summary":          {},
+            "summary":          {"cpu_active_ratio": None},
         }
 
     def get_latest_sample(self) -> Dict:

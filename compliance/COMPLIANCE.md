@@ -26,6 +26,9 @@ Platform-conditional imports ONLY in `core/readers/factory.py`. Never in:
 - `core/execution/harness.py`
 - Any other file
 
+**PAC-2 Extension: Cross-platform metrics must be computed inside readers, not scattered across harness/analyzer.**
+Any metric that exists on all platforms (e.g. `cpu_active_ratio`, `frequency_mhz`) must be computed inside the platform's reader and returned in `stop_monitoring()` summary dict. The harness and energy_analyzer must read it generically via `summary.get("metric_name")` with no platform branching. Adding a metric to harness.py with `if platform == Darwin` or `or derived.cpu_active_ratio` is a PAC-2 violation. Every reader's `stop_monitoring()` summary is the single insertion point for new cross-platform metrics.
+
 ```python
 # WRONG — direct import in energy_engine.py
 from core.readers.disk_reader import DiskReader
