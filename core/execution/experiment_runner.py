@@ -1274,6 +1274,7 @@ class ExperimentRunner:
         print(f"DEBUG rapl_before_pretask agentic={agentic_result.get('rapl_before_pretask')}")
         print(f"DEBUG rapl_before_pretask linear={linear_result.get('rapl_before_pretask')}")
         _aml = agentic_result.get("ml_features", {})
+        print(f"DEBUG _aml rapl_before_pretask={_aml.get('rapl_before_pretask')}")
         if _aml.get("rapl_before_pretask") is not None:
             fix_run_with_pretask(
                 agentic_id,
