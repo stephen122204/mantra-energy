@@ -59,7 +59,8 @@ def _pkg_uj(rapl_dict: dict | None) -> int | None:
     if not rapl_dict:
         return None
     return (rapl_dict.get("package-0") or rapl_dict.get("package")
-            or rapl_dict.get("pkg"))
+            or rapl_dict.get("pkg")
+            or rapl_dict.get("cpu"))   # Apple IOKit: CPU_APPLE rail
  
  
 def _compute_window_energy(
