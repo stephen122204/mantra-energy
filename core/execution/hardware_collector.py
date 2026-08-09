@@ -87,6 +87,9 @@ def get_governor() -> str:
     Returns:
         'performance', 'powersave', 'ondemand', etc., or 'unknown'
     """
+    import platform
+    if platform.system() == "Darwin":
+        return "apple_silicon"
     try:
         with open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "r") as f:
             return f.read().strip()

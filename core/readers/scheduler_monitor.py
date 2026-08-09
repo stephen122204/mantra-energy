@@ -232,6 +232,30 @@ class SchedulerMonitor(SchedulerMonitorABC):
             "swap_cached_mb": 0.0,
         }
 
+        import platform as _platform
+        if _platform.system() == "Darwin":
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["sysctl", "vm.swapusage"],
+                    capture_output=True, text=True, timeout=5
+                )
+                # Format: vm.swapusage: total = 2048.00M  used = 1024.00M  free = 1024.00M
+                if result.returncode == 0:
+                    import re
+                    nums = re.findall(r"[\d.]+", result.stdout)
+                    if len(nums) >= 3:
+                        total = float(nums[0])
+                        used  = float(nums[1])
+                        free  = float(nums[2])
+                        swap_metrics["swap_total_mb"] = total
+                        swap_metrics["swap_free_mb"]  = free
+                        swap_metrics["swap_used_mb"]  = used
+                        if total > 0:
+                            swap_metrics["swap_percent"] = (used / total) * 100.0
+            except Exception as e:
+                logger.debug("Darwin swap metrics failed: %s", e)
+            return swap_metrics
         try:
             with open("/proc/meminfo", "r") as f:
                 for line in f:

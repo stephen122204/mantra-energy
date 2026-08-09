@@ -940,8 +940,20 @@ class ExperimentRunner:
                     linear_agg["avg_task_power_watts"] = round(
                         _attr_uj / 1_000_000.0 / _task_dur_s, 4)
                 # energy_sample_coverage_pct: SPBM preferred, phase fallback
+                # Apple IOKit: compute coverage from energy_sample_domains count
+                # IOKit samples at 200ms intervals (5 Hz)
+                _iokit_cov = None
+                if _spbm_cov is None and _phase_cov is None:
+                    _task_dur_ns = _ml.get("task_duration_ns") or 0
+                    _sample_count = _ml.get("energy_sample_count") or 0
+                    if _task_dur_ns > 0 and _sample_count > 0:
+                        _iokit_cov = min(
+                            (_sample_count * 200_000_000) / _task_dur_ns * 100, 100.0
+                        )
                 linear_agg["energy_sample_coverage_pct"] = (
-                    _spbm_cov if _spbm_cov is not None else _phase_cov)
+                    _spbm_cov if _spbm_cov is not None else
+                    _phase_cov if _phase_cov is not None else
+                    _iokit_cov)
                 # framework_overhead_energy_uj = avg_power_w * overhead_s * 1e6
                 if linear_agg.get("avg_task_power_watts") and _fw_s:
                     linear_agg["framework_overhead_energy_uj"] = round(
@@ -958,6 +970,8 @@ class ExperimentRunner:
                 else:
                     linear_agg["gpu_attribution_method"] = "none"
                 db.update_run_stats(linear_id, linear_agg)
+                if not linear_agg.get("energy_sample_coverage_pct"):
+                    db.runs.update_energy_sample_coverage(linear_id)
 
             # Insert agentic run
             agentic_id = db.insert_run(exp_id, hw_id, agentic_result)
@@ -1137,6 +1151,8 @@ class ExperimentRunner:
                 else:
                     agentic_agg["gpu_attribution_method"] = "none"
                 db.update_run_stats(agentic_id, agentic_agg)
+                if not agentic_agg.get("energy_sample_coverage_pct"):
+                    db.runs.update_energy_sample_coverage(agentic_id)
             # Agentic orchestration events
             if "orchestration_events" in agentic_result:
                 db.insert_orchestration_events(
@@ -1585,6 +1601,8 @@ class ExperimentRunner:
                     else:
                         agg["gpu_attribution_method"] = "none"
                     db.update_run_stats(run_id, agg)
+                    if not agg.get("energy_sample_coverage_pct"):
+                        db.runs.update_energy_sample_coverage(run_id)
 
                 # Orchestration events — present on agentic side
                 if "orchestration_events" in result:
@@ -1738,6 +1756,8 @@ class ExperimentRunner:
                 _agg2["gpu_attribution_method"] = "none"
             if hasattr(db, "update_run_stats"):
                 db.update_run_stats(run_id, _agg2)
+                if not _agg2.get("energy_sample_coverage_pct"):
+                    db.runs.update_energy_sample_coverage(run_id)
 
         # Orchestration events — agentic only in practice, safe to call on linear
         if "orchestration_events" in result:

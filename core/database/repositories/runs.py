@@ -567,6 +567,38 @@ class RunsRepository:
             # Re-raise the original error
             raise
 
+    def update_energy_sample_coverage(self, run_id: int, sample_interval_ns: int = 200_000_000) -> None:
+        """Compute and update energy_sample_coverage_pct from energy_sample_domains.
+
+        Called after run INSERT on platforms where coverage is not computed
+        during the run (e.g. Apple IOKit). Platform-agnostic: counts rows
+        in energy_sample_domains and divides by expected sample count based
+        on task_duration_ns and sample_interval_ns.
+
+        Args:
+            run_id: run to update
+            sample_interval_ns: sampling interval in ns (default 200ms for IOKit)
+        """
+        row = self.db.fetchone(
+            "SELECT task_duration_ns FROM runs WHERE run_id = ?", (run_id,)
+        )
+        if not row or not row[0]:
+            return
+        task_duration_ns = row[0]
+        count_row = self.db.fetchone(
+            "SELECT COUNT(DISTINCT sample_id) FROM energy_sample_domains WHERE run_id = ?",
+            (run_id,)
+        )
+        sample_count = count_row[0] if count_row else 0
+        if sample_count == 0 or task_duration_ns == 0:
+            return
+        expected = task_duration_ns / sample_interval_ns
+        coverage_pct = min(sample_count / expected * 100.0, 100.0)
+        self.db.execute(
+            "UPDATE runs SET energy_sample_coverage_pct = ? WHERE run_id = ?",
+            (round(coverage_pct, 2), run_id)
+        )
+
     def update_run_stats(self, run_id: int, stats: Dict) -> None:
         """Update run with aggregated statistics from samples."""
         # Round temperatures to 2 decimal places — applies on all platforms.
