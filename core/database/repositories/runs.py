@@ -579,16 +579,18 @@ class RunsRepository:
             run_id: run to update
             sample_interval_ns: sampling interval in ns (default 200ms for IOKit)
         """
-        row = self.db.fetchone(
+        cur = self.db.conn.execute(
             "SELECT task_duration_ns FROM runs WHERE run_id = ?", (run_id,)
         )
+        row = cur.fetchone()
         if not row or not row[0]:
             return
         task_duration_ns = row[0]
-        count_row = self.db.fetchone(
+        cur = self.db.conn.execute(
             "SELECT COUNT(DISTINCT sample_id) FROM energy_sample_domains WHERE run_id = ?",
             (run_id,)
         )
+        count_row = cur.fetchone()
         sample_count = count_row[0] if count_row else 0
         if sample_count == 0 or task_duration_ns == 0:
             return

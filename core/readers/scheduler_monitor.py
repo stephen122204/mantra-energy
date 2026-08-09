@@ -243,7 +243,7 @@ class SchedulerMonitor(SchedulerMonitorABC):
                 # Format: vm.swapusage: total = 2048.00M  used = 1024.00M  free = 1024.00M
                 if result.returncode == 0:
                     import re
-                    nums = re.findall(r"[\d.]+", result.stdout)
+                    nums = re.findall(r"\d+\.?\d*", result.stdout)
                     if len(nums) >= 3:
                         total = float(nums[0])
                         used  = float(nums[1])
