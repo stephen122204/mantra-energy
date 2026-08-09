@@ -384,12 +384,25 @@ def fix_run_with_pretask(
         es_row = cursor.fetchone()
         if not es_row or es_row[0] is None:
             # Fallback: SPBM platform — use energy_sample_domains domain_id=1
+            # Find the primary energy domain for this run.
+            # domain_id=1 is RAPL CORE on Linux. On Apple, CPU_APPLE is the
+            # primary domain. Use the domain with max cumulative energy.
+            cursor.execute("""
+                SELECT esd.domain_id
+                FROM energy_sample_domains esd
+                WHERE esd.run_id = ?
+                GROUP BY esd.domain_id
+                ORDER BY MAX(esd.energy_uj) DESC
+                LIMIT 1
+            """, (run_id,))
+            primary_domain_row = cursor.fetchone()
+            primary_domain_id = primary_domain_row[0] if primary_domain_row else 1
             cursor.execute("""
                 SELECT MIN(esd.energy_uj), MAX(esd.energy_uj)
                 FROM energy_sample_domains esd
                 JOIN energy_samples_v2 esv ON esv.sample_id = esd.sample_id
-                WHERE esd.run_id = ? AND esd.domain_id = 1
-            """, (run_id,))
+                WHERE esd.run_id = ? AND esd.domain_id = ?
+            """, (run_id, primary_domain_id))
             spbm_row = cursor.fetchone()
             if not spbm_row or spbm_row[0] is None:
                 logger.warning("Run %d: no energy_samples or SPBM samples — skipping", run_id)
