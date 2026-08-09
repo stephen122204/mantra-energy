@@ -372,7 +372,14 @@ class ReaderFactory:
             from core.readers.scheduler_monitor import SchedulerMonitor
             return SchedulerMonitor(config)
  
-        # macOS, Windows, unknown — no /proc
+        # macOS: SchedulerMonitor gracefully degrades on Darwin.
+        # /proc paths return empty; get_swap_metrics() uses sysctl vm.swapusage.
+        if caps.os == "Darwin":
+            from core.readers.scheduler_monitor import SchedulerMonitor
+            logger.info("get_scheduler_monitor: Darwin -> SchedulerMonitor (swap via sysctl)")
+            return SchedulerMonitor(config)
+
+        # Windows, unknown — no /proc
         from core.readers.fallback.dummy_scheduler_monitor import DummySchedulerMonitor
         logger.info(
             "get_scheduler_monitor: platform=%s -> DummySchedulerMonitor (LIMITED)",
