@@ -171,11 +171,18 @@ def _fix_run(cursor: sqlite3.Cursor, run_id: int) -> dict | None:
 
     if not es or es[2] == 0:
         # Fallback: SPBM platform — use energy_sample_domains domain_id=1
+        # Find primary domain (max cumulative energy) for this run
+        cursor.execute("""
+            SELECT domain_id FROM energy_sample_domains
+            WHERE run_id = ?
+            GROUP BY domain_id ORDER BY MAX(energy_uj) DESC LIMIT 1
+        """, (run_id,))
+        _dom = cursor.fetchone()
+        _primary_domain = _dom[0] if _dom else 1
         cursor.execute("""
             SELECT MIN(esv.timestamp_ns), MAX(esv.timestamp_ns), COUNT(*)
-            FROM energy_sample_domains esd
-            JOIN energy_samples_v2 esv ON esv.sample_id = esd.sample_id
-            WHERE esd.run_id = ? AND esd.domain_id = 1
+            FROM energy_samples_v2 esv
+            WHERE esv.run_id = ?
         """, (run_id,))
         spbm_es = cursor.fetchone()
         if not spbm_es or spbm_es[2] == 0:
@@ -400,7 +407,6 @@ def fix_run_with_pretask(
             cursor.execute("""
                 SELECT MIN(esd.energy_uj), MAX(esd.energy_uj)
                 FROM energy_sample_domains esd
-                JOIN energy_samples_v2 esv ON esv.sample_id = esd.sample_id
                 WHERE esd.run_id = ? AND esd.domain_id = ?
             """, (run_id, primary_domain_id))
             spbm_row = cursor.fetchone()
