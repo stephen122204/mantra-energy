@@ -41,6 +41,7 @@ import time
 from typing import Dict, List, Optional
 
 from core.readers.interfaces import EnergyReaderABC
+from core.models.normalized_energy_reading import NormalizedEnergyReading
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +197,31 @@ class IOKitPowerReader(EnergyReaderABC):
         # Delta is computed by _resolve_gpu_total_uj() in energy_engine.py.
         with self._lock:
             return self._cumulative_uj.get("gpu", 0)
+        
+    def read_normalized(self) -> "NormalizedEnergyReading":
+        """Map IOKit/powermetrics keys to canonical NormalizedEnergyReading.
+
+        Apple Silicon key mapping (M1 Pro / M-series unified memory):
+            cpu -> pkg_uj   (CPU_APPLE unified rail = full package envelope)
+            cpu -> cpu_uj   (same rail; no cores-only subdomain on Apple)
+            gpu -> gpu_uj   (Apple integrated GPU domain)
+            N/A -> dram_uj  (unified memory architecture, no DRAM domain)
+
+        Both pkg_uj and cpu_uj use the same value because Apple Silicon
+        does not expose a cores-only subdomain. This is correct: on Apple,
+        CPU energy IS the package energy as reported by powermetrics.
+        """
+        import time
+
+        raw = self.read_energy_uj()
+        cpu_val = raw.get("cpu")
+        return NormalizedEnergyReading(
+            pkg_uj  = cpu_val,
+            cpu_uj  = cpu_val,
+            gpu_uj  = raw.get("gpu"),
+            dram_uj = None,
+            ts_ns   = time.monotonic_ns(),
+        )
 
     def get_frequency_mhz(self) -> int:
         """Return latest P-cluster HW active frequency in MHz.

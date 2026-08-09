@@ -27,6 +27,7 @@ Author: Deepak Panigrahy
 
 import logging
 from typing import Dict, List
+from core.models.normalized_energy_reading import NormalizedEnergyReading
 from core.utils.formula import formula
 
 from core.readers.interfaces import EnergyReaderABC
@@ -121,7 +122,26 @@ class EnergyEstimator(EnergyReaderABC):
 
         # Return zero for every synthetic domain
         return {domain: 0 for domain in self.STUB_DOMAINS}
+    
+    def read_normalized(self) -> "NormalizedEnergyReading":
+        """Return estimated reading for INFERRED quality reader.
 
+        Estimator currently returns zeros (stub implementation).
+        pkg_uj is set from package-0 key; cpu/gpu/dram are None
+        because the estimator cannot break down energy by sub-domain.
+        METHOD_PROVENANCE is INFERRED so downstream must treat values
+        as estimates, not hardware measurements.
+        """
+        import time
+
+        raw = self.read_energy_uj()
+        return NormalizedEnergyReading(
+            pkg_uj  = raw.get("package-0") or raw.get("package"),
+            cpu_uj  = None,
+            gpu_uj  = None,
+            dram_uj = None,
+            ts_ns   = time.monotonic_ns(),
+        )
     def get_domains(self) -> List[str]:
         """
         Return the list of domains this estimator provides.

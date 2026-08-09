@@ -24,6 +24,7 @@ Author: Deepak Panigrahy
 
 import logging
 from typing import Dict, List
+from core.models.normalized_energy_reading import NormalizedEnergyReading
 from core.utils.formula import formula
 
 from core.readers.interfaces import EnergyReaderABC
@@ -103,6 +104,15 @@ class DummyEnergyReader(EnergyReaderABC):
 
         return {domain: 0 for domain in self.STUB_DOMAINS}
 
+    def read_normalized(self) -> "NormalizedEnergyReading":
+        """Return zero reading for unavailable reader (PAC-4).
+
+        All energy fields are None (not 0) per PAC-3, correctly signaling
+        that no measurement hardware is available on this platform.
+        """
+        from core.models.normalized_energy_reading import NormalizedEnergyReading
+        return NormalizedEnergyReading.zero()
+    
     def get_measurement_schema(self):
         """Return empty schema — dummy reader has no real domains."""
         from core.readers.measurement_schema import SCHEMA_DUMMY

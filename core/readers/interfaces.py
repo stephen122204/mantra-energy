@@ -40,6 +40,7 @@ Author: Deepak Panigrahy
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
+from core.models.normalized_energy_reading import NormalizedEnergyReading
 from core.readers.measurement_schema import MeasurementSchema
  
 
@@ -160,6 +161,20 @@ class EnergyReaderABC(BaseReader):
         return SCHEMA_DUMMY   # safe default — subclasses override
     
     @abstractmethod
+    @abstractmethod
+    def read_normalized(self) -> NormalizedEnergyReading:
+        """Return a canonical energy snapshot.
+
+        Each reader maps its platform-specific keys to canonical fields here.
+        This is the ONLY place platform key names appear in the codebase.
+        Downstream consumers access typed attributes, never raw dict keys.
+
+        Returns:
+            NormalizedEnergyReading: Immutable frozen dataclass.
+            Fields are None when the platform lacks that domain (PAC-3).
+        """
+        ...
+
     def read_energy_uj(self) -> Dict[str, int]:
         """
         Read current cumulative energy counters from all available domains.

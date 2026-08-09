@@ -485,6 +485,28 @@ class RAPLReader:
     def read_energy_uj(self) -> dict:
         """EnergyReaderABC interface — delegates to read_energy_safe()."""
         return self.read_energy_safe()
+    def read_normalized(self) -> "NormalizedEnergyReading":
+        """Map RAPL domain keys to canonical NormalizedEnergyReading.
+
+        RAPL key mapping (Intel/AMD x86_64):
+            package-0 or package -> pkg_uj  (full package envelope)
+            core                 -> cpu_uj  (CPU cores subdomain)
+            gpu                  -> None    (PP1 handled by gpu_collector)
+            dram                 -> dram_uj (memory controller domain)
+
+        gpu_uj is None: RAPL PP1 is read by gpu_collector.py through a
+        separate MSR path to avoid double-counting (MIC-1 separation).
+        """
+        import time
+        from core.models.normalized_energy_reading import NormalizedEnergyReading
+        raw = self.read_energy_safe()
+        return NormalizedEnergyReading(
+            pkg_uj  = raw.get("package-0") or raw.get("package"),
+            cpu_uj  = raw.get("core"),
+            gpu_uj  = None,
+            dram_uj = raw.get("dram"),
+            ts_ns   = time.monotonic_ns(),
+        )  
     def __str__(self) -> str:
         """
         String representation of RAPL reader state.

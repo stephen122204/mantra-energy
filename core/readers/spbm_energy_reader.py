@@ -236,6 +236,29 @@ class SPBMEnergyReader(EnergyReaderABC):
             'dram':      None,                     # no RAPL DRAM domain on Grace
         }
 
+    def read_normalized(self) -> "NormalizedEnergyReading":
+        """Map SPBM native keys to canonical NormalizedEnergyReading.
+
+        SPBM key mapping (GN100 / Grace Blackwell SoC):
+            pkg   -> pkg_uj   (full SoC power rail)
+            cpu_p -> cpu_uj   (P-core cluster, performance cores only)
+            gpu   -> gpu_uj   (Blackwell GPU SPBM accumulator)
+            N/A   -> dram_uj  (Grace has no DRAM energy domain, MIC-1)
+
+        Uses read_energy() with native SPBM keys directly, not
+        read_energy_uj() which translates to RAPL-style keys.
+        """
+        import time
+        from core.models.normalized_energy_reading import NormalizedEnergyReading
+        raw = self.read_energy()
+        return NormalizedEnergyReading(
+            pkg_uj  = raw.get("pkg"),
+            cpu_uj  = raw.get("cpu_p"),
+            gpu_uj  = raw.get("gpu"),
+            dram_uj = None,
+            ts_ns   = time.monotonic_ns(),
+        )
+
     def read_energy_safe(self):
         # type: () -> Dict[str, Optional[int]]
         """
