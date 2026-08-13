@@ -14,7 +14,10 @@ Author: Deepak Panigrahy
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from core.models.normalized_energy_reading import NormalizedEnergyReading
 
 
 @dataclass
@@ -52,12 +55,15 @@ class RawEnergyMeasurement:
     end_time: float
     duration_seconds: float
 
-    # Raw RAPL readings (microjoules)
-    rapl_start_uj: Dict[str, int]
-    rapl_end_uj: Dict[str, int]
+    # Energy snapshots at start/end of measurement window.
+    # NormalizedEnergyReading replaces raw Dict - platform-agnostic typed fields.
+    rapl_start_uj: Dict[str, int]   # kept for backward compat - use energy_start
+    rapl_end_uj: Dict[str, int]     # kept for backward compat - use energy_end
 
     # Other hardware readings
     perf: Any  # PerformanceCounters object
+    energy_start: "Optional[NormalizedEnergyReading]" = None
+    energy_end:   "Optional[NormalizedEnergyReading]" = None
     turbostat: Dict[str, Any] = field(default_factory=dict)  # ADD THIS LINE
     thermal: Dict[str, Any] = field(default_factory=dict)
     power_state: Dict[str, Any] = field(default_factory=dict)
@@ -117,6 +123,11 @@ class RawEnergyMeasurement:
         Supports RAPL key 'package-0' (x86), SPBM key 'pkg' (GN100 aarch64),
         and IOKit key 'cpu' (Apple Silicon unified CPU rail).
         """
+        # Use NormalizedEnergyReading if available (Phase 2 path)
+        if self.energy_start is not None and self.energy_end is not None:
+            if self.energy_start.pkg_uj is not None and self.energy_end.pkg_uj is not None:
+                return max(0, self.energy_end.pkg_uj - self.energy_start.pkg_uj)
+        # Fallback: legacy raw dict path (Phase 1 backward compat)
         start = self.rapl_start_uj.get("package-0",
                 self.rapl_start_uj.get("pkg",
                 self.rapl_start_uj.get("cpu", 0)))
@@ -131,6 +142,11 @@ class RawEnergyMeasurement:
         Supports RAPL key 'core' (x86), SPBM key 'cpu_p' (GN100 P-cores),
         and IOKit key 'cpu' (Apple Silicon — same rail as package, no sub-domain).
         """
+        # Use NormalizedEnergyReading if available (Phase 2 path)
+        if self.energy_start is not None and self.energy_end is not None:
+            if self.energy_start.cpu_uj is not None and self.energy_end.cpu_uj is not None:
+                return max(0, self.energy_end.cpu_uj - self.energy_start.cpu_uj)
+        # Fallback: legacy raw dict path (Phase 1 backward compat)
         start = self.rapl_start_uj.get("core",
                 self.rapl_start_uj.get("cpu_p",
                 self.rapl_start_uj.get("cpu", 0)))

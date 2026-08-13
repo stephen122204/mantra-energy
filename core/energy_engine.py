@@ -707,6 +707,7 @@ class EnergyEngine:
         # STEP 1: Snapshot readers - capture START values
         # ====================================================================
         rapl_start = self.rapl.read_energy()
+        energy_start = self.rapl.read_normalized()
         self.scheduler_start = self.scheduler.read_all()
 
         self._start_thermal_sampling()
@@ -732,11 +733,12 @@ class EnergyEngine:
         # GPU PP1 start counter — None on non-Tiger-Lake platforms
         gpu_start_uj = ReaderFactory.get_gpu_energy_uj(self.rapl)
         self.start_readings = {
-            "rapl":        rapl_start,
-            "scheduler":   self.scheduler_start,
-            "sensor":      self.sensor.read_temperatures(),
-            "msr_thermal": msr_thermal_start,
-            "gpu_uj":      gpu_start_uj,   # MSR 0x641 at measurement start
+            "rapl":         rapl_start,
+            "energy_start": energy_start,   # NormalizedEnergyReading at window start
+            "scheduler":    self.scheduler_start,
+            "sensor":       self.sensor.read_temperatures(),
+            "msr_thermal":  msr_thermal_start,
+            "gpu_uj":       gpu_start_uj,
         }
         # SPEC_SPBM_FULL_TELEMETRY: firmware power limits, captured once
         # per run (not per-tick). None on non-SPBM platforms — read_power_limits
@@ -1088,6 +1090,7 @@ class EnergyEngine:
         # STEP 2: Capture snapshot readers END values
         # ====================================================================
         rapl_end = self.rapl.read_energy()
+        energy_end = self.rapl.read_normalized()
         # GPU PP1 end counter — paired with start captured in start_measurement()
         gpu_end_uj  = ReaderFactory.get_gpu_energy_uj(self.rapl)
         scheduler_end = self.scheduler.read_all()
@@ -1293,6 +1296,8 @@ class EnergyEngine:
             # RAPL (snapshot)
             rapl_start_uj=start_rapl,
             rapl_end_uj=rapl_end,
+            energy_start=self.start_readings.get("energy_start"),
+            energy_end=energy_end,
             # perf (continuous) - store object directly
             perf=perf_data,
             # turbostat (continuous) - store the full data dictionary

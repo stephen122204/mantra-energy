@@ -269,11 +269,21 @@ class RunsRepository:
         pre_task_energy_uj    = ml.get("pre_task_energy_uj")
         _post_dur_sec         = ml.get("post_task_duration_sec") or fields.get("post_task_duration_sec")
         post_task_duration_ns = int(_post_dur_sec * 1e9) if _post_dur_sec else None
-        _rapl_before          = ml.get("rapl_before_pretask") or {}
-        _rapl_after           = ml.get("rapl_after_task") or {}
-        rapl_before_pretask_uj = (_rapl_before.get("package-0") or _rapl_before.get("package")
-                                  or _rapl_before.get("pkg") or _rapl_before.get("cpu"))
-        rapl_after_task_uj     = (_rapl_after.get("package-0")  or _rapl_after.get("package")
+        _rapl_before          = ml.get("rapl_before_pretask")
+        _rapl_after           = ml.get("rapl_after_task")
+        # NormalizedEnergyReading path (Phase 2): use .pkg_uj directly
+        # Legacy dict path (backward compat): fall back to key lookup chain
+        if hasattr(_rapl_before, 'pkg_uj'):
+            rapl_before_pretask_uj = _rapl_before.pkg_uj
+        else:
+            _rapl_before = _rapl_before or {}
+            rapl_before_pretask_uj = (_rapl_before.get("package-0") or _rapl_before.get("package")
+                                      or _rapl_before.get("pkg") or _rapl_before.get("cpu"))
+        if hasattr(_rapl_after, 'pkg_uj'):
+            rapl_after_task_uj = _rapl_after.pkg_uj
+        else:
+            _rapl_after = _rapl_after or {}
+            rapl_after_task_uj = (_rapl_after.get("package-0") or _rapl_after.get("package")
                                   or _rapl_after.get("pkg") or _rapl_after.get("cpu"))
 
         # Fallback to old method if per-run timestamps missing

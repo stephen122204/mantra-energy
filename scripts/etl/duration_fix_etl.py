@@ -55,12 +55,21 @@ COVERAGE_ACCEPTABLE = 80.0
 
 
 def _pkg_uj(rapl_dict: dict | None) -> int | None:
-    """Extract package energy µJ from a rapl.read_energy() dict. PAC safe."""
+    """Extract package energy µJ from a rapl snapshot. PAC safe.
+
+    Accepts both NormalizedEnergyReading (Phase 2) and raw dict (legacy).
+    """
+    if rapl_dict is None:
+        return None
+    # NormalizedEnergyReading path (Phase 2)
+    if hasattr(rapl_dict, 'pkg_uj'):
+        return rapl_dict.pkg_uj
+    # Legacy raw dict path (backward compat)
     if not rapl_dict:
         return None
     return (rapl_dict.get("package-0") or rapl_dict.get("package")
             or rapl_dict.get("pkg")
-            or rapl_dict.get("cpu"))   # Apple IOKit: CPU_APPLE rail
+            or rapl_dict.get("cpu"))
  
  
 def _compute_window_energy(
