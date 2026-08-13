@@ -106,8 +106,19 @@ def _compute_window_energy(
  
     raw_delta_uj  = rapl_end_uj - rapl_start_uj
     if raw_delta_uj < 0:
-        logger.warning("RAPL counter wrap detected — window energy invalid")
-        return None
+        # On Apple Silicon, IOKit cumulative counters start at 0 at reader init.
+        # rapl_start_uj may exceed rapl_end_uj (first sample) causing negative delta.
+        # Fall back to baseline power * duration as energy estimate.
+        if baseline_power_watts is not None and duration_ns is not None:
+            duration_sec = duration_ns / 1e9
+            raw_delta_uj = int(baseline_power_watts * duration_sec * 1e6)
+            logger.debug(
+                "Negative counter delta — using baseline estimate: %.1f µJ",
+                raw_delta_uj
+            )
+        else:
+            logger.warning("RAPL counter wrap detected — window energy invalid")
+            return None
 
     # No baseline subtraction for overhead windows — the pre/post task windows
     # are short instrumentation periods, not LLM work. Subtracting the task-era
