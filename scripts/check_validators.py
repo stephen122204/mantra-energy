@@ -84,9 +84,13 @@ def validate_boundary(run_row, platform):
     work_uj = attr_uj - pre_uj - post_uj
     total   = pre_uj + work_uj + post_uj
     delta   = abs(total - attr_uj)
-
-    return {
-        'status':     'OK' if delta <= 1000 else 'FAIL',
+    status  = 'OK' if delta <= 1000 else 'FAIL'
+    reason  = None
+    if work_uj < 0:
+        status = 'WARN'
+        reason = 'baseline exceeds total'
+    result = {
+        'status':     status,
         'delta_uj':   round(delta, 0),
         'pre_j':      round(pre_uj / 1e6, 4),
         'work_j':     round(work_uj / 1e6, 4),
@@ -94,6 +98,9 @@ def validate_boundary(run_row, platform):
         'attr_j':     round(attr_uj / 1e6, 4),
         'framework_overhead_j': round(fwoh_uj / 1e6, 4),
     }
+    if reason:
+        result['reason'] = reason
+    return result
 
 
 # ---------------------------------------------------------------------------

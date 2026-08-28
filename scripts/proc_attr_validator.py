@@ -176,6 +176,9 @@ def validate_proc_attr(conn, run_id, platform, run_row, dag_nodes):
                 'source':     'ML1 (Intel PP1 MSR)',
                 'e_gpu_j':    round(gpu_pp1_uj / 1e6, 4),
                 'status':     'OK',
+                'assumption':          'pp1_msr',
+                'assumption_confidence': 'HIGH',
+                'assumption_evidence': 'PP1 MSR direct metering, integrated GPU only',
                 'note':       'Integrated GPU only. Discrete GPU not metered via PP1.',
             }
         else:
@@ -183,6 +186,9 @@ def validate_proc_attr(conn, run_id, platform, run_row, dag_nodes):
                 'method': 'pp1_msr',
                 'source': 'ML1 (Intel PP1 MSR)',
                 'status': 'N/A',
+                'assumption':          'pp1_msr',
+                'assumption_confidence': 'LOW',
+                'assumption_evidence': 'no GPU energy or integrated GPU not present',
                 'reason': 'no GPU energy or integrated GPU not present',
             }
 

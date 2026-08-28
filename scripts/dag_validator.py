@@ -297,6 +297,11 @@ def validate_dag(conn, run_id, platform, run_row, workflow_type='agentic'):
             if child_uj is None:
                 any_missing = True
             children_uj[child_name] = child_uj
+        # Optional children: add if present, never cause DM if missing
+        for opt_child_name in edge.get('optional_children', []):
+            opt_uj = results['dag_nodes'].get(opt_child_name, {}).get('energy_uj')
+            if opt_uj is not None:
+                children_uj[opt_child_name] = opt_uj
 
         if any_missing:
             results['checks'][check_name] = {

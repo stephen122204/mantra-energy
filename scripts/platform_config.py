@@ -173,10 +173,11 @@ PLATFORM_CONFIGS = {
             {
                 'check':        'ML1-INT',
                 'parent':       'pkg',
-                'children':     ['core', 'uncore', 'dram'],
+                'children':     ['core', 'uncore'],
+                'optional_children': ['dram'],
                 'cross_source': False,
                 'relation':     'exact',
-                'description':  'RAPL pkg = core + uncore + dram (exact by hardware design)',
+                'description':  'RAPL pkg = core + uncore (+ dram if present, DRAM optional on x86)',
             },
         ],
 
