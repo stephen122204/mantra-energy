@@ -16,7 +16,7 @@ Per spec validator_rewrite_spec_v2.md §5.
 import sqlite3
 import logging
 from typing import Optional
-
+from platform_config import get_platform_config
 logger = logging.getLogger(__name__)
 
 
@@ -142,13 +142,12 @@ def validate_proc_attr(conn, run_id, platform, run_row, dag_nodes):
         }
 
     # ── PROC-ATTR-GPU ────────────────────────────────────────────────────
+    gpu_method = get_platform_config(platform).get('proc_attr_gpu_method', 'none')
     gpu_dcgm_uj = (dag_nodes.get('gpu_dcgm') or {}).get('energy_uj')
     gpu_assumption = assess_gpu_attribution(conn, run_id, run_row)
-
-    if gpu_dcgm_uj is not None and gpu_dcgm_uj > 0:
+    if gpu_method == 'direct_metering' and gpu_dcgm_uj is not None and gpu_dcgm_uj > 0:
         fraction = gpu_assumption.get('fraction')
         gpu_attributed_uj = (gpu_dcgm_uj * fraction) if fraction is not None else None
-
         result['proc_attr_gpu'] = {
             'method':              'direct_metering',
             'source':              'ML2 (DCGM field 156)',
@@ -160,15 +159,14 @@ def validate_proc_attr(conn, run_id, platform, run_row, dag_nodes):
             'e_gpu_attributed_j':  round(gpu_attributed_uj / 1e6, 4) if gpu_attributed_uj else None,
             'status':              'OK' if fraction is not None else 'WARN',
         }
-    elif 'spbm' in platform:
+    elif gpu_method == 'direct_metering':
         result['proc_attr_gpu'] = {
             'method': 'direct_metering',
             'source': 'ML2 (DCGM field 156)',
             'status': 'DM',
             'reason': 'no DCGM samples for this run',
         }
-    else:
-        # x86: GPU via PP1 MSR (integrated graphics only)
+    elif gpu_method == 'pp1_msr':
         gpu_pp1_uj = run_row.get('gpu_total_energy_uj')
         if gpu_pp1_uj and gpu_pp1_uj > 0:
             result['proc_attr_gpu'] = {
@@ -191,6 +189,17 @@ def validate_proc_attr(conn, run_id, platform, run_row, dag_nodes):
                 'assumption_evidence': 'no GPU energy or integrated GPU not present',
                 'reason': 'no GPU energy or integrated GPU not present',
             }
+    else:
+        # gpu_method == 'none' or unrecognized: no GPU metering on this platform
+        result['proc_attr_gpu'] = {
+            'method': gpu_method,
+            'source': 'N/A (no GPU metering on this platform)',
+            'status': 'N/A',
+            'assumption':          gpu_method,
+            'assumption_confidence': 'N/A',
+            'assumption_evidence': f'proc_attr_gpu_method={gpu_method}: no GPU metering available',
+            'reason': 'no GPU metering available on this platform',
+        }
 
     # ── PROC-ATTR-COMBINED ───────────────────────────────────────────────
     cpu_attr_j = None
