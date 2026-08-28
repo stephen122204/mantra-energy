@@ -67,6 +67,22 @@ def detect_platform(conn, run_id):
     Never raises.
     """
     try:
+        hw_row = conn.execute("""
+            SELECT hc.cpu_architecture, hc.gpu_driver, hc.cpu_vendor
+            FROM runs r JOIN hardware_config hc ON hc.hw_id = r.hw_id
+            WHERE r.run_id = ?
+        """, (run_id,)).fetchone()
+        if hw_row:
+            cpu_arch, gpu_driver, cpu_vendor = hw_row
+            cpu_arch    = (cpu_arch or "").lower()
+            gpu_driver  = (gpu_driver or "").lower()
+            cpu_vendor  = (cpu_vendor or "").lower()
+            if gpu_driver == "iokit" and cpu_arch == "arm64":
+                return "macos_iokit"
+            if cpu_vendor == "nvidia_grace" or "grace" in cpu_vendor:
+                return "arm_spbm"
+            if cpu_arch in ("x86_64", "amd64"):
+                return "x86_rapl"
         row = conn.execute(
             "SELECT energy_measurement_mode FROM runs WHERE run_id=?",
             (run_id,)
