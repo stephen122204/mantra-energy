@@ -451,11 +451,16 @@ class PlatformDetector:
     
     def _check_perf(self) -> bool:
         """
-        Live-probe whether perf binary is callable.
-
-        Not stored in hw_config.json so probed directly here.
+        Live-probe whether perf binary is callable (Linux) or kperf
+        helper is installed (Darwin arm64). Not stored in hw_config.json.
         Failure caught silently — perf is optional.
         """
+        # Darwin arm64: kperf helper acts as perf equivalent
+        import platform as _platform
+        if _platform.system() == "Darwin":
+            import os
+            return os.path.isfile("/usr/local/bin/alems_kperf_reader")
+
         try:
             result = subprocess.run(
                 ["perf", "--version"],

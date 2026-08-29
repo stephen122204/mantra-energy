@@ -237,7 +237,11 @@ class KPerfPMUReader(CPUReaderABC):
     # =================================================================
     # Two-snapshot measurement interface
     # =================================================================
-
+    @property
+    def perf_available(self):
+        """Compatibility shim for energy_engine.py has_perf gate."""
+        return self.is_available()
+    
     def start_process_measurement(self):
         # type: () -> None
         """
