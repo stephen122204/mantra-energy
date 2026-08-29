@@ -733,22 +733,37 @@ def detect_rapl_paths() -> Tuple[Dict[str, str], List[str]]:
 
 
 def detect_thermal_paths() -> Tuple[Dict[str, str], Optional[str]]:
-    """Detect thermal zones and identify package temperature."""
+    """Detect thermal zones and identify package temperature.
+
+    Primary: /sys/class/thermal/thermal_zone* (Intel, GN100)
+    Fallback: hwmon k10temp (AMD Ryzen, no CPU thermal_zone)
+    """
     thermal_paths = {}
     package_temp = None
-
     for zone in glob.glob("/sys/class/thermal/thermal_zone*"):
         temp_file = os.path.join(zone, "temp")
         type_file = os.path.join(zone, "type")
-
         if os.path.exists(temp_file) and os.path.exists(type_file):
             with open(type_file, "r") as f:
                 zone_type = f.read().strip()
             thermal_paths[zone_type] = temp_file
-
             # Identify package temperature
             if any(pkg in zone_type.lower() for pkg in ["pkg", "package", "x86"]):
                 package_temp = zone_type
+
+    # Fallback: AMD k10temp hwmon (no CPU thermal_zone on AMD Ryzen)
+    if package_temp is None:
+        for hwmon_dir in sorted(glob.glob("/sys/class/hwmon/hwmon*/")):
+            try:
+                name = open(hwmon_dir + "name").read().strip()
+            except (IOError, OSError):
+                continue
+            if name == "k10temp":
+                temp_file = hwmon_dir + "temp1_input"
+                if os.path.exists(temp_file):
+                    thermal_paths["k10temp"] = temp_file
+                    package_temp = "k10temp"
+                    break
 
     return thermal_paths, package_temp
 

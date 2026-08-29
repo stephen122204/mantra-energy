@@ -18,7 +18,14 @@ OS="$(uname -s)"
 ARCH="$(uname -m)"
 
 case "${OS}_${ARCH}" in
-    Linux_x86_64)   PLATFORM="intel_x86"  ;;
+    Linux_x86_64)
+        # Distinguish Intel from AMD on x86_64
+        if grep -q "AuthenticAMD" /proc/cpuinfo 2>/dev/null; then
+            PLATFORM="amd_x86"
+        else
+            PLATFORM="intel_x86"
+        fi
+        ;;
     Linux_aarch64)  PLATFORM="linux_arm"   ;;
     Darwin_arm64)   PLATFORM="apple_m1"    ;;
     Darwin_x86_64)  PLATFORM="intel_mac"   ;;

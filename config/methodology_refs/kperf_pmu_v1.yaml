@@ -1,0 +1,28 @@
+method_id: kperf_pmu_v1
+references:
+  - title: "kpc_demo: Apple Silicon performance counter example"
+    authors: "ibireme"
+    year: 2021
+    ref_type: "internal"
+    url: "https://gist.github.com/ibireme/173517c208c7dc333ba962c1f0d67d12"
+    relevance: "Canonical reverse-engineered kperf/kperfdata C interface"
+  - title: "mperf: portable hardware counters for macOS"
+    authors: "lambdafoo"
+    year: 2026
+    ref_type: "internal"
+    url: "https://lambdafoo.com/posts/2026-03-25-mperf-hardware-counters-macos.html"
+    relevance: "Event alias mapping across Apple Silicon generations"
+  - title: "simple-kpc: minimal kperf wrapper"
+    authors: "lunacookies"
+    year: 2023
+    ref_type: "internal"
+    url: "https://github.com/lunacookies/simple-kpc"
+    relevance: "Simplified C library confirming kpc API stability"
+formula: >
+  delta = C_stop - C_start for each PMU counter
+  (FIXED_INSTRUCTIONS, FIXED_CYCLES, L1D_CACHE_MISS_LD,
+   L1D_CACHE_MISS_ST, L1D_CACHE_MISS_LD_NONSPEC, L1D_TLB_ACCESS)
+parameters:
+  C_start: "PMU counter snapshot at measurement start (system-wide)"
+  C_stop: "PMU counter snapshot at measurement stop (system-wide)"
+confidence: 0.85

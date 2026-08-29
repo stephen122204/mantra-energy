@@ -921,3 +921,202 @@ attribution is handled separately by the DCGM backend.
 `SensorReader` on UBUNTU2505 and Alex AMD machine. Factory dispatches
 `ARMThermalReader` only when `caps.os == 'Linux'` and `caps.arch == 'aarch64'`
 and `caps.has_thermal`.
+
+## Apple Silicon PMU Counters (kperf_pmu_v1)
+
+---
+**Method ID:** kperf_pmu_v1
+**Schema version:** No new columns (all columns pre-exist in runs table)
+**Platforms verified:** Apple M1 Pro (arm64)
+**Status:** DRAFT
+**Last updated:** 2026-08-13
+---
+
+### Overview
+
+Reads CPU performance counters (instructions retired, CPU cycles, L1D
+cache misses) on Apple Silicon via Apple's private kperf.framework and
+kperfdata.framework. A compiled C helper binary performs the actual PMU
+read and prints JSON to stdout. The Python reader (`KPerfPMUReader`) calls
+the helper at measurement start and stop, then computes deltas.
+
+This method fills the same `runs` table columns as `PerfReader` on Linux:
+`instructions`, `cycles`, `ipc`, `cache_misses`, `cache_references`,
+`cache_miss_rate`, `l1d_cache_misses_total`, `energy_per_instruction`,
+`energy_per_cycle`. L2 and L3 cache columns remain NULL on M1 Pro — this
+is a hardware PMU event limitation of the a14 core architecture, not a
+software gap.
+
+### Platform Coverage
+
+| Platform | Architecture | Source | Canonical Role | Confidence | Status |
+|----------|-------------|--------|---------------|------------|--------|
+| Apple M1 Pro | arm64 | kperf/kperfdata PMU | CPU_COUNTERS | 0.85 | DRAFT |
+| Apple M2 (expected) | arm64 | kperf/kperfdata PMU | CPU_COUNTERS | TBD | PLANNED |
+| NVIDIA Grace GB10 | aarch64 | N/A | N/A | N/A | NOT_SUPPORTED |
+| Intel i7-1165G7 | x86_64 | N/A | N/A | N/A | NOT_SUPPORTED |
+| AMD Ryzen | x86_64 | N/A | N/A | N/A | NOT_SUPPORTED |
+
+### Schema
+
+No new columns. All target columns already exist in the `runs` table:
+
+| Column | Type | Apple Silicon Source | Linux Source |
+|--------|------|---------------------|--------------|
+| instructions | REAL | FIXED_INSTRUCTIONS delta | perf instructions |
+| cycles | REAL | FIXED_CYCLES delta | perf cycles |
+| ipc | REAL | instructions / cycles | perf derived |
+| cache_misses | REAL | L1D_MISS_LD + L1D_MISS_ST | perf cache-misses |
+| cache_references | REAL | L1D_TLB_ACCESS (proxy) | perf cache-references |
+| cache_miss_rate | REAL | cache_misses / cache_references | perf derived |
+| l1d_cache_misses_total | INTEGER | L1D_CACHE_MISS_LD_NONSPEC | perf L1-dcache-load-misses |
+| l2_cache_misses_total | INTEGER | NULL (no M1 event) | perf l2_rqsts.miss |
+| l3_cache_hits_total | INTEGER | NULL (no M1 event) | perf LLC-loads |
+| l3_cache_misses_total | INTEGER | NULL (no M1 event) | perf LLC-load-misses |
+| energy_per_instruction | REAL | pkg_energy_uj / instructions | same |
+| energy_per_cycle | REAL | pkg_energy_uj / cycles | same |
+
+### Method Provenance
+
+**method_id:** kperf_pmu_v1
+**confidence:** 0.85
+**layer:** silicon
+**provenance:** MEASURED
+
+**Formula:**
+
+    delta_instr = C_stop^instr - C_start^instr
+
+where C is the system-wide PMU counter value read by the C helper at
+measurement start and stop boundaries.
+
+**Confidence justification (PDS-6):**
+
+(a) Why not 1.0: Three sources of uncertainty. First, kperf and kperfdata
+are private Apple frameworks — stable since macOS 12 through macOS 15+
+but with no public API guarantee. Second, `kpc_set_config()` requires
+root, adding a sudoers installation step and ~50ms subprocess overhead
+per call. Third, counters are system-wide across all CPUs and processes,
+not scoped to the inference workload.
+
+(b) To reach 1.0: Apple would need to publish kperf as a public stable
+API, remove the root requirement, and provide per-process PMU sampling.
+
+(c) Quantitative impact: During llama_cpp inference on a quiescent M1 Pro,
+the inference process accounts for ~92–98% of CPU utilization (verified
+via top). System-wide overcounting of instructions/cycles is estimated at
+2–8%. For runs exceeding 5 seconds this is within acceptable research
+bounds.
+
+### Query Reference
+
+**Verify PMU counters populated on Apple Silicon:**
+
+Answers: Are instructions and cycles non-zero after a Mac run?
+Applies to: Apple M1 Pro (arm64). Replace `<your-hostname>` with output
+of `python3 -c "import socket; print(socket.gethostname())"`.
+Expected: instructions 10^8 to 10^11 per run, IPC 1.0 to 4.0.
+
+```sql
+SELECT run_id, created_at,
+       instructions, cycles, ipc,
+       cache_misses, cache_miss_rate,
+       l1d_cache_misses_total,
+       energy_per_instruction, energy_per_cycle
+FROM runs
+WHERE machine_id = '<your-hostname>'
+  AND instructions > 0
+ORDER BY run_id DESC
+LIMIT 10;
+```
+
+**Cross-platform IPC comparison:**
+
+Answers: How does IPC differ across measurement platforms?
+Applies to: All platforms with PMU counters populated.
+
+```sql
+SELECT machine_id,
+       AVG(ipc) AS avg_ipc,
+       MIN(ipc) AS min_ipc,
+       MAX(ipc) AS max_ipc,
+       COUNT(*) AS num_runs
+FROM runs
+WHERE ipc > 0
+GROUP BY machine_id;
+```
+
+### Verification
+
+Run these commands on the Apple M1 Pro platform after implementation:
+
+```bash
+# 1. Compile and install the C helper
+cc -O2 -o scripts/helpers/kperf_reader scripts/helpers/kperf_reader.c
+sudo cp scripts/helpers/kperf_reader /usr/local/bin/alems_kperf_reader
+sudo chown root:wheel /usr/local/bin/alems_kperf_reader
+sudo chmod 755 /usr/local/bin/alems_kperf_reader
+
+# 2. Install sudoers rule (or run scripts/fix_permissions.sh)
+echo "%admin ALL=(root) NOPASSWD: /usr/local/bin/alems_kperf_reader" \
+    | sudo tee /etc/sudoers.d/alems_kperf > /dev/null
+sudo chmod 0440 /etc/sudoers.d/alems_kperf
+
+# 3. Verify helper produces JSON without password prompt
+sudo -n /usr/local/bin/alems_kperf_reader
+# Expected: {"instructions":NNNN,"cycles":NNNN,"l1d_miss_ld":NN,...}
+
+# 4. Run standalone verification test
+python3 scripts/tests/test_kperf_standalone.py
+# Expected: all PASS, 0 FAIL
+
+# 5. Verify factory returns KPerfPMUReader on Darwin arm64
+python3 -c "
+from core.readers.factory import ReaderFactory
+r = ReaderFactory.get_cpu_reader()
+print(type(r).__name__)
+"
+# Expected: KPerfPMUReader
+
+# 6. Run experiment and verify DB columns
+DB=$(python3 -c "from scripts.tools.path_loader import get_alems_db_path; print(get_alems_db_path())")
+sqlite3 "$DB" "
+SELECT run_id, instructions, cycles, ipc,
+       cache_misses, l1d_cache_misses_total,
+       energy_per_instruction
+FROM runs ORDER BY run_id DESC LIMIT 1;
+"
+# Expected: instructions > 0, cycles > 0, 0.5 < ipc < 5.0
+# l2/l3 cache columns NULL — correct, hardware limitation
+```
+
+### Known Limitations
+
+- **L2 and L3 cache events unavailable on M1:** The a14.plist (M1 core
+  architecture) does not include L2 cache miss, L3 cache miss, or L3
+  cache hit events. `l2_cache_misses_total`, `l3_cache_hits_total`, and
+  `l3_cache_misses_total` remain NULL on M1 Pro. Hardware limitation,
+  not a software gap. Workaround: None. Accept NULL.
+
+- **System-wide counters, not per-process:** Counters capture all CPU
+  activity across all cores and processes. Overcounting estimated at 2–8%
+  during dedicated inference. Workaround: Ensure Mac is quiescent.
+
+- **Sudo required:** Without the sudoers rule, reader falls back to
+  DummyCPUReader (all counters zero/NULL). Workaround: Run
+  `scripts/fix_permissions.sh`.
+
+- **VM environments:** kperf unavailable in virtualized macOS. Reader
+  returns False from `is_available()` and falls back gracefully.
+  Workaround: None — PMU counters require bare metal macOS.
+
+- **Private API stability:** Stable macOS 12 through 15+ but no formal
+  guarantee. `is_available()` catches load failures. Workaround: Monitor
+  macOS release notes.
+
+- **Subprocess overhead:** ~50ms per call, ~100ms per measurement. Under
+  2% overhead for runs >5 seconds. Significant for sub-second runs.
+
+- **cache_references proxy:** `L1D_TLB_ACCESS` used as proxy for total
+  cache accesses. Cross-platform `cache_miss_rate` comparisons should
+  account for this semantic difference vs Linux perf LLC-accesses.

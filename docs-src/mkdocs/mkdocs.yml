@@ -27,6 +27,7 @@ nav:
     - Quick Start: getting-started/04-quick-start.md
     - Troubleshooting: getting-started/05-troubleshooting.md
     - Adding a New Client: getting-started/06-new-client.md
+    - Seed Data Reference: getting-started/seed-data-reference.md
     - Setup:
       - Oracle VM: setup/02-oracle-vm.md
   

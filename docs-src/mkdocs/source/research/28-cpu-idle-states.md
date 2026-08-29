@@ -42,8 +42,8 @@ New analysis uses `cpu_idle_states`.
 |----------|-------------|-------------|--------|------------|--------|
 | NVIDIA Grace GB10 | aarch64 | LPI-0, LPI-1, LPI-2, LPI-3 | cpuidle sysfs | 0.85 | VERIFIED |
 | Intel i7-1165G7 | x86_64 | C1, C2, C3, C6, C7 | turbostat | 0.90 | VERIFIED |
-| AMD Ryzen (RTX 2070 Super) | x86_64 | C2, C3, C6 | turbostat | 0.90 | PENDING |
-| Apple M1 Pro | arm64 | vendor-specific | IOKit (future) | TBD | PLANNED |
+| AMD Ryzen (x86_64) | cpuidle sysfs | POLL, C1, C2 | cumulative | cpuidle_sysfs | VERIFIED |
+| Apple M1 Pro | arm64 | vendor-specific | IOKit  | TBD | PLANNED |
 | Oracle Ampere | aarch64 | LPI variant | cpuidle sysfs | 0.85 | PLANNED |
 
 ### Confidence Score Justification

@@ -881,3 +881,6 @@ MSC-4: migrations/schema/ contains DDL only (CREATE, ALTER, DROP).
        migrations/seed/ contains data only (INSERT, UPDATE, DELETE).
        A schema/ file with INSERT is a violation. A seed/ file with
        ALTER TABLE is a violation.
+
+## 16. Migration System (Database Changes)
+Any DB schema change MUST follow compliance/MIGRATION_GUIDE.md before touching any migration file.
