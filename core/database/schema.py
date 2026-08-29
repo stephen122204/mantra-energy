@@ -3089,8 +3089,12 @@ CREATE TABLE IF NOT EXISTS nic_samples (
     rx_bytes     INTEGER,
     tx_packets   INTEGER,
     rx_packets   INTEGER,
+    sample_start_ns INTEGER,
+    sample_end_ns   INTEGER,
     FOREIGN KEY (run_id) REFERENCES runs(run_id)
 );
 CREATE INDEX IF NOT EXISTS idx_nic_samples_run_ns
     ON nic_samples(run_id, sample_ns);
+CREATE INDEX IF NOT EXISTS idx_nic_samples_interval
+    ON nic_samples(run_id, sample_start_ns, sample_end_ns);
 """
