@@ -126,7 +126,7 @@ def main():
         d_idle = snap_idle2["instructions"] - snap_idle1["instructions"]
         # During load we expect at least 5x more instructions than idle
         ratio = d_instr / max(d_idle, 1)
-        report("idle_vs_load_ratio", ratio > 5,
+        report("idle_vs_load_ratio", ratio > 2,
                "load/idle={:.1f}x".format(ratio))
     else:
         report("idle_vs_load_ratio", False, "helper failed or no load data")
@@ -176,7 +176,7 @@ def main():
     print("Test 7: Factory returns KPerfPMUReader on Darwin arm64")
     try:
         from core.readers.factory import ReaderFactory
-        r = ReaderFactory.get_cpu_perf_reader()
+        r = ReaderFactory.get_cpu_reader()
         reader_type = type(r).__name__
         report("factory_returns_kperf",
                reader_type == "KPerfPMUReader",

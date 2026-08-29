@@ -77,6 +77,33 @@ else
     echo "  No platform permissions script, skipping"
 fi
 
+# ── Step 3b: kperf PMU helper (Darwin arm64 only) ───────────────────
+if [ "${OS}" = "Darwin" ] && [ "${ARCH}" = "arm64" ]; then
+    echo "[3b/12] Building and installing kperf PMU helper..."
+    KPERF_SRC="${PROJECT_ROOT}/scripts/helpers/kperf_reader.c"
+    KPERF_BIN="${PROJECT_ROOT}/scripts/helpers/kperf_reader"
+    KPERF_DEST="/usr/local/bin/alems_kperf_reader"
+    if [ ! -f "$KPERF_SRC" ]; then
+        echo "  ERROR: kperf_reader.c not found at $KPERF_SRC"
+        exit 1
+    fi
+    cc -O2 -o "$KPERF_BIN" "$KPERF_SRC"
+    echo "  Compiled: $KPERF_BIN"
+    sudo cp "$KPERF_BIN" "$KPERF_DEST"
+    sudo chown root:wheel "$KPERF_DEST"
+    sudo chmod 755 "$KPERF_DEST"
+    echo "  Installed: $KPERF_DEST"
+    echo "%admin ALL=(root) NOPASSWD: $KPERF_DEST" \
+        | sudo tee /etc/sudoers.d/alems_kperf > /dev/null
+    sudo chmod 0440 /etc/sudoers.d/alems_kperf
+    echo "  Sudoers rule installed"
+    sudo -n "$KPERF_DEST" > /dev/null 2>&1 \
+        && echo "  ✅ kperf_reader verified" \
+        || echo "  ⚠️  kperf_reader verify failed — check sudoers"
+else
+    echo "[3b/12] kperf PMU helper: skipped (Linux only needs perf)"
+fi
+
 # ── Step 4: Hardware detection ───────────────────────────────────────
 echo "[4/12] Hardware detection..."
 python3 scripts/detect_hardware.py
