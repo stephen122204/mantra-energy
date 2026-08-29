@@ -52,6 +52,17 @@ if [ "$(uname -s)" = "Darwin" ]; then
 
     if sudo -n powermetrics --samplers cpu_power -n 1 -i 100 > /dev/null 2>&1; then
         echo "  ✅ powermetrics runs without a password prompt."
+
+    # --- Apple Silicon PMU counter reader ---
+    KPERF_HELPER="/usr/local/bin/alems_kperf_reader"
+    if [ -f "$KPERF_HELPER" ]; then
+        echo "%admin ALL=(root) NOPASSWD: $KPERF_HELPER" \
+            | sudo tee /etc/sudoers.d/alems_kperf > /dev/null
+        sudo chmod 0440 /etc/sudoers.d/alems_kperf
+        echo "  ✅ kperf_reader sudoers rule installed"
+    else
+        echo "  ⚠️  kperf_reader not yet installed at $KPERF_HELPER (build first)"
+    fi
     else
         echo "  ⚠️ Verification failed, check $SUDOERS_FILE"
         exit 1

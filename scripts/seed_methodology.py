@@ -52,7 +52,8 @@ def _load_readers() -> List[Any]:
     from core.readers.darwin.iokit_thermal_reader  import IOKitThermalReader
     from core.readers.fallback.energy_estimator    import EnergyEstimator
     from core.readers.fallback.dummy_energy_reader import DummyEnergyReader
-    return [RAPLReader, IOKitPowerReader, IOKitThermalReader, EnergyEstimator, DummyEnergyReader]
+    from core.readers.darwin.kperf_pmu_reader import KPerfPMUReader
+    return [RAPLReader, IOKitPowerReader, IOKitThermalReader, KPerfPMUReader, EnergyEstimator, DummyEnergyReader]
 
 
 # =============================================================================
@@ -235,6 +236,34 @@ def _load_measured_methods() -> List[Dict]:
             "doc":          "07-energy-readers-methodology.md",
             "section":      "IOReport CPU Frequency (ioreport_cpufreq_v1)",
         },
+        {
+            "id":           "kperf_pmu_v1",
+            "name":         "Apple Silicon kperf PMU Counters",
+            "provenance":   "MEASURED",
+            "layer":        "silicon",
+            "output_metric":"instructions,cycles,cache_misses",
+            "output_unit":  "count",
+            "applicable_on":["darwin_arm64"],
+            "formula_latex": (
+                r"\Delta_{\text{instr}} = C_{\text{stop}}^{\text{instr}} "
+                r"- C_{\text{start}}^{\text{instr}}"
+            ),
+            "parameters":   {
+                "C_start": "PMU counter snapshot at measurement start",
+                "C_stop":  "PMU counter snapshot at measurement stop",
+            },
+            "confidence":   0.85,
+            "description":  (
+                "Reads CPU performance counters on Apple Silicon via "
+                "kperf/kperfdata private frameworks. Two-snapshot delta "
+                "pattern. System-wide counters (all CPUs). Requires sudo. "
+                "Fixed counters: FIXED_CYCLES, FIXED_INSTRUCTIONS. "
+                "Configurable: L1D_CACHE_MISS_LD, L1D_CACHE_MISS_ST, "
+                "L1D_CACHE_MISS_LD_NONSPEC, L1D_TLB_ACCESS."
+            ),
+            "doc":          "07-energy-readers-methodology.md",
+            "section":      "Apple Silicon PMU Counters (kperf_pmu_v1)",
+        },        
         {
             "id":           "ioreport_cpufreq_v1",
             "name":         "IOReport DVFS Residency Weighted CPU Frequency",

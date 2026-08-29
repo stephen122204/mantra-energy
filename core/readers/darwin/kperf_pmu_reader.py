@@ -66,6 +66,11 @@ class KPerfPMUReader(CPUReaderABC):
     METHOD_CONFIDENCE = 0.85
     METHOD_DOC = "07-energy-readers-methodology.md"
     METHOD_SECTION = "Apple Silicon PMU Counters (kperf_pmu_v1)"
+    METHOD_PARAMS = {
+        "C_start": "PMU counter snapshot at measurement start",
+        "C_stop":  "PMU counter snapshot at measurement stop",
+    }
+    FALLBACK_METHOD_ID = "dummy_cpu_reader"
     METHOD_DESCRIPTION = (
         "Reads CPU performance counters (instructions, cycles, L1D cache "
         "misses) on Apple Silicon via kperf/kperfdata private frameworks. "

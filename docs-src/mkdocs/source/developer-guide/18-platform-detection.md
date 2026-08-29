@@ -178,6 +178,10 @@ Nothing else changes. `EnergyEngine`, `harness.py`, database, UI — all untouch
 | `IOKitPowerReader` | `core/readers/darwin/iokit_power_reader.py` | 🔲 Stub (zeros) | Chunk 1.1 |
 | `EnergyEstimator` | `core/readers/fallback/energy_estimator.py` | 🔲 Stub (zeros) | Chunk 7 |
 | `DummyEnergyReader` | `core/readers/fallback/dummy_energy_reader.py` | ✅ Intentional zeros | — |
+| `IOReportCPUFreqReader` | `core/readers/darwin/ioreport_cpufreq_reader.py` | ✅ Production | macOS arm64 |
+| `DVFSFrequencyProvider` | `core/readers/darwin/dvfs_frequency_provider.py` | ✅ Production | macOS arm64 |
+| `DarwinCPUFreqReader` | `core/readers/darwin/darwin_cpufreq_reader.py` | 🔲 Fallback | macOS arm64 |
+| `KPerfPMUReader` | `core/readers/darwin/kperf_pmu_reader.py` | 🔲 Draft | macOS arm64 (sudo required) |
 
 ---
 

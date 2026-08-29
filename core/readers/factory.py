@@ -161,6 +161,10 @@ class ReaderFactory:
             return cls._make_perf_reader(config)
 
         # macOS / Windows / unknown — stub
+        # macOS arm64: kperf PMU reader (private frameworks, requires sudo)
+        if caps.os == "Darwin" and caps.arch in ("arm64", "aarch64"):
+            return cls._make_kperf_pmu_reader(config)
+
         return cls._make_dummy_cpu(config)
 
     @classmethod
@@ -456,6 +460,25 @@ class ReaderFactory:
         return ARMCPUFreqReader(config)
 
     @staticmethod
+    @staticmethod
+    def _make_kperf_pmu_reader(config: dict):
+        """
+        Instantiate KPerfPMUReader for Apple Silicon PMU counters.
+
+        Falls back to DummyCPUReader if kperf unavailable (PAC-2: local import).
+        """
+        from core.readers.darwin.kperf_pmu_reader import KPerfPMUReader
+        reader = KPerfPMUReader(config)
+        if reader.is_available():
+            logger.debug("ReaderFactory: instantiating KPerfPMUReader")
+            return reader
+        logger.info(
+            "ReaderFactory: KPerfPMUReader unavailable, "
+            "falling back to DummyCPUReader"
+        )
+        from core.readers.fallback.dummy_cpu_reader import DummyCPUReader
+        return DummyCPUReader(config)
+
     def _make_dummy_cpu(config: dict):
         """Return a minimal CPU stub for non-Linux platforms."""
         from core.readers.fallback.dummy_cpu_reader import DummyCPUReader

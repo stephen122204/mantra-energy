@@ -503,6 +503,7 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "iokit_power_reader":            0.85,
     "iokit_thermal_reader":          0.75,
     "ioreport_cpufreq_v1":           0.95,
+    "kperf_pmu_v1":                  0.85,
     "cpu_active_ratio_v1":           0.90,
     "ml_energy_estimator":           0.0,
     "dummy_energy_reader":           0.0,
