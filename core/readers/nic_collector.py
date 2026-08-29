@@ -89,15 +89,22 @@ class NICCollector:
         Sampling loop — reads NIC counters at _HZ and buffers samples.
         Same structure as EnergyCollector._loop().
         """
+        _prev_ns = None
         while self._running:
             t0 = time.monotonic()
 
             try:
                 sample = self._reader.read_sample()
                 if sample is not None:
-                    # Add run_id and timestamp_ns for DB insertion
-                    sample["run_id"]    = self._run_id
-                    sample["sample_ns"] = time.time_ns()
+                    # Add run_id and interval timestamps for phase join.
+                    # sample_start_ns/sample_end_ns enable interval overlap
+                    # joins identical to gpu_samples and interrupt_samples.
+                    now_ns = time.time_ns()
+                    sample["run_id"]          = self._run_id
+                    sample["sample_ns"]       = now_ns
+                    sample["sample_start_ns"] = _prev_ns if _prev_ns is not None else now_ns
+                    sample["sample_end_ns"]   = now_ns
+                    _prev_ns = now_ns
                     self._flushed_nic_samples.append(sample)
             except Exception as exc:
                 # Never crash the loop — log and continue (PAC-4)

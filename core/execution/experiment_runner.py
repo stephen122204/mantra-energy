@@ -75,14 +75,16 @@ def _insert_nic_samples(db, run_id: int, samples: list) -> None:
                 s.get("rx_bytes"),
                 s.get("tx_packets"),
                 s.get("rx_packets"),
+                s.get("sample_start_ns"),
+                s.get("sample_end_ns"),
             )
             for s in samples
         ]
         db.db.conn.executemany("""
             INSERT INTO nic_samples
                 (run_id, sample_ns, interface, tx_bytes, rx_bytes,
-                 tx_packets, rx_packets)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 tx_packets, rx_packets, sample_start_ns, sample_end_ns)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, rows)
         db.db.conn.commit()
         logger.debug("_insert_nic_samples: run=%d rows=%d", run_id, len(rows))
@@ -849,6 +851,11 @@ class ExperimentRunner:
             if _caps_arch == 'aarch64':
                 _arm_row = _build_arm_cpu_sample_row(linear_id, linear_result)
                 if _arm_row:
+                    _r = db.get_run(linear_id)
+                    if _r:
+                        _arm_row['sample_start_ns'] = _r.get('start_time_ns')
+                        _arm_row['sample_end_ns']   = _r.get('end_time_ns')
+                        _arm_row['timestamp_ns']    = _r.get('end_time_ns')
                     db.insert_cpu_samples(linear_id, [_arm_row])
             # cpu_idle_states: ARM path — cpuidle sysfs cumulative residency
             if _caps_arch == 'aarch64':
@@ -1048,6 +1055,11 @@ class ExperimentRunner:
             if _caps_arch == 'aarch64':
                 _arm_row = _build_arm_cpu_sample_row(agentic_id, agentic_result)
                 if _arm_row:
+                    _r = db.get_run(agentic_id)
+                    if _r:
+                        _arm_row['sample_start_ns'] = _r.get('start_time_ns')
+                        _arm_row['sample_end_ns']   = _r.get('end_time_ns')
+                        _arm_row['timestamp_ns']    = _r.get('end_time_ns')
                     db.insert_cpu_samples(agentic_id, [_arm_row])
             # cpu_idle_states: ARM path
             if _caps_arch == 'aarch64':
@@ -1274,7 +1286,6 @@ class ExperimentRunner:
         print(f"DEBUG rapl_before_pretask agentic={agentic_result.get('rapl_before_pretask')}")
         print(f"DEBUG rapl_before_pretask linear={linear_result.get('rapl_before_pretask')}")
         _aml = agentic_result.get("ml_features", {})
-        print(f"DEBUG _aml rapl_before_pretask={_aml.get('rapl_before_pretask')}")
         if _aml.get("rapl_before_pretask") is not None:
             fix_run_with_pretask(
                 agentic_id,
