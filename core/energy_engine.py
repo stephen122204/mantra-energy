@@ -587,7 +587,7 @@ class EnergyEngine:
         if self._sampling_thread and self._sampling_thread.is_alive():
             logger.warning("Sampling already active")
             return
-
+        self._sampling_run_start_time = time.time()
         self._sampling_active = True
         self._sampling_thread = threading.Thread(
             target=self._sampling_loop, name="EnergyEngine-Sampler", daemon=True
@@ -936,6 +936,73 @@ class EnergyEngine:
  
         return int(dynamic_uj), idle_power_w
  
+    def _resolve_cpu_dynamic_local_uj(self):
+        # type: () -> Tuple[Optional[int], Optional[float]]
+        """
+        Run-local adaptive CPU/package dynamic energy, mirroring
+        _resolve_gpu_dynamic_local_uj. Primary method for the CPU-side
+        idle/dynamic split — core/analysis/energy_analyzer.py falls back
+        to the external idle-calibration baseline (idle_baselines table)
+        only when this returns (None, None).
+
+            P_idle    = median(P_i | sample classified idle in this run)
+            E_dynamic = sum_i max(P_i - P_idle, 0) * dt_i
+
+        Idle power is estimated from this run's own samples, not a
+        separately-measured calibration baseline, removing thermal
+        drift, clock drift, and background-load differences between
+        calibration time and run time — same rationale as the GPU
+        method (see BUG_SPEC_CPU_BASELINE_STALE_CALIBRATION.md).
+
+        Currently sourced only from IOKitPowerReader.get_samples_since()
+        on macOS, since cpu_samples (turbostat) is x86-only and ARM
+        writes a single summary row per run with no intra-run
+        granularity. Returns (None, None) on any platform/reader
+        without a compatible sample source, so callers safely fall
+        back to the existing external baseline everywhere else.
+
+        Idle classification threshold: samples below the 10th
+        percentile of this run's own CPU power readings are treated as
+        idle. Chosen as a percentile rather than a fixed mW threshold
+        because absolute idle power varies across Apple Silicon SKUs;
+        revisit if empirical data shows this percentile is unstable.
+        """
+        reader = getattr(self, "energy_reader", None)
+        if reader is None or not hasattr(reader, "get_samples_since"):
+            return None, None
+
+        start_time = getattr(self, "_sampling_run_start_time", None)
+        if start_time is None:
+            return None, None
+
+        samples = reader.get_samples_since(start_time)
+        cpu_powers_w = [
+            s["cpu_mw"] / 1000.0
+            for s in samples
+            if s.get("cpu_mw") is not None and s.get("dt_s", 0) > 0
+        ]
+        if not cpu_powers_w:
+            return None, None
+
+        sorted_powers = sorted(cpu_powers_w)
+        idle_cutoff_idx = max(0, int(len(sorted_powers) * 0.10) - 1)
+        idle_threshold_w = sorted_powers[idle_cutoff_idx]
+        idle_powers_w = [p for p in cpu_powers_w if p <= idle_threshold_w]
+        if not idle_powers_w:
+            return None, None
+
+        idle_power_w = statistics.median(idle_powers_w)
+
+        dynamic_uj = 0.0
+        for s in samples:
+            if s.get("cpu_mw") is None or s.get("dt_s", 0) <= 0:
+                continue
+            power_w = s["cpu_mw"] / 1000.0
+            residual_w = max(power_w - idle_power_w, 0.0)
+            dynamic_uj += residual_w * s["dt_s"] * 1_000_000
+
+        return int(dynamic_uj), idle_power_w
+
     def _resolve_gpu_total_uj(self, gpu_end_uj):
         # type: (Optional[int]) -> Optional[int]
         """
@@ -1018,6 +1085,8 @@ class EnergyEngine:
          self.last_gpu_idle_power_w_local) = self._resolve_gpu_dynamic_local_uj(
             self.last_gpu_samples
         )
+        (self.last_cpu_dynamic_local_uj,
+         self.last_cpu_idle_power_w_local) = self._resolve_cpu_dynamic_local_uj()
         # SPBMSampler retired (16B3) — EnergyCollector handles GN100 now
         self.last_spbm_samples = []
  
@@ -1328,6 +1397,8 @@ class EnergyEngine:
             gpu_total_uj=self._resolve_gpu_total_uj(gpu_end_uj),
             gpu_dynamic_local_uj=self.last_gpu_dynamic_local_uj,
             gpu_idle_power_w_local=self.last_gpu_idle_power_w_local,
+            cpu_dynamic_local_uj=self.last_cpu_dynamic_local_uj,
+            cpu_idle_power_w_local=self.last_cpu_idle_power_w_local,
             # True unless this reader is genuinely Intel RAPL. The
             # package=core+uncore+dram decomposition is an Intel-specific
             # physical model, not a universal one, same class of bug as

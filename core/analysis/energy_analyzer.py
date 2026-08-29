@@ -91,15 +91,28 @@ class EnergyAnalyzer:
         idle_core_uj = 0
         idle_uncore_uj = 0
         baseline_id = None
-
-        if baseline:
+        cpu_dynamic_local_uj = getattr(raw, "cpu_dynamic_local_uj", None)
+        if cpu_dynamic_local_uj is not None:
+            # Run-local adaptive baseline (primary method when available).
+            # See BUG_SPEC_CPU_BASELINE_STALE_CALIBRATION.md. Only populated
+            # today when the platform's energy reader supports
+            # get_samples_since() (currently macOS/IOKit). idle_uj here is
+            # package_uj - cpu_dynamic_local_uj so downstream code that
+            # expects idle_uj (not dynamic_uj) directly keeps working.
+            idle_uj = max(0, package_uj - cpu_dynamic_local_uj)
+            if baseline:
+                baseline_id = baseline.baseline_id
+            print(
+                f"🔍 DEBUG - Using RUN-LOCAL baseline: idle_uj={idle_uj/1e6:.3f}J "
+                f"(cpu_dynamic_local_uj={cpu_dynamic_local_uj/1e6:.3f}J)"
+            )
+        elif baseline:
             # Use minimum baseline (2nd percentile) instead of mean
             min_energy = baseline.min_energy_uj(raw.duration_seconds)
             idle_uj = find_idle_uj(min_energy)
             idle_core_uj = find_idle_core_uj(min_energy)
             idle_uncore_uj = min_energy.get("UNCORE", min_energy.get("uncore", 0))
             baseline_id = baseline.baseline_id
-
             print(
                 f"🔍 DEBUG - Using MIN baseline: idle_uj={idle_uj/1e6:.3f}J, idle_core={idle_core_uj/1e6:.3f}J, idle_uncore={idle_uncore_uj/1e6:.3f}J"
             )

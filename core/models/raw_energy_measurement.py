@@ -87,6 +87,8 @@ class RawEnergyMeasurement:
     # Populated by EnergyEngine.stop_measurement() on UBUNTU2505, None elsewhere
     gpu_total_uj: Optional[int] = None  # raw MSR delta * 61.0352 µJ over full run
     gpu_dynamic_local_uj:    Optional[int]   = None  # run-local adaptive dynamic energy, primary method
+    cpu_dynamic_local_uj:    Optional[int]   = None  # run-local adaptive CPU/pkg dynamic energy, primary method
+    cpu_idle_power_w_local:  Optional[float] = None  # median idle power from this run's own CPU power samples
     gpu_idle_power_w_local:  Optional[float] = None  # median idle power from this run's own idle samples
     uncore_unavailable: bool = False  # True on readers with no real core+uncore+dram=package model (SPBM/Grace, future AMD/Apple)
     # Sampling data
