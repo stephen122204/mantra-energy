@@ -254,7 +254,12 @@ def check_gaps_and_extras(applied: set, repo: set):
     missing = repo - applied
     gaps = set()
     if applied and missing:
-        max_applied = max(applied)
+        # Exclude sentinel version 9000 from max calculation.
+        # v9000 is a baseline adoption marker, not a sequential migration.
+        # Including it in max() causes every real migration (82, 83...)
+        # to be flagged as a gap permanently.
+        real_applied = {v for v in applied if v < 9000}
+        max_applied = max(real_applied) if real_applied else 0
         gaps = {v for v in missing if v < max_applied}
     extra = applied - repo
     return gaps, extra
