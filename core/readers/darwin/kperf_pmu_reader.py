@@ -242,8 +242,8 @@ class KPerfPMUReader(CPUReaderABC):
         """Compatibility shim for energy_engine.py has_perf gate."""
         return self.is_available()
     
-    def start_process_measurement(self):
-        # type: () -> None
+    def start_process_measurement(self, pid=None):
+        # type: (object) -> None
         """
         Take the start snapshot of PMU counters.
 
