@@ -170,6 +170,31 @@ class IOKitPowerReader(EnergyReaderABC):
                 self._cumulative_uj["gpu"] += int(gpu_mw * dt_s * 1000)
             if p_cluster_mhz is not None:
                 self._latest_freq_mhz = p_cluster_mhz
+            self._samples.append({
+                "timestamp": now,
+                "cpu_mw": cpu_mw,
+                "gpu_mw": gpu_mw,
+                "dt_s": dt_s,
+            })
+
+    def get_samples_since(self, start_time: float) -> List[Dict]:
+        """
+        Return retained power samples with timestamp >= start_time, for
+        run-local idle-baseline classification (mirrors GPU's per-sample
+        gpu_samples table on other platforms, which this reader has no
+        equivalent of — samples are kept in-memory here instead).
+        Does not clear the buffer; caller filters by run window.
+        """
+        with self._lock:
+            return [s for s in self._samples if s["timestamp"] >= start_time]
+
+    def trim_samples_before(self, cutoff_time: float):
+        """
+        Drop retained samples older than cutoff_time to bound memory growth
+        across a long-running process instrumenting many runs.
+        """
+        with self._lock:
+            self._samples = [s for s in self._samples if s["timestamp"] >= cutoff_time]
 
     def read_energy_uj(self) -> Dict[str, int]:
         """
