@@ -212,13 +212,29 @@ class RunPersistenceService:
             except Exception as _e:
                 logger.warning("cpu_idle_states ARM insert failed run_id=%d: %s", run_id, _e)
         else:
-            # cpu_idle_states: x86 path — derive from turbostat cpu_samples
+            # cpu_idle_states: x86 path — prefer turbostat, fall back to cpuidle sysfs
+            # AMD Zen 2 turbostat crashes (SIGABRT in rapl_perf_init), cpu_samples
+            # is empty. cpuidle sysfs verified working on AMD. Vendor check added
+            # here because this site (unlike experiment_runner) hardcoded intel.
             try:
-                db.cpu_idle.write_from_turbostat(
-                    run_id,
-                    result.get("cpu_samples", []),
-                    platform="intel_x86_64",
-                )
+                _is_amd = False
+                try:
+                    with open("/proc/cpuinfo") as _f:
+                        _is_amd = "AuthenticAMD" in _f.read()
+                except (IOError, OSError):
+                    _is_amd = False
+                _idle_platform = "amd_x86_64" if _is_amd else "intel_x86_64"
+                _cpu_samples = result.get("cpu_samples", [])
+                if _cpu_samples:
+                    db.cpu_idle.write_from_turbostat(
+                        run_id,
+                        _cpu_samples,
+                        platform=_idle_platform,
+                    )
+                elif os.path.exists("/sys/devices/system/cpu/cpu0/cpuidle/state0"):
+                    db.cpu_idle.write_from_cpuidle_sysfs(run_id, platform=_idle_platform)
+                else:
+                    logger.info("cpu_idle_states: no turbostat data and no cpuidle sysfs, skipping run_id=%d", run_id)
             except Exception as _e:
                 logger.warning("cpu_idle_states x86 insert failed run_id=%d: %s", run_id, _e)
 

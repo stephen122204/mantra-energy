@@ -311,7 +311,8 @@ class CPUIdleRepository:
  
     Platform support:
       intel_x86_64   — turbostat delta residency via write_from_turbostat()
-      amd_x86_64     — turbostat delta residency via write_from_turbostat()
+      amd_x86_64     — cpuidle sysfs cumulative via write_from_cpuidle_sysfs()
+                       (turbostat crashes on Zen 2, SIGABRT in rapl_perf_init)
       grace_aarch64  — cpuidle sysfs cumulative via write_from_cpuidle_sysfs()
       ampere_aarch64 — cpuidle sysfs cumulative via write_from_cpuidle_sysfs()
       apple_arm64    — IOKit (future, not yet implemented)

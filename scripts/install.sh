@@ -149,7 +149,7 @@ echo "  DB path: ${DB_PATH}"
 echo "[6/12] Database initialization..."
 python3 -c "
 from core.database.sqlite_adapter import SQLiteAdapter
-db = SQLiteAdapter('${DB_PATH}')
+db = SQLiteAdapter({'path': '${DB_PATH}'})
 db.create_tables()
 print('  Tables created')
 "

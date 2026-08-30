@@ -444,10 +444,14 @@ class PlatformDetector:
     def _check_amd_energy(self) -> bool:
         """Return True if amd_energy sysfs node present (module must be loaded)."""
         import glob
-        return bool(glob.glob("/sys/class/hwmon/hwmon*/name") and
-                    any("amd_energy" in open(f).read()
-                        for f in glob.glob("/sys/class/hwmon/hwmon*/name")
-                        if _safe_read(f)))
+        for name_file in glob.glob("/sys/class/hwmon/hwmon*/name"):
+            try:
+                with open(name_file) as f:
+                    if "amd_energy" in f.read():
+                        return True
+            except (IOError, OSError):
+                continue
+        return False
     
     def _check_perf(self) -> bool:
         """
