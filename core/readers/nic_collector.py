@@ -124,7 +124,10 @@ class NICCollector:
             if platform.system() == "Linux":
                 from core.readers.linux.nic_sysfs_reader import LinuxNICSysfsReader
                 return LinuxNICSysfsReader({})
-            # macOS: deferred to future darwin/nic_netstat_reader.py
+            # macOS: DarwinNICReader via psutil (no sudo, no subprocess)
+            if platform.system() == "Darwin":
+                from core.readers.darwin.nic_reader import DarwinNICReader
+                return DarwinNICReader({})
             # Windows: no sysfs, no collector
             logger.debug("NICCollector: platform %s not supported", platform.system())
             return None

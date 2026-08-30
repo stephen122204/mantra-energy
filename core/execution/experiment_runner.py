@@ -42,6 +42,8 @@ from core.utils.provenance import record_run_provenance
 from scripts.etl.phase_attribution_etl import compute_phase_attribution
 from scripts.etl.aggregate_hardware_metrics import aggregate_hardware_metrics
 # 16D3: ARM PMU cache data → cpu_samples row builder
+# 16D4: Darwin PMU cache data → cpu_samples row builder (mirrors ARM pattern)
+from core.execution.darwin_cpu_sample_builder import _build_darwin_cpu_sample_row
 from core.execution.arm_cpu_sample_builder import _build_arm_cpu_sample_row
 from scripts.etl.energy_attribution_etl import compute_energy_attribution
 from scripts.etl.duration_fix_etl import fix_run, fix_run_with_pretask
@@ -857,6 +859,19 @@ class ExperimentRunner:
                         _arm_row['sample_end_ns']   = _r.get('end_time_ns')
                         _arm_row['timestamp_ns']    = _r.get('end_time_ns')
                     db.insert_cpu_samples(linear_id, [_arm_row])
+            elif _hw_info.get('os_name') == 'Darwin':
+                # Darwin: one summary row from KPerfPMUReader (mirrors ARM pattern)
+                _darwin_row = _build_darwin_cpu_sample_row(linear_id, linear_result)
+                if _darwin_row:
+                    _r = db.get_run(linear_id)
+                    if _r:
+                        _darwin_row['sample_start_ns'] = _r.get('start_time_ns')
+                        _darwin_row['sample_end_ns']   = _r.get('end_time_ns')
+                        _darwin_row['timestamp_ns']    = _r.get('end_time_ns')
+                        _darwin_row['interval_ns'] = (
+                            (_r.get('end_time_ns') or 0) - (_r.get('start_time_ns') or 0)
+                        )
+                    db.insert_cpu_samples(linear_id, [_darwin_row])
             # cpu_idle_states: ARM path — cpuidle sysfs cumulative residency
             if _caps_arch == 'aarch64':
                 try:
