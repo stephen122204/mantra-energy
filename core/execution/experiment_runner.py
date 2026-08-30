@@ -180,6 +180,7 @@ class ExperimentRunner:
                     "system_type": data.get("system", {}).get("type"),
                     "virtualization_type": data.get("system", {}).get("virtualization"),
                     "detected_at": data.get("metadata", {}).get("detected_at"),
+                    "os_name": data.get("metadata", {}).get("system"),
                 }
                 return flat_data
 
