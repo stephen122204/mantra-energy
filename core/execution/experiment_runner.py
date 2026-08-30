@@ -18,6 +18,7 @@ Author: Deepak Panigrahy
 """
 
 import json
+import platform
 import os
 import socket
 import sys
@@ -112,7 +113,8 @@ def _convert_gpu_to_telemetry(gpu_samples):
     return result
 
 def _get_power_paths() -> dict:
-    import json, pathlib
+    import json
+import platform, pathlib
     cfg_path = pathlib.Path(__file__).parent.parent.parent / "config" / "hw_config.json"
     try:
         cfg = json.loads(cfg_path.read_text())
@@ -188,6 +190,7 @@ class ExperimentRunner:
         """Get environment information for reproducibility tracking"""
         import hashlib
         import json
+import platform
         import platform
         import subprocess
 
@@ -860,7 +863,7 @@ class ExperimentRunner:
                         _arm_row['sample_end_ns']   = _r.get('end_time_ns')
                         _arm_row['timestamp_ns']    = _r.get('end_time_ns')
                     db.insert_cpu_samples(linear_id, [_arm_row])
-            elif _hw_info.get('os_name') == 'Darwin':
+            elif platform.system() == 'Darwin':
                 # Darwin: one summary row from KPerfPMUReader (mirrors ARM pattern)
                 _darwin_row = _build_darwin_cpu_sample_row(linear_id, linear_result)
                 if _darwin_row:
