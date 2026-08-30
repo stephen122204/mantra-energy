@@ -112,9 +112,11 @@ def _convert_gpu_to_telemetry(gpu_samples):
         ))
     return result
 
+import platform
+import pathlib
+
 def _get_power_paths() -> dict:
     import json
-import platform, pathlib
     cfg_path = pathlib.Path(__file__).parent.parent.parent / "config" / "hw_config.json"
     try:
         cfg = json.loads(cfg_path.read_text())
