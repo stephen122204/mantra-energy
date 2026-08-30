@@ -46,54 +46,33 @@ def _build_darwin_cpu_sample_row(run_id, result):
     Returns:
         dict ready for insert_cpu_samples(), or None if no counter data.
     """
-    # Try direct key first (future-proof path)
-    perf = result.get("perf_counters")
+    # perf data lives in derived_energy.performance (harness puts it there)
+    derived = result.get("derived_energy") or {}
+    perf = derived.get("performance", {}) if isinstance(derived, dict) else {}
 
-    # Fall back to raw_energy['perf'] — same convention as ARM builder
-    if perf is None:
-        raw = result.get("raw_energy")
-        if isinstance(raw, dict):
-            perf = raw.get("perf")
-        elif raw is not None:
-            perf = getattr(raw, "perf", None)
+    # ml_features also has instructions/cycles directly
+    ml = result.get("ml_features") or {}
 
-    if not perf:
-        # KPerfPMUReader not available or helper failed — not an error
+    instructions = perf.get("instructions") or ml.get("instructions") or 0
+    cycles = perf.get("cycles") or 0
+    cache_misses = perf.get("cache_misses") or None
+    ipc = perf.get("ipc") or None
+    l1d_misses = None  # not in derived_energy — comes from KPerfPMUReader directly
+
+    if not instructions and not cycles:
+        # No PMU data available for this run
         logger.debug(
             "_build_darwin_cpu_sample_row: no perf counters for run_id=%d", run_id
         )
         return None
 
-    # Frequency from IOReportCPUFreqReader via turbostat_data summary
-    freq_data = result.get("turbostat_data") or {}
-    summary = freq_data.get("summary", {}) if isinstance(freq_data, dict) else {}
-    freq_mean = summary.get("frequency_mean", 0.0)
+    if ipc is None and cycles and cycles > 0:
+        ipc = instructions / cycles
 
-    # cpu_active_ratio from IOReport — convert to percent for cpu_util_percent
-    # cpu_active_ratio is the fraction of wall time P-cluster was non-idle
-    cpu_active_ratio = summary.get("cpu_active_ratio", None)
+    # Frequency and cpu_active_ratio from ml_features (populated by IOReport)
+    freq_mean = ml.get("frequency_mhz") or 0.0
+    cpu_active_ratio = ml.get("cpu_active_ratio")
     cpu_util = (cpu_active_ratio * 100.0) if cpu_active_ratio is not None else None
-
-    # Extract counter values — PerformanceCounters object or dict
-    if isinstance(perf, dict):
-        instructions = perf.get("instructions_retired", 0)
-        cycles = perf.get("cpu_cycles", 0)
-        cache_misses = perf.get("cache_misses", None)
-        l1d_misses = perf.get("l1d_cache_misses", None)
-        ipc = perf.get("ipc", None)
-        if ipc is None and cycles and cycles > 0:
-            ipc = instructions / cycles
-    else:
-        # PerformanceCounters object
-        instructions = getattr(perf, "instructions_retired", 0)
-        cycles = getattr(perf, "cpu_cycles", 0)
-        cache_misses = getattr(perf, "cache_misses", None)
-        l1d_misses = getattr(perf, "l1d_cache_misses", None)
-        # instructions_per_cycle() is a method on PerformanceCounters
-        try:
-            ipc = perf.instructions_per_cycle() if cycles > 0 else None
-        except Exception:
-            ipc = None
 
     now_ns = _time.time_ns()
 
