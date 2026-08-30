@@ -192,7 +192,6 @@ class ExperimentRunner:
         """Get environment information for reproducibility tracking"""
         import hashlib
         import json
-import platform
         import platform
         import subprocess
 
