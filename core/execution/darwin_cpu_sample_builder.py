@@ -60,9 +60,15 @@ def _build_darwin_cpu_sample_row(run_id, result):
     l1d_misses = None  # not in derived_energy — comes from KPerfPMUReader directly
 
     if not instructions and not cycles:
-        # No PMU data available for this run
-        logger.debug(
-            "_build_darwin_cpu_sample_row: no perf counters for run_id=%d", run_id
+        # No PMU data available for this run — log at WARNING for debug
+        import json as _json
+        logger.warning(
+            "_build_darwin_cpu_sample_row: no perf counters run_id=%d "
+            "derived_keys=%s perf=%s ml_instructions=%s",
+            run_id,
+            list(derived.keys()) if derived else "EMPTY",
+            perf,
+            ml.get("instructions")
         )
         return None
 
