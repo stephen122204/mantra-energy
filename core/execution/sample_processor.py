@@ -99,6 +99,20 @@ def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list
             start_ns = raw_energy.metadata.get("turbostat_start_ns")
             interval_ns = raw_energy.metadata.get("turbostat_interval_ns", 100_000_000)
 
+        # Fix 2 (BUG-01): resolve k10temp path ONCE per run, not per
+        # sample. detect_thermal_paths() globs /sys/class/thermal and
+        # /sys/class/hwmon and opens a type/name file per candidate —
+        # cheap once, wasteful at 10Hz. Only runs when turbostat's own
+        # DataFrame has no PkgTmp column at all, so platforms where
+        # turbostat already reports temperature (UBUNTU2505) never pay
+        # this cost and are otherwise untouched by this change.
+        _k10temp_path = None
+        if not df.empty and "PkgTmp" not in df.columns:
+            from scripts.detect_hardware import detect_thermal_paths
+            _thermal_paths, _pkg_temp_zone = detect_thermal_paths()
+            if _pkg_temp_zone == "k10temp":
+                _k10temp_path = _thermal_paths.get("k10temp")
+
         if not df.empty:
             for idx, row in df.iterrows():
                 # Calculate timestamp using monotonic clock
@@ -121,17 +135,42 @@ def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list
                     "interval_ns":     interval_ns,
                 }
 
-                # Extract canonical metrics
+                # Extract canonical metrics.
+                # ALIAS SUPPORT (BUG-01 fix, 2026-08-31): turbostat renames
+                # columns across kernel/turbostat versions and CPU vendors
+                # (Intel emits "C1ACPI%", AMD Zen 2 emits "C1%" for the same
+                # physical quantity — confirmed by real header capture on
+                # both platforms). canonical_metrics values may be a single
+                # column name (legacy string, backward compatible) or a
+                # list of alias names tried in order; first one present in
+                # this row wins. Self-healing across future turbostat or
+                # kernel renames without another override-file edit.
+                matched_alias_names = set()
                 for our_name, turbostat_col in canonical_metrics.items():
+                    aliases = (
+                        turbostat_col if isinstance(turbostat_col, list)
+                        else [turbostat_col]
+                    )
                     try:
-                        # MIC-1: missing column -> NULL, not 0.0
-                        # row.get returns None when column absent in this kernel version
-                        raw = row.get(turbostat_col)
-                        if raw is None or (hasattr(raw, '__class__') and raw.__class__.__name__ == 'float' and raw != raw):
-                            # None or NaN -> NULL in DB (missing measurement)
+                        raw = None
+                        for alias in aliases:
+                            candidate = row.get(alias)
+                            # MIC-1: missing column -> NULL, not 0.0.
+                            # Try the next alias before giving up.
+                            if candidate is None:
+                                continue
+                            if hasattr(candidate, '__class__') and candidate.__class__.__name__ == 'float' and candidate != candidate:
+                                continue  # NaN -- try next alias
+                            raw = candidate
+                            matched_alias_names.add(alias)
+                            break
+
+                        if raw is None:
+                            # No alias matched — genuinely unmeasured on
+                            # this hardware/turbostat build, not a bug.
                             sample[our_name] = None
                             continue
-                        val = float(raw)                        
+                        val = float(raw)
 
                         # Scale percentages (C-states, GPU RC6)
                         if our_name in [
@@ -155,11 +194,30 @@ def process_cpu_samples(raw_energy, canonical_metrics, store_extra=True) -> list
                     except (TypeError, ValueError):
                         sample[our_name] = None
 
-                # Store all other columns in JSON
+                # Fix 2 (BUG-01): package_temp via k10temp hwmon when
+                # turbostat emits no thermal column at all. AMD's
+                # turbostat build on Ryzen 5 3600 has no PkgTmp column
+                # (confirmed by real header capture 2026-08-31) — no
+                # alias can recover a column turbostat never reports.
+                # Falls back to the same k10temp path already proven for
+                # thermal_samples_v2 (EDIT 5). Path resolved once above
+                # this loop (see _k10temp_path), not per sample — cheap
+                # read only, no re-discovery per tick.
+                if sample.get("package_temp") is None and _k10temp_path:
+                    try:
+                        with open(_k10temp_path) as f:
+                            sample["package_temp"] = int(f.read().strip()) / 1000.0
+                    except (IOError, OSError, ValueError):
+                        pass  # stays None — honest NULL, not fabricated
+
+                # Store all other columns in JSON. Excludes every alias
+                # that actually matched (not just the primary name), so a
+                # column consumed via its AMD-style alias (e.g. "C1%")
+                # does not also leak into extra_metrics_json.
                 if store_extra:
                     extra = {}
                     for col in df.columns:
-                        if col not in canonical_metrics.values():
+                        if col not in matched_alias_names:
                             val = row.get(col)
                             if val is not None:
                                 try:

@@ -14,8 +14,14 @@ canonical_metrics:
   # ----------------------------------------------------------------------
   # Core C-States (All have non-zero values)
   # ----------------------------------------------------------------------
-  c1_residency: "C1ACPI%"           # 850 mean → 8.5% - significant
-  c2_residency: "C2ACPI%"           # 20.59 mean → 0.2% - small but real
+  # Alias lists: turbostat renames these across kernel/CPU vendor builds.
+  # Intel emits C1ACPI%/C2ACPI%; AMD Zen 2 emits C1%/C2% for the same
+  # physical quantity (confirmed by real header capture on UBUNTU2505
+  # and the AMD Ryzen box, 2026-08-31). First alias present in a given
+  # run's actual turbostat output wins — resolved against real data,
+  # not vendor guessing, so it self-heals across future renames.
+  c1_residency: ["C1ACPI%", "C1%"]
+  c2_residency: ["C2ACPI%", "C2%"]
   c3_residency: "C3ACPI%"           # 4169 mean → 41.7% - MAJOR
   c6_residency: "CPU%c6"            # 2802 mean → 28.0% - MAJOR
   c7_residency: "CPU%c7"            # 2.73 mean → 2.7% - significant

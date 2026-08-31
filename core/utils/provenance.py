@@ -518,6 +518,7 @@ METHOD_CONFIDENCE: Dict[str, float] = {
     "arm_thermal_sysfs_v1":          0.90,   # acpitz sysfs zones, ~100ms ACPI polling lag
     "thermal_zone_sysfs_v2":         0.92,   # normalized per-zone sysfs, quality-flagged
     "cooling_sysfs_v1":              1.00,   # cur_state is exact kernel enum value
+    "cpu_k10temp_hwmon":             0.90,   # direct hwmon read, fallback when turbostat has no PkgTmp column (AMD Zen 2)
     "cpuidle_sysfs_v1":              0.85,   # cumulative snapshot only, not per-run delta
     "os_scheduler_reader":           1.0,
     "msr_reader":                    1.0,
