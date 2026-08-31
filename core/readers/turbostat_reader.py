@@ -138,6 +138,17 @@ class TurbostatReader:
         self._reader_thread: Optional[threading.Thread] = None
         self._stop_reader = False
 
+    def is_available(self) -> bool:
+        """
+        Interface parity with BaseReader and every other core/readers/
+        class. energy_engine.py:779/1154 calls this on whatever object
+        self.turbostat holds; on AMD (has_turbostat=False, arch=x86_64)
+        that object is this class, reached for the first time by that
+        exact combination — every other platform's branch structure
+        short-circuits before this call is ever made.
+        """
+        return self.available
+
     def _find_turbostat(self) -> Optional[str]:
         """
         Locate the real turbostat binary.
