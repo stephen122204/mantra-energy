@@ -722,10 +722,14 @@ class EnergyEngine:
         if hasattr(self, "msr") and msr_available:
             try:
                 msr_thermal_start = self.msr.snapshot_thermal_state()
-                print(f"\n🔥 THERMAL SNAPSHOT - START:")
-                print(f"   Package: {msr_thermal_start['package']}")
-                print(f"   Core: {msr_thermal_start['core']}")
-                logger.debug(f"MSR thermal start: {msr_thermal_start}")
+                # BUG-05 fix: snapshot_thermal_state() legitimately returns
+                # None (AMD vendor gate, or both MSR reads failed) — guard
+                # before subscripting instead of crashing on any platform.
+                if msr_thermal_start is not None:
+                    print(f"\n🔥 THERMAL SNAPSHOT - START:")
+                    print(f"   Package: {msr_thermal_start['package']}")
+                    print(f"   Core: {msr_thermal_start['core']}")
+                    logger.debug(f"MSR thermal start: {msr_thermal_start}")
             except Exception as e:
                 print(f"❌ Failed to capture start MSR thermal: {e}")
                 logger.warning(f"Could not capture start MSR thermal: {e}")
@@ -1174,10 +1178,11 @@ class EnergyEngine:
         if hasattr(self, "msr") and msr_available:
             try:
                 msr_thermal_end = self.msr.snapshot_thermal_state()
-                print(f"\n🔥 THERMAL SNAPSHOT - END:")
-                print(f"   Package: {msr_thermal_end['package']}")
-                print(f"   Core: {msr_thermal_end['core']}")
-                logger.debug(f"MSR thermal end: {msr_thermal_end}")
+                if msr_thermal_end is not None:
+                    print(f"\n🔥 THERMAL SNAPSHOT - END:")
+                    print(f"   Package: {msr_thermal_end['package']}")
+                    print(f"   Core: {msr_thermal_end['core']}")
+                    logger.debug(f"MSR thermal end: {msr_thermal_end}")
             except Exception as e:
                 print(f"❌ Failed to capture end MSR thermal: {e}")
                 logger.warning(f"Could not capture end MSR thermal: {e}")

@@ -808,9 +808,24 @@ class MSRReader(MSRReaderABC):
         Use this at START and END of experiment to detect if throttling
         occurred DURING the experiment (end_log > start_log).
 
+        BUG-05 fix: MSR_IA32_PACKAGE_THERM_STATUS / MSR_IA32_THERM_STATUS
+        are Intel-specific addresses, absent on AMD's MSR map entirely.
+        Same pattern as _check_amd_energy (EDIT 13): detect and skip
+        cleanly with one INFO line, never attempt-and-fail-loudly per call.
+
         Returns:
-            Dictionary with package and core thermal status, or None if both fail
+            Dictionary with package and core thermal status, or None if
+            both fail, or if this CPU vendor has no thermal MSRs to read.
         """
+        cpu_vendor = self.msr_config.get("cpu_vendor", "").lower()
+        if cpu_vendor == "amd":
+            logger.info(
+                "MSRReader: skipping thermal MSR read — AMD has no "
+                "MSR_IA32_PACKAGE_THERM_STATUS/MSR_IA32_THERM_STATUS "
+                "equivalent (BUG-05)."
+            )
+            return None
+
         package_status = self.read_thermal_throttle_status(cpu, pin)
         core_status = self.read_core_thermal_status(cpu, pin)
 
