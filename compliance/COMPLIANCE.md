@@ -1,3 +1,5 @@
+# See COMPLIANCE_INDEX.md before reading this file.
+
 # A-LEMS Developer Compliance Guide
 
 **MANDATORY READING — Every developer and agent must read this before touching any code.**
