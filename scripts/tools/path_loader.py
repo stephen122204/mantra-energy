@@ -52,6 +52,31 @@ def get_alems_db_path():
         Path string for experiments.db on this machine.
     """
     _source_alemsrc()
+    # Layer 0: .alems-env marker file in checkout root (highest priority).
+    # Single token: dev | integration | preprod | prod
+    # Resolves to: $ALEMS_DATA_ROOT/<hostname>/envs/<env>/experiments.db
+    try:
+        import pathlib as _pl
+        _repo_root = _pl.Path(__file__).parent.parent.parent
+        _env_file = _repo_root / ".alems-env"
+        if _env_file.exists():
+            _env = _env_file.read_text().strip()
+            _valid = {"dev", "integration", "preprod", "prod"}
+            if _env not in _valid:
+                raise ValueError(
+                    f".alems-env contains invalid value '{_env}'. "
+                    f"Valid values: {sorted(_valid)}"
+                )
+            _source_alemsrc()
+            _base = os.environ.get("ALEMS_DATA_ROOT")
+            if _base:
+                _host = socket.gethostname().lower()
+                return f"{_base}/{_host}/envs/{_env}/experiments.db"
+    except ValueError:
+        raise
+    except Exception:
+        pass
+
     base = os.environ.get("ALEMS_DATA_ROOT")
     if base:
         machine_id = socket.gethostname().lower()
