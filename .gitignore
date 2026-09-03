@@ -114,3 +114,4 @@ data/*.db.bkp_*
 config/platform.json
 data/test_files/
 data/*.json
+.alems-env
