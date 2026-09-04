@@ -1660,10 +1660,8 @@ NOTE:
                 # Create sensors_to_monitor from discovered zones with smart naming
                 # ====================================================================
                 sensors_to_monitor = {}
-
                 for sensor_type in thermal_zones.keys():
                     sensor_lower = sensor_type.lower()
-
                     # Map known sensor types to stable roles
                     if "x86_pkg_temp" in sensor_type or (
                         "cpu" in sensor_lower and "temp" in sensor_lower
@@ -1681,6 +1679,15 @@ NOTE:
                     else:
                         # For any other sensors, use their actual type as the key
                         sensors_to_monitor[sensor_type] = sensor_type
+
+
+                _fallback_paths, _fallback_package_temp = detect_thermal_paths()
+                if _fallback_package_temp and "cpu_package" not in sensors_to_monitor:
+                    sensors_to_monitor["cpu_package"] = _fallback_package_temp
+                    if "paths" not in existing["thermal"]:
+                        existing["thermal"]["paths"] = {}
+                    existing["thermal"]["paths"].update(_fallback_paths)
+                    existing["thermal"]["package_temp"] = _fallback_package_temp
 
                 existing["thermal"]["sensors_to_monitor"] = sensors_to_monitor
                 existing["thermal"]["sampling_rate_hz"] = 1
@@ -1777,6 +1784,19 @@ NOTE:
                     sensors_to_monitor[sensor_type] = sensor_type
                 else:
                     sensors_to_monitor[sensor_type] = sensor_type
+            # BUG-04 fix: this branch never called detect_thermal_paths(),
+            # so it had no hwmon-fallback package_temp (e.g. AMD k10temp)
+            # available. Call it here so this branch produces complete
+            # hw_config.json output too. Only adds if not already covered,
+            # so platforms with a real thermal_zone package entry are
+            # unaffected.
+            _fallback_paths, _fallback_package_temp = detect_thermal_paths()
+            if _fallback_package_temp and "cpu_package" not in sensors_to_monitor:
+                sensors_to_monitor["cpu_package"] = _fallback_package_temp
+                if "paths" not in final_config["thermal"]:
+                    final_config["thermal"]["paths"] = {}
+                final_config["thermal"]["paths"].update(_fallback_paths)
+                final_config["thermal"]["package_temp"] = _fallback_package_temp
             final_config["thermal"]["sensors_to_monitor"] = sensors_to_monitor
             final_config["thermal"]["sampling_rate_hz"] = 1
             final_config["config_version"] = 2
