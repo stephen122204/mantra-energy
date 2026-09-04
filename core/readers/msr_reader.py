@@ -98,6 +98,10 @@ class MSRReader(MSRReaderABC):
         """
         self.msr_config = config.get("msr", {})
         self.cpu_count = self.msr_config.get("count", os.cpu_count() or 8)
+        # BUG-05 follow-up: cpu_vendor is top-level in hw_config.json,
+        # a sibling of "msr" — not nested inside it. Confirmed against
+        # real config/hw_config.json on the AMD box, 2026-09-02.
+        self.cpu_vendor = config.get("cpu_vendor", "")
         self.msr_fds = []
         self.rdmsr_available = False
         self.helper_available = False
@@ -817,7 +821,7 @@ class MSRReader(MSRReaderABC):
             Dictionary with package and core thermal status, or None if
             both fail, or if this CPU vendor has no thermal MSRs to read.
         """
-        cpu_vendor = self.msr_config.get("cpu_vendor", "").lower()
+        cpu_vendor = getattr(self, "cpu_vendor", "").lower()
         if cpu_vendor == "amd":
             logger.info(
                 "MSRReader: skipping thermal MSR read — AMD has no "
