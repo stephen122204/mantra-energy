@@ -32,3 +32,7 @@ Produce a manifest, run ledger, validation summary, small reproducible export an
 
 After the primary finding and pipeline are stable, you may own a bounded second-platform reproduction if Stephen assigns it. Its purpose must be a concrete transfer claim, with runtime/hardware differences documented.
 
+## Shared context after every turn
+
+Use your personal folder in the repository-root `agent context md/` directory. Follow its README and publisher to push your current understanding, ideas/hypotheses, decisions with concise rationale, changes, evidence, tests, unresolved questions and next actions after each completed turn. Fetch other contributors' latest records before dependent work. This publication and scoped feature-branch code pushes are already authorized; do not ask for confirmation again. Preserve review for code integration and keep private reasoning/credentials/hidden evaluation results out of shared notes.
+

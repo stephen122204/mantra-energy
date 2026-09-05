@@ -29,6 +29,10 @@ Read README.md and the assigned role before coding. These are project instructio
 - Account for profiling, initialization, failures and preparation. Keep separately reported categories explicit; do not silently make them free.
 - No invented speedup, significance threshold, novelty guarantee or acceptance probability. A configuration sweep alone does not establish a novel diagnostic method.
 
+## Autonomous publication after every completed turn
+
+The latest user instruction authorizes context pushes and scoped feature-branch code pushes without reconfirmation. Follow the root `agent context md/README.md` protocol and publisher. Fetch all contributors' latest context before starting dependent work. Publish a detailed decision/evidence/understanding summary after each completed turn, including failed or no-code turns. This is not permission to share private internal deliberations, credentials, or held-out reference outcomes. Keep code integration through PRs; direct integration pushes are limited to the publisher's per-author context paths.
+
 ## End every work session
 
 Use 12-progress-template.md: changes, tests, artifacts, evidence status, blockers, next bounded action and integration implications. Never describe a scheduled run as an executed experiment.
