@@ -1,0 +1,29 @@
+name: Energy diagnosis setup
+
+on:
+  push:
+    branches: ['research/energy-diagnosis']
+    paths:
+      - 'docs/agent-context/**'
+      - 'studies/energy_diagnosis/**'
+      - 'scripts/check_energy_diagnosis_setup.py'
+      - '.github/workflows/energy-diagnosis-setup.yml'
+  pull_request:
+    branches: ['research/energy-diagnosis']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: energy-diagnosis-setup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  handoff-and-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check portable context and planning integrity (no hardware jobs)
+        run: python3 scripts/check_energy_diagnosis_setup.py

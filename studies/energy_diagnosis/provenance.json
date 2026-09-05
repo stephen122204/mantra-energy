@@ -1,0 +1,20 @@
+{
+  "study_id": "alems_diagnosis_fall_2026",
+  "prepared_date": "2026-09-05",
+  "upstream_repository": "https://github.com/deepakpanigrahy03/alems-platform",
+  "reviewed_upstream_commit": "ce8e299a7322849fc6a94a3b2f21ad04ff4fdd56",
+  "chosen_upstream_commit": "a67d6583ca2a5ff484e4706284c7b7ce512ef6a0",
+  "baseline_decision": "Latest upstream main at setup; one additional commit fixes AMD hwmon package-temperature fallback in scripts/detect_hardware.py. Reviewed core paths are unchanged. Runtime remains unvalidated.",
+  "team_repository": "https://github.com/stephen122204/alems-energy-diagnosis",
+  "integration_branch": "research/energy-diagnosis",
+  "initial_upstream_branch": "main",
+  "baseline_tag": "upstream-baseline-2026-09-05",
+  "roles": {
+    "lead": "stephen122204",
+    "runtime_measurement": null,
+    "workloads_verifiers": null,
+    "campaign_reproducibility": null
+  },
+  "hardware_tested": false,
+  "experiment_results_present": false
+}
