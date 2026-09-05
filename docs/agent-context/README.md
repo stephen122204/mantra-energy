@@ -1,5 +1,7 @@
 # A-LEMS energy diagnosis: student and agent handoff
 
+**Repository setup is now complete:** read [00-setup-status.md](00-setup-status.md) for the actual repository, baseline, branches, issues and remaining access tasks. The setup instructions below are retained as rationale and future reference.
+
 Prepared 5 September 2026. Target: SIGMETRICS 2027 Fall. This is a development and research handoff, not a completed implementation or evidence of novelty.
 
 ## Start here

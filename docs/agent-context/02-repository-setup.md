@@ -1,5 +1,7 @@
 # Set up the shared repository before implementation
 
+**Repository setup is now complete:** read [00-setup-status.md](00-setup-status.md) for the actual repository, baseline, branches, issues and remaining access tasks. The setup instructions below are retained as rationale and future reference.
+
 ## Recommendation
 
 Use one team research repository with Stephen maintaining the integration branch. Give each student a feature branch and an issue. Do not start with three divergent platform forks.
