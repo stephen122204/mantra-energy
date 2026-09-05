@@ -14,7 +14,9 @@ CONTEXT = ROOT / "docs" / "agent-context"
 
 def main():
     errors = []
-    for doc in CONTEXT.rglob("*.md"):
+    documents = list(CONTEXT.rglob("*.md")) + list((ROOT / "studies/energy_diagnosis").rglob("*.md"))
+    documents += [ROOT / "AGENTS.md", ROOT / "START_HERE.md"]
+    for doc in documents:
         for link in re.findall(r"\]\(([^)]+)\)", doc.read_text()):
             target = link.split("#", 1)[0]
             if not target or re.match(r"^[a-zA-Z]+:", target):

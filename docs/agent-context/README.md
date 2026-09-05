@@ -1,5 +1,7 @@
 # A-LEMS energy diagnosis: student and agent handoff
 
+**Repository setup is now complete:** read [00-setup-status.md](00-setup-status.md) for the actual repository, baseline, branches, issues and remaining access tasks. The setup instructions below are retained as rationale and future reference.
+
 Prepared 5 September 2026. This is an implementation handoff, not evidence of completed software or hardware validation.
 
 ## Start here
