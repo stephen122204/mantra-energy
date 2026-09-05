@@ -17,7 +17,9 @@ source-review concern and what this issue must add. Then implement the smallest
 reviewable change with meaningful local tests. Preserve other people's work.
 Do not invent APIs, hardware access, observed results or scientific novelty.
 Continue independent local work if hardware is unavailable. Do not start a
-cluster campaign or push to a remote unless this task explicitly authorizes it.
+cluster campaign without an assigned budget. Scoped feature-branch pushes and
+per-turn context publication are already authorized: follow the root
+agent context md/README.md protocol before ending every completed turn.
 Finish with the evidence-based progress template and precise remaining work.
 ```
 

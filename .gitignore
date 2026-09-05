@@ -121,3 +121,6 @@ data/*.json
 /studies/energy_diagnosis/models/
 /studies/energy_diagnosis/local/
 /docs/agent-context/starter/generated/
+
+# Local unsent context summaries
+.agent-context-pending/

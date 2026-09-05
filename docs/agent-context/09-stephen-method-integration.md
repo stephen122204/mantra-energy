@@ -41,3 +41,7 @@ If only two students are available, keep the runner/integration work with you. A
 ## Go/no-go dates
 
 Working targets: September 11 for capability plus valid single-goal intervention; September 18 for a development result beyond simple screening. Revise these based on actual progress. October 2/9 are the official Fall abstract/paper deadlines, not reasons to present incomplete evidence as conclusive. Do not run the full campaign simply because the planner contains 1,432 rows.
+
+## Shared context after every turn
+
+Use your personal folder in the repository-root `agent context md/` directory. Follow its README and publisher to push your current understanding, ideas/hypotheses, decisions with concise rationale, changes, evidence, tests, unresolved questions and next actions after each completed turn. Fetch other contributors' latest records before dependent work. This publication and scoped feature-branch code pushes are already authorized; do not ask for confirmation again. Preserve review for code integration and keep private reasoning/credentials/hidden evaluation results out of shared notes.

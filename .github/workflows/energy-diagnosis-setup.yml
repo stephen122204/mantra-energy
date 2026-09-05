@@ -7,6 +7,9 @@ on:
       - 'docs/agent-context/**'
       - 'studies/energy_diagnosis/**'
       - 'scripts/check_energy_diagnosis_setup.py'
+      - 'scripts/publish_agent_context.py'
+      - 'scripts/tests/test_publish_agent_context.py'
+      - 'AGENTS.md'
       - '.github/workflows/energy-diagnosis-setup.yml'
   pull_request:
     branches: ['research/energy-diagnosis']
@@ -27,3 +30,5 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Check portable context and planning integrity (no hardware jobs)
         run: python3 scripts/check_energy_diagnosis_setup.py
+      - name: Test isolated context publishing with disposable Git repositories
+        run: python3 -m unittest discover -s scripts/tests -p test_publish_agent_context.py -v

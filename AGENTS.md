@@ -12,6 +12,14 @@ This repository preserves upstream A-LEMS and adds a bounded SIGMETRICS research
 - Use individual authorized cluster accounts. GPU/model jobs require an assigned allocation and the session budget in the task; do not launch campaigns through CI. Local fixtures need no cluster access.
 - Connected email is strictly read-only. Never create mailbox drafts, send, reply, forward, delete, move, label, archive or mark messages read/unread. Do not copy private correspondence or credentials into this repository.
 
+## Standing authorization: autonomous pushes and shared context
+
+Stephen explicitly authorizes autonomous pushes to this private team repository. Before ending every completed turn, publish a detailed reviewable context summary under `agent context md/<person>/` using `scripts/publish_agent_context.py`. Read `agent context md/README.md` and fetch contributors' latest records at the start of each turn. Do not request confirmation again for these scoped pushes. Share problem understanding, ideas/hypotheses, decisions and concise rationale, evidence, tests, open questions and next steps; do not expose private internal reasoning transcripts.
+
+The publisher has a narrow exception to PR-only integration: it may directly push only an author's immutable turn record and LATEST.md to `research/energy-diagnosis` from an isolated worktree. Scoped code changes are committed and pushed to the assigned feature branch autonomously, with truthful WIP/test status, and still integrate through reviewed PRs. Never force-push or stage unrelated changes. If interrupted or offline, retain the pending note, report the failure and retry when possible. This is an agent workflow requirement, not an installed background service.
+
+The same rules apply when a student uses another model/provider. Supply these instructions explicitly if that tool does not load AGENTS.md. Author folders are `stephen`, `alex`, `aldric`, `nitheesh`; do not infer GitHub usernames from these names.
+
 ## Local bootstrap check
 
 Run `python3 scripts/check_energy_diagnosis_setup.py`. It validates the handoff/planning setup using only the Python standard library. It does not validate the upstream runtime, reproduce the model bug or measure energy. Add meaningful focused tests with subsequent implementation PRs.

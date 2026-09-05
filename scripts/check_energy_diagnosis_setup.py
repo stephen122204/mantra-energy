@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,12 +17,13 @@ def main():
     errors = []
     documents = list(CONTEXT.rglob("*.md")) + list((ROOT / "studies/energy_diagnosis").rglob("*.md"))
     documents += [ROOT / "AGENTS.md", ROOT / "START_HERE.md"]
+    documents += list((ROOT / "agent context md").rglob("*.md"))
     for doc in documents:
         for link in re.findall(r"\]\(([^)]+)\)", doc.read_text()):
             target = link.split("#", 1)[0]
             if not target or re.match(r"^[a-zA-Z]+:", target):
                 continue
-            if not (doc.parent / target).exists():
+            if not (doc.parent / unquote(target)).exists():
                 errors.append(f"Broken link in {doc.relative_to(ROOT)}: {target}")
     provenance = json.loads((ROOT / "studies/energy_diagnosis/provenance.json").read_text())
     for name in ("reviewed_upstream_commit", "chosen_upstream_commit"):
