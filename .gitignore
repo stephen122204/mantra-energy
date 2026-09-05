@@ -115,3 +115,9 @@ config/platform.json
 data/test_files/
 data/*.json
 .alems-env
+
+# Energy-diagnosis study: retain only small fixtures/manifests in Git
+/studies/energy_diagnosis/artifacts/
+/studies/energy_diagnosis/models/
+/studies/energy_diagnosis/local/
+/docs/agent-context/starter/generated/

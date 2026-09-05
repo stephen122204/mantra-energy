@@ -1,0 +1,63 @@
+{
+  "schema_version": "0.1",
+  "study_id": "alems_diagnosis_fall_2026",
+  "status": "planning_only",
+  "randomization_seed": 20260904,
+  "reviewed_alems_commit": "ce8e299a7322849fc6a94a3b2f21ad04ff4fdd56",
+  "runtime": {
+    "alems_execution_commit": null,
+    "model_id": null,
+    "model_revision_sha256": null,
+    "tokenizer_revision_sha256": null,
+    "inference_engine_version": null,
+    "environment_digest": null,
+    "decoding_policy": null,
+    "trace_adapter_revision": null,
+    "collector_revision": null
+  },
+  "hardware": {
+    "reservation_id": null,
+    "host_id": null,
+    "gpu_uuid": null,
+    "cpu_allocation": null,
+    "exclusive_access_confirmed": false,
+    "energy_domain_manifest_path": null,
+    "telemetry_preflight_passed": false,
+    "endpoint_validation_passed": false
+  },
+  "protocol": {
+    "observed_deployment_default": null,
+    "service_deadline_seconds": null,
+    "retry_limit": null,
+    "completion_tolerance": null,
+    "latency_constraint": null,
+    "initial_state_protocol": null,
+    "replay_fidelity_tolerances": null,
+    "candidate_semantics_validated": false,
+    "task_lineage_split_validated": false,
+    "pilot_gate_passed": false,
+    "research_gate_passed": false,
+    "selectors_frozen": false,
+    "primary_energy_scope": "TO_BE_VALIDATED"
+  },
+  "task_families": [
+    {"id": "data_analysis", "pilot_instances": 2, "development_instances": 10, "heldout_instances": 20},
+    {"id": "repository_analysis", "pilot_instances": 2, "development_instances": 10, "heldout_instances": 20}
+  ],
+  "task_assets": {},
+  "task_asset_required_fields": ["input_path", "input_sha256", "verifier_path", "verifier_sha256", "lineage_id", "eligibility_path"],
+  "candidates": [
+    {"id": "C00", "tool_concurrency": 1, "workers_per_tool": 1},
+    {"id": "C10", "tool_concurrency": 2, "workers_per_tool": 1},
+    {"id": "C01", "tool_concurrency": 1, "workers_per_tool": 4},
+    {"id": "C11", "tool_concurrency": 2, "workers_per_tool": 4}
+  ],
+  "reference_candidate": "C00",
+  "repetitions": 3,
+  "budgeted_selectors": ["trace_guided", "uniform_profile", "factorial_screen"],
+  "profiling_queries_per_selector": 2,
+  "live_policies": ["deployment_reference", "proposed", "strongest_simple_baseline"],
+  "planning_mean_minutes_per_execution": 5,
+  "excluded_from_primary_count": ["instrumentation checks", "conditioning and warmup", "extra trace acquisition retries", "reruns", "state mechanism ablation", "second-machine transfer"],
+  "notes": "All task IDs generated from this file are placeholders until task_assets is populated. This manifest is not an executable workload definition. No experiments have been run by the planner."
+}
