@@ -39,3 +39,5 @@ First team milestone: one real local-model goal, independently verified, with va
 ## Continuous context sharing
 
 The repository-root [agent context md](agent%20context%20md/README.md) contains folders for Stephen, Alex, Aldric and Nitheesh. Agents must read shared context at the start of a turn and autonomously publish their decision/evidence/understanding summary before ending it. Use the supplied publisher to avoid accidentally staging code. Scoped code pushes go to feature branches; code still integrates through review.
+
+Read the [PR and independent-testing workflow](agent%20context%20md/PR_WORKFLOW.md) before implementation: early drafts, branch-local testing, parallel issues, explicit dependencies and Stephen-owned merge decisions.
