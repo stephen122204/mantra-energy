@@ -4,6 +4,20 @@
 
 Start with the [human overview](../HUMAN_START_HERE.md), read this guide, then give your agent [alex.txt](alex.txt) with your repository checkout. The [technical assignment](../../docs/agent-context/06-alex-runtime-measurement.md) is supporting detail for you and required reading for the agent.
 
+## The machine this work is for
+
+**Develop on your existing laptop or desktop; deploy the real experiment to a scheduled Linux compute node in Texas A&M HPRC’s Grace cluster.** The proposed study allocation uses **one NVIDIA A100 with 40GB GPU memory**, with **16 allocated CPU cores and 64GB host RAM** as an initial resource target. The CPU/RAM allocation is our proposal, subject to scheduler policy, isolation and measured requirements. It is not a reservation. [Grace hardware](https://hprc.tamu.edu/kb/User-Guides/Grace/Hardware/)
+
+The GPU runs the selected local language model. CPU cores run tool computations, verification and supporting processes. A-LEMS and the measurement collector run alongside them in the same allocation. Your development computer is where you edit and inspect; laptop energy is not the target measurement. Here “local model” means inference on the experimental compute node, not an external paid API. The model/runtime choice still needs validation; a 7B-class model is the current pilot direction.
+
+The three assignments build cooperating pieces of one experiment on this platform. Keep one goal and one model request active at a time initially; the proposed controlled parallelism is in independent CPU tool work. A100 allocation alone does not isolate CPU-package readings, so coordinate whole-node isolation or another validated arrangement before energy comparisons. Start with software fixtures now; hardware access, readable CPU energy and session budgets remain preflight items. No separate GPU purchase, H100 migration or multi-node training is part of your starting task. See the [technical hardware plan](../../docs/agent-context/05-hardware-and-access.md).
+
+## Picture what you are building
+
+Think of your part as the model connection and measurement boundary around one real task. Aldric’s executor requests a model response; your existing A-LEMS adapter reaches the model server on the assigned A100, returns usable output and records what actually happened. The collector supplies timed CPU/GPU observations around the actual workload. Nitheesh’s ledger links those outputs to the run that caused them.
+
+A concrete first demonstration is a small model request with an inspectable answer, response/timing metadata and a declared runtime configuration. A later demonstration shows one task’s start/end events joined to raw energy readings, including an honest explanation of any unavailable domain. You should be able to point to the allocated device, actual response and raw evidence—not just a green test summary. The adapter fixtures can be built on any development machine; physical energy validation must occur on Grace.
+
 ## Your question and purpose
 
 You make the model response and energy record trustworthy enough for an experiment. First establish that the existing local-provider path produces the right output and honest timing/token information. Then establish what CPU/GPU energy the Grace setup can actually measure. This supports the validity of every later comparison; it is not by itself the claimed research novelty.

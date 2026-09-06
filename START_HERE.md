@@ -10,7 +10,7 @@ Read the [human overview](agent%20context%20md/HUMAN_START_HERE.md) first, then 
 
 | Person | Read | Work area | First issue |
 |---|---|---|---|
-| [Stephen — human guide](agent%20context%20md/stephen/HUMAN_START_HERE.md) | [Method and integration](docs/agent-context/09-stephen-method-integration.md) | Shared interfaces and `studies/energy_diagnosis/analysis/` | ED-01, then ED-10 |
+| Stephen — orchestration | [Method and integration](docs/agent-context/09-stephen-method-integration.md) | Shared interfaces and `studies/energy_diagnosis/analysis/` | ED-01, then ED-10 |
 | [Alex — human guide](agent%20context%20md/alex/HUMAN_START_HERE.md) | [Assignment](docs/agent-context/06-alex-runtime-measurement.md) | Existing adapters/readers/harness; `studies/energy_diagnosis/runtime/` | ED-02 |
 | [Aldric — human guide](agent%20context%20md/aldric/HUMAN_START_HERE.md) | [Assignment](docs/agent-context/07-aldric-workloads-verifiers.md) | `studies/energy_diagnosis/workloads/` | ED-03 |
 | [Nitheesh — human guide](agent%20context%20md/nitheesh/HUMAN_START_HERE.md) | [Assignment](docs/agent-context/08-nitheesh-campaign-reproducibility.md) | `studies/energy_diagnosis/campaign/` | ED-04 |

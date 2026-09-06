@@ -24,7 +24,7 @@ Build and validate the assigned software components using the shared contracts. 
 
 Follow the engineering schedule and approved session budgets. Research and submission planning remain private.
 
-1. This overview, then your personal human guide: [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), [Nitheesh](nitheesh/HUMAN_START_HERE.md), or [Stephen](stephen/HUMAN_START_HERE.md).
+1. This overview, then your personal human guide: [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), or [Nitheesh](nitheesh/HUMAN_START_HERE.md).
 2. The [dependencies and hardware guide](DEPENDENCIES_AND_HARDWARE.md). The first tasks can proceed mostly in parallel; real measured experiments require integration.
 3. Open your linked first issue. Use the `.txt` attached to the kickoff email: Alex uses `alex.txt`, Aldric uses `aldric.txt`, and Nitheesh uses `nitheesh.txt`. Repository copies are linked in each personal guide. Give your entire `name.txt` to your coding agent with access to your own checkout. The agent should read the technical context and begin the bounded task. You do not need to paste every technical document yourself.
 
@@ -39,6 +39,10 @@ Each person owns the meaning and credibility of their result. Read your assignme
 Your agent can inspect existing code, reproduce defects, implement scoped changes, create meaningful tests and small fixtures, run those tests, and prepare reproducible handoffs. It should push its scoped branch changes autonomously, open/update a draft PR, and publish a reviewable context summary after every completed turn using the supplied helper. Shared notes contain understanding, hypotheses, concise rationale and evidence, never private internal reasoning transcripts. Agents do not merge their own PRs or run an unbudgeted campaign.
 
 At the first check-in, provide your GitHub username if access is pending, your development environment, a short explanation of your assigned question, and the first PR or a specific blocker. At each handoff, provide the PR, tested commit, exact test results, a small example artifact, missing evidence and the next action. Keep one issue per PR; test on your branch while Stephen reviews and start another independent issue separately if useful. Coordinate changes to shared interfaces before implementing incompatible versions.
+
+## Picture the system you are building
+
+Your laptop or desktop is the development and inspection machine. The measured experiment runs inside an assigned Grace compute-node job: the A100 runs the language model; host CPUs run tools and the verifier; A-LEMS observes execution and energy; the ledger saves the attempt and its artifacts. Alex makes the runtime and measurements trustworthy, Aldric makes one useful task executable and checkable, and Nitheesh makes repeated runs reliable and traceable. The personal guides include concrete examples and the proposed resource allocation.
 
 ## Hardware and completion gates
 

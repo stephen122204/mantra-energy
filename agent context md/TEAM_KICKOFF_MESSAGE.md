@@ -1,6 +1,6 @@
 # Team kickoff message
 
-Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), [Nitheesh](nitheesh/HUMAN_START_HERE.md), or [Stephen](stephen/HUMAN_START_HERE.md).
+Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), or [Nitheesh](nitheesh/HUMAN_START_HERE.md).
 
 Build and validate the assigned software components using the shared contracts. Research planning is maintained privately.
 
