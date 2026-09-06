@@ -14,3 +14,5 @@ This is the proposed named allocation used for the kickoff; Stephen can reassign
 Each prompt tells the agent to inspect current code/issues/context, perform its first bounded implementation, run the relevant tests, push scoped work through PRs, and publish context after every completed turn. They explicitly handle the expanded PR guide being unmerged in PR #13 at preparation time. Read current repository state instead of assuming that status remains unchanged.
 
 The [human team message](TEAM_KICKOFF_MESSAGE.md) explains how the four parts support one research contribution. Shared exact API agreements remain ED-01; students can progress on independent fixtures without silently inventing conflicting interfaces.
+
+See [DEPENDENCIES_AND_HARDWARE.md](DEPENDENCIES_AND_HARDWARE.md) for the parallel first tasks, named hardware, required handoffs, integration gates and the distinction between component completion and a supported research result.

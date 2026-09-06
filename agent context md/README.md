@@ -48,3 +48,5 @@ Hardware/model validation and scientific novelty remain separate from successful
 ## First agent session
 
 Use the [named kickoff prompts](KICKOFF_PROMPTS.md) and [human team message](TEAM_KICKOFF_MESSAGE.md) to introduce the project and start the assigned first issue. Each prompt is self-contained but requires access to the actual repository for implementation.
+
+See [DEPENDENCIES_AND_HARDWARE.md](DEPENDENCIES_AND_HARDWARE.md) for the parallel first tasks, named hardware, required handoffs, integration gates and the distinction between component completion and a supported research result.
