@@ -1,35 +1,33 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260906-student-device-guides.md)
+[Immutable turn record](turns/20260906-chat-email-delivery.md)
 
-# Turn summary: Stephen — student device guides and local lead education
+# Turn summary: Stephen — copyable email and verified prompt delivery
 
 ## Task and current understanding
 
-Stephen asked to remove his personal human guide from GitHub because his education/orchestration planning belongs outside the shared student material. He also requested concrete device targets and examples so students can picture what they are building.
+Stephen requested the complete email in chat with embedded links and the three initial TXT prompts, with confirmation that hardware background and detailed implementation instructions are included.
 
 ## Ideas and hypotheses
 
-Describing where each process runs and showing a concrete inspectable artifact should help students reason about their component without exhaustive code reading. One shared Grace study platform with three cooperating components is the current plan.
+A copyable email and three separately named attachments give students a clear human-read-first and agent-start-second entry point. The email can summarize physical placement while the guides and prompts retain implementation depth.
 
 ## Decisions and rationale
 
-Removed Stephen’s personal human guide and live inbound links from the handoff branch. Preserved a local copy outside the team repository and excluded it from student bundles. Shared technical coordination and the per-turn context protocol remain. Added a guard against recreating the personal guide in the shared tree. Existing Git history was not rewritten; the current-tree deletion is not a historical purge.
-
-Student guides distinguish development computers from the measured Grace Linux compute allocation. Target one A100 40GB GPU, with proposed 16 CPU cores/64GB host RAM, subject to scheduler policy, actual requirements and isolation. Official Grace hardware documentation was checked. The model uses the GPU; tools and verifier use host CPUs; actual inference, computation and measurement occur in the same allocated environment. Access and CPU energy remain preflight questions.
+Kept the existing named tasks, timeline, hardware proposal and human/agent division. Added a concise device-placement paragraph to the local proposed email. Reused the existing writing artifact for the chat revision. No mailbox interaction is required or authorized.
 
 ## Changes and artifacts
 
-Commit bece8af on lead/named-kickoff-prompts updates PR #14. Alex’s guide illustrates the model connection and energy boundary; Aldric’s illustrates a fixed task, answer key and controlled CPU execution; Nitheesh’s illustrates a resumable controller and complete attempt record. Updated initial prompts, indexes and shared overview. Refreshed student guide copies and attachment packages; Stephen’s human guide is absent from the distributable bundle. No email content or mailbox was changed this turn.
+Updated local KICKOFF_EMAIL.md/html and refreshed the portable bundle. The repository guides/prompts already contain hardware background, detailed first tasks, source paths, failure tests, acceptance criteria, dependencies and PR/context workflow. No implementation or maintained repository document changes were needed this turn. Delivered alex.txt, aldric.txt and nitheesh.txt as individual local file links for manual attachment or supplying to the agents.
 
 ## Tests and evidence
 
-Setup/link checker and diff whitespace checks pass. Remote tree checks confirm the personal human guide is absent from both lead/named-kickoff-prompts and research/energy-diagnosis. Portable prompt copies match source and ZIP inspection confirms the personal guide is excluded. GitHub handoff-and-plan passed at https://github.com/stephen122204/alems-energy-diagnosis/actions/runs/34053315442. Working tree clean after push. No hardware job or model inference ran.
+Verified each attachment matches the current repository prompt byte-for-byte. Prompts are approximately 1,600 words each. Read the first deliverable, subsequent scope, hardware placement and schedule sections for all three; these contain concrete code/test and evidence expectations. No new model, hardware or campaign test ran. No email was changed or sent in a mailbox.
 
 ## Open questions and disagreements
 
-The previous guide remains accessible in earlier Git commits; current files and bundles no longer contain it. PR #14 remains unmerged. Actual device assignment, reservation, energy permissions and isolation have not been established by this documentation.
+PR #14 remains pending review. Individual access and measurement validity remain preflight items. Detailed instructions do not prove implemented functionality or publication readiness. Stephen’s personal human guide remains outside student bundles and the current repository tree.
 
 ## Next actions and handoff
 
-Stephen reviews PR #14 and shares the updated student guides/prompts. Students begin local fixture work and use their concrete component examples to check behavior. Coordinate the shared Grace preflight and integration rather than pursuing unrelated per-person platform ports. Keep personal lead education outside shared source and publish only team-facing coordination and evidence.
+Stephen can copy the complete linked email into Gmail, attach the three TXT files manually and send when ready. Students skim their human guide, provide their named prompt with a checkout and begin the assigned first issue. Continue the established scoped pushes, review and per-turn context publication workflow.
