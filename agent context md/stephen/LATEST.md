@@ -1,33 +1,33 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260906-named-kickoff-prompts.md)
+[Immutable turn record](turns/20260906-dependencies-hardware.md)
 
-# Turn summary: Stephen — 20260906-named-kickoff-prompts
+# Turn summary: Stephen — 20260906-dependencies-hardware
 
 ## Task and current understanding
 
-Stephen requested a brief human explanation of the research question and each person's contribution, plus name.txt prompts that let the four agents begin concrete work using current context. The proposed named split is Stephen method/integration, Alex runtime/measurement, Aldric workloads/verifiers and Nitheesh campaign/reproducibility. This is a working assignment for the kickoff; GitHub usernames/access are still not inferred from display names.
+Stephen asked whether the named tasks are independent or depend on other people, and wanted beginning/end expectations, workflow and hardware made very clear. The initial fixture tasks are mostly parallel, but the real integration and scientific evaluation have explicit dependencies. Common interfaces are the first enabling shared deliverable.
 
 ## Ideas and hypotheses
 
-Each prompt should be self-contained enough to start the assigned issue while requiring inspection of actual code, current issues and shared notes. Independent task fixtures can proceed before GPU access, but shared interface decisions and real integration remain necessary. The research question is economical energy-saving intervention selection on verified goals, not another score or platform sweep; significance remains to be established against simple alternatives.
+Separating component, pipeline and scientific completion should prevent an agent from treating a local passing test as a completed experiment or publication result. A small agreed contract plus synthetic example enables local progress without waiting for all runtime/hardware work. The later gate still requires actual inference, tools, verification and valid measurements in the same experiment.
 
 ## Decisions and rationale
 
-Provided one prompt per person with repository identity, first issue, code paths, acceptance tests, bounded scope, feature-branch/PR rules and automatic context publication. The prompts explicitly handle PR #13 still being unmerged, avoiding an onboarding dependency on that guide. Maintained named prompts/team message through a new independent PR rather than pushing maintained documents directly into integration. Left role/account metadata and invitations unchanged because usernames and final assignment confirmation are absent.
+Kept the established proposed named split. Alex begins locally on runtime fixtures and later uses assigned Grace A100 sessions for live model/energy validation. Aldric begins locally on tasks/verifiers and later joins the Grace environment for real controls. Nitheesh begins locally on a fixture ledger and later runs the pilot using the validated components. Stephen establishes contracts/design now and later makes empirical method/evaluation decisions. No new machine purchase, H100 requirement or platform-per-student assignment was introduced.
 
 ## Changes and artifacts
 
-PR https://github.com/stephen122204/alems-energy-diagnosis/pull/14 on branch lead/named-kickoff-prompts; commit 93ec06cd6c33fbc7ef3a2d6c25c091342c85c730. Added stephen.txt, alex.txt, aldric.txt and nitheesh.txt under their root context folders, a kickoff index and human team message, and entry-point links. Portable copies plus TEAM_MESSAGE.txt and a ZIP were saved in the exploration workspace's fall-review/student-kickoff deliverables. No model/runtime code or experiment definition changed.
+Updated existing PR #14 rather than opening another PR for the same kickoff task. Commit ec7b29fe535fdac363fd7e09744a18dd632056c9 adds agent context md/DEPENDENCIES_AND_HARDWARE.md and updates the four name.txt prompts, human message, index and entry points. Rebuilt portable prompts and ALEMS_Named_Kickoff_Prompts.zip. PR URL: https://github.com/stephen122204/alems-energy-diagnosis/pull/14. It remains unmerged.
 
 ## Tests and evidence
 
-Validated that all four portable prompts match their repository copies and the intended role, issue and context author. python3 scripts/check_energy_diagnosis_setup.py and git diff --check passed. GitHub CI passed at https://github.com/stephen122204/alems-energy-diagnosis/actions/runs/34051835796. PR #14 is ready for review, not merged. No hardware or model execution occurred.
+Portable prompts match repository copies. python3 scripts/check_energy_diagnosis_setup.py and git diff --check passed. GitHub CI for this update is https://github.com/stephen122204/alems-energy-diagnosis/actions/runs/34052125863; inspect its actual status. Changes are documentation only. No model, hardware run or new resource allocation occurred.
 
 ## Open questions and disagreements
 
-Stephen can change the proposed named split. Collaborator identities and individual hardware access remain outstanding. PRs #13 and #14 await review; current remote integration does not yet contain the maintained prompt files. The supplied portable prompts can be used directly now because they include the workflow and current-state checks rather than assuming those PRs are merged. A prompt does not itself provision accounts or establish paper novelty.
+Actual accounts and sessions remain an operational dependency. ED-01's precise interfaces remain to be agreed. ED-07 depends on ED-02/05 runtime/measurement, ED-03/06 task/controls and ED-04 ledger; ED-09 additionally needs ED-08's pilot assets. ED-10 requires usable pilot/development evidence, though method design can start now. Software completion does not establish a SIGMETRICS-level result, and missing host energy cannot be replaced by GPU-only readings for CPU-tool claims.
 
 ## Next actions and handoff
 
-Stephen shares the human message and corresponding name.txt files, supplies access and reviews the PRs. Alex starts ED-02, Aldric ED-03, Nitheesh ED-04, and Stephen ED-01. Each agent inspects current code/context, performs its bounded first deliverable, tests it, pushes feature work and publishes per-turn evidence notes. Full campaigns remain behind measurement and scientific opportunity gates. This note makes the pending kickoff artifacts visible through shared integration without merging them.
+Stephen reviews updated PR #14 and shares the revised kickoff materials. Students start their independent fixture tasks and explicitly state provisional interfaces. Plan one integration session after the required components and individual access are ready, then the bounded pilot. Each person hands off tested interfaces/artifacts and evidence, not only a status message. Continue separate tasks while PR review is pending; coordinate energy sessions and exact tested versions. Publish this summary through the shared context helper.
