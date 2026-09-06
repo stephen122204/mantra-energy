@@ -1,6 +1,6 @@
 # Alex: shared agent context
 
-Use the issue assigned by Stephen; this folder name does not assign a student role or a GitHub account.
+Working assignment: **Runtime and measurement reliability**. Start with [your human guide](HUMAN_START_HERE.md) and then give your agent [alex.txt](alex.txt). Your name does not establish a GitHub account or repository permission.
 
 Read [the shared protocol](../README.md), [the latest summary](LATEST.md), the root instructions and your assigned issue at the start of every turn. Read other contributors' latest records from the remote integration branch before making dependent decisions.
 

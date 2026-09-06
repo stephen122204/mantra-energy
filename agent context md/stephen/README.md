@@ -1,6 +1,6 @@
 # Stephen: shared agent context
 
-Research method, shared interfaces and integration lead.
+Research method, shared interfaces and integration lead. Begin with [your human guide](HUMAN_START_HERE.md).
 
 Read [the shared protocol](../README.md), [the latest summary](LATEST.md), the root instructions and your assigned issue at the start of every turn. Read other contributors' latest records from the remote integration branch before making dependent decisions.
 

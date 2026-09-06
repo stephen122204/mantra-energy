@@ -1,5 +1,7 @@
 # Named starting prompts
 
+Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), [Nitheesh](nitheesh/HUMAN_START_HERE.md), or [Stephen](stephen/HUMAN_START_HERE.md).
+
 Prepared 6 September 2026. These are self-contained prompts to paste into each person's coding agent after providing access to the team checkout.
 
 | Person | Working assignment | Starting issue | Prompt |
