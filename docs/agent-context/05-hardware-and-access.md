@@ -23,7 +23,7 @@ Qwen2.5 7B Instruct Q4_K_M is a proposed Ollama pilot model with an approximatel
 
 ## Preflight deliverable
 
-Student 1 records: hostname/boot and device identities; requested versus actual CPU/GPU allocation; runtime/model revision; GPU residency; CPU/GPU energy APIs, read permissions, units and scope; counter increment/reset/wrap behavior; sensor refresh/duplicate rates; collection overhead; CPU/GPU sharing state; and persistent artifact destination. No elevated privilege is inherently required if operators provide suitable read access.
+Alex records: hostname/boot and device identities; requested versus actual CPU/GPU allocation; runtime/model revision; GPU residency; CPU/GPU energy APIs, read permissions, units and scope; counter increment/reset/wrap behavior; sensor refresh/duplicate rates; collection overhead; CPU/GPU sharing state; and persistent artifact destination. No elevated privilege is inherently required if operators provide suitable read access.
 
 CPU temperature, utilization or frequency is not CPU energy. If GPU energy works but host energy does not, local integration may proceed, but the planned CPU-tool energy-saving claim cannot pass the main-campaign gate on that evidence alone. Obtain operator-provided host energy or select another capable environment.
 

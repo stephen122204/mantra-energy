@@ -28,7 +28,7 @@ Upstream: `deepakpanigrahy03/alems-platform`. Reviewed reference: `ce8e299a73228
 
 ## Reuse and extension boundary
 
-Keep A-LEMS as the execution/measurement base. Introduce a small study-specific namespace for task adapters, contracts, replay, runner and analysis after checking repository conventions. Do not invent names that collide with existing modules. Student 2 owns the bounded tool/dependency executor; Student 3 owns its campaign invocation. Stephen owns the diagnostic algorithm and cross-module schema decisions.
+Keep A-LEMS as the execution/measurement base. Introduce a small study-specific namespace for task adapters, contracts, replay, runner and analysis after checking repository conventions. Do not invent names that collide with existing modules. Aldric owns the bounded tool/dependency executor; Nitheesh owns its campaign invocation. Stephen owns the diagnostic algorithm and cross-module schema decisions.
 
 The supplied `starter/make_run_plan.py` and `starter/campaign.json` are a copied planning utility and an unfilled template. They do not execute workloads, acquire telemetry or enforce runtime isolation. `goal_thermal_schema.sql` in the older review was a draft analysis schema, not an installed production migration; do not apply it as part of setup.
 

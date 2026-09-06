@@ -21,9 +21,9 @@ Everyone: [agent rules](AGENTS.md) → [project brief](01-project-brief.md) → 
 | [03-code-map.md](03-code-map.md) | Reviewed baseline, existing components, concrete problems to reproduce |
 | [04-interfaces-and-data.md](04-interfaces-and-data.md) | Shared module boundaries and measurement semantics |
 | [05-hardware-and-access.md](05-hardware-and-access.md) | Alex's updated access report, equipment, preflight and job conditions |
-| [06-student-runtime-measurement.md](06-student-runtime-measurement.md) | Student 1: inference and trustworthy telemetry |
-| [07-student-workloads-verifiers.md](07-student-workloads-verifiers.md) | Student 2: tasks, verifiers and bounded tool execution |
-| [08-student-campaign-reproducibility.md](08-student-campaign-reproducibility.md) | Student 3: runner, validation and reproducibility |
+| [06-alex-runtime-measurement.md](06-alex-runtime-measurement.md) | Alex: inference and trustworthy telemetry |
+| [07-aldric-workloads-verifiers.md](07-aldric-workloads-verifiers.md) | Aldric: tasks, verifiers and bounded tool execution |
+| [08-nitheesh-campaign-reproducibility.md](08-nitheesh-campaign-reproducibility.md) | Nitheesh: runner, validation and reproducibility |
 | [09-stephen-method-integration.md](09-stephen-method-integration.md) | Lead's implementation and integration responsibilities |
 | [10-first-issues-and-milestones.md](10-first-issues-and-milestones.md) | Dependency order and reviewable first issues |
 | [11-agent-prompts.md](11-agent-prompts.md) | Copyable starting prompts for different models |

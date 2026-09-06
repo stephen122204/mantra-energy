@@ -17,11 +17,11 @@ Build and validate the assigned software components using the shared contracts. 
 FIRST ACTIONS AND REQUIRED CONTEXT
 Use the actual team checkout. If it is absent, clone the private repository into a new directory using your individually authorized account; do not overwrite another checkout. If access fails, report the exact access dependency without requesting shared credentials. Never assume a display name is a GitHub username. Inspect the branch, working changes and remote URLs; fetch the current integration branch and preserve uncommitted work. Read the actual issue and inspect for an existing branch/PR before duplicating work.
 
-Read these files before coding:
+Read your human guide at agent context md/nitheesh/HUMAN_START_HERE.md if available; the role and first-task essentials are also included here. Read these files before coding:
 1. AGENTS.md and START_HERE.md.
 2. docs/agent-context/00-setup-status.md and 01-project-brief.md.
 3. docs/agent-context/03-code-map.md and 04-interfaces-and-data.md.
-4. docs/agent-context/08-student-campaign-reproducibility.md.
+4. docs/agent-context/08-nitheesh-campaign-reproducibility.md. If the named guide is not yet on integration because PR #14 is unmerged, read the existing docs/agent-context/08-student-campaign-reproducibility.md instead; it covers the same technical role.
 5. docs/agent-context/starter/data-contract.md.
 6. agent context md/README.md, TURN_TEMPLATE.md, SIGMETRICS_ASSESSMENT.md, and your personal AGENTS.md.
 7. agent context md/DEPENDENCIES_AND_HARDWARE.md if present; its role-specific essentials are also included below so this prompt can be used before the documentation PR merges.

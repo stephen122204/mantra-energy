@@ -1,5 +1,7 @@
 # Team kickoff message
 
+Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), [Nitheesh](nitheesh/HUMAN_START_HERE.md), or [Stephen](stephen/HUMAN_START_HERE.md).
+
 Build and validate the assigned software components using the shared contracts. Research planning is maintained privately.
 
 The first software tasks can run mostly in parallel. I will establish the small shared data/interface contract so each component fits the others. You do not need to wait for the entire system or a GPU reservation to begin isolated tests. Later, the components must come together for one real goal before we run the pilot.
