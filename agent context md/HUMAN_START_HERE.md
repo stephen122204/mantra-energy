@@ -6,11 +6,27 @@ Can a small amount of profiling tell us how to run an AI-agent task using less m
 
 We are targeting SIGMETRICS, but neither novelty nor publication readiness is established. The first work builds the trustworthy evidence needed to decide whether the idea deserves a full evaluation. Read the [research assessment](SIGMETRICS_ASSESSMENT.md) for the distinction between conference fit and an established contribution.
 
+## Background before you start the agent
+
+An **agentic goal** is a complete useful task: for example, inspect fixed data, compute the requested summaries and return a reconciled answer. It may involve several model requests and tool calls. An **independent verifier** checks the answer against fixed rules or reference computations; the model saying it succeeded is not enough.
+
+A **configuration** changes how the same task executes. Our proposed initial controls vary concurrent independent tool calls and tool workers while keeping the model and allocated resources fixed. More parallel work can shorten a task but also change power use. Energy is accumulated over time, so neither lower power nor shorter duration alone guarantees lower energy.
+
+**Profiling** means spending measured work to learn which configuration to choose. That expense must be included when judging the recommendation. Our method must earn its complexity against simple choices such as a fixed setting or a small ordinary configuration test. A **baseline** is one of these explicit comparison methods, not a deliberately weak opponent.
+
+**Energy per verified completion** relates measured energy spent across the specified attempts, including failures, to the number of independently verified completions. If there are no verified completions, this ratio is undefined. We also report success, latency, profiling expense and measurement coverage; a favorable ratio alone is not enough. A **held-out goal** is a task reserved for evaluation that was not used to tune the decision rule.
+
+A **fixture** is a small controlled test input, such as a saved model response or simulated interrupted run. Fixtures let us build and test components without a GPU. The **pilot** is a small real experiment that checks whether the assembled system produces valid data and whether the proposed method has a useful opportunity. Fixture success is software evidence; it does not demonstrate energy savings.
+
+A concrete proposed example: several independent data summaries might run together or sequentially, with different worker counts. Aldric establishes that each setting still computes the correct answer; Alex establishes that the runtime and measured energy boundaries are credible; Nitheesh preserves every attempted execution; Stephen evaluates whether limited profiling can select a worthwhile setting on new tasks. This is an illustration of the experiment, not a reported result.
+
 ## Read in this order
 
 1. This overview, then your personal human guide: [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), [Nitheesh](nitheesh/HUMAN_START_HERE.md), or [Stephen](stephen/HUMAN_START_HERE.md).
 2. The [dependencies and hardware guide](DEPENDENCIES_AND_HARDWARE.md). The first tasks can proceed mostly in parallel; real measured experiments require integration.
-3. Open your linked first issue. Give your entire `name.txt` to your coding agent with access to your own checkout. The agent should read the technical context and begin the bounded task. You do not need to paste every technical document yourself.
+3. Open your linked first issue. Use the `.txt` attached to the kickoff email: Alex uses `alex.txt`, Aldric uses `aldric.txt`, and Nitheesh uses `nitheesh.txt`. Repository copies are linked in each personal guide. Give your entire `name.txt` to your coding agent with access to your own checkout. The agent should read the technical context and begin the bounded task. You do not need to paste every technical document yourself.
+
+Before starting the agent, be able to explain your task, what evidence would demonstrate correctness, and what your next person needs from you. Then attach or paste the whole prompt into a new coding-agent session opened on your own repository checkout. The prompt tells the agent to inspect context and begin the first bounded task; it should return a tested PR or a precise blocker. You review a representative result and the stated limitations.
 
 The kickoff documents are proposed in [PR #14](https://github.com/stephen122204/alems-energy-diagnosis/pull/14). Until merged, read them on that PR's branch; implementation branches still start from current `research/energy-diagnosis`. The prompts contain the essential workflow even if some new guides are not yet on integration. Do not merge an unreviewed documentation branch into your work just to start fixtures.
 
