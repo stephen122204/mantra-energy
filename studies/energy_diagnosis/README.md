@@ -4,9 +4,9 @@ Start at [the team entry point](../../START_HERE.md). This directory reserves im
 
 | Directory | Owner | Scope |
 |---|---|---|
-| runtime/ | Student 1 | Study configuration and capability exports; reuse core adapters/readers |
-| workloads/ | Student 2 | Task assets, independent verifiers and bounded trace execution |
-| campaign/ | Student 3 | Execution ledger, orchestration and export validation |
+| runtime/ | Alex | Study configuration and capability exports; reuse core adapters/readers |
+| workloads/ | Aldric | Task assets, independent verifiers and bounded trace execution |
+| campaign/ | Nitheesh | Execution ledger, orchestration and export validation |
 | analysis/ | Stephen | Diagnostic method, fair baselines and evaluation |
 | fixtures/ | Shared through review | Small synthetic examples for CI; clearly labeled simulated |
 
