@@ -44,3 +44,7 @@ Record publication failure and retain the local note if credentials, permissions
 Commit scoped code to your assigned issue/feature branch and push autonomously each turn when code changed. Include test results and mark work-in-progress accurately. Inspect the staged diff; never use a blanket add that could include other people's changes or confidential assets. Keep code integration through PR review. The direct integration push exception is only for the narrowly scoped context records above. Changes to shared scripts/instructions still follow the assigned implementation task and review process.
 
 Hardware/model validation and scientific novelty remain separate from successful synchronization. Read the [SIGMETRICS assessment](SIGMETRICS_ASSESSMENT.md) before making paper-readiness claims.
+
+## First agent session
+
+Use the [named kickoff prompts](KICKOFF_PROMPTS.md) and [human team message](TEAM_KICKOFF_MESSAGE.md) to introduce the project and start the assigned first issue. Each prompt is self-contained but requires access to the actual repository for implementation.

@@ -39,3 +39,5 @@ First team milestone: one real local-model goal, independently verified, with va
 ## Continuous context sharing
 
 The repository-root [agent context md](agent%20context%20md/README.md) contains folders for Stephen, Alex, Aldric and Nitheesh. Agents must read shared context at the start of a turn and autonomously publish their decision/evidence/understanding summary before ending it. Use the supplied publisher to avoid accidentally staging code. Scoped code pushes go to feature branches; code still integrates through review.
+
+For a fresh agent session, use the [named kickoff prompts](agent%20context%20md/KICKOFF_PROMPTS.md). They assign the proposed first tasks for Stephen, Alex, Aldric and Nitheesh and link the human team explanation.
