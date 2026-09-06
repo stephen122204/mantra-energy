@@ -8,7 +8,8 @@ Replace the bracketed fields before use. Supply only the relevant files and let 
 You are helping implement the A-LEMS energy-diagnosis study in this repository.
 Read the repository's existing instructions and docs/agent-context/AGENTS.md,
 README.md, 01-project-brief.md, 03-code-map.md, 04-interfaces-and-data.md,
-and my role file: [ROLE FILE]. My assigned issue is [ISSUE ID].
+and the root agent context md/PR_WORKFLOW.md, plus my role file: [ROLE FILE].
+My assigned issue is [ISSUE ID].
 The intended branch is [BRANCH]. The agreed baseline is [COMMIT].
 
 First inspect the actual checkout, working changes, active configuration and
@@ -20,6 +21,9 @@ Continue independent local work if hardware is unavailable. Do not start a
 cluster campaign without an assigned budget. Scoped feature-branch pushes and
 per-turn context publication are already authorized: follow the root
 agent context md/README.md protocol before ending every completed turn.
+Open a draft PR early, test on your feature branch, and mark it ready only
+when acceptance evidence is complete. Do not self-merge. Continue independent
+work on separate branches while awaiting review; declare dependencies explicitly.
 Finish with the evidence-based progress template and precise remaining work.
 ```
 

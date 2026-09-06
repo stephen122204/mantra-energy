@@ -37,3 +37,7 @@ The latest user instruction authorizes context pushes and scoped feature-branch 
 
 Use 12-progress-template.md: changes, tests, artifacts, evidence status, blockers, next bounded action and integration implications. Never describe a scheduled run as an executed experiment.
 
+## PR lifecycle
+
+The detailed, repository-wide PR/testing/dependency workflow is `agent context md/PR_WORKFLOW.md`. All roles must read it. Draft PRs do not block branch-local testing or independent work. Stephen retains merge decisions; do not treat passing CI as approval.
+
