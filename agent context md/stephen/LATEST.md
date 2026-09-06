@@ -1,33 +1,33 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260906-pr-workflow-guidance.md)
+[Immutable turn record](turns/20260906-named-kickoff-prompts.md)
 
-# Turn summary: Stephen — 20260906-pr-workflow-guidance
+# Turn summary: Stephen — 20260906-named-kickoff-prompts
 
 ## Task and current understanding
 
-Stephen asked whether the agent context already contains the PR system and the considerations needed for independent implementation/testing. Existing integrated instructions covered autonomous feature-branch pushes, reviewed code integration and direct per-turn context publication. Draft/ready transitions, progress during review and dependent PRs needed explicit guidance.
+Stephen requested a brief human explanation of the research question and each person's contribution, plus name.txt prompts that let the four agents begin concrete work using current context. The proposed named split is Stephen method/integration, Alex runtime/measurement, Aldric workloads/verifiers and Nitheesh campaign/reproducibility. This is a working assignment for the kickoff; GitHub usernames/access are still not inferred from display names.
 
 ## Ideas and hypotheses
 
-A single canonical PR workflow linked from every entry point should reduce contradictory agent assumptions about when work must stop or who may merge. Independent fixture development is useful only when shared interfaces agree; it must be followed by actual cross-component and hardware validation. These are workflow expectations, not measured research outcomes.
+Each prompt should be self-contained enough to start the assigned issue while requiring inspection of actual code, current issues and shared notes. Independent task fixtures can proceed before GPU access, but shared interface decisions and real integration remain necessary. The research question is economical energy-saving intervention selection on verified goals, not another score or platform sweep; significance remains to be established against simple alternatives.
 
 ## Decisions and rationale
 
-Added the missing details through a feature branch and PR to demonstrate the requested review system. The proposal is not merged and must not be described as the current integration version. It distinguishes direct context-only pushes from reviewed code/documentation, permits continued independent work during review, requires explicit dependent-PR bases/commits, and leaves merge decisions with Stephen. CI success does not imply approval.
+Provided one prompt per person with repository identity, first issue, code paths, acceptance tests, bounded scope, feature-branch/PR rules and automatic context publication. The prompts explicitly handle PR #13 still being unmerged, avoiding an onboarding dependency on that guide. Maintained named prompts/team message through a new independent PR rather than pushing maintained documents directly into integration. Left role/account metadata and invitations unchanged because usernames and final assignment confirmation are absent.
 
 ## Changes and artifacts
 
-Branch `lead/pr-workflow-guidance`, commit `964aa44487ce0f622798c3ecc9635bc7b2636aba`, PR https://github.com/stephen122204/alems-energy-diagnosis/pull/13. Added `agent context md/PR_WORKFLOW.md`; updated root/shared/personal agent instructions, four role guides, starting prompts, START_HERE and the PR template. No runtime code or experiment configuration changed.
+PR https://github.com/stephen122204/alems-energy-diagnosis/pull/14 on branch lead/named-kickoff-prompts; commit 93ec06cd6c33fbc7ef3a2d6c25c091342c85c730. Added stephen.txt, alex.txt, aldric.txt and nitheesh.txt under their root context folders, a kickoff index and human team message, and entry-point links. Portable copies plus TEAM_MESSAGE.txt and a ZIP were saved in the exploration workspace's fall-review/student-kickoff deliverables. No model/runtime code or experiment definition changed.
 
 ## Tests and evidence
 
-`python3 scripts/check_energy_diagnosis_setup.py` and `git diff --check` passed locally. GitHub CI passed at https://github.com/stephen122204/alems-energy-diagnosis/actions/runs/34009008057, including setup validation and the four existing isolated-publisher tests. PR #13 was created as a draft, then marked ready after checks passed. No model or hardware runs were performed.
+Validated that all four portable prompts match their repository copies and the intended role, issue and context author. python3 scripts/check_energy_diagnosis_setup.py and git diff --check passed. GitHub CI passed at https://github.com/stephen122204/alems-energy-diagnosis/actions/runs/34051835796. PR #14 is ready for review, not merged. No hardware or model execution occurred.
 
 ## Open questions and disagreements
 
-PR #13 awaits Stephen's review and merge decision; no self-approval or automatic merge occurred. Exact component API agreements and student account mappings remain outstanding. Current private-repository plan still cannot enforce required approvals, so agent instructions govern the process. Existing role branches do not receive this unmerged proposal automatically; agents should read the linked PR as a proposal and follow the already integrated base rules.
+Stephen can change the proposed named split. Collaborator identities and individual hardware access remain outstanding. PRs #13 and #14 await review; current remote integration does not yet contain the maintained prompt files. The supplied portable prompts can be used directly now because they include the workflow and current-state checks rather than assuming those PRs are merged. A prompt does not itself provision accounts or establish paper novelty.
 
 ## Next actions and handoff
 
-Stephen reviews PR #13. After merge, agents fetch integration and use the canonical PR workflow before implementation. Meanwhile agents can continue assigned independent issues using the current contracts, and should publish their context each turn. This note is published through the scoped context helper so the pending PR is visible to all contributors immediately. Code changes are already pushed to the feature branch; integration remains unchanged except for this context note.
+Stephen shares the human message and corresponding name.txt files, supplies access and reviews the PRs. Alex starts ED-02, Aldric ED-03, Nitheesh ED-04, and Stephen ED-01. Each agent inspects current code/context, performs its bounded first deliverable, tests it, pushes feature work and publishes per-turn evidence notes. Full campaigns remain behind measurement and scientific opportunity gates. This note makes the pending kickoff artifacts visible through shared integration without merging them.
