@@ -1,6 +1,6 @@
 # Stephen: shared agent context
 
-Research method, shared interfaces and integration lead. Begin with [your human guide](HUMAN_START_HERE.md).
+Research method, shared interfaces and integration lead. This folder carries team-facing technical context; Stephen’s personal human guide and orchestration education stay outside the shared repository.
 
 Read [the shared protocol](../README.md), [the latest summary](LATEST.md), the root instructions and your assigned issue at the start of every turn. Read other contributors' latest records from the remote integration branch before making dependent decisions.
 

@@ -17,7 +17,7 @@ Our question: can limited profiling identify an execution change that reduces me
 FIRST ACTIONS AND REQUIRED CONTEXT
 Use the actual team checkout. If it is absent, clone the private repository into a new directory using your individually authorized account; do not overwrite another checkout. If access fails, report the exact access dependency without requesting shared credentials. Never assume a display name is a GitHub username. Inspect the branch, working changes and remote URLs; fetch the current integration branch and preserve uncommitted work. Read the actual issue and inspect for an existing branch/PR before duplicating work.
 
-Read your human guide at agent context md/stephen/HUMAN_START_HERE.md if available; the role and first-task essentials are also included here. Read these files before coding:
+Stephen’s personal human guide stays outside this repository; do not publish or package it. This shared prompt contains only team-facing technical responsibilities. Read these files before coding:
 1. AGENTS.md and START_HERE.md.
 2. docs/agent-context/00-setup-status.md and 01-project-brief.md.
 3. docs/agent-context/03-code-map.md and 04-interfaces-and-data.md.

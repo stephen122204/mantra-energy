@@ -4,6 +4,20 @@
 
 Start with the [human overview](../HUMAN_START_HERE.md), read this guide, then give your agent [nitheesh.txt](nitheesh.txt) with your repository checkout. The [technical assignment](../../docs/agent-context/08-nitheesh-campaign-reproducibility.md) is supporting detail for you and required reading for the agent.
 
+## The machine this work is for
+
+**Develop on your existing laptop or desktop; deploy the real experiment to a scheduled Linux compute node in Texas A&M HPRC’s Grace cluster.** The proposed study allocation uses **one NVIDIA A100 with 40GB GPU memory**, with **16 allocated CPU cores and 64GB host RAM** as an initial resource target. The CPU/RAM allocation is our proposal, subject to scheduler policy, isolation and measured requirements. It is not a reservation. [Grace hardware](https://hprc.tamu.edu/kb/User-Guides/Grace/Hardware/)
+
+The GPU runs the selected local language model. CPU cores run tool computations, verification and supporting processes. A-LEMS and the measurement collector run alongside them in the same allocation. Your development computer is where you edit and inspect; laptop energy is not the target measurement. Here “local model” means inference on the experimental compute node, not an external paid API. The model/runtime choice still needs validation; a 7B-class model is the current pilot direction.
+
+The three assignments build cooperating pieces of one experiment on this platform. Keep one goal and one model request active at a time initially; the proposed controlled parallelism is in independent CPU tool work. A100 allocation alone does not isolate CPU-package readings, so coordinate whole-node isolation or another validated arrangement before energy comparisons. Start with software fixtures now; hardware access, readable CPU energy and session budgets remain preflight items. No separate GPU purchase, H100 migration or multi-node training is part of your starting task. See the [technical hardware plan](../../docs/agent-context/05-hardware-and-access.md).
+
+## Picture what you are building
+
+Think of your part as the experiment’s run controller and record book. It reads the agreed task/configuration plan, invokes Aldric’s single-goal executor using Alex’s runtime/measurements inside the assigned Grace job, and records each attempt’s outcome and artifact locations. It must survive interruption without losing failures or accidentally presenting duplicate executions as fresh evidence.
+
+A concrete first demonstration is a tiny exported run table containing a success, a verifier failure, an interrupted attempt and a missing measurement, all traceable to their inputs and test artifacts. Later, replace those simulated calls with the real Grace execution interface and collect the bounded pilot. Your laptop can develop and inspect the ledger; actual measured workload execution belongs on the allocated compute node, with durable artifacts saved off temporary job storage. Starting another measured goal concurrently is not a way to speed up the initial study because it can mix energy attribution.
+
 ## Your question and purpose
 
 You make every attempted run traceable and reproducible. First build the run ledger with simulated outcomes; later use it to coordinate the real pilot. The scientific purpose is to prevent retries, failures, interrupted work or missing measurements from disappearing and biasing the comparison.

@@ -124,3 +124,6 @@ data/*.json
 
 # Local unsent context summaries
 .agent-context-pending/
+
+# Stephen personal human guide belongs outside shared source and handoff bundles
+/agent context md/stephen/HUMAN_START_HERE.md

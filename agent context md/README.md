@@ -1,6 +1,6 @@
 # Shared agent context
 
-Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), [Nitheesh](nitheesh/HUMAN_START_HERE.md), or [Stephen](stephen/HUMAN_START_HERE.md).
+Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), or [Nitheesh](nitheesh/HUMAN_START_HERE.md).
 
 This is the shared research notebook for [Stephen](stephen/README.md), [Alex](alex/README.md), [Aldric](aldric/README.md) and [Nitheesh](nitheesh/README.md). Each person has a folder; the active issue determines their implementation responsibility. Folder names are not GitHub usernames or account invitations.
 
