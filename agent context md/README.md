@@ -55,3 +55,5 @@ Use the [named kickoff prompts](KICKOFF_PROMPTS.md) and [human team message](TEA
 
 See [DEPENDENCIES_AND_HARDWARE.md](DEPENDENCIES_AND_HARDWARE.md) for the parallel first tasks, named hardware, required handoffs, integration gates and the distinction between component completion and a supported research result.
 
+The [Fall timeline](FALL_TIMELINE.md) sets dated evidence milestones, an experimental contingency window and the practical human/agent work split.
+

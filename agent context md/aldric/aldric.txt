@@ -42,6 +42,8 @@ ED-06 adds bounded scheduling of independent ready tools: one or two simultaneou
 STARTING HARDWARE, DEPENDENCIES AND HANDOFF
 Start on your own development computer; use the team Intel machine only if assigned. Task/verifier fixtures do not require the model, collector or a GPU. Agree task/output/event fields with Stephen's ED-01; build isolated checks while the final contract is reviewed. Later validate actual tool controls with Alex's runtime on the shared Grace environment. Nitheesh needs your immutable inputs, verifiers, candidate eligibility and single-goal executor to run the real pilot. Your first handoff is one task with independently verified correct/incorrect outcomes, then meaningful controls and the second family. ED-07 needs the first task/controls, and ED-09 also needs the four pilot goal assets. Do not wait for every other component to finish before writing verifiers.
 
+Follow the engineering schedule and approved session budgets. Research and submission planning remain private.
+
 AUTONOMY, PRs AND TESTING
 Work on a separate issue branch from current integration. Open a draft PR early, targeting research/energy-diagnosis; later pushes update the same PR. Scoped commits and pushes to your feature branch are already authorized. Do not ask for confirmation again for those actions. Keep the PR draft while its required evidence is missing; mark it ready when the issue's acceptance criteria are met and report limitations. Stephen decides merges. Do not self-merge, enable auto-merge, force-push, push to upstream/main, or include another person's changes.
 
