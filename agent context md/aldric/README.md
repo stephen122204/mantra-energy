@@ -10,3 +10,5 @@ Immutable records will appear under `turns/`. `LATEST.md` is a full snapshot of 
 
 For a fresh agent session, supply [aldric.txt](aldric.txt). It contains the proposed role, first issue, code/test expectations and context-publication workflow.
 
+Read the [dependencies, hardware and completion guide](../DEPENDENCIES_AND_HARDWARE.md) for what can start independently and what the next person needs from your work.
+

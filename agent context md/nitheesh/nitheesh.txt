@@ -24,6 +24,7 @@ Read these files before coding:
 4. docs/agent-context/08-student-campaign-reproducibility.md.
 5. docs/agent-context/starter/data-contract.md.
 6. agent context md/README.md, TURN_TEMPLATE.md, SIGMETRICS_ASSESSMENT.md, and your personal AGENTS.md.
+7. agent context md/DEPENDENCIES_AND_HARDWARE.md if present; its role-specific essentials are also included below so this prompt can be used before the documentation PR merges.
 Fetch origin/research/energy-diagnosis and read all four contributors' LATEST.md files from that remote branch using git show, including their linked turn notes when relevant. Do not overwrite your working tree to refresh shared context.
 
 If agent context md/PR_WORKFLOW.md is present, read it. At preparation time that expanded guide is in unmerged PR #13; check its current state and do not treat a proposal as already integrated. The operational rules below are provided directly here so this task does not need to wait for that documentation PR. The reviewed source commit was ce8e299a7322849fc6a94a3b2f21ad04ff4fdd56 and the chosen bootstrap source was a67d6583ca2a5ff484e4706284c7b7ce512ef6a0. These are provenance references, not instructions to reset the current checkout.
@@ -37,6 +38,9 @@ Tests must demonstrate restart/resume behavior, duplicate prevention, interrupte
 
 NEXT, ONLY WHEN ASSIGNED
 ED-09 joins validated components into a bounded randomized pilot with consistent resources, preparation and a complete cost/failure ledger. Coordinate hardware sessions and record the exact branch commit/configuration tested. Help Stephen with ED-11: hide reference outcomes from the selector, enforce query budgets, seal decisions, and test for leakage. Keep a single writer per run store or validate the chosen concurrency mechanism. Your scientific support is making the comparison reproducible and ensuring failures, profiling cost and missing data cannot be silently excluded.
+
+STARTING HARDWARE, DEPENDENCIES AND HANDOFF
+Start on your own development computer with simulated task/model/sensor outcomes; no GPU is needed for ledger/restart tests. Use Stephen's ED-01 contract and clearly identify provisional interfaces. Your real runner later consumes Alex's validated runtime/collector and Aldric's tasks/verifiers/single-goal execution. ED-09 cannot run as a scientific pilot until ED-07 integration and ED-08 pilot assets are ready. Hardware executions use a booked Grace session with exact source/model/task versions and separate output files. Your handoff to Stephen is a complete validated experiment ledger, reproducible exports and actual cost/missingness/failure evidence. Building runner fixtures can proceed independently of hardware availability.
 
 AUTONOMY, PRs AND TESTING
 Work on a separate issue branch from current integration. Open a draft PR early, targeting research/energy-diagnosis; later pushes update the same PR. Scoped commits and pushes to your feature branch are already authorized. Do not ask for confirmation again for those actions. Keep the PR draft while its required evidence is missing; mark it ready when the issue's acceptance criteria are met and report limitations. Stephen decides merges. Do not self-merge, enable auto-merge, force-push, push to upstream/main, or include another person's changes.

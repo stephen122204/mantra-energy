@@ -24,6 +24,7 @@ Read these files before coding:
 4. docs/agent-context/06-student-runtime-measurement.md.
 5. docs/agent-context/starter/data-contract.md.
 6. agent context md/README.md, TURN_TEMPLATE.md, SIGMETRICS_ASSESSMENT.md, and your personal AGENTS.md.
+7. agent context md/DEPENDENCIES_AND_HARDWARE.md if present; its role-specific essentials are also included below so this prompt can be used before the documentation PR merges.
 Fetch origin/research/energy-diagnosis and read all four contributors' LATEST.md files from that remote branch using git show, including their linked turn notes when relevant. Do not overwrite your working tree to refresh shared context.
 
 If agent context md/PR_WORKFLOW.md is present, read it. At preparation time that expanded guide is in unmerged PR #13; check its current state and do not treat a proposal as already integrated. The operational rules below are provided directly here so this task does not need to wait for that documentation PR. The reviewed source commit was ce8e299a7322849fc6a94a3b2f21ad04ff4fdd56 and the chosen bootstrap source was a67d6583ca2a5ff484e4706284c7b7ce512ef6a0. These are provenance references, not instructions to reset the current checkout.
@@ -37,6 +38,9 @@ First-PR acceptance: demonstrate the defect where present, verify the repaired r
 
 NEXT, ONLY WHEN ASSIGNED
 ED-05 covers core/execution/harness.py, core/energy_engine.py and existing readers: CPU/GPU energy scope, permissions, clocks, missing readings, wraps/resets and endpoint behavior under delayed teardown. A measured energy window must not expand because collector shutdown becomes slower. The intended primary machine is Grace A100, but CPU temperature/utilization does not prove CPU-energy access. Coordinate an individual authorized account and session budget. Your scientific support is making intervention effects trustworthy; instrument repairs alone are not our novelty claim.
+
+STARTING HARDWARE, DEPENDENCIES AND HANDOFF
+Start on your own development computer with provider fixtures; no GPU is needed to reproduce response-format behavior. Full local-runtime completion requires a real model response, and measurement validation requires your assigned Grace A100 session. Use one agreed contract from Stephen's ED-01. Do not block isolated fixture work on the complete runner. Aldric will consume your model interface; Nitheesh will consume your event/energy records. Your handoff is tested interfaces plus a capability/domain report and example data, including failures and missing readings. ED-07 cannot pass until your live runtime and measurement evidence are ready. No new hardware purchase or unbooked HPC session is implied.
 
 AUTONOMY, PRs AND TESTING
 Work on a separate issue branch from current integration. Open a draft PR early, targeting research/energy-diagnosis; later pushes update the same PR. Scoped commits and pushes to your feature branch are already authorized. Do not ask for confirmation again for those actions. Keep the PR draft while its required evidence is missing; mark it ready when the issue's acceptance criteria are met and report limitations. Stephen decides merges. Do not self-merge, enable auto-merge, force-push, push to upstream/main, or include another person's changes.

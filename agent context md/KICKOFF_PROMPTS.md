@@ -15,3 +15,5 @@ Each prompt tells the agent to inspect current code/issues/context, perform its 
 
 The [human team message](TEAM_KICKOFF_MESSAGE.md) explains how the four parts support one integrated software pipeline. Shared exact API agreements remain ED-01; students can progress on independent fixtures without silently inventing conflicting interfaces.
 
+See [DEPENDENCIES_AND_HARDWARE.md](DEPENDENCIES_AND_HARDWARE.md) for the parallel first tasks, named hardware, required handoffs, integration gates and the distinction between component completion and a supported research result.
+
