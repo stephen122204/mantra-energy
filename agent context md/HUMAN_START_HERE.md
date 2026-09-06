@@ -22,11 +22,14 @@ A concrete proposed example: several independent data summaries might run togeth
 
 ## Read in this order
 
+Read the [Fall timeline and practical work split](FALL_TIMELINE.md): first usable real pilot data by **15 September**, core evaluation data by **25 September**, a **26 September–1 October** experimental buffer, abstract registration **2 October**, and paper submission **9 October**. These are targets subject to the stated evidence/access gates.
+
+
 1. This overview, then your personal human guide: [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), [Nitheesh](nitheesh/HUMAN_START_HERE.md), or [Stephen](stephen/HUMAN_START_HERE.md).
 2. The [dependencies and hardware guide](DEPENDENCIES_AND_HARDWARE.md). The first tasks can proceed mostly in parallel; real measured experiments require integration.
 3. Open your linked first issue. Use the `.txt` attached to the kickoff email: Alex uses `alex.txt`, Aldric uses `aldric.txt`, and Nitheesh uses `nitheesh.txt`. Repository copies are linked in each personal guide. Give your entire `name.txt` to your coding agent with access to your own checkout. The agent should read the technical context and begin the bounded task. You do not need to paste every technical document yourself.
 
-Before starting the agent, be able to explain your task, what evidence would demonstrate correctness, and what your next person needs from you. Then attach or paste the whole prompt into a new coding-agent session opened on your own repository checkout. The prompt tells the agent to inspect context and begin the first bounded task; it should return a tested PR or a precise blocker. You review a representative result and the stated limitations.
+Skim the overview and your own assignment, focusing on the task, correctness checks and handoff; do not read the entire codebase before starting. Let the agent investigate implementation details. Spend human time on hardware, consequential logic checks, debugging behavior and inspecting representative evidence. Then attach or paste the whole prompt into a new coding-agent session opened on your own repository checkout. The prompt tells the agent to inspect context and begin the first bounded task; it should return a tested PR or a precise blocker. You review a representative result and the stated limitations.
 
 The kickoff documents are proposed in [PR #14](https://github.com/stephen122204/alems-energy-diagnosis/pull/14). Until merged, read them on that PR's branch; implementation branches still start from current `research/energy-diagnosis`. The prompts contain the essential workflow even if some new guides are not yet on integration. Do not merge an unreviewed documentation branch into your work just to start fixtures.
 
