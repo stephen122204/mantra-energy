@@ -47,3 +47,7 @@ Commit scoped code to your assigned issue/feature branch and push autonomously e
 
 Hardware/model validation and scientific novelty remain separate from successful synchronization. Read the [SIGMETRICS assessment](SIGMETRICS_ASSESSMENT.md) before making paper-readiness claims.
 
+## First agent session
+
+Use the [named kickoff prompts](KICKOFF_PROMPTS.md) and [human team message](TEAM_KICKOFF_MESSAGE.md) to introduce the project and start the assigned first issue. Each prompt is self-contained but requires access to the actual repository for implementation.
+

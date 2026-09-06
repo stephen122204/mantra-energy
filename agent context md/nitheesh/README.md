@@ -8,3 +8,5 @@ Keep a local note during work. Before ending every completed turn, publish your 
 
 Immutable records will appear under `turns/`. `LATEST.md` is a full snapshot of the latest published summary plus a link to its immutable record. A turn that makes no code change still needs a context record. Report failed publication honestly and retain the pending note for retry.
 
+For a fresh agent session, supply [nitheesh.txt](nitheesh.txt). It contains the proposed role, first issue, code/test expectations and context-publication workflow.
+
