@@ -1,33 +1,26 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260906-grace-session-request.md)
+[Immutable turn record](turns/20260907-windows-checkout-fix.md)
 
-# Turn summary: Stephen — first Grace session and capability status
+# Windows checkout repair — Stephen
 
 ## Task and current understanding
-
-Stephen asked what date/resources to request for a Grace session and whether A-LEMS currently has the necessary capabilities. Distinguish an immediate capability check from the integrated study and main campaign.
-
-## Ideas and hypotheses
-
-A three-hour capability session targeted September 9, with September 10 fallback, can test resource identities, CPU/GPU energy permissions and basic inference without requiring the completed diagnostic method. Schedule integration for September 11–12 only if engineering evidence is ready.
+A contributor reported clone success followed by checkout failure and apparent staged deletions. The exact rejected path is migrations/SELECT COUNT(*) FROM metric_display_registry;. The asterisk is a Windows-invalid filename character. A failed local checkout does not mutate the remote repository; do not commit the apparent deletions.
 
 ## Decisions and rationale
-
-Recommend contacting Alex to coordinate his individually authorized Grace account/allocation and asking HPRC through the appropriate team channel about permissions or supported isolation if needed. Target one A100 40GB, proposed 16 CPU cores and 64GB RAM, three-hour wall time. Whole-node isolation may require a larger allocation and different charge. A requested date is not a guaranteed scheduler reservation. No booking or job launch occurred.
+Inspected integration at 9fd5c8c. The offending tracked file is zero bytes, inherited from upstream commit 12dbfa4. Removed the empty artifact rather than renaming it to suggest a functional migration. Other occurrences of the SQL statement are legitimate query strings, not references requiring changes.
 
 ## Changes and artifacts
-
-No code or maintained documentation changed. Prepared a proposed access/session email in chat. Fetched current upstream main read-only; it remains a67d658 dated September 4. Existing shared study runtime/workloads/campaign folders still state implementation pending.
+Isolated worktree and branch fix/windows-checkout-paths; commit 959dda6. One empty tracked file removed. Pushed to the authorized private team repository and opened https://github.com/stephen122204/alems-energy-diagnosis/pull/15 targeting research/energy-diagnosis. PR remains pending review; no merge or upstream push performed. Original checkout lead/named-kickoff-prompts preserved.
 
 ## Tests and evidence
-
-Inspected core/readers/rapl_reader.py and gpu_collector.py: CPU energy reader and NVIDIA cumulative-energy/power paths exist. Model registry has Ollama/vLLM entries. Inspected the common adapter: forced stream handling still assumes SSE/choices while the Ollama parsing route expects message.content; source concern needs reproduction. These observations establish available components, not validated Grace operation. Checked official Grace batch documentation: resource-intensive work uses Slurm compute allocations, and documented options select allocation, A100 resources and walltime. No live inference, sensor permissions or energy accuracy was tested.
-
-## Open questions and disagreements
-
-Actual account, remaining allocation, model environment, CPU energy permissions and isolation remain unknown. The full independently verified goal, bounded controls, resumable ledger and selection method are not complete in shared study code. Readiness of another runtime environment cannot be inferred from registry entries. The capability check can proceed before full study implementation; campaign claims cannot.
+Scanned 2,195 remaining tracked paths for Windows-invalid characters, reserved device basenames, trailing spaces/dots, and case-insensitive file/directory collisions: none. Setup checker passes. Actual Windows checkout and runtime not tested; long-path configuration remains machine-dependent. Initial gh PR request used an unintended repository default and failed without creation; explicit --repo created the intended team PR.
 
 ## Next actions and handoff
+Review and merge PR 15, then affected contributor should clone integration into a fresh sibling folder, retaining the failed clone if it contains work. Do not reset/delete their folder blindly. Feature branch can be cloned immediately for verification. Historical refs and upstream still contain the file; this scoped change fixes team integration after merge. No runtime, measurement, research contract, or workbench vendor pin changed.
 
-Stephen may manually send the request to Alex, aiming for September 9–10 and arranging operator assistance if access/isolation requires it. Alex prepares fixtures and the small capability checklist before the session. Run integration September 11–12 and bounded pilot September 13–15 only after required components and measurement evidence are ready. Publish precise output and blockers without reporting a requested reservation as confirmed.
+## Ideas and hypotheses
+Removing the sole known incompatible path should resolve the reported checkout error; a real Windows retry is the remaining verification.
+
+## Open questions and disagreements
+No unresolved content decision: the file is empty. Windows filesystem/path-length configuration was not inspected.
