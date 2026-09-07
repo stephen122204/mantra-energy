@@ -3,3 +3,16 @@
 Student 2: immutable task contracts, verifiers and narrow tool/dependency execution. Start ED-03.
 
 Implementation pending. See the [study index](../README.md) and root instructions.
+Student 2 owns immutable task contracts, verifiers and bounded trace execution.
+
+The first ED-03 fixture is `data-aggregate-reconcile-v1`. Its contract requires
+revenue totals independently grouped by region and product, reconciliation to a
+shared grand total, and source-asset evidence. `data_analysis.py` recomputes the
+reference directly from the CSV; it does not consume SQL output or an agent's
+self-reported status. The CSV and expected-result JSON are synthetic CC0 assets,
+and their SHA-256 values are pinned in `task.json`.
+
+The existing `core.execution.tools.real_tools.DatabaseQueryTool` uses synchronous
+SQLite connections and exposes no worker/thread control. It is suitable for a
+portable fixture path, but no worker-based intervention is eligible from that
+tool until an engine with an observable setting is selected and measured.
