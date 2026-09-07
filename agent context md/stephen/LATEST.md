@@ -1,26 +1,31 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-windows-fix-merged.md)
-
-# Windows checkout fix merged
+[Immutable turn record](turns/20260907-aldric-pr16-pr17-review.md)
 
 ## Task and current understanding
-Stephen explicitly requested merging implemented PR 15.
+
+Reviewed Aldric's PR 16 (70ff717) and PR 17 (0006b4f) for scope, correctness and readiness before merge. No merge or external review/comment was performed. Current integration read was ca52b83.
 
 ## Ideas and hypotheses
-The reported invalid asterisk filename no longer exists on integration. Actual Windows retry remains external verification.
+
+The small synthetic data task is suitable for ED-03 correctness fixtures. Its six data rows plus header are not an energy workload. A clean-checkout test is necessary because byte-level asset hashes can differ across Git line-ending configurations.
 
 ## Decisions and rationale
-Merged the exact reviewed head 959dda660a95c4412352f1899367e5fd788fc0b9 after confirming only the empty offending file was deleted and handoff-and-plan CI succeeded.
+
+Hold PR 16 for a reproducible portability defect: pinned hashes match CRLF representations, whereas Git stores LF files. The two-line publisher fix in PR 17 addresses Windows path normalization correctly in source review and a PureWindowsPath reproduction. PR 17 also includes PR 16's workload commit, so do not merge it independently as currently based. No student code was modified in this review.
 
 ## Changes and artifacts
-PR 15 merged into research/energy-diagnosis at 62447ec38186fa35b6b256e350e087847a17d4cb, 2026-09-07T19:24:25Z. No upstream or main changes.
+
+Review artifacts are local only; actionable evidence is recorded here for shared handoff. A detached checkout of 0006b4f was used. Requested changes: pin LF for immutable text fixtures and regenerate hashes; include workload pytest tests in CI; reject non-finite task tolerances; isolate the Windows publisher commit and add relevant regression evidence.
 
 ## Tests and evidence
-GitHub reports MERGED. Fetched remote integration and inspected its complete tree: migrations/SELECT COUNT(*) FROM metric_display_registry; is absent. Prior full path scan found no other Windows-invalid components or case collisions.
+
+Clean macOS checkout: eight workload tests error at setup with asset hash mismatch for sales.csv; all four publisher tests pass. A disposable clone using core.autocrlf=true passes all eight workload tests. sales.csv LF hash is 5620e18244fc24c128e8610997ccdab9bd03c612c3ebd8a0abd9452acae0b8cc; its pinned hash matches CRLF. expected_result.json has the same LF/CRLF discrepancy. Setup validator passes. CI runs only setup and publisher tests, not the new workload suite. Infinity tolerance accepts an all-zero wrong answer; NaN tolerance raises uncaught InvalidOperation. Default finite tolerance is unaffected. PureWindowsPath allowlist comparison fails before the proposed publisher change and succeeds afterward. No native Windows OS, GPU, model or energy experiment was run.
 
 ## Open questions and disagreements
-No remaining repository fix for this reported path. Actual Windows checkout and runtime are not independently verified.
+
+Worker-capable engine selection and exact ED-01 interfaces remain outstanding; the current SQLite tool limitation is correctly disclosed. The hash evidence requirement needs a concrete runtime handoff later and does not establish answer correctness or tool use. Passing a first fixture PR does not complete ED-06 or the full workload role.
 
 ## Next actions and handoff
-Contributor can clone integration into a new folder, preserving any existing work. Do not commit apparent deletions from the failed clone. Historical refs still contain the old file.
+
+Aldric should repair canonical asset bytes/hashes and finite tolerance validation with focused tests. Stephen should ensure relevant CI coverage and review the corrected exact heads. Isolate the PR 17 publisher fix from PR 16 before any independent merge. Keep expected outputs, evidence boundaries and no-force-push safeguards intact.
