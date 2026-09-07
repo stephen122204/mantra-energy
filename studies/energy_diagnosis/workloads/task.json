@@ -1,0 +1,10 @@
+{
+  "task_id": "data-aggregate-reconcile-v1",
+  "asset": "sales.csv",
+  "expected_result": "expected_result.json",
+  "asset_sha256": "745e33689a4c81f5348bffc46d3899f35cbfdbbf4279651eda86ef533084a007",
+  "expected_result_sha256": "afc6712bd6de4b06c301087770409bd5ee6965f7b1fe944670cb3fe0b79dc9bd",
+  "verifier_version": "data-analysis-verifier-v1",
+  "absolute_tolerance": "0.01",
+  "prompt": "Using sales.csv, report revenue totals by region and by product. Reconcile both aggregates to the same grand total and report the difference. Return region_totals, product_totals, reconciliation with region_total, product_total, difference, and evidence containing the source asset SHA-256."
+}

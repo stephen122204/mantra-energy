@@ -1,0 +1,5 @@
+{
+  "region_totals": {"North": 49.0, "South": 33.5, "West": 41.0},
+  "product_totals": {"Widget": 62.5, "Gadget": 40.0, "Gizmo": 21.0},
+  "grand_total": 123.5
+}
