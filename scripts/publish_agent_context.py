@@ -68,9 +68,9 @@ def publish(repo, author, turn_id, note, expected_remote=EXPECTED_REMOTE, retrie
                     f"# Latest published context: {author}\n\n"
                     f"[Immutable turn record](turns/{turn_id}.md)\n\n" + note
                 )
-                git(worktree, "add", "--", str(relative), str(latest))
+                git(worktree, "add", "--", relative.as_posix(), latest.as_posix())
                 staged = set(git(worktree, "diff", "--cached", "--name-only", "-z").stdout.rstrip("\0").split("\0"))
-                if staged != {str(relative), str(latest)}:
+                if staged != {relative.as_posix(), latest.as_posix()}:
                     raise RuntimeError("Unexpected staged paths; refusing a broad context push")
                 git(worktree, "diff", "--cached", "--check")
                 git(worktree, "commit", "-m", f"context({author}): {turn_id}")
