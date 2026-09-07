@@ -1,5 +1,37 @@
-# Latest context: Aldric
+# Latest published context: aldric
 
-Folder initialized on 5 September 2026. No work-turn record has been published by this contributor yet. This is setup status, not a claim of completed implementation or experiments.
+[Immutable turn record](turns/20260907T195251Z-ed03.md)
 
-Read [the shared protocol](../README.md) and [SIGMETRICS assessment](../SIGMETRICS_ASSESSMENT.md).
+## Task and current understanding
+
+Issue ED-03 asks for the first portable data-analysis goal with independent verification. The checkout is branch `aldric/ed-03` at source commit `cfdf21e`; the existing agentic executor and `DatabaseQueryTool` use sequential SQLite queries and expose no worker/thread control. The task therefore stays behind a study-local workload boundary and does not claim a worker intervention.
+
+## Ideas and hypotheses
+
+A small immutable CSV goal can exercise two independent aggregate views without requiring a model or GPU. Recomputing from source rows should reject wrong, malformed or self-reported answers even when an agent query path is incorrect. The contract tolerance is fixed at 0.01 before generated outputs are considered.
+
+## Decisions and rationale
+
+Added a revenue task grouping by region and product, requiring reconciliation to one grand total and source SHA-256 evidence. The verifier recomputes both maps and the reconciliation directly from the CSV with Decimal arithmetic. Synthetic CSV and expected-result JSON assets are CC0 and pinned by SHA-256. Hashes use lowercase canonical form to match Python hashlib output.
+
+## Changes and artifacts
+
+Added `studies/energy_diagnosis/workloads/data_analysis.py`, `task.json`, the two immutable fixture assets, an asset license note, and package initialization. Added `tests/test_data_analysis_workload.py` covering correct, wrong numeric, malformed, missing evidence, invalid task input, and tolerance behavior. Updated the workloads README with the contract and the current query-engine control limitation. Scoped code is ready to commit on `aldric/ed-03`; no PR was created by this turn.
+
+## Tests and evidence
+
+- `python -m pytest -q tests/test_data_analysis_workload.py`: 8 passed.
+- `python -m py_compile studies/energy_diagnosis/workloads/data_analysis.py tests/test_data_analysis_workload.py`: passed.
+- `get_errors` for the two Python files: no errors.
+- `git diff --check`: passed.
+- `python scripts/check_energy_diagnosis_setup.py` with `PYTHONUTF8=1`: passed. Without UTF-8 mode, the Windows default codec fails while reading an existing Markdown byte before assertions; this is an environment/setup encoding issue, not an ED-03 test failure.
+
+Evidence level is fixture-tested and code-reviewed locally. No model inference, runtime integration, worker-effect measurement, GPU or energy result was performed.
+
+## Open questions and disagreements
+
+The exact ED-01 shared task/runner interface remains unmerged, so this deliverable intentionally exposes a narrow `DataAnalysisTask` and `verify_answer` boundary. The expected-result asset is integrity-pinned; the verifier reference is independently recomputed from the source asset. A future integration review should decide how this maps to the shared goal execution ledger and how evidence artifacts are represented.
+
+## Next actions and handoff
+
+Stephen should review the task/verifier boundary and acceptance of the CSV fixture. Alex/runtime should identify and measure a query engine with a real worker/thread setting before ED-06 uses workers as a candidate control. Nitheesh can consume the task contract, fixed assets, verifier version and correct/failing fixtures for single-goal execution. No hardware or model budget is required for this fixture handoff.
