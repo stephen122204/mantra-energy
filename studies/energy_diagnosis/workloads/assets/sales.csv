@@ -1,0 +1,7 @@
+order_id,region,product,units,unit_price
+o-001,North,Widget,2,12.50
+o-002,South,Widget,1,12.50
+o-003,North,Gadget,3,8.00
+o-004,West,Gadget,2,8.00
+o-005,South,Gizmo,4,5.25
+o-006,West,Widget,2,12.50
