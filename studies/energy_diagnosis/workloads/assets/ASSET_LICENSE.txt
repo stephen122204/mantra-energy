@@ -1,0 +1,3 @@
+The sales.csv and expected_result.json files are synthetic fixtures created for
+the A-LEMS energy-diagnosis study and are dedicated to the public domain under
+CC0 1.0. They contain no personal or third-party data.
