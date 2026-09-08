@@ -3,3 +3,7 @@
 # No setup needed — just git add data/experiments.db and push
 *.db     filter=lfs diff=lfs merge=lfs -text
 *.sqlite filter=lfs diff=lfs merge=lfs -text
+
+# Immutable workload assets: hashes are pinned on LF bytes
+studies/energy_diagnosis/workloads/assets/sales.csv text eol=lf
+studies/energy_diagnosis/workloads/assets/expected_result.json text eol=lf
