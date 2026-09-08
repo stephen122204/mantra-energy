@@ -4,16 +4,18 @@
 
 This is the team's private development repository, based on A-LEMS. The research method and experiments remain to be implemented and validated. GPU access is team-reported; telemetry, individual accounts and isolation require preflight.
 
+Read the [human overview](agent%20context%20md/HUMAN_START_HERE.md) first, then your personal human guide and agent prompt below.
+
 ## Pick your starting point
 
 | Person | Read | Work area | First issue |
 |---|---|---|---|
-| Stephen | [Method and integration](docs/agent-context/09-stephen-method-integration.md) | Shared interfaces and `studies/energy_diagnosis/analysis/` | ED-01, then ED-10 |
-| Runtime/measurement student | [Assignment](docs/agent-context/06-student-runtime-measurement.md) | Existing adapters/readers/harness; `studies/energy_diagnosis/runtime/` | ED-02 |
-| Workloads/verifiers student | [Assignment](docs/agent-context/07-student-workloads-verifiers.md) | `studies/energy_diagnosis/workloads/` | ED-03 |
-| Campaign student | [Assignment](docs/agent-context/08-student-campaign-reproducibility.md) | `studies/energy_diagnosis/campaign/` | ED-04 |
+| Stephen — orchestration | [Method and integration](docs/agent-context/09-stephen-method-integration.md) | Shared interfaces and `studies/energy_diagnosis/analysis/` | ED-01, then ED-10 |
+| [Alex — human guide](agent%20context%20md/alex/HUMAN_START_HERE.md) | [Assignment](docs/agent-context/06-alex-runtime-measurement.md) | Existing adapters/readers/harness; `studies/energy_diagnosis/runtime/` | ED-02 |
+| [Aldric — human guide](agent%20context%20md/aldric/HUMAN_START_HERE.md) | [Assignment](docs/agent-context/07-aldric-workloads-verifiers.md) | `studies/energy_diagnosis/workloads/` | ED-03 |
+| [Nitheesh — human guide](agent%20context%20md/nitheesh/HUMAN_START_HERE.md) | [Assignment](docs/agent-context/08-nitheesh-campaign-reproducibility.md) | `studies/energy_diagnosis/campaign/` | ED-04 |
 
-Use the [issue tracker](https://github.com/stephen122204/alems-energy-diagnosis/issues). Student names and accounts are not assigned yet; roles identify the work in the meantime.
+Use the [issue tracker](https://github.com/stephen122204/alems-energy-diagnosis/issues). The working assignments are Alex (runtime), Aldric (workloads), Nitheesh (campaign), and Stephen (method/integration). Individual GitHub usernames and repository invitations still need confirmation.
 
 ## Clone and begin
 
@@ -39,3 +41,9 @@ First team milestone: one real local-model goal, independently verified, with va
 ## Continuous context sharing
 
 The repository-root [agent context md](agent%20context%20md/README.md) contains folders for Stephen, Alex, Aldric and Nitheesh. Agents must read shared context at the start of a turn and autonomously publish their decision/evidence/understanding summary before ending it. Use the supplied publisher to avoid accidentally staging code. Scoped code pushes go to feature branches; code still integrates through review.
+
+For a fresh agent session, use the [named kickoff prompts](agent%20context%20md/KICKOFF_PROMPTS.md). They assign the proposed first tasks for Stephen, Alex, Aldric and Nitheesh and link the human team explanation.
+
+The [dependencies and hardware guide](agent%20context%20md/DEPENDENCIES_AND_HARDWARE.md) explains who can start locally, what each person hands off and what must be ready before Grace integration or a scientific pilot.
+
+Read the [PR and independent-testing workflow](agent%20context%20md/PR_WORKFLOW.md) before implementation: early drafts, branch-local testing, parallel issues, explicit dependencies and Stephen-owned merge decisions.
