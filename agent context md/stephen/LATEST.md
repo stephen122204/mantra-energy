@@ -1,31 +1,31 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-aldric-pr16-pr17-review.md)
+[Immutable turn record](turns/20260907-prepared-repair-assessment.md)
 
 ## Task and current understanding
 
-Reviewed Aldric's PR 16 (70ff717) and PR 17 (0006b4f) for scope, correctness and readiness before merge. No merge or external review/comment was performed. Current integration read was ca52b83.
+Assessed the locally prepared PR repairs and proposed integration procedure. This turn is review only; no code branch pushes, PR edits, or merges were performed. Open GitHub PR heads remain unchanged from the prior review.
 
 ## Ideas and hypotheses
 
-The small synthetic data task is suitable for ED-03 correctness fixtures. Its six data rows plus header are not an energy workload. A clean-checkout test is necessary because byte-level asset hashes can differ across Git line-ending configurations.
+Canonical LF assets and byte-matched pinned hashes address the cross-checkout failure. Explicit finite tolerance validation fixes the Infinity/NaN issue. History-preserving updates avoid disrupting the open PR dependency chain.
 
 ## Decisions and rationale
 
-Hold PR 16 for a reproducible portability defect: pinned hashes match CRLF representations, whereas Git stores LF files. The two-line publisher fix in PR 17 addresses Windows path normalization correctly in source review and a PureWindowsPath reproduction. PR 17 also includes PR 16's workload commit, so do not merge it independently as currently based. No student code was modified in this review.
+Local repair f0e59b7 is appropriately scoped. Do not force-push the rebased PR 13 branch: resolve PR 14/current integration into the existing PR 13 branch with a merge commit, or use a replacement PR. Push PR 16's repair as an ordinary descendant commit after fetching and checking for new author work. Preserve PR 16's ancestry through a merge commit if expecting PR 17's remaining diff to shrink naturally.
 
 ## Changes and artifacts
 
-Review artifacts are local only; actionable evidence is recorded here for shared handoff. A detached checkout of 0006b4f was used. Requested changes: pin LF for immutable text fixtures and regenerate hashes; include workload pytest tests in CI; reject non-finite task tolerances; isolate the Windows publisher commit and add relevant regression evidence.
+Inspected review-pr16-fix f0e59b7, review-pr13-rebased a176a35, and combined review-stack 8fd4a4f. PR 13's resolved text correctly keeps legacy stubs and moves workflow guidance to named role guides. Stephen's personal human guide remains absent from the combined tree.
 
 ## Tests and evidence
 
-Clean macOS checkout: eight workload tests error at setup with asset hash mismatch for sales.csv; all four publisher tests pass. A disposable clone using core.autocrlf=true passes all eight workload tests. sales.csv LF hash is 5620e18244fc24c128e8610997ccdab9bd03c612c3ebd8a0abd9452acae0b8cc; its pinned hash matches CRLF. expected_result.json has the same LF/CRLF discrepancy. Setup validator passes. CI runs only setup and publisher tests, not the new workload suite. Infinity tolerance accepts an all-zero wrong answer; NaN tolerance raises uncaught InvalidOperation. Default finite tolerance is unaffected. PureWindowsPath allowlist comparison fails before the proposed publisher change and succeeds afterward. No native Windows OS, GPU, model or energy experiment was run.
+Repaired PR 16 checkout: 12 workload/publisher tests pass; setup validator passes. A disposable clone of review-stack also passes all 12 tests and the setup validator. These are local checks, not new GitHub CI or native Windows validation. The added CI step now invokes pytest on the workload suite. The repair does not yet add regression tests for Infinity/NaN or a publisher Windows-path regression.
 
 ## Open questions and disagreements
 
-Worker-capable engine selection and exact ED-01 interfaces remain outstanding; the current SQLite tool limitation is correctly disclosed. The hash evidence requirement needs a concrete runtime handoff later and does not establish answer correctness or tool use. Passing a first fixture PR does not complete ED-06 or the full workload role.
+Add focused invalid-tolerance tests and Windows-path regression evidence before calling all repairs complete. core.autocrlf simulation is useful checkout coverage but is not native Windows execution. Original green CI belongs to old PR heads and must be rerun on the actual updates. The proposed force-push conflicts with repository no-force-push instructions and is unnecessary.
 
 ## Next actions and handoff
 
-Aldric should repair canonical asset bytes/hashes and finite tolerance validation with focused tests. Stephen should ensure relevant CI coverage and review the corrected exact heads. Isolate the PR 17 publisher fix from PR 16 before any independent merge. Keep expected outputs, evidence boundaries and no-force-push safeguards intact.
+Merge authorization remains with Stephen. Suggested order is 14, history-preserving update of 13, repaired 16, then exact remaining 17 diff. After each dependent update, inspect the new head and relevant CI. If PR 16 is squash-merged, update or isolate PR 17 instead of assuming its diff will shrink automatically. Refresh integration before future merges to preserve newer context records.
