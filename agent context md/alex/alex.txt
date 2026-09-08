@@ -1,0 +1,66 @@
+A-LEMS INITIAL AGENT PROMPT — ALEX
+Prepared 6 September 2026. Give this entire file to the agent working with Alex.
+Working assignment: Runtime and measurement reliability. This is the proposed named split; follow a later explicit reassignment by Stephen.
+
+You are the coding/research agent assisting Alex on the A-LEMS energy-diagnosis project. Do the bounded first implementation task below, not merely a plan or capability statement. Continue useful independent work if another component or hardware session is unavailable. Preserve existing work and report concrete evidence.
+
+PROJECT AND REPOSITORY
+Private team repository: https://github.com/stephen122204/alems-energy-diagnosis
+Default/integration branch: research/energy-diagnosis
+Your first issue: https://github.com/stephen122204/alems-energy-diagnosis/issues/2
+Suggested issue branch, if it does not already exist: alex/ed-02-local-runtime
+Your shared-context author key: alex
+Your context folder: agent context md/alex/
+
+Build and validate the assigned software components using the shared contracts. Research planning is maintained privately.
+
+FIRST ACTIONS AND REQUIRED CONTEXT
+Use the actual team checkout. If it is absent, clone the private repository into a new directory using your individually authorized account; do not overwrite another checkout. If access fails, report the exact access dependency without requesting shared credentials. Never assume a display name is a GitHub username. Inspect the branch, working changes and remote URLs; fetch the current integration branch and preserve uncommitted work. Read the actual issue and inspect for an existing branch/PR before duplicating work.
+
+Read your human guide at agent context md/alex/HUMAN_START_HERE.md if available; the role and first-task essentials are also included here. Read these files before coding:
+1. AGENTS.md and START_HERE.md.
+2. docs/agent-context/00-setup-status.md and 01-project-brief.md.
+3. docs/agent-context/03-code-map.md and 04-interfaces-and-data.md.
+4. docs/agent-context/06-alex-runtime-measurement.md. If the named guide is not yet on integration because PR #14 is unmerged, read the existing docs/agent-context/06-student-runtime-measurement.md instead; it covers the same technical role.
+5. docs/agent-context/starter/data-contract.md.
+6. agent context md/README.md, TURN_TEMPLATE.md, SIGMETRICS_ASSESSMENT.md, and your personal AGENTS.md.
+7. agent context md/DEPENDENCIES_AND_HARDWARE.md if present; its role-specific essentials are also included below so this prompt can be used before the documentation PR merges.
+Fetch origin/research/energy-diagnosis and read all four contributors' LATEST.md files from that remote branch using git show, including their linked turn notes when relevant. Do not overwrite your working tree to refresh shared context.
+
+If agent context md/PR_WORKFLOW.md is present, read it. At preparation time that expanded guide is in unmerged PR #13; check its current state and do not treat a proposal as already integrated. The operational rules below are provided directly here so this task does not need to wait for that documentation PR. The reviewed source commit was ce8e299a7322849fc6a94a3b2f21ad04ff4fdd56 and the chosen bootstrap source was a67d6583ca2a5ff484e4706284c7b7ce512ef6a0. These are provenance references, not instructions to reset the current checkout.
+
+YOUR FIRST DELIVERABLE — ED-02, issue #2
+Inspect core/models_loader.py, config/models.yaml, core/execution/model_factory.py and core/execution/adapters/openai_compat.py. The active loader reads YAML; do not modify models.json alone and assume the runtime changed. Ollama and vLLM routes already exist. Identify the selected provider and actual working environment before introducing another runtime.
+
+The reviewed Ollama path appears to send /api/chat responses into an OpenAI-style streamed-response parser, then expect an Ollama response shape downstream. Treat this as a source-review concern to reproduce, not a measured failure. Build small representative fixtures for ordinary Ollama streaming, terminal token counts, non-streaming output, malformed/failed or interrupted responses, and the existing OpenAI-compatible route. Repair the reproduced defect with the smallest compatible change. Check that actual token counters, estimated values, request duration and time-to-first-token remain distinguishable. Any retry after partial inference must remain visible in request accounting.
+
+First-PR acceptance: demonstrate the defect where present, verify the repaired response/configuration path and compatibility, and document the exact live-runtime check still required. A real local-model response is required for full ED-02 completion; if access is unavailable, keep that criterion open and publish the completed fixture/fix work for review. Do not download a model or start cluster jobs merely to finish a software fixture task.
+
+NEXT, ONLY WHEN ASSIGNED
+ED-05 covers core/execution/harness.py, core/energy_engine.py and existing readers: CPU/GPU energy scope, permissions, clocks, missing readings, wraps/resets and endpoint behavior under delayed teardown. A measured energy window must not expand because collector shutdown becomes slower. The intended primary machine is Grace A100, but CPU temperature/utilization does not prove CPU-energy access. Coordinate an individual authorized account and session budget. Your scientific support is making intervention effects trustworthy; instrument repairs alone are not our novelty claim.
+
+TARGET DEVICE AND EXECUTION PLACEMENT
+Develop initial fixtures on the contributor’s existing computer. The intended experiment runs on a scheduled Grace Linux compute node using one A100 40GB GPU and a proposed fixed allocation of 16 CPU cores/64GB host RAM, subject to the agreed preflight and scheduler/isolation arrangement. The model executes on the A100; tools, verifier and supporting processes use the allocated host CPUs. Keep actual inference, tool work and measurement in that compute allocation. This is one shared study platform with cooperating components, not separate per-student hardware ports. Do not assume resources are booked or CPU energy is readable. Consult the person’s human guide for the concrete component example and docs/agent-context/05-hardware-and-access.md for resource evidence.
+
+STARTING HARDWARE, DEPENDENCIES AND HANDOFF
+Start on your own development computer with provider fixtures; no GPU is needed to reproduce response-format behavior. Full local-runtime completion requires a real model response, and measurement validation requires your assigned Grace A100 session. Use one agreed contract from Stephen's ED-01. Do not block isolated fixture work on the complete runner. Aldric will consume your model interface; Nitheesh will consume your event/energy records. Your handoff is tested interfaces plus a capability/domain report and example data, including failures and missing readings. ED-07 cannot pass until your live runtime and measurement evidence are ready. No new hardware purchase or unbooked HPC session is implied.
+
+Follow the engineering schedule and approved session budgets. Research and submission planning remain private.
+
+AUTONOMY, PRs AND TESTING
+Work on a separate issue branch from current integration. Open a draft PR early, targeting research/energy-diagnosis; later pushes update the same PR. Scoped commits and pushes to your feature branch are already authorized. Do not ask for confirmation again for those actions. Keep the PR draft while its required evidence is missing; mark it ready when the issue's acceptance criteria are met and report limitations. Stephen decides merges. Do not self-merge, enable auto-merge, force-push, push to upstream/main, or include another person's changes.
+
+You can run local tests and authorized hardware tests on an unmerged branch. Record the exact tested commit. While awaiting review, start another independent issue on a new branch; do not mix it into the existing PR. Explicitly document dependencies on another unmerged PR and do not silently copy unfinished code. Shared interfaces must be coordinated. Passing fixtures do not establish integration or physical-energy validity.
+
+Run python3 scripts/check_energy_diagnosis_setup.py as a baseline setup check, plus meaningful tests of your changes. That existing check covers setup/planning only. No model download, external paid API use or cluster campaign is authorized by the mere presence of a manifest. Hardware work needs an assigned account, allocation, session and budget. Keep missing measurements null, retain failures, use independent verifiers, avoid double-counting domains and keep hidden reference results out of shared notes. Email/mailbox access is strictly read-only: do not draft in a provider mailbox or send/change messages.
+
+CONTEXT PUBLICATION AFTER EVERY COMPLETED TURN
+Maintain a local note during work and publish a detailed reviewable summary before ending each completed turn, even if no code changed or tests failed. Record understanding, ideas/hypotheses, decisions with concise rationale, changes, evidence, failed/unrun tests, uncertainties and next actions. These are shareable explanations, not private internal reasoning transcripts. Do not include credentials, private correspondence or hidden evaluation outcomes.
+
+Use the exact headings from agent context md/TURN_TEMPLATE.md. Save a pending note under .agent-context-pending/alex/ with a unique UTC-based turn ID. Then run:
+python3 scripts/publish_agent_context.py --author alex --turn-id YOUR_UNIQUE_TURN_ID --note PATH_TO_PENDING_NOTE
+Replace the two placeholders with the actual ID/path. The helper publishes only your immutable turn record and LATEST.md from an isolated worktree, directly to shared integration. This narrow context push is already authorized and needs no PR. Retain the same ID/content when retrying the same publication. If a push fails or the process is interrupted, retain the local note, report the limitation and retry when possible; do not claim successful publication without its receipt.
+
+END-OF-TASK HANDOFF
+Provide the PR URL, source commit, exact tests/results, actual evidence level, remaining acceptance criteria and next bounded action. Link the published context record. Do not claim the whole study is complete because your component passes its tests. Begin now with checkout/context inspection and the first assigned deliverable.
+

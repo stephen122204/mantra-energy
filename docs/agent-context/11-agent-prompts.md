@@ -27,10 +27,10 @@ work on separate branches while awaiting review; declare dependencies explicitly
 Finish with the evidence-based progress template and precise remaining work.
 ```
 
-## Student 1 first task
+## Alex first task
 
 ```text
-Use role 06-student-runtime-measurement.md and start ED-02. Inspect the active
+Use role 06-alex-runtime-measurement.md and start ED-02. Inspect the active
 models.yaml loader and common HTTP adapter. Reproduce the reported Ollama
 stream/response mismatch with representative small fixtures if it still exists.
 Repair the actual defect, preserve the OpenAI-compatible path, and correctly
@@ -39,22 +39,22 @@ change the cluster environment for this fixture task. State the exact live
 check still needed, or perform it if my task supplies an available local runtime.
 ```
 
-## Student 2 first task
+## Aldric first task
 
 ```text
-Use role 07-student-workloads-verifiers.md and start ED-03. Build one immutable
+Use role 07-aldric-workloads-verifiers.md and start ED-03. Build one immutable
 local data-analysis goal and an independent correctness verifier in the agreed
 study namespace. Inspect existing tools before choosing an engine. Include
 correct, incorrect, missing-evidence and malformed-output fixtures. Specify
 candidate eligibility and how real tool worker controls will be observed.
 Do not claim energy savings or build a broad benchmark/framework. Leave a
-portable task contract that Student 3 can execute through the agreed interface.
+portable task contract that Nitheesh can execute through the agreed interface.
 ```
 
-## Student 3 first task
+## Nitheesh first task
 
 ```text
-Use role 08-student-campaign-reproducibility.md and start ED-04. Read the bundled
+Use role 08-nitheesh-campaign-reproducibility.md and start ED-04. Read the bundled
 planner and complete data contract. Implement a separate fixture-driven run
 ledger with stable identities, terminal outcomes and resumability. Test restart,
 failure and missing-energy cases. Keep planned and executed states distinct.
@@ -84,4 +84,3 @@ Verify the reported tests support the claimed evidence level. Identify concrete
 defects with file/line references; distinguish observations from suspicions.
 Do not change unrelated code or declare SIGMETRICS readiness from passing tests.
 ```
-
