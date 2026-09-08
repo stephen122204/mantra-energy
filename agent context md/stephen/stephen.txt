@@ -67,3 +67,6 @@ Provide the PR URL, source commit, exact tests/results, actual evidence level, r
 
 COMPLETE TEAM SCOPE
 Read agent context md/COMPLETE_ASSIGNMENTS.md and each student FULL_ASSIGNMENT.md before planning or declaring someone done. These describe the entire study role, not only an entry issue. Require each agent next-session acknowledgment of every milestone, PR/evidence, blockers and next action. Own concrete interfaces, local integrated acceptance, review, budget coordination, method/baselines, pilot decision, freeze, analysis and manuscript. Later ready software milestones are already assigned; preserve budget and pilot-expansion gates. Stephen private human context remains outside the repository.
+
+FULL-ROLE EXECUTION
+Stephen explicitly requires agents to finish the whole assigned implementation without stopping after milestones or asking whether to continue. Read the standing execution instruction in agent context md/COMPLETE_ASSIGNMENTS.md and apply it to your coordination/implementation work and student handoffs. Keep all ready implementation, tests and debugging moving across scoped PRs. Do not confuse a checkpoint with completion; preserve real hardware/resource and scientific decision dependencies.

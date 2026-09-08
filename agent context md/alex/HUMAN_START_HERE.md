@@ -10,6 +10,10 @@ At the next check-in, have your agent show the status of **every milestone**, in
 
 Start with the [human overview](../HUMAN_START_HERE.md), read this guide, then give your agent [alex.txt](alex.txt) with your repository checkout. The [technical assignment](../../docs/agent-context/06-alex-runtime-measurement.md) is supporting detail for you and required reading for the agent.
 
+## What to expect from your agent
+
+Give the agent the updated prompt and let it work through the **entire assigned implementation**, tests, debugging and integration. It should not stop after a PR or ask you to assign the next listed milestone. You inspect representative behavior, help with actual access or consequential decisions, and review its full-role evidence; you should not have to keep prompting “continue” after every component. The agent should fix failures in its own work and progress on other items while a dependency or PR review is pending. Report only real blockers. Preparing the software for later evaluation is part of the work now; actual large experiments still depend on the pilot and approved resources.
+
 ## The machine this work is for
 
 **Develop on your existing laptop or desktop; deploy the real experiment to a scheduled Linux compute node in Texas A&M HPRC’s Grace cluster.** The proposed study allocation uses **one NVIDIA A100 with 40GB GPU memory**, with **16 allocated CPU cores and 64GB host RAM** as an initial resource target. The CPU/RAM allocation is our proposal, subject to scheduler policy, isolation and measured requirements. It is not a reservation. [Grace hardware](https://hprc.tamu.edu/kb/User-Guides/Grace/Hardware/)

@@ -59,3 +59,7 @@ GitHub does not allow an author to approve their own PR. When a PR is created th
 ## Track full-role progress
 
 Before selecting work, read [complete assignments](COMPLETE_ASSIGNMENTS.md) and your personal FULL_ASSIGNMENT.md. In each handoff identify the milestone this PR covers and what remains across the full role. The first PR does not finish the role. At the next session provide a complete milestone/evidence/dependency table in your own context; continue ready independent milestones in separate branches while review proceeds. Local integrated success/failure checks precede the main Grace integration; an early bounded Grace capability check can run alongside component development.
+
+## PR boundaries do not stop execution
+
+A PR is a reviewable unit, not the limit of the agent assignment. Stephen requires full-role execution: keep implementing/testing the next ready milestone while prior work is reviewed, and repair your component during integration. Follow the standing instruction in [COMPLETE_ASSIGNMENTS.md](COMPLETE_ASSIGNMENTS.md). Do not ask for a new assignment or end work solely because you published a PR, passed tests or recorded context.

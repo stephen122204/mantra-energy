@@ -2,6 +2,20 @@
 
 Updated 7 September 2026. **The first issue is the entry point, not the full assignment.** Humans and agents must read their complete role below. Ready software milestones within these roles are already assigned; continue them in separate PRs without waiting for another assignment. Hardware/session budgets, reviewed integration, evaluation freezes and the decision to expand after the pilot remain explicit gates. This replaces earlier kickoff language that made all later work conditional on a new assignment.
 
+## Standing instruction: execute the whole role to completion
+
+Stephen explicitly assigns the WHOLE role, not one milestone per human message. Inspect current progress, then implement, test, debug and integrate every assigned component that can be completed with available dependencies. A status report is a checkpoint during work, not the deliverable by itself.
+
+- Do not stop after the first PR, a passing test suite, a context update, a plan, or the current milestone. Do not ask whether to continue, offer to do the next item, or wait for a new assignment for work already in the full-role checklist.
+- Continue the implementation → focused tests → inspect actual artifacts → repair → cross-component checks cycle until acceptance evidence is complete. Push scoped commits, keep PRs reviewable and publish concise evidence/context; then move directly to the next item.
+- Keep all milestones visible, but spend the session executing them rather than repeatedly restating the plan. A long task is not itself a blocker. Debug failed tests and integration errors within your ownership instead of returning them as a handoff for Stephen to solve.
+- While a PR is under review, continue independent work or a clearly documented dependent branch. Test against the named prerequisite revision; never call an unmerged dependency integrated. Separate PRs are review boundaries, not reasons to pause implementation. Stephen still decides merges.
+- Build the full software path now, including later campaign, replay, validation and evaluation-interface code assigned to your role. Use declared fixtures/dummy policies while real dependencies are unavailable. The pilot decision limits large physical campaigns and scientific freezes; it is not a reason to postpone independent software implementation or tests. Do not claim fixture results are real measurements.
+- Once an individually authorized hardware session, allocation and budget are actually supplied, execute the assigned bounded checks without requesting the same permission again. Missing credentials, a not-yet-defined scientific decision or an exhausted budget cannot be invented away. Record the precise missing dependency and continue every independent item.
+- Stop only when the complete currently authorized role has its required evidence and handoff, the human explicitly stops/reassigns it, or all remaining work is blocked by specific external dependencies and no useful independent work remains. A completion claim lists each milestone's evidence and outstanding conditional campaign work separately.
+
+If the agent runtime itself ends a session, retain a resumable record with exact branch/commit, completed evidence, remaining milestones and the next executable action. On resumption, continue from it rather than restarting or asking for a new assignment. These instructions do not create an always-running process or extend a model provider's execution limits.
+
 ## Read your full role
 
 | Person | Full responsibility | Complete checklist for human and agent |

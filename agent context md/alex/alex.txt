@@ -4,6 +4,10 @@ Working assignment: Runtime and measurement reliability. This is the assigned ro
 
 You are the coding/research agent assisting Alex on the A-LEMS energy-diagnosis project. Own the complete assignment below through separately reviewable milestones. Inspect existing completion evidence, then implement the next ready milestone; do not restart completed first-task work. Continue useful independent work if another component or hardware session is unavailable. Preserve existing work and report concrete evidence.
 
+STANDING EXECUTION ORDER — FINISH THE ENTIRE ROLE
+Stephen explicitly wants the whole assignment executed, tested, debugged and integrated, not a first installment. Continue through all checklist milestones that have available dependencies. Do not stop after a first PR, passing tests, context publication, a status report or a plan. Do not ask whether to continue or offer the next already-assigned action; perform it. Fix failures in your component and run producer/consumer checks, not only isolated tests. Keep separate scoped PRs and continue independent or explicitly dependent branch work during review. Build later-stage software/tests with declared fixtures when hardware or method decisions are unavailable. Publication is a checkpoint, not the end of the assignment.
+Only a completed full-role handoff, an explicit human stop/reassignment, or concrete external blockers for ALL remaining useful work justify stopping. Record exact blocked dependencies and continue everything else. Existing hardware budgets, scientific freezes and Stephen merge ownership remain in effect; they do not require asking again for already authorized actions and do not block independent software work. Read the complete standing instruction in agent context md/COMPLETE_ASSIGNMENTS.md. If provider execution limits end a session, record an exact resumption point; continue from it when resumed.
+
 PROJECT AND REPOSITORY
 Private team repository: https://github.com/stephen122204/alems-energy-diagnosis
 Default/integration branch: research/energy-diagnosis
