@@ -13,16 +13,16 @@ This file supersedes the handoff's earlier instructions to create the repository
 - Bootstrap tag: `study-bootstrap-v0.1`.
 - Local clone on Stephen's computer: directory `alems-energy-diagnosis` inside the exploration workspace. Student clones should use their own paths.
 
-## Prepared collaboration layout
+## Bootstrap branch inventory (historical names)
 
 | Role | Starting branch | First issue |
 |---|---|---|
-| Runtime/measurement | `student1/runtime-measurement` | ED-02 |
-| Workloads/verifiers | `student2/workloads-verifiers` | ED-03 |
-| Campaign/reproducibility | `student3/campaign-runner` | ED-04 |
+| Alex: runtime/measurement | `student1/runtime-measurement` | ED-02 |
+| Aldric: workloads/verifiers | `student2/workloads-verifiers` | ED-03 |
+| Nitheesh: campaign/reproducibility | `student3/campaign-runner` | ED-04 |
 | Stephen | `lead/diagnostic-method` | ED-01; later ED-10 |
 
-Role branches start at the common bootstrap. Use separate issue branches and PRs against integration as work progresses. Student usernames were not supplied, so no student invitations or personal issue assignments have been made. Stephen owns the lead issues and initial CODEOWNERS review responsibility. Hardware accounts, reservation budgets and student access remain ED-12.
+These numbered branches are existing bootstrap references, retained without renaming or deleting them. New work uses named issue branches from current integration: `alex/ed-02-local-runtime`, `aldric/ed-03-goal-verifier`, and `nitheesh/ed-04-run-ledger`. Role branches start at the common bootstrap. Use separate issue branches and PRs against integration as work progresses. Student usernames were not supplied, so no student invitations or personal issue assignments have been made. Stephen owns the lead issues and initial CODEOWNERS review responsibility. Hardware accounts, reservation budgets and student access remain ED-12.
 
 Directories under `studies/energy_diagnosis/` reserve runtime, workloads, campaign, analysis and small-fixture work areas. They contain ownership/readme scaffolding, not functioning implementations. Do not duplicate the starter manifest or invent module APIs before ED-01's interface review.
 
@@ -55,9 +55,9 @@ Directories under `studies/energy_diagnosis/` reserve runtime, workloads, campai
 
 ## What Stephen needs to do next
 
-1. Supply each student's GitHub username and role; then grant intended repository access and replace role placeholders.
+1. Confirm Alex's, Aldric's and Nitheesh's GitHub usernames and grant intended repository access. Their named work areas are assigned; names alone do not grant permissions.
 2. Review ED-01's exact shared interface and current local-model environment with the team. Baseline selection is prepared; runtime functionality is not asserted.
 3. Establish individual HPRC accounts/allocation assignments and a scheduled capability session with Alex/Dr. Tyagi. An award or issue does not reserve GPU time.
-4. Let Students 1–3 start ED-02/03/04 locally. Keep the research method/evaluation decisions with Stephen.
+4. Let Alex, Aldric and Nitheesh start ED-02/03/04 locally. Keep the research method/evaluation decisions with Stephen.
 
 No cluster workload, model download, hardware setting change or mailbox mutation was performed during repository setup. No experiment result or acceptance claim is supplied.

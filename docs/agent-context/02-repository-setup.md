@@ -39,16 +39,16 @@ git rev-parse HEAD
 
 After reviewing the destination and seed contents, Stephen can make the first push to the team repository. Students then clone that repository and branch from the agreed integration branch. Do not paste the placeholders as real values, share credentials, or have multiple people edit one live cluster checkout.
 
-## Proposed branch ownership
+## Named issue-branch examples
 
 | Owner | Branch prefix | Main change boundary |
 |---|---|---|
-| Student 1 | `student1/runtime-measurement` | Model adapter, registry override, collectors and preflight |
-| Student 2 | `student2/workloads-verifiers` | Task assets, tool controls, verifiers and narrow trace executor |
-| Student 3 | `student3/campaign-runner` | Manifest handling, ledger, scheduling, exports and validation |
+| Alex | `alex/ed-02-local-runtime` | Model adapter, registry override, collectors and preflight |
+| Aldric | `aldric/ed-03-goal-verifier` | Task assets, tool controls, verifiers and narrow trace executor |
+| Nitheesh | `nitheesh/ed-04-run-ledger` | Manifest handling, ledger, scheduling, exports and validation |
 | Stephen | `lead/diagnostic-method` | Selector, evaluation, common schema/interface integration |
 
-Each person should use separate issue branches when a change is reviewable on its own. Student 1 owns edits to shared harness boundaries initially; others extend through agreed interfaces or coordinate a small PR. Stephen is the merge owner. Rebase/merge upstream intentionally between experiment phases, never silently during a frozen campaign.
+Each person should use separate issue branches when a change is reviewable on its own. Alex owns edits to shared harness boundaries initially; others extend through agreed interfaces or coordinate a small PR. Stephen is the merge owner. Rebase/merge upstream intentionally between experiment phases, never silently during a frozen campaign.
 
 ## Data and cluster layout
 
@@ -56,16 +56,18 @@ Track code, small synthetic fixtures, manifests, lockfiles and schema versions i
 
 Each student has an individual local checkout and an individually authorized cluster account. Deploy the same frozen commit into separate job working directories. Use a shared reservation calendar; no simultaneous energy experiments on the same measured domains.
 
-## Fill before handoff
+## Historical bootstrap checklist
+
+This unfilled template is retained as setup history. Use [00-setup-status.md](00-setup-status.md) for actual repository state and the named kickoff guides for current assignments; do not repeat completed repository creation.
 
 ```text
 Team repository URL: UNSET
 Visibility and publication decision: UNSET
 Chosen baseline commit: UNSET
 Integration branch: research/energy-diagnosis (proposed)
-Student 1 / issue / branch: UNSET
-Student 2 / issue / branch: UNSET
-Student 3 / issue / branch: UNSET
+Alex / issue / branch: UNSET
+Aldric / issue / branch: UNSET
+Nitheesh / issue / branch: UNSET
 Approved cluster account/allocation for each person: UNSET
 Small-job budget and who launches jobs: UNSET
 Artifact storage location and access: UNSET
