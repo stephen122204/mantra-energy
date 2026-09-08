@@ -1,42 +1,31 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-prs-13-14-16-17-merged.md)
-
-# PRs 13, 14, 16 and 17 merged into integration with reviewed repairs
+[Immutable turn record](turns/20260907-post-merge-project-priorities.md)
 
 ## Task and current understanding
 
-Clear the open PR backlog after the 7 September review of Aldric's ED-03 PRs. The review found three merge blockers in PR 16 (CRLF-pinned asset hashes, no CI coverage of the workload tests, non-finite tolerance accepted) and one structural issue in PR 17 (it contained all of PR 16). PRs 13 and 14 (Stephen's workflow and kickoff documents) conflicted with each other in the generic student pages.
+Reviewed current PR state and project priorities. During this read-only code review, the other active workflow completed the merges of PRs 14, 13, 16 and 17. GitHub now shows no open PRs; integration code head is 01482b56bbd4237bbf2b0fabb1d3bb38296ac54d. This turn did not perform those merges.
 
 ## Ideas and hypotheses
 
-Aldric's local pass was genuine: the same commit passes when checked out with `core.autocrlf=true`. Fixing the assets to a canonical LF form and regenerating the hashes makes the task portable without weakening the raw-byte integrity check.
+The immediate scientific bottleneck is now one real measured goal and a meaningful execution intervention, rather than additional onboarding documentation. A small validated fixture is necessary but cannot establish an energy-saving opportunity or novelty.
 
 ## Decisions and rationale
 
-- Merge order 14 → 13 → 16 → 17, each as a normal merge commit, no squash, no force-push, so Aldric's commits stay intact and PR 17's diff collapsed to its own change once 16 landed.
-- Repairs handled centrally as separate commits on Aldric's branches rather than sending him back for another session on shared-workflow issues.
-- PR 13 was fixed by merging the updated integration branch into its branch and resolving there (history preserved), not by rebasing.
+Treat the four PRs as completed components. Next: one small shared Windows-development follow-up; a minimal callable/data contract from Stephen; runtime/measurement integration from Alex; meaningful bounded tool controls from Aldric; resumable ledger from Nitheesh. Keep the first integration smaller than the full pilot and compare simple baselines before expanding the campaign.
 
 ## Changes and artifacts
 
-- `e85fbb8` on `aldric/ed-03`: `.gitattributes` forces LF for the two immutable assets; hashes regenerated from LF bytes; `absolute_tolerance` must be finite; CI runs `tests/test_data_analysis_workload.py`; four regression tests added.
-- `0e03632` on `aldric/fix-context-publisher-windows`: regression test simulating Windows-style relative paths against Git's staged paths (POSIX simulation, not a native Windows run).
-- `f608f65`: integration merged into `lead/pr-workflow-guidance`; PR-lifecycle section moved into the named guides for Alex, Aldric and Nitheesh.
-- Integration merges: `b3fe577` (14), `0f8bb40` (13), `cf89515` (16), `01482b5` (17).
+No code edits, PR messages, or merges in this review. Inspected merged guide resolutions, repaired fixture hashes and finite-tolerance guards/regressions, the pytest CI step, and the publisher path fix with its added regression.
 
 ## Tests and evidence
 
-- GitHub CI passed on every merged head and on integration `01482b5`: setup check, 5 publisher tests, 12 workload tests.
-- Each new regression test was run against the pre-fix code and failed there before being committed.
-- Local: 12 workload tests pass on an LF checkout and on a clone configured with `core.autocrlf=true`.
+A disposable checkout of merged integration 01482b5 with PR 17 head e85bff0 verified already contained passes 17 tests across workloads and publisher; setup validator passes. All four PRs show MERGED with successful Linux PR checks. Merged study runtime, campaign and analysis directories still contain README placeholders; no implementations in those directories were found. Alex and Nitheesh have no published turn records yet in the inspected integration snapshot; that is not proof of no local work.
 
 ## Open questions and disagreements
 
-- No native Windows run exists; the Windows evidence is a simulation. Aldric can confirm by running `python -m pytest tests/test_data_analysis_workload.py` and the publisher tests on his machine.
-- The dataset is still seven rows; larger representative inputs are needed before energy experiments.
+Explicit UTF-8 I/O remains needed in setup/publisher helpers. CI remains Linux-only. The publisher regression's as_posix override returns base_cls.__str__, which still uses backslashes on real Windows; adjust the test before including it in Windows CI. Existing POSIX simulation is evidence for the path fix, not native Windows coverage. Hardware RAPL read access is team-confirmed; validate actual domain/device coverage and isolation in the allocated session rather than reopening the resolved permission question.
 
 ## Next actions and handoff
 
-- Aldric: pull integration, confirm the workload and publisher tests pass natively on Windows, then continue with ED-06 controls.
-- Nothing here establishes a model-backed experiment or an energy measurement; those remain behind Alex's runtime (ED-02) and Nitheesh's runner (ED-04).
+Stephen: freeze minimal ED-01 interfaces and one example record, specify fair baseline and profiling-cost accounting, own Windows bootstrap cleanup. Alex: provider path and both-socket/allocated-GPU measurements for one real task. Aldric: preserve the small verifier fixture, then demonstrate real worker/concurrency controls and unchanged results. Nitheesh: preserve success/failure/interruption/missing telemetry in a resumable ledger. Target integrated goal September 11–12 and usable pilot by September 15 subject to actual session/readiness; assess scientific opportunity by September 18. Do not expand to extra platforms, full training or the 1,432-row campaign before the pilot establishes a meaningful decision problem. Existing individual task assignments and other project commitments should be coordinated, not silently replaced.
