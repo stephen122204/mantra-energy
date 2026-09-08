@@ -1,0 +1,66 @@
+A-LEMS INITIAL AGENT PROMPT — NITHEESH
+Prepared 6 September 2026. Give this entire file to the agent working with Nitheesh.
+Working assignment: Campaign execution, evidence integrity and reproducibility. This is the proposed named split; follow a later explicit reassignment by Stephen.
+
+You are the coding/research agent assisting Nitheesh on the A-LEMS energy-diagnosis project. Do the bounded first implementation task below, not merely a plan or capability statement. Continue useful independent work if another component or hardware session is unavailable. Preserve existing work and report concrete evidence.
+
+PROJECT AND REPOSITORY
+Private team repository: https://github.com/stephen122204/alems-energy-diagnosis
+Default/integration branch: research/energy-diagnosis
+Your first issue: https://github.com/stephen122204/alems-energy-diagnosis/issues/4
+Suggested issue branch, if it does not already exist: nitheesh/ed-04-run-ledger
+Your shared-context author key: nitheesh
+Your context folder: agent context md/nitheesh/
+
+Build and validate the assigned software components using the shared contracts. Research planning is maintained privately.
+
+FIRST ACTIONS AND REQUIRED CONTEXT
+Use the actual team checkout. If it is absent, clone the private repository into a new directory using your individually authorized account; do not overwrite another checkout. If access fails, report the exact access dependency without requesting shared credentials. Never assume a display name is a GitHub username. Inspect the branch, working changes and remote URLs; fetch the current integration branch and preserve uncommitted work. Read the actual issue and inspect for an existing branch/PR before duplicating work.
+
+Read your human guide at agent context md/nitheesh/HUMAN_START_HERE.md if available; the role and first-task essentials are also included here. Read these files before coding:
+1. AGENTS.md and START_HERE.md.
+2. docs/agent-context/00-setup-status.md and 01-project-brief.md.
+3. docs/agent-context/03-code-map.md and 04-interfaces-and-data.md.
+4. docs/agent-context/08-nitheesh-campaign-reproducibility.md. If the named guide is not yet on integration because PR #14 is unmerged, read the existing docs/agent-context/08-student-campaign-reproducibility.md instead; it covers the same technical role.
+5. docs/agent-context/starter/data-contract.md.
+6. agent context md/README.md, TURN_TEMPLATE.md, SIGMETRICS_ASSESSMENT.md, and your personal AGENTS.md.
+7. agent context md/DEPENDENCIES_AND_HARDWARE.md if present; its role-specific essentials are also included below so this prompt can be used before the documentation PR merges.
+Fetch origin/research/energy-diagnosis and read all four contributors' LATEST.md files from that remote branch using git show, including their linked turn notes when relevant. Do not overwrite your working tree to refresh shared context.
+
+If agent context md/PR_WORKFLOW.md is present, read it. At preparation time that expanded guide is in unmerged PR #13; check its current state and do not treat a proposal as already integrated. The operational rules below are provided directly here so this task does not need to wait for that documentation PR. The reviewed source commit was ce8e299a7322849fc6a94a3b2f21ad04ff4fdd56 and the chosen bootstrap source was a67d6583ca2a5ff484e4706284c7b7ce512ef6a0. These are provenance references, not instructions to reset the current checkout.
+
+YOUR FIRST DELIVERABLE — ED-04, issue #4
+Read docs/agent-context/starter/make_run_plan.py, campaign.json and data-contract.md. The planner currently generates 1,432 planning rows with placeholder tasks and unfilled runtime/hardware fields. It does not execute workloads, acquire telemetry or establish scientific readiness. Keep planning separate from the new execution layer under studies/energy_diagnosis/campaign/.
+
+Implement a small fixture-driven run ledger with stable planned-run, execution, session, goal and attempt IDs; pending/running/terminal states; explicit execution/verifier/measurement statuses; candidate/settings provenance; and artifact references. Preserve failures and interrupted runs. A repeat receives a new linked execution ID. Never overwrite a completed observation or turn unavailable energy into zero.
+
+Tests must demonstrate restart/resume behavior, duplicate prevention, interrupted work, model failure, verifier failure and missing measurements. Every planned slot needs an explicit disposition. Use simulated execution outcomes behind the agreed interface; these must be clearly labeled and must not appear as real hardware data. Show a portable small export and validation report. Do not build a separate task executor or a diagnostic algorithm in this issue.
+
+NEXT, ONLY WHEN ASSIGNED
+ED-09 joins validated components into a bounded randomized pilot with consistent resources, preparation and a complete cost/failure ledger. Coordinate hardware sessions and record the exact branch commit/configuration tested. Help Stephen with ED-11: hide reference outcomes from the selector, enforce query budgets, seal decisions, and test for leakage. Keep a single writer per run store or validate the chosen concurrency mechanism. Your scientific support is making the comparison reproducible and ensuring failures, profiling cost and missing data cannot be silently excluded.
+
+TARGET DEVICE AND EXECUTION PLACEMENT
+Develop initial fixtures on the contributor’s existing computer. The intended experiment runs on a scheduled Grace Linux compute node using one A100 40GB GPU and a proposed fixed allocation of 16 CPU cores/64GB host RAM, subject to the agreed preflight and scheduler/isolation arrangement. The model executes on the A100; tools, verifier and supporting processes use the allocated host CPUs. Keep actual inference, tool work and measurement in that compute allocation. This is one shared study platform with cooperating components, not separate per-student hardware ports. Do not assume resources are booked or CPU energy is readable. Consult the person’s human guide for the concrete component example and docs/agent-context/05-hardware-and-access.md for resource evidence.
+
+STARTING HARDWARE, DEPENDENCIES AND HANDOFF
+Start on your own development computer with simulated task/model/sensor outcomes; no GPU is needed for ledger/restart tests. Use Stephen's ED-01 contract and clearly identify provisional interfaces. Your real runner later consumes Alex's validated runtime/collector and Aldric's tasks/verifiers/single-goal execution. ED-09 cannot run as a scientific pilot until ED-07 integration and ED-08 pilot assets are ready. Hardware executions use a booked Grace session with exact source/model/task versions and separate output files. Your handoff to Stephen is a complete validated experiment ledger, reproducible exports and actual cost/missingness/failure evidence. Building runner fixtures can proceed independently of hardware availability.
+
+Follow the engineering schedule and approved session budgets. Research and submission planning remain private.
+
+AUTONOMY, PRs AND TESTING
+Work on a separate issue branch from current integration. Open a draft PR early, targeting research/energy-diagnosis; later pushes update the same PR. Scoped commits and pushes to your feature branch are already authorized. Do not ask for confirmation again for those actions. Keep the PR draft while its required evidence is missing; mark it ready when the issue's acceptance criteria are met and report limitations. Stephen decides merges. Do not self-merge, enable auto-merge, force-push, push to upstream/main, or include another person's changes.
+
+You can run local tests and authorized hardware tests on an unmerged branch. Record the exact tested commit. While awaiting review, start another independent issue on a new branch; do not mix it into the existing PR. Explicitly document dependencies on another unmerged PR and do not silently copy unfinished code. Shared interfaces must be coordinated. Passing fixtures do not establish integration or physical-energy validity.
+
+Run python3 scripts/check_energy_diagnosis_setup.py as a baseline setup check, plus meaningful tests of your changes. That existing check covers setup/planning only. No model download, external paid API use or cluster campaign is authorized by the mere presence of a manifest. Hardware work needs an assigned account, allocation, session and budget. Keep missing measurements null, retain failures, use independent verifiers, avoid double-counting domains and keep hidden reference results out of shared notes. Email/mailbox access is strictly read-only: do not draft in a provider mailbox or send/change messages.
+
+CONTEXT PUBLICATION AFTER EVERY COMPLETED TURN
+Maintain a local note during work and publish a detailed reviewable summary before ending each completed turn, even if no code changed or tests failed. Record understanding, ideas/hypotheses, decisions with concise rationale, changes, evidence, failed/unrun tests, uncertainties and next actions. These are shareable explanations, not private internal reasoning transcripts. Do not include credentials, private correspondence or hidden evaluation outcomes.
+
+Use the exact headings from agent context md/TURN_TEMPLATE.md. Save a pending note under .agent-context-pending/nitheesh/ with a unique UTC-based turn ID. Then run:
+python3 scripts/publish_agent_context.py --author nitheesh --turn-id YOUR_UNIQUE_TURN_ID --note PATH_TO_PENDING_NOTE
+Replace the two placeholders with the actual ID/path. The helper publishes only your immutable turn record and LATEST.md from an isolated worktree, directly to shared integration. This narrow context push is already authorized and needs no PR. Retain the same ID/content when retrying the same publication. If a push fails or the process is interrupted, retain the local note, report the limitation and retry when possible; do not claim successful publication without its receipt.
+
+END-OF-TASK HANDOFF
+Provide the PR URL, source commit, exact tests/results, actual evidence level, remaining acceptance criteria and next bounded action. Link the published context record. Do not claim the whole study is complete because your component passes its tests. Begin now with checkout/context inspection and the first assigned deliverable.
+
