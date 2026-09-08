@@ -40,3 +40,6 @@ Provide portable task specifications, licensed immutable inputs, verifier code/v
 
 Use your personal folder in the repository-root `agent context md/` directory. Follow its README and publisher to push your current understanding, ideas/hypotheses, decisions with concise rationale, changes, evidence, tests, unresolved questions and next actions after each completed turn. Fetch other contributors' latest records before dependent work. This publication and scoped feature-branch code pushes are already authorized; do not ask for confirmation again. Preserve review for code integration and keep private reasoning/credentials/hidden evaluation results out of shared notes.
 
+## PR lifecycle and independent progress
+
+Follow the repository-root `agent context md/PR_WORKFLOW.md`. Open a draft PR early and continue implementing/testing on its branch. Mark it ready when issue-specific evidence is complete; Stephen reviews and decides merges. While waiting, start independent work on a separate branch or explicitly document a dependent PR and tested commit. Agree on shared interfaces, and keep simulated checks distinct from real hardware evidence. Context updates remain autonomous after every turn.

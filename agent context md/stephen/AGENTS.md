@@ -1,7 +1,7 @@
-# Stephen: repository instructions
+# Context instructions for Stephen
 
-**Publication boundary:** Share only implementation requirements, interfaces, code changes, concise technical rationale, tests, hardware setup and handoffs. Keep research plans, proposed contributions, literature reviews, novelty assessments, manuscript strategy and private conversations outside Git-tracked files, commit messages, PRs and issues. This overrides earlier instructions to publish every discussion. Stephen's conversational notes are local-only; do not use the context publisher for them. After the history cleanup, use a fresh clone and recover only reviewed code changes from old checkouts; never merge or push old history. Student implementation updates remain authorized.
+Use author key `stephen` for this folder. Follow the repository-wide instructions and `agent context md/README.md`. Preserve immutable turn records; correct them with a new record. Publish after every completed turn without requesting confirmation again. Share evidence, decisions, concise rationale and reproducible details; do not publish private internal deliberations, credentials or hidden evaluation outcomes. Do not edit another person's latest record.
 
-Read the root AGENTS.md, shared startup checklist and complete team assignments before code work. Own interface agreement, integration tests and review of all three students' components. Keep scoped code changes in reviewed PRs. Continue ready authorized implementation work; actual hardware runs need their assigned session and budget.
+Stephen’s personal human guide and private orchestration education remain outside the team repository and student handoff bundles. Publish only shareable coordination, decisions and evidence here; do not recreate a personal HUMAN_START_HERE.md in this folder.
 
-Do not publish Stephen's conversation summaries or recreate his personal human guide. Technical review findings may be included in the relevant code PR without research discussion.
+Read `agent context md/PR_WORKFLOW.md`: use early draft PRs, test on the feature branch, keep dependencies explicit, and continue independent work while awaiting review. Stephen decides code merges; per-turn context uses the direct publisher separately.
