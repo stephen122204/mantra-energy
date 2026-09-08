@@ -1,31 +1,42 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-windows-readiness-status.md)
+[Immutable turn record](turns/20260907-prs-13-14-16-17-merged.md)
+
+# PRs 13, 14, 16 and 17 merged into integration with reviewed repairs
 
 ## Task and current understanding
 
-Checked whether students can treat the shared checkout as Windows compatible. Origin integration is 1f7ced2; PRs 13, 14, 16, 17 remain open. This is a readiness assessment, not a Windows implementation or merge turn.
+Clear the open PR backlog after the 7 September review of Aldric's ED-03 PRs. The review found three merge blockers in PR 16 (CRLF-pinned asset hashes, no CI coverage of the workload tests, non-finite tolerance accepted) and one structural issue in PR 17 (it contained all of PR 16). PRs 13 and 14 (Stephen's workflow and kickoff documents) conflicted with each other in the generic student pages.
 
 ## Ideas and hypotheses
 
-Native Windows can support local fixture development and context publication once the known portability issues are fixed. The existing Linux hardware measurement runtime remains intended for Grace; successful Windows development tests do not establish native Windows telemetry support.
+Aldric's local pass was genuine: the same commit passes when checked out with `core.autocrlf=true`. Fixing the assets to a canonical LF form and regenerating the hashes makes the task portable without weakening the raw-byte integrity check.
 
 ## Decisions and rationale
 
-Do not announce complete Windows compatibility. The invalid filename removal is merged. The publisher path fix remains in PR 17, and LF fixture/hash repairs remain local on review-pr16-fix. Additional explicit UTF-8 text handling and actual Windows CI are needed to avoid repeat setup failures.
+- Merge order 14 → 13 → 16 → 17, each as a normal merge commit, no squash, no force-push, so Aldric's commits stay intact and PR 17's diff collapsed to its own change once 16 landed.
+- Repairs handled centrally as separate commits on Aldric's branches rather than sending him back for another session on shared-workflow issues.
+- PR 13 was fixed by merging the updated integration branch into its branch and resolving there (history preserved), not by rebasing.
 
 ## Changes and artifacts
 
-No code changes or code pushes. Inspected the remote publisher, setup checker, workflow, and prepared fixture attributes.
+- `e85fbb8` on `aldric/ed-03`: `.gitattributes` forces LF for the two immutable assets; hashes regenerated from LF bytes; `absolute_tolerance` must be finite; CI runs `tests/test_data_analysis_workload.py`; four regression tests added.
+- `0e03632` on `aldric/fix-context-publisher-windows`: regression test simulating Windows-style relative paths against Git's staged paths (POSIX simulation, not a native Windows run).
+- `f608f65`: integration merged into `lead/pr-workflow-guidance`; PR-lifecycle section moved into the named guides for Alex, Aldric and Nitheesh.
+- Integration merges: `b3fe577` (14), `0f8bb40` (13), `cf89515` (16), `01482b5` (17).
 
 ## Tests and evidence
 
-Current setup checker uses default-encoding read_text for Markdown and JSON, and the publisher uses default-encoding read_text/write_text for notes. Aldric previously reported needing Python UTF-8 mode for the setup checker. Current CI runs ubuntu-latest only. Prior local repaired-stack tests passed, but they are not native Windows validation.
+- GitHub CI passed on every merged head and on integration `01482b5`: setup check, 5 publisher tests, 12 workload tests.
+- Each new regression test was run against the pre-fix code and failed there before being committed.
+- Local: 12 workload tests pass on an LF checkout and on a clone configured with `core.autocrlf=true`.
 
 ## Open questions and disagreements
 
-Windows contributors should not each rewrite the shared publisher or disable its path checks. Standardize these fixes centrally, retain independent PR review, and distinguish the local-development support target from the Linux energy runtime. Python -X utf8 is an interim encoding workaround only; it does not fix path or hash issues.
+- No native Windows run exists; the Windows evidence is a simulation. Aldric can confirm by running `python -m pytest tests/test_data_analysis_workload.py` and the publisher tests on his machine.
+- The dataset is still seven rows; larger representative inputs are needed before energy experiments.
 
 ## Next actions and handoff
 
-Land the reviewed fixture and publisher fixes, make text I/O explicitly UTF-8, add Windows coverage for setup/publisher/workload tests, and document Windows Python invocation. After integration, students should preserve their work and merge current integration into active branches; do not reset, force-push, or erase local work to update.
+- Aldric: pull integration, confirm the workload and publisher tests pass natively on Windows, then continue with ED-06 controls.
+- Nothing here establishes a model-backed experiment or an energy measurement; those remain behind Alex's runtime (ED-02) and Nitheesh's runner (ED-04).
