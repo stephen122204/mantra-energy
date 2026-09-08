@@ -1,31 +1,41 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-startup-context-routes-merged.md)
+[Immutable turn record](turns/20260907-ed01-contracts-and-utf8-merged.md)
+
+# ED-01 shared contracts merged (#21); publisher UTF-8 fix merged (#20)
 
 ## Task and current understanding
 
-Stephen requires all current agent context to be known when each person starts. Audited root/named/legacy entry points after PR #18. Found docs/agent-context/11-agent-prompts.md still supplied first-issue-only prompts and personal README wording still emphasized entry tasks.
+Clear the remaining items on Stephen's side of the dependency chain before the students' agents start their next milestones: the concrete shared interface (ED-01, gate G0) and the shared Windows tooling follow-up. Both are merged; the open PR list is empty.
 
 ## Ideas and hypotheses
 
-Require one explicit context-loading checklist and a first substantive acknowledgment naming actual files/revisions read, complete role, dependencies and acceptance tests. This supplies observable orientation evidence without claiming that document publication itself proves understanding.
+With the record types in one module, three components developed in parallel should meet at the local integration gate (G2) with field-level rather than structural mismatches. The contract deliberately encodes the semantics that were previously only prose: null-not-zero energy, separate execution/verifier/measurement status, span dependency order, simulated flag.
 
 ## Decisions and rationale
 
-Routed all maintained startup paths through current shared/named context, including stale-branch/email prompt handling using fetched integration without resetting work. Replaced legacy first-task snippets with complete named prompts. Require an acknowledgment followed immediately by implementation; no new approval pause. Read relevant historical evidence rather than treating every immutable old note as current instruction. Continued the user-authorized publication rollout through reviewed, tested documentation PR #19 and merged it.
+- ED-01 v0.1 is dataclasses plus JSON, no dependencies, so every component can consume it without new packages. Callable and module names for the runner, executor and collector stay with their milestones; only the records are shared.
+- Changes to records go through a PR against `studies/energy_diagnosis/contracts.py`: additive fields in minor versions, renames bump `CONTRACT_VERSION`. Do not keep local copies of the types.
+- The publisher now reads and writes notes as UTF-8 because every guide contains characters outside the Windows default code page.
 
 ## Changes and artifacts
 
-PR #19 https://github.com/stephen122204/alems-energy-diagnosis/pull/19 is MERGED at ea53be62f074d852d38911683f7571bff835c2e4. Source a75e3a6. Added agent context md/STARTUP_CHECKLIST.md; updated 24 other maintained root, named, technical and legacy entry points. No mailbox/student messages, hardware jobs or runtime changes. Private Stephen human guide remains outside the repository.
+- `eb49e72` (#21): `studies/energy_diagnosis/contracts.py`; examples in `studies/energy_diagnosis/fixtures/contract_examples/` (task spec, four settings, verified run, completed-but-wrong run, timeout with missing energy); `tests/test_study_contracts.py`; CI step; pointers in `docs/agent-context/04-interfaces-and-data.md` and the study README.
+- `b58984a` (#20): publisher UTF-8 I/O; regression test under a forced ASCII locale; the Windows path simulation test is skipped on native Windows.
 
 ## Tests and evidence
 
-Local setup/link/provenance/planning checks and git diff --check passed. Entry-point audit passed for all four personal AGENTS/README/name.txt files, root and legacy index. GitHub handoff-and-plan CI passed. Merged with exact-head guard, fetched integration and verified the startup links and acknowledgment requirements on that remote ref.
+- CI on the merged heads: setup check, 6 publisher tests, 12 workload tests, 10 contract tests.
+- Contract bridge test maps the merged ED-03 verifier output into `VerifierResult` and embeds it in an `ExecutionRecord`.
+- UTF-8 regression test fails against the previous publisher (UnicodeEncodeError) and passes now. No native Windows run.
 
 ## Open questions and disagreements
 
-Agents in external sessions must fetch/read the merged update. No acknowledgment of actual reading is yet observed for the students. Documentation cannot force a provider to load files or persist execution; do not equate a startup acknowledgment with tested software or physical measurement evidence.
+- Alex, Aldric and Nitheesh: confirm your next milestone consumes these types, and open a small PR if a field is missing. That is the G0 producer/consumer check.
+- Native Windows confirmation of the workload, publisher and contract tests is still owed by the Windows user.
+- ED-12 (individual Grace accounts, allocation, scheduled session) and the node-side RAPL check remain the hardware prerequisites for ED-05 and ED-07.
 
 ## Next actions and handoff
 
-At start/resumption, each agent reads STARTUP_CHECKLIST.md and every listed required shared/named document plus all four latest records and relevant evidence. First update names actual files and revisions, explains full role/hardware/interfaces, lists all milestones with evidence/dependencies/next action and Grace acceptance checks; then immediately continues full-role implementation. Publish this acknowledgment with the normal context record so Stephen can verify uptake. Use latest name.txt copies; legacy links now redirect to them.
+- Students: fetch integration, complete the startup checklist, publish the full-milestone acknowledgment, continue.
+- Stephen: ED-12 access, the comparison specification for ED-10, local integration command (G2) once the first executor and ledger PRs land.
