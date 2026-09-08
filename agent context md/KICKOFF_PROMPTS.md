@@ -1,5 +1,7 @@
 # Named starting prompts
 
+**Before starting or resuming:** follow the [required context-loading checklist](STARTUP_CHECKLIST.md). Read the complete current shared and named context; demonstrate all-role understanding, then continue implementation in the same session. This applies even with an old kickoff attachment or an agent that does not automatically load AGENTS.md.
+
 Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), or [Nitheesh](nitheesh/HUMAN_START_HERE.md).
 
 Updated 7 September 2026. These are self-contained prompts to paste into each person's coding agent after providing access to the team checkout.

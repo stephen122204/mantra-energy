@@ -1,5 +1,7 @@
 # Start here: A-LEMS energy diagnosis
 
+**Before starting or resuming:** follow the [required context-loading checklist](agent%20context%20md/STARTUP_CHECKLIST.md). Read the complete current shared and named context; demonstrate all-role understanding, then continue implementation in the same session. This applies even with an old kickoff attachment or an agent that does not automatically load AGENTS.md.
+
 **Required full scope:** read [complete team assignments and merge gates](agent%20context%20md/COMPLETE_ASSIGNMENTS.md) and your named full-role checklist. The first issue is only the first milestone. At the next agent session, account for every milestone and continue ready assigned work; retain explicit hardware and pilot-expansion gates.
 
 **Research question:** Which feasible execution change saves measured energy per correctly completed agentic goal, and can we select it with a small profiling budget?
@@ -44,7 +46,7 @@ First team milestone: one real local-model goal, independently verified, with va
 
 The repository-root [agent context md](agent%20context%20md/README.md) contains folders for Stephen, Alex, Aldric and Nitheesh. Agents must read shared context at the start of a turn and autonomously publish their decision/evidence/understanding summary before ending it. Use the supplied publisher to avoid accidentally staging code. Scoped code pushes go to feature branches; code still integrates through review.
 
-For a fresh agent session, use the [named kickoff prompts](agent%20context%20md/KICKOFF_PROMPTS.md). They assign the proposed first tasks for Stephen, Alex, Aldric and Nitheesh and link the human team explanation.
+For a fresh agent session, use the [named kickoff prompts](agent%20context%20md/KICKOFF_PROMPTS.md). They assign the complete named roles, require all-milestone startup acknowledgment, and link the human team explanation.
 
 The [dependencies and hardware guide](agent%20context%20md/DEPENDENCIES_AND_HARDWARE.md) explains who can start locally, what each person hands off and what must be ready before Grace integration or a scientific pilot.
 

@@ -1,5 +1,7 @@
 # Complete team assignments and merge gates
 
+**Before starting or resuming:** follow the [required context-loading checklist](STARTUP_CHECKLIST.md). Read the complete current shared and named context; demonstrate all-role understanding, then continue implementation in the same session. This applies even with an old kickoff attachment or an agent that does not automatically load AGENTS.md.
+
 Updated 7 September 2026. **The first issue is the entry point, not the full assignment.** Humans and agents must read their complete role below. Ready software milestones within these roles are already assigned; continue them in separate PRs without waiting for another assignment. Hardware/session budgets, reviewed integration, evaluation freezes and the decision to expand after the pilot remain explicit gates. This replaces earlier kickoff language that made all later work conditional on a new assignment.
 
 ## Standing instruction: execute the whole role to completion

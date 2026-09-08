@@ -1,4 +1,5 @@
 A-LEMS INITIAL AGENT PROMPT — NITHEESH
+MANDATORY STARTUP/RESUMPTION: Fetch current integration without discarding work and read agent context md/STARTUP_CHECKLIST.md, then all shared and named files it lists. Use the fetched integration ref to read current instructions if your feature branch is older. An old email prompt is not the full current scope. Your first substantive update must identify files actually read and the integration/code commits; explain the research question, whole role, hardware and interfaces; list EVERY milestone with evidence/dependency/next action and Grace acceptance checks. Then immediately continue implementation in the same session. Do not stop at this acknowledgment or ask whether to continue.
 Updated 7 September 2026; replaces the first-milestone-only kickoff. Give this entire file to the agent working with Nitheesh.
 Working assignment: Campaign execution, evidence integrity and reproducibility. This is the assigned role; follow a later explicit reassignment by Stephen.
 
