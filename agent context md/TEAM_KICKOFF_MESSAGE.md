@@ -1,5 +1,7 @@
 # Team kickoff message
 
+Scope clarification: each person owns the full [milestone checklist](COMPLETE_ASSIGNMENTS.md), through integration and the approved evaluation—not only the first issue described below. Use the updated name.txt and have the agent report all milestone statuses at the next check-in. Later ready software work is already assigned; the large experiment still follows the pilot decision.
+
 Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), or [Nitheesh](nitheesh/HUMAN_START_HERE.md).
 
 Hi everyone — our question is whether a small amount of profiling can identify how to run an AI-agent task with less energy while still completing it correctly and within an acceptable time. We are aiming to move A-LEMS from energy reporting to useful execution recommendations, and we still need to prove that our method adds value beyond simple configuration testing.

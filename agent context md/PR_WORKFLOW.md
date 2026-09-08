@@ -55,3 +55,7 @@ Keep raw large logs and datasets in approved artifact storage with links/hashes.
 Contributors must use individually authorized GitHub and cluster accounts. Folder names are not GitHub identities. Branch protection is unavailable under the current private-repository plan, so required approval is a project instruction rather than an enforced GitHub rule. CODEOWNERS and CI do not themselves prevent a direct push.
 
 GitHub does not allow an author to approve their own PR. When a PR is created through Stephen's account, do not fabricate an independent approval; Stephen can review its diff and explicitly decide whether to merge it. Other students' accounts should be used for their own work once provisioned. No student invitation, account sharing or merge is implied by opening a PR.
+
+## Track full-role progress
+
+Before selecting work, read [complete assignments](COMPLETE_ASSIGNMENTS.md) and your personal FULL_ASSIGNMENT.md. In each handoff identify the milestone this PR covers and what remains across the full role. The first PR does not finish the role. At the next session provide a complete milestone/evidence/dependency table in your own context; continue ready independent milestones in separate branches while review proceeds. Local integrated success/failure checks precede the main Grace integration; an early bounded Grace capability check can run alongside component development.

@@ -1,5 +1,7 @@
 # Aldric: verifiable goals and controlled execution
 
+**Full-role checklist:** [all Aldric milestones](../../agent%20context%20md/aldric/FULL_ASSIGNMENT.md). This technical guide and that checklist describe the complete assignment; the first issue is only the entry point. Read the [shared merge gates](../../agent%20context%20md/COMPLETE_ASSIGNMENTS.md).
+
 Mission: give the experiment real tasks whose correctness and intervention semantics are independently testable. Develop on an existing Intel/local machine; integrate on Grace with Alex's runtime. CPU-only fixture execution is useful development evidence, not the primary GPU result.
 
 ## Own

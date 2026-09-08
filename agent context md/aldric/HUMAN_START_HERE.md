@@ -1,5 +1,11 @@
 # Aldric: human guide
 
+## Your whole assignment—not only the first PR
+
+**Your full responsibility is: first task/checker → single-goal execution and four controls → four pilot tasks → trace/replay fidelity → Grace integration → conditional expanded task suite and workload evidence.** The first issue below is only the entry milestone. Read the [complete milestone checklist](FULL_ASSIGNMENT.md): it states every deliverable, what must be tested, who depends on it, and the final completion criteria. Later ready software milestones are already assigned; they do not require another invitation to begin. Pilot expansion and hardware runs keep their explicit gates.
+
+At the next check-in, have your agent show the status of **every milestone**, including later work and dependencies, so you can check the full scope together. Do not report the role complete based only on the first PR.
+
 **Your work:** Verifiable goals and controlled execution. **First task:** [ED-03, issue #3](https://github.com/stephen122204/alems-energy-diagnosis/issues/3).
 
 Start with the [human overview](../HUMAN_START_HERE.md), read this guide, then give your agent [aldric.txt](aldric.txt) with your repository checkout. The [technical assignment](../../docs/agent-context/07-aldric-workloads-verifiers.md) is supporting detail for you and required reading for the agent.
@@ -10,7 +16,7 @@ Start with the [human overview](../HUMAN_START_HERE.md), read this guide, then g
 
 The GPU runs the selected local language model. CPU cores run tool computations, verification and supporting processes. A-LEMS and the measurement collector run alongside them in the same allocation. Your development computer is where you edit and inspect; laptop energy is not the target measurement. Here “local model” means inference on the experimental compute node, not an external paid API. The model/runtime choice still needs validation; a 7B-class model is the current pilot direction.
 
-The three assignments build cooperating pieces of one experiment on this platform. Keep one goal and one model request active at a time initially; the proposed controlled parallelism is in independent CPU tool work. A100 allocation alone does not isolate CPU-package readings, so coordinate whole-node isolation or another validated arrangement before energy comparisons. Start with software fixtures now; hardware access, readable CPU energy and session budgets remain preflight items. No separate GPU purchase, H100 migration or multi-node training is part of your starting task. See the [technical hardware plan](../../docs/agent-context/05-hardware-and-access.md).
+The three assignments build cooperating pieces of one experiment on this platform. Keep one goal and one model request active at a time initially; the proposed controlled parallelism is in independent CPU tool work. A100 allocation alone does not isolate CPU-package readings, so coordinate whole-node isolation or another validated arrangement before energy comparisons. Start with software fixtures now; Alex has reported CPU RAPL reads without sudo; individual access, session budgets, actual domain/device coverage and isolation still require session checks. No separate GPU purchase, H100 migration or multi-node training is part of your starting task. See the [technical hardware plan](../../docs/agent-context/05-hardware-and-access.md).
 
 ## Picture what you are building
 
@@ -34,7 +40,7 @@ Have the agent inspect existing tools, create small immutable input assets and a
 
 Begin on your own computer; an assigned team Intel machine is optional. Verifier fixtures need no model or GPU. Later validate actual tool execution with Alex's runtime in the shared Grace A100 environment. Use Stephen's common contracts; your initial verifier can be developed independently. Nitheesh's real runner needs your task specification, verifier and single-goal executor.
 
-## What done means
+## First milestone versus full-role completion
 
 The first PR delivers one fixed goal, immutable inputs, a tested independent verifier and portable task contract. Show a correct example and a deliberately wrong one. The next handoff adds eligible execution controls, their tested semantic equivalence and four pilot assets across two families. Component completion requires evidence about correctness and execution; a generated task list alone is insufficient.
 

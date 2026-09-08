@@ -1,5 +1,7 @@
 # Nitheesh: campaign execution and reproducibility
 
+**Full-role checklist:** [all Nitheesh milestones](../../agent%20context%20md/nitheesh/FULL_ASSIGNMENT.md). This technical guide and that checklist describe the complete assignment; the first issue is only the entry point. Read the [shared merge gates](../../agent%20context%20md/COMPLETE_ASSIGNMENTS.md).
+
 Mission: turn validated single-goal executions into a complete, auditable experiment. Develop the ledger/validation against synthetic fixtures locally. Use Grace only after the runtime and task interfaces are ready.
 
 ## Own
