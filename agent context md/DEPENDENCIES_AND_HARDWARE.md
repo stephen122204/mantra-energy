@@ -1,6 +1,8 @@
 # Dependencies, hardware and what completion means
 
-Prepared 6 September 2026. The named split is the kickoff proposal: Alex runtime/measurement, Aldric workloads/verifiers, Nitheesh campaign/reproducibility, Stephen method/integration. Individual GitHub identities and machine access must still be provisioned. This guide describes one shared experiment, not four independent platform studies.
+Read [COMPLETE_ASSIGNMENTS.md](COMPLETE_ASSIGNMENTS.md) for the complete named scope, acknowledgment requirement and G0–G6 merge/verification gates. Each personal FULL_ASSIGNMENT.md is required for both the human and agent. Later ready software milestones are already assigned.
+
+Prepared 6 September 2026. The named assignment is: Alex runtime/measurement, Aldric workloads/verifiers, Nitheesh campaign/reproducibility, Stephen method/integration. Individual GitHub identities and machine access must still be provisioned. This guide describes one shared experiment, not four independent platform studies.
 
 ## Work that can start together
 
@@ -22,7 +24,7 @@ No person needs a new GPU purchase for their initial software task. Grace is the
 ## Actual dependency chain
 
 1. **ED-01 interface agreement supports all three implementation streams.** Standalone fixtures can start while the final interface is reviewed; provisional interfaces must be identified explicitly.
-2. **ED-07 needs Alex's runtime and measurement checks (ED-02/05), Aldric's first task and controls (ED-03/06), and Nitheesh's execution ledger (ED-04).** All three must fit together for one real independently verified goal with linked energy records. A stub collector or cached model response cannot pass this milestone.
+2. **Before the main Grace integration, Stephen supplies a fresh-checkout local end-to-end test using all real components together and labeled external fixtures where needed. Each owner repairs their component. Alex runs an early bounded hardware smoke check in parallel. ED-07 needs Alex's runtime and measurement checks (ED-02/05), Aldric's first task and controls (ED-03/06), and Nitheesh's execution ledger (ED-04).** All three must fit together for one real independently verified goal with linked energy records. A stub collector or cached model response cannot pass this milestone.
 3. **ED-09 pilot needs ED-07 plus Aldric's second family/four pilot assets (ED-08).** Nitheesh can implement the runner beforehand but cannot call an unintegrated fixture schedule a completed pilot.
 4. **ED-10's empirical research decision needs pilot/development evidence.** Stephen can design the method and baselines now; demonstrating their value requires valid measurements and goals. If the first pilot is inconclusive, do a bounded development investigation rather than assume the method works.
 5. **ED-11 and the main held-out evaluation need a frozen, justified method and an adequate measurement pipeline.** Freeze assets, policies, verifiers, information access and analysis; seal recommendations before independent reference results are read.

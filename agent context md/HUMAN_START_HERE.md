@@ -1,5 +1,7 @@
 # Human start here: the A-LEMS energy-diagnosis study
 
+**Required full scope:** read [complete team assignments and merge gates](COMPLETE_ASSIGNMENTS.md) and your named full-role checklist. The first issue is only the first milestone. At the next agent session, account for every milestone and continue ready assigned work; retain explicit hardware and pilot-expansion gates.
+
 ## What we are investigating
 
 Can a small amount of profiling tell us how to run an AI-agent task using less measured energy while still completing it correctly and within acceptable time? A-LEMS provides the execution and measurement foundation. Our intended contribution is a useful, economical recommendation about execution, validated on new goals against simple alternatives. A larger configuration sweep or another hardware comparison would not establish that contribution.
@@ -27,11 +29,11 @@ Read the [Fall timeline and practical work split](FALL_TIMELINE.md): first usabl
 
 1. This overview, then your personal human guide: [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), or [Nitheesh](nitheesh/HUMAN_START_HERE.md).
 2. The [dependencies and hardware guide](DEPENDENCIES_AND_HARDWARE.md). The first tasks can proceed mostly in parallel; real measured experiments require integration.
-3. Open your linked first issue. Use the `.txt` attached to the kickoff email: Alex uses `alex.txt`, Aldric uses `aldric.txt`, and Nitheesh uses `nitheesh.txt`. Repository copies are linked in each personal guide. Give your entire `name.txt` to your coding agent with access to your own checkout. The agent should read the technical context and begin the bounded task. You do not need to paste every technical document yourself.
+3. Open your linked first issue. Use the `.txt` attached to the kickoff email: Alex uses `alex.txt`, Aldric uses `aldric.txt`, and Nitheesh uses `nitheesh.txt`. Repository copies are linked in each personal guide. Give your entire `name.txt` to your coding agent with access to your own checkout. The agent must read the full role, report all milestones and begin the next ready bounded task. You do not need to paste every technical document yourself.
 
-Skim the overview and your own assignment, focusing on the task, correctness checks and handoff; do not read the entire codebase before starting. Let the agent investigate implementation details. Spend human time on hardware, consequential logic checks, debugging behavior and inspecting representative evidence. Then attach or paste the whole prompt into a new coding-agent session opened on your own repository checkout. The prompt tells the agent to inspect context and begin the first bounded task; it should return a tested PR or a precise blocker. You review a representative result and the stated limitations.
+Skim the overview and your own assignment, focusing on the task, correctness checks and handoff; do not read the entire codebase before starting. Let the agent investigate implementation details. Spend human time on hardware, consequential logic checks, debugging behavior and inspecting representative evidence. Then attach or paste the whole prompt into a new coding-agent session opened on your own repository checkout. The prompt tells the agent to inspect the complete assignment and existing progress, then begin the next ready bounded task; it should return a tested PR or a precise blocker. You review a representative result and the stated limitations.
 
-The kickoff documents are proposed in [PR #14](https://github.com/stephen122204/alems-energy-diagnosis/pull/14). Until merged, read them on that PR's branch; implementation branches still start from current `research/energy-diagnosis`. The prompts contain the essential workflow even if some new guides are not yet on integration. Do not merge an unreviewed documentation branch into your work just to start fixtures.
+The named guides and earlier PR workflow documents are merged. Use current repository prompts rather than stale email attachments. Read the full assignment before choosing the next bounded milestone; do not restart an already completed first issue.
 
 ## Human responsibilities and agent responsibilities
 
@@ -47,7 +49,7 @@ Your laptop or desktop is the development and inspection machine. The measured e
 
 ## Hardware and completion gates
 
-Start on existing development computers with small synthetic fixtures; no new GPU purchase is needed for those tasks. The proposed primary experimental platform is a characterized Grace A100 allocation. Team access is reported, but individual permissions, available allocation, CPU-energy readings and isolation still need confirmation. FASTER/Lonestar and ACCESS H100/H200 are not required to begin this work.
+Start on existing development computers with small synthetic fixtures; no new GPU purchase is needed for those tasks. The proposed primary experimental platform is a characterized Grace A100 allocation. Team access and no-sudo CPU RAPL reads have been reported by Alex; confirm each individual session, remaining allocation, actual energy-domain coverage and isolation. FASTER/Lonestar and ACCESS H100/H200 are not required to begin this work.
 
 Use individually authorized accounts and scheduled sessions. Do not run model inference on login nodes. A separate branch does not isolate shared CPU/GPU energy measurements. Alex validates the runtime and sensors, Aldric supplies verifiable goals and execution controls, and Nitheesh integrates them into the campaign record; Stephen coordinates contracts and scientific decisions.
 

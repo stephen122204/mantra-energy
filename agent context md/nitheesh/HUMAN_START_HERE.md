@@ -1,8 +1,18 @@
 # Nitheesh: human guide
 
+## Your whole assignment—not only the first PR
+
+**Your full responsibility is: resumable ledger → randomized bounded runner and data validation → integrated Grace pilot → selector budget/information boundary → approved evaluation and reproducible exports.** The first issue below is only the entry milestone. Read the [complete milestone checklist](FULL_ASSIGNMENT.md): it states every deliverable, what must be tested, who depends on it, and the final completion criteria. Later ready software milestones are already assigned; they do not require another invitation to begin. Pilot expansion and hardware runs keep their explicit gates.
+
+At the next check-in, have your agent show the status of **every milestone**, including later work and dependencies, so you can check the full scope together. Do not report the role complete based only on the first PR.
+
 **Your work:** Campaign records and reproducibility. **First task:** [ED-04, issue #4](https://github.com/stephen122204/alems-energy-diagnosis/issues/4).
 
 Start with the [human overview](../HUMAN_START_HERE.md), read this guide, then give your agent [nitheesh.txt](nitheesh.txt) with your repository checkout. The [technical assignment](../../docs/agent-context/08-nitheesh-campaign-reproducibility.md) is supporting detail for you and required reading for the agent.
+
+## What to expect from your agent
+
+Give the agent the updated prompt and let it work through the **entire assigned implementation**, tests, debugging and integration. It should not stop after a PR or ask you to assign the next listed milestone. You inspect representative behavior, help with actual access or consequential decisions, and review its full-role evidence; you should not have to keep prompting “continue” after every component. The agent should fix failures in its own work and progress on other items while a dependency or PR review is pending. Report only real blockers. Preparing the software for later evaluation is part of the work now; actual large experiments still depend on the pilot and approved resources.
 
 ## The machine this work is for
 
@@ -10,7 +20,7 @@ Start with the [human overview](../HUMAN_START_HERE.md), read this guide, then g
 
 The GPU runs the selected local language model. CPU cores run tool computations, verification and supporting processes. A-LEMS and the measurement collector run alongside them in the same allocation. Your development computer is where you edit and inspect; laptop energy is not the target measurement. Here “local model” means inference on the experimental compute node, not an external paid API. The model/runtime choice still needs validation; a 7B-class model is the current pilot direction.
 
-The three assignments build cooperating pieces of one experiment on this platform. Keep one goal and one model request active at a time initially; the proposed controlled parallelism is in independent CPU tool work. A100 allocation alone does not isolate CPU-package readings, so coordinate whole-node isolation or another validated arrangement before energy comparisons. Start with software fixtures now; hardware access, readable CPU energy and session budgets remain preflight items. No separate GPU purchase, H100 migration or multi-node training is part of your starting task. See the [technical hardware plan](../../docs/agent-context/05-hardware-and-access.md).
+The three assignments build cooperating pieces of one experiment on this platform. Keep one goal and one model request active at a time initially; the proposed controlled parallelism is in independent CPU tool work. A100 allocation alone does not isolate CPU-package readings, so coordinate whole-node isolation or another validated arrangement before energy comparisons. Start with software fixtures now; Alex has reported CPU RAPL reads without sudo; individual access, session budgets, actual domain/device coverage and isolation still require session checks. No separate GPU purchase, H100 migration or multi-node training is part of your starting task. See the [technical hardware plan](../../docs/agent-context/05-hardware-and-access.md).
 
 ## Picture what you are building
 
@@ -34,7 +44,7 @@ Have the agent implement the execution ledger around synthetic fixtures, separat
 
 Begin on your own computer; ledger fixtures need no GPU. The real pilot runs on an assigned Grace A100 session after runtime, measurements, tasks and controls are ready. Stephen supplies the shared contract and approved plan. You can develop the ledger independently now; actual integration depends on both Alex and Aldric.
 
-## What done means
+## First milestone versus full-role completion
 
 The first PR delivers a resumable fixture ledger, tests, and a small inspectable export showing successes, failures, interruptions and missing values. The later pilot handoff includes a complete run disposition record, validated raw/derived data, exact tested versions, measurement coverage and actual time/resource costs. Run the bounded pilot only after the integration gate and assigned budget; do not launch the full planning matrix automatically.
 

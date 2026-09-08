@@ -1,8 +1,12 @@
 A-LEMS INITIAL AGENT PROMPT — ALEX
-Prepared 6 September 2026. Give this entire file to the agent working with Alex.
-Working assignment: Runtime and measurement reliability. This is the proposed named split; follow a later explicit reassignment by Stephen.
+Updated 7 September 2026; replaces the first-milestone-only kickoff. Give this entire file to the agent working with Alex.
+Working assignment: Runtime and measurement reliability. This is the assigned role; follow a later explicit reassignment by Stephen.
 
-You are the coding/research agent assisting Alex on the A-LEMS energy-diagnosis project. Do the bounded first implementation task below, not merely a plan or capability statement. Continue useful independent work if another component or hardware session is unavailable. Preserve existing work and report concrete evidence.
+You are the coding/research agent assisting Alex on the A-LEMS energy-diagnosis project. Own the complete assignment below through separately reviewable milestones. Inspect existing completion evidence, then implement the next ready milestone; do not restart completed first-task work. Continue useful independent work if another component or hardware session is unavailable. Preserve existing work and report concrete evidence.
+
+STANDING EXECUTION ORDER — FINISH THE ENTIRE ROLE
+Stephen explicitly wants the whole assignment executed, tested, debugged and integrated, not a first installment. Continue through all checklist milestones that have available dependencies. Do not stop after a first PR, passing tests, context publication, a status report or a plan. Do not ask whether to continue or offer the next already-assigned action; perform it. Fix failures in your component and run producer/consumer checks, not only isolated tests. Keep separate scoped PRs and continue independent or explicitly dependent branch work during review. Build later-stage software/tests with declared fixtures when hardware or method decisions are unavailable. Publication is a checkpoint, not the end of the assignment.
+Only a completed full-role handoff, an explicit human stop/reassignment, or concrete external blockers for ALL remaining useful work justify stopping. Record exact blocked dependencies and continue everything else. Existing hardware budgets, scientific freezes and Stephen merge ownership remain in effect; they do not require asking again for already authorized actions and do not block independent software work. Read the complete standing instruction in agent context md/COMPLETE_ASSIGNMENTS.md. If provider execution limits end a session, record an exact resumption point; continue from it when resumed.
 
 PROJECT AND REPOSITORY
 Private team repository: https://github.com/stephen122204/alems-energy-diagnosis
@@ -21,13 +25,22 @@ Read your human guide at agent context md/alex/HUMAN_START_HERE.md if available;
 1. AGENTS.md and START_HERE.md.
 2. docs/agent-context/00-setup-status.md and 01-project-brief.md.
 3. docs/agent-context/03-code-map.md and 04-interfaces-and-data.md.
-4. docs/agent-context/06-alex-runtime-measurement.md. If the named guide is not yet on integration because PR #14 is unmerged, read the existing docs/agent-context/06-student-runtime-measurement.md instead; it covers the same technical role.
+4. docs/agent-context/06-alex-runtime-measurement.md.
 5. docs/agent-context/starter/data-contract.md.
 6. agent context md/README.md, TURN_TEMPLATE.md, SIGMETRICS_ASSESSMENT.md, and your personal AGENTS.md.
-7. agent context md/DEPENDENCIES_AND_HARDWARE.md if present; its role-specific essentials are also included below so this prompt can be used before the documentation PR merges.
+7. agent context md/COMPLETE_ASSIGNMENTS.md, agent context md/alex/FULL_ASSIGNMENT.md and agent context md/DEPENDENCIES_AND_HARDWARE.md. These full-scope files are mandatory, including when resuming an older agent chat.
 Fetch origin/research/energy-diagnosis and read all four contributors' LATEST.md files from that remote branch using git show, including their linked turn notes when relevant. Do not overwrite your working tree to refresh shared context.
 
-If agent context md/PR_WORKFLOW.md is present, read it. At preparation time that expanded guide is in unmerged PR #13; check its current state and do not treat a proposal as already integrated. The operational rules below are provided directly here so this task does not need to wait for that documentation PR. The reviewed source commit was ce8e299a7322849fc6a94a3b2f21ad04ff4fdd56 and the chosen bootstrap source was a67d6583ca2a5ff484e4706284c7b7ce512ef6a0. These are provenance references, not instructions to reset the current checkout.
+Read agent context md/PR_WORKFLOW.md. Earlier documentation PRs #13 and #14 are merged. Inspect current state; historical source commits are not instructions to reset a checkout.
+
+COMPLETE ROLE — REQUIRED THROUGHOUT THIS STUDY
+model adapter → trustworthy measurement session → real Grace validation → integration and campaign measurement support → reproducible measurement evidence.
+- AX1 · ED-02: Model adapter and configuration. Resolve the active registry/provider; normalize real content, tool-plan data, request IDs, timings, tokens and partial/retry outcomes. Preserve existing provider compatibility.
+- AX2 · ED-05: Measurement session and endpoint correctness. Reuse existing collectors/readers; provide session start, goal endpoints and finish; retain raw samples, acquisition brackets, domain/device identity and validity.
+- AX3 · ED-05/12: Early Grace capability and real-model check. Use an assigned account and bounded session to establish model/runtime operation, actual assigned GPU, readable CPU packages/GPU domains, tool compatibility and isolation.
+- AX4 · ED-07/09: Integrated goal and pilot measurement support. Connect to the shared local integration path and then real Grace execution. Fix adapter/collector defects; inspect physical windows and coverage during the bounded pilot.
+- AX5 · after pilot approval: Campaign and paper measurement evidence. Maintain the frozen runtime/collector; diagnose invalid sessions, assess which results a repair invalidates, and supply reproducible environment and measurement-method evidence.
+Read FULL_ASSIGNMENT.md for acceptance tests and dependencies for every item. Subsequent ready software milestones are already assigned. Use separate PRs and keep Stephen review; actual hardware runs need an assigned session/budget, and the expanded evaluation needs Stephen pilot/freeze decision. If blocked, publish the precise dependency and continue another ready item. Report full-role progress after every completed turn, not only the active PR.
 
 YOUR FIRST DELIVERABLE — ED-02, issue #2
 Inspect core/models_loader.py, config/models.yaml, core/execution/model_factory.py and core/execution/adapters/openai_compat.py. The active loader reads YAML; do not modify models.json alone and assume the runtime changed. Ollama and vLLM routes already exist. Identify the selected provider and actual working environment before introducing another runtime.
@@ -36,11 +49,11 @@ The reviewed Ollama path appears to send /api/chat responses into an OpenAI-styl
 
 First-PR acceptance: demonstrate the defect where present, verify the repaired response/configuration path and compatibility, and document the exact live-runtime check still required. A real local-model response is required for full ED-02 completion; if access is unavailable, keep that criterion open and publish the completed fixture/fix work for review. Do not download a model or start cluster jobs merely to finish a software fixture task.
 
-NEXT, ONLY WHEN ASSIGNED
+CONTINUING ASSIGNED WORK — NO NEW SOFTWARE ASSIGNMENT REQUIRED
 ED-05 covers core/execution/harness.py, core/energy_engine.py and existing readers: CPU/GPU energy scope, permissions, clocks, missing readings, wraps/resets and endpoint behavior under delayed teardown. A measured energy window must not expand because collector shutdown becomes slower. The intended primary machine is Grace A100, but CPU temperature/utilization does not prove CPU-energy access. Coordinate an individual authorized account and session budget. Your scientific support is making intervention effects trustworthy; instrument repairs alone are not our novelty claim.
 
 TARGET DEVICE AND EXECUTION PLACEMENT
-Develop initial fixtures on the contributor’s existing computer. The intended experiment runs on a scheduled Grace Linux compute node using one A100 40GB GPU and a proposed fixed allocation of 16 CPU cores/64GB host RAM, subject to the agreed preflight and scheduler/isolation arrangement. The model executes on the A100; tools, verifier and supporting processes use the allocated host CPUs. Keep actual inference, tool work and measurement in that compute allocation. This is one shared study platform with cooperating components, not separate per-student hardware ports. Do not assume resources are booked or CPU energy is readable. Consult the person’s human guide for the concrete component example and docs/agent-context/05-hardware-and-access.md for resource evidence.
+Develop initial fixtures on the contributor’s existing computer. The intended experiment runs on a scheduled Grace Linux compute node using one A100 40GB GPU and a proposed fixed allocation of 16 CPU cores/64GB host RAM, subject to the agreed preflight and scheduler/isolation arrangement. The model executes on the A100; tools, verifier and supporting processes use the allocated host CPUs. Keep actual inference, tool work and measurement in that compute allocation. This is one shared study platform with cooperating components, not separate per-student hardware ports. Alex has reported no-sudo RAPL access. Do not assume a session is booked; validate actual devices, readable domains and isolation in the assigned allocation. Consult the person’s human guide for the concrete component example and docs/agent-context/05-hardware-and-access.md for resource evidence.
 
 STARTING HARDWARE, DEPENDENCIES AND HANDOFF
 Start on your own development computer with provider fixtures; no GPU is needed to reproduce response-format behavior. Full local-runtime completion requires a real model response, and measurement validation requires your assigned Grace A100 session. Use one agreed contract from Stephen's ED-01. Do not block isolated fixture work on the complete runner. Aldric will consume your model interface; Nitheesh will consume your event/energy records. Your handoff is tested interfaces plus a capability/domain report and example data, including failures and missing readings. ED-07 cannot pass until your live runtime and measurement evidence are ready. No new hardware purchase or unbooked HPC session is implied.
@@ -64,4 +77,4 @@ python3 scripts/publish_agent_context.py --author alex --turn-id YOUR_UNIQUE_TUR
 Replace the two placeholders with the actual ID/path. The helper publishes only your immutable turn record and LATEST.md from an isolated worktree, directly to shared integration. This narrow context push is already authorized and needs no PR. Retain the same ID/content when retrying the same publication. If a push fails or the process is interrupted, retain the local note, report the limitation and retry when possible; do not claim successful publication without its receipt.
 
 END-OF-TASK HANDOFF
-Provide the PR URL, source commit, exact tests/results, actual evidence level, remaining acceptance criteria and next bounded action. Link the published context record. Do not claim the whole study is complete because your component passes its tests. Begin now with checkout/context inspection and the first assigned deliverable.
+Provide the PR URL, source commit, exact tests/results, actual evidence level, remaining acceptance criteria and next bounded action. Link the published context record. Do not claim the whole study is complete because your component passes its tests. Begin with checkout/context inspection and a status table covering EVERY milestone in your FULL_ASSIGNMENT.md. Include evidence, PR/commit, blockers and next action; explain the complete scope to the human, then implement the next ready milestone. Continue independent software work while waiting for review. Do not stop at the first merged PR.

@@ -1,5 +1,7 @@
 # Alex: local runtime and measurement reliability
 
+**Full-role checklist:** [all Alex milestones](../../agent%20context%20md/alex/FULL_ASSIGNMENT.md). This technical guide and that checklist describe the complete assignment; the first issue is only the entry point. Read the [shared merge gates](../../agent%20context%20md/COMPLETE_ASSIGNMENTS.md).
+
 Mission: make one local model execution and its energy record trustworthy. Primary hardware: Grace A100 in scheduled sessions. Local fixture work should proceed without waiting for a reservation.
 
 ## Own

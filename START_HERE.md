@@ -1,5 +1,7 @@
 # Start here: A-LEMS energy diagnosis
 
+**Required full scope:** read [complete team assignments and merge gates](agent%20context%20md/COMPLETE_ASSIGNMENTS.md) and your named full-role checklist. The first issue is only the first milestone. At the next agent session, account for every milestone and continue ready assigned work; retain explicit hardware and pilot-expansion gates.
+
 **Research question:** Which feasible execution change saves measured energy per correctly completed agentic goal, and can we select it with a small profiling budget?
 
 This is the team's private development repository, based on A-LEMS. The research method and experiments remain to be implemented and validated. GPU access is team-reported; telemetry, individual accounts and isolation require preflight.
