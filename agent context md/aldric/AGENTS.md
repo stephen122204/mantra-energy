@@ -12,3 +12,7 @@ Read [FULL_ASSIGNMENT.md](FULL_ASSIGNMENT.md), [the team merge plan](../COMPLETE
 
 Before implementing on your next session, report every milestone ID and its status, evidence/PR, missing dependency and next action. Give the human a concise explanation of the complete role. Maintain that full-scope status in per-turn context, sharing concise rationale and evidence rather than private reasoning. No acknowledgment or completion claim without reading the current files.
 
+## Execute continuously through the full assignment
+
+Stephen explicitly requires full-role implementation, testing, debugging and integration. Follow the standing execution instruction in [COMPLETE_ASSIGNMENTS.md](../COMPLETE_ASSIGNMENTS.md). Do not stop after a milestone, PR, status report or context publication, and do not ask whether to continue already assigned work. Fix component failures, proceed to the next item, and use independent or declared dependent branches while review proceeds. Prepare later-stage software/tests now; missing hardware or a scientific freeze blocks only dependent measurements/decisions. Continue until the role is complete or every remaining item has a concrete external blocker with no useful independent work left.
+

@@ -4,6 +4,10 @@
 
 Your responsibility runs through: **first task/checker → single-goal execution and four controls → four pilot tasks → trace/replay fidelity → Grace integration → conditional expanded task suite and workload evidence**.
 
+## Execution expectation: finish the whole implementation
+
+Work through ALL milestones continuously, including implementation, debugging, meaningful tests, cross-component integration and reproducible handoff. Do not return after a milestone asking what to do next. Status/context publication and separate PRs are checkpoints, not stop signals. Build later-stage software using agreed fixtures where necessary; keep actual physical campaigns and scientific decisions within their stated dependencies. Follow [the standing execution instruction](../COMPLETE_ASSIGNMENTS.md#standing-instruction-execute-the-whole-role-to-completion). When one item is externally blocked, continue another; escalate only the specific dependency, not the whole assignment.
+
 ## Milestones, evidence and dependencies
 
 | Milestone | Deliverable | Required implementation | Acceptance evidence | Dependency / handoff |

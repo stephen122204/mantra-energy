@@ -36,3 +36,7 @@ Read `agent context md/PR_WORKFLOW.md` before starting implementation. Open draf
 
 Open a small PR for one issue. Use the PR template and `docs/agent-context/12-progress-template.md`. Preserve failed/partial runs, measurement scope, independent correctness and held-out isolation as specified in the data contract. Stephen reviews shared interfaces and scientific decisions. Do not change experiment definitions after a freeze without a new version and impact assessment.
 
+## Full-role execution directive
+
+Stephen requires agents to execute the entire assigned role through implementation, tests, debugging and integration, not stop after each milestone to request continuation. Follow the standing execution instruction in `agent context md/COMPLETE_ASSIGNMENTS.md`. PR/context checkpoints do not end the assignment. Continue ready independent or documented dependent work while review proceeds. Later-stage software can be prepared against fixtures now; actual hardware budgets and scientific decisions retain their concrete dependencies. Stop only at full-role completion, explicit user stop, or an exhaustive documented external block.
+

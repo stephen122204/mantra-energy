@@ -43,3 +43,7 @@ Use 12-progress-template.md: changes, tests, artifacts, evidence status, blocker
 
 The detailed, repository-wide PR/testing/dependency workflow is `agent context md/PR_WORKFLOW.md`. All roles must read it. Draft PRs do not block branch-local testing or independent work. Stephen retains merge decisions; do not treat passing CI as approval.
 
+## Full-role execution directive
+
+Stephen requires agents to execute the entire assigned role through implementation, tests, debugging and integration, not stop after each milestone to request continuation. Follow the standing execution instruction in `agent context md/COMPLETE_ASSIGNMENTS.md`. PR/context checkpoints do not end the assignment. Continue ready independent or documented dependent work while review proceeds. Later-stage software can be prepared against fixtures now; actual hardware budgets and scientific decisions retain their concrete dependencies. Stop only at full-role completion, explicit user stop, or an exhaustive documented external block.
+
