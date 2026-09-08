@@ -1,0 +1,27 @@
+{
+  "_type": "ExecutionRecord",
+  "contract_version": "0.1",
+  "goal_execution_id": "ge-0003",
+  "planned_run_id": "plan-0003",
+  "session_id": "sess-fixture-01",
+  "task_id": "data-aggregate-reconcile-v1",
+  "setting_id": "C00",
+  "attempt_number": 2,
+  "execution_status": "timed_out",
+  "started_ns": 20000000000,
+  "ended_ns": 320000000000,
+  "clock_domain": "fixture-host:boot-1",
+  "simulated": true,
+  "error": "deadline 300 s exceeded during tool span s-tool-region; owned work terminated",
+  "model_response": {"request_id": "req-0003", "status": "completed", "model_hash": "fixture-model-0000", "started_ns": 20100000000, "ended_ns": 22000000000, "clock_domain": "fixture-host:boot-1", "text": "plan", "token_provenance": "estimated", "prompt_tokens": 400, "completion_tokens": 20},
+  "spans": [
+    {"span_id": "s-model", "attempt_id": "att-0003-2", "kind": "model", "ready_ns": 20000000000, "start_ns": 20100000000, "end_ns": 22000000000, "status": "completed"},
+    {"span_id": "s-tool-region", "attempt_id": "att-0003-2", "kind": "tool", "ready_ns": 22000000000, "start_ns": 22100000000, "end_ns": 320000000000, "status": "timed_out", "depends_on": ["s-model"], "workers_configured": 1, "error": "killed at deadline"}
+  ],
+  "measurements": [
+    {"session_id": "sess-fixture-01", "domain_id": "cpu-package-0", "start_ns": 20000000000, "end_ns": 320000000000, "status": "unavailable", "method": "counter-difference", "energy_j": null, "reason": "collector lost the counter after a reset at 150 s; no valid bracket"},
+    {"session_id": "sess-fixture-01", "domain_id": "gpu-board-0", "start_ns": 20000000000, "end_ns": 320000000000, "status": "partial", "method": "trapezoid-power", "energy_j": 640.0, "coverage": 0.5, "reason": "NVML polling gap 150-300 s"}
+  ],
+  "verifier": {"verifier_version": "data-analysis-verifier-v1", "outcome": "unavailable", "reason": "no output artifact to verify"},
+  "notes": "Fixture: timed out, retained in the ledger with null (not zero) CPU energy and a partial GPU reading."
+}
