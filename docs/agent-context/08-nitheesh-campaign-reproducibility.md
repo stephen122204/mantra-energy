@@ -1,5 +1,7 @@
 # Nitheesh: campaign execution and reproducibility
 
+**Full-role checklist:** [all Nitheesh milestones](../../agent%20context%20md/nitheesh/FULL_ASSIGNMENT.md). This technical guide and that checklist describe the complete assignment; the first issue is only the entry point. Read the [shared merge gates](../../agent%20context%20md/COMPLETE_ASSIGNMENTS.md).
+
 Mission: turn validated single-goal executions into a complete, auditable experiment. Develop the ledger/validation against synthetic fixtures locally. Use Grace only after the runtime and task interfaces are ready.
 
 ## Own
@@ -39,3 +41,4 @@ Use your personal folder in the repository-root `agent context md/` directory. F
 ## PR lifecycle and independent progress
 
 Follow the repository-root `agent context md/PR_WORKFLOW.md`. Open a draft PR early and continue implementing/testing on its branch. Mark it ready when issue-specific evidence is complete; Stephen reviews and decides merges. While waiting, start independent work on a separate branch or explicitly document a dependent PR and tested commit. Agree on shared interfaces, and keep simulated checks distinct from real hardware evidence. Context updates remain autonomous after every turn.
+

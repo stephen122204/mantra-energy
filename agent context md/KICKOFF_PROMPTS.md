@@ -2,7 +2,7 @@
 
 Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), or [Nitheesh](nitheesh/HUMAN_START_HERE.md).
 
-Prepared 6 September 2026. These are self-contained prompts to paste into each person's coding agent after providing access to the team checkout.
+Updated 7 September 2026. These are self-contained prompts to paste into each person's coding agent after providing access to the team checkout.
 
 | Person | Working assignment | Starting issue | Prompt |
 |---|---|---|---|
@@ -13,7 +13,7 @@ Prepared 6 September 2026. These are self-contained prompts to paste into each p
 
 This is the proposed named allocation used for the kickoff; Stephen can reassign it. Names do not establish GitHub usernames or permissions, and no invitations were issued by these files. Do not change account assignments or overwrite an existing task solely because a prompt suggests a branch name.
 
-Each prompt tells the agent to inspect current code/issues/context, perform its first bounded implementation, run the relevant tests, push scoped work through PRs, and publish context after every completed turn. They explicitly handle the expanded PR guide being unmerged in PR #13 at preparation time. Read current repository state instead of assuming that status remains unchanged.
+Each prompt requires the complete role checklist, an acknowledgment covering EVERY milestone, inspection of existing work, and progress through ready milestones in separate PRs. The first issue is not the full assignment. The updated prompts replace earlier first-task-only attachments. See [complete assignments](COMPLETE_ASSIGNMENTS.md); remaining hardware and scientific expansion gates still apply.
 
 The [human team message](TEAM_KICKOFF_MESSAGE.md) explains how the four parts support one integrated software pipeline. Shared exact API agreements remain ED-01; students can progress on independent fixtures without silently inventing conflicting interfaces.
 

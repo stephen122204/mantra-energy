@@ -1,5 +1,7 @@
 # Alex: local runtime and measurement reliability
 
+**Full-role checklist:** [all Alex milestones](../../agent%20context%20md/alex/FULL_ASSIGNMENT.md). This technical guide and that checklist describe the complete assignment; the first issue is only the entry point. Read the [shared merge gates](../../agent%20context%20md/COMPLETE_ASSIGNMENTS.md).
+
 Mission: make one local model execution and its energy record trustworthy. Primary hardware: Grace A100 in scheduled sessions. Local fixture work should proceed without waiting for a reservation.
 
 ## Own
@@ -37,3 +39,4 @@ Use your personal folder in the repository-root `agent context md/` directory. F
 ## PR lifecycle and independent progress
 
 Follow the repository-root `agent context md/PR_WORKFLOW.md`. Open a draft PR early and continue implementing/testing on its branch. Mark it ready when issue-specific evidence is complete; Stephen reviews and decides merges. While waiting, start independent work on a separate branch or explicitly document a dependent PR and tested commit. Agree on shared interfaces, and keep simulated checks distinct from real hardware evidence. Context updates remain autonomous after every turn.
+

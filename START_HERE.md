@@ -1,6 +1,8 @@
 # Start here: A-LEMS energy diagnosis
 
-**Research question:** Which feasible execution change saves measured energy per correctly completed agentic goal, and can we select it with a small profiling budget?
+**Required full scope:** read [complete team assignments and merge gates](agent%20context%20md/COMPLETE_ASSIGNMENTS.md) and your named full-role checklist. The first issue is only the first milestone. At the next agent session, account for every milestone and continue ready assigned work; retain explicit hardware and pilot-expansion gates.
+
+Build and validate the assigned software components using the shared contracts. Research planning is maintained privately.
 
 This is the team's private development repository, based on A-LEMS. The research method and experiments remain to be implemented and validated. GPU access is team-reported; telemetry, individual accounts and isolation require preflight.
 
@@ -47,3 +49,4 @@ For a fresh agent session, use the [named kickoff prompts](agent%20context%20md/
 The [dependencies and hardware guide](agent%20context%20md/DEPENDENCIES_AND_HARDWARE.md) explains who can start locally, what each person hands off and what must be ready before Grace integration or a scientific pilot.
 
 Read the [PR and independent-testing workflow](agent%20context%20md/PR_WORKFLOW.md) before implementation: early drafts, branch-local testing, parallel issues, explicit dependencies and Stephen-owned merge decisions.
+

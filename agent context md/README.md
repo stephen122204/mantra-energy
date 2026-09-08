@@ -1,4 +1,8 @@
+**Publication boundary:** Share only implementation requirements, interfaces, code changes, concise technical rationale, tests, hardware setup and handoffs. Keep research plans, proposed contributions, literature reviews, novelty assessments, manuscript strategy and private conversations outside Git-tracked files, commit messages, PRs and issues. This overrides earlier instructions to publish every discussion. Stephen's conversational notes are local-only; do not use the context publisher for them. After the history cleanup, use a fresh clone and recover only reviewed code changes from old checkouts; never merge or push old history. Student implementation updates remain authorized.
+
 # Shared agent context
+
+**Required full scope:** read [complete team assignments and merge gates](COMPLETE_ASSIGNMENTS.md) and your named full-role checklist. The first issue is only the first milestone. At the next agent session, account for every milestone and continue ready assigned work; retain explicit hardware and pilot-expansion gates.
 
 Human starting point: [overview](HUMAN_START_HERE.md), then [Alex](alex/HUMAN_START_HERE.md), [Aldric](aldric/HUMAN_START_HERE.md), or [Nitheesh](nitheesh/HUMAN_START_HERE.md).
 
@@ -56,3 +60,4 @@ Use the [named kickoff prompts](KICKOFF_PROMPTS.md) and [human team message](TEA
 See [DEPENDENCIES_AND_HARDWARE.md](DEPENDENCIES_AND_HARDWARE.md) for the parallel first tasks, named hardware, required handoffs, integration gates and the distinction between component completion and a supported research result.
 
 The [Fall timeline](FALL_TIMELINE.md) sets dated evidence milestones, an experimental contingency window and the practical human/agent work split.
+
