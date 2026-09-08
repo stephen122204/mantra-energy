@@ -1,33 +1,31 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260905-context-setup.md)
-
-# Turn summary: Stephen — 20260905-context-setup
+[Immutable turn record](turns/20260907-windows-readiness-status.md)
 
 ## Task and current understanding
 
-Stephen requested a repository-root directory named `agent context md`, personal folders for Stephen/Alex/Aldric/Nitheesh, autonomous pushing after every completed turn, and a candid assessment of whether the goal-level research direction has been vetted for SIGMETRICS. The implementation baseline for this change is `4d3450d8f78816128821bdd737213ea0fb5379c6`; the code/instruction change is `e6c133cb6a8aa8b03e631d4df5ee4ba67c5ef8bf`. Shared context should make work understandable across people and models without publishing confidential material or private internal deliberations.
+Checked whether students can treat the shared checkout as Windows compatible. Origin integration is 1f7ced2; PRs 13, 14, 16, 17 remain open. This is a readiness assessment, not a Windows implementation or merge turn.
 
 ## Ideas and hypotheses
 
-A shared per-person notebook can reduce conflicting assumptions if agents read refreshed context before dependent work and publish reviewable evidence, understanding, hypotheses and decisions at turn completion. This coordination benefit has not been measured. The research hypothesis remains that goal/dependency/state information enables economical energy-saving intervention decisions beyond simple screening. Goal labels and four familiar configuration settings alone do not establish that contribution.
+Native Windows can support local fixture development and context publication once the known portability issues are fixed. The existing Linux hardware measurement runtime remains intended for Grace; successful Windows development tests do not establish native Windows telemetry support.
 
 ## Decisions and rationale
 
-Created the exact requested top-level directory and four named folders. Chose one shared integration branch for narrowly scoped context updates so everyone can see records without waiting for code PRs. Chose an isolated temporary worktree for publication so a note push cannot accidentally include staged or unfinished code. Turn IDs are immutable and idempotent; non-fast-forward races retry by reapplying only the note without force-pushing. Code still goes to assigned feature branches and integrates through PR review. Named folders do not imply known GitHub usernames or a newly assigned student role.
+Do not announce complete Windows compatibility. The invalid filename removal is merged. The publisher path fix remains in PR 17, and LF fixture/hash repairs remain local on review-pr16-fix. Additional explicit UTF-8 text handling and actual Windows CI are needed to avoid repeat setup failures.
 
 ## Changes and artifacts
 
-Added root context protocol/template, personal README/AGENTS/LATEST files, SIGMETRICS_ASSESSMENT.md, `scripts/publish_agent_context.py` and disposable-Git tests. Updated root/shared/role instructions and agent prompts with standing push authorization. Added local pending-note ignore and CI tests. Code commit was pushed to the private team integration branch. No upstream A-LEMS runtime code or hardware configuration was changed.
+No code changes or code pushes. Inspected the remote publisher, setup checker, workflow, and prepared fixture attributes.
 
 ## Tests and evidence
 
-`python3 scripts/check_energy_diagnosis_setup.py` passed: portable links, provenance and planning behavior. `python3 -m unittest discover -s scripts/tests -p test_publish_agent_context.py -v` passed four tests: concurrent remote advance preserves both authors; staged unrelated code is not pushed and duplicate notes are idempotent; rejected pushes preserve the source note and clean temporary worktrees; invalid author/turn/sections or wrong destinations are rejected. `git diff --check` passed. Evidence level is fixture-tested software behavior, not hardware/campaign validation. GitHub CI for the code change is at https://github.com/stephen122204/alems-energy-diagnosis/actions/runs/33990973966; its final status should be read from GitHub rather than inferred here. This note's publication receipt provides separate real-remote evidence.
+Current setup checker uses default-encoding read_text for Markdown and JSON, and the publisher uses default-encoding read_text/write_text for notes. Aldric previously reported needing Python UTF-8 mode for the setup checker. Current CI runs ubuntu-latest only. Prior local repaired-stack tests passed, but they are not native Windows validation.
 
 ## Open questions and disagreements
 
-Student GitHub usernames and final assignment mapping remain unavailable; repository write access must be provisioned before their agents can publish. A forcibly interrupted/offline process cannot guarantee an end-of-turn push; pending notes must be recovered and retried. Venue fit and close prior work were vetted, but novelty/significance are unproved until the method beats or economizes on credible baselines on held-out verified goals. The four-setting pilot could show ordinary screening is sufficient. No new GPU experiment was run.
+Windows contributors should not each rewrite the shared publisher or disable its path checks. Standardize these fixes centrally, retain independent PR review, and distinguish the local-development support target from the Linux energy runtime. Python -X utf8 is an interim encoding workaround only; it does not fix path or hash issues.
 
 ## Next actions and handoff
 
-Use the publisher for this first Stephen record, then verify the remote artifact and synchronize untouched role starting branches. Each agent should read the root context protocol and all latest records at the next turn. Stephen supplies account mappings and leads ED-01/ED-10; local student implementation can proceed on ED-02/03/04 once interfaces are agreed. Retain the research opportunity gate before a full campaign. No additional hardware budget is consumed by this update.
+Land the reviewed fixture and publisher fixes, make text I/O explicitly UTF-8, add Windows coverage for setup/publisher/workload tests, and document Windows Python invocation. After integration, students should preserve their work and merge current integration into active branches; do not reset, force-push, or erase local work to update.
