@@ -1,31 +1,31 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-post-merge-project-priorities.md)
+[Immutable turn record](turns/20260907-dependency-and-merge-gates.md)
 
 ## Task and current understanding
 
-Reviewed current PR state and project priorities. During this read-only code review, the other active workflow completed the merges of PRs 14, 13, 16 and 17. GitHub now shows no open PRs; integration code head is 01482b56bbd4237bbf2b0fabb1d3bb38296ac54d. This turn did not perform those merges.
+Stephen requested explicit ownership, dependency order and merge evidence so Grace integration does not become a first integration attempt. Refreshed origin at b642f3e; local lead/named-kickoff-prompts worktree was clean. No open PRs at inspection. Shared v0 interfaces remain proposed shapes rather than merged callable definitions. First workload/verifier is implemented; study runtime and campaign directories remain placeholders. Unpublished local student work is unknown.
 
 ## Ideas and hypotheses
 
-The immediate scientific bottleneck is now one real measured goal and a meaningful execution intervention, rather than additional onboarding documentation. A small validated fixture is necessary but cannot establish an energy-saving opportunity or novelty.
+A small common contract plus a local end-to-end fixture integration will reduce interface surprises. An early Alex-owned Grace capability/model smoke check must run in parallel with development: local tests cannot establish drivers, permissions, energy-domain coverage or resource isolation.
 
 ## Decisions and rationale
 
-Treat the four PRs as completed components. Next: one small shared Windows-development follow-up; a minimal callable/data contract from Stephen; runtime/measurement integration from Alex; meaningful bounded tool controls from Aldric; resumable ledger from Nitheesh. Keep the first integration smaller than the full pilot and compare simple baselines before expanding the campaign.
+Recommended merge waves: Stephen minimal concrete contracts and contract tests; parallel Alex provider plus collector components, Aldric single-goal executor/controls and task assets, Nitheesh fixture-backed ledger; Stephen-owned integrated local path with fault injection; bounded real Grace goal; four-goal pilot; only then selector, evaluation freeze and expanded suite. Components can merge as fixture-tested, but hardware-dependent issues remain incomplete until real evidence. Aldric owns choosing meaningful tool worker controls with Alex advising environment compatibility. Controlled replay can be a separate subsequent PR after live path works; it is required before replay-based scientific claims.
 
 ## Changes and artifacts
 
-No code edits, PR messages, or merges in this review. Inspected merged guide resolutions, repaired fixture hashes and finite-tolerance guards/regressions, the pytest CI step, and the publisher path fix with its added regression.
+No implementation changes or merges. Published this coordination summary using the authorized context-only exception. Current assignments remain canonical in docs/agent-context/04-interfaces-and-data.md and named role files. The response partitions those existing responsibilities into reviewable deliverables; proposed tests are acceptance requirements, not claims of existing test coverage.
 
 ## Tests and evidence
 
-A disposable checkout of merged integration 01482b5 with PR 17 head e85bff0 verified already contained passes 17 tests across workloads and publisher; setup validator passes. All four PRs show MERGED with successful Linux PR checks. Merged study runtime, campaign and analysis directories still contain README placeholders; no implementations in those directories were found. Alex and Nitheesh have no published turn records yet in the inspected integration snapshot; that is not proof of no local work.
+Read current shared interfaces, named role files, contributor latest records, root and shared instructions. Queried all issues and open PRs. No tests rerun because this turn is a planning and repository-state inspection, with no code changes. Prior 17-test result is historical component evidence, not end-to-end validation.
 
 ## Open questions and disagreements
 
-Explicit UTF-8 I/O remains needed in setup/publisher helpers. CI remains Linux-only. The publisher regression's as_posix override returns base_cls.__str__, which still uses backslashes on real Windows; adjust the test before including it in Windows CI. Existing POSIX simulation is evidence for the path fix, not native Windows coverage. Hardware RAPL read access is team-confirmed; validate actual domain/device coverage and isolation in the allocated session rather than reopening the resolved permission question.
+No guarantee Grace will require only minor repairs. Remaining hardware evidence includes actual model/tool integration, supported worker controls, telemetry coverage/refresh/overhead and appropriate node isolation. Team-confirmed no-sudo RAPL access remains accepted. Current student completion records are insufficient to call runtime or campaign work ready. Shared interface changes must be reviewed by producer and consumer.
 
 ## Next actions and handoff
 
-Stephen: freeze minimal ED-01 interfaces and one example record, specify fair baseline and profiling-cost accounting, own Windows bootstrap cleanup. Alex: provider path and both-socket/allocated-GPU measurements for one real task. Aldric: preserve the small verifier fixture, then demonstrate real worker/concurrency controls and unchanged results. Nitheesh: preserve success/failure/interruption/missing telemetry in a resumable ledger. Target integrated goal September 11–12 and usable pilot by September 15 subject to actual session/readiness; assess scientific opportunity by September 18. Do not expand to extra platforms, full training or the 1,432-row campaign before the pilot establishes a meaningful decision problem. Existing individual task assignments and other project commitments should be coordinated, not silently replaced.
+Stephen owns ED-01 concrete schema/callables, example records, integrated acceptance command and Windows bootstrap follow-up. Alex ED-02/05 produces normalized model outcomes, session collector and early Grace evidence. Aldric ED-06/08 produces semantic-preserving execution controls, four pilot goals and trace/replay support. Nitheesh ED-04 produces resumable complete records, then ED-09 adds bounded randomized campaign validation and exports. Before Grace acceptance require fresh-checkout local integrated success/failure/missing-telemetry/interruption runs against real component implementations with only external model/sensors stubbed; require real tool execution. After first measured goal, expand to candidate comparison then the bounded pilot. Stephen scientific method/freeze and Nitheesh selector budget/isolation precede held-out evaluation. Larger task suite remains conditional on pilot evidence.
