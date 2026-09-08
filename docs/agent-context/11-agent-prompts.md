@@ -1,86 +1,17 @@
-# Starting prompts for students' models
+# Starting prompts: use the complete named assignment
 
-Replace the bracketed fields before use. Supply only the relevant files and let the agent inspect the checkout. These prompts ask for concrete work, not an unbounded research redesign. Students remain responsible for understanding and reviewing their agent's changes.
+This page preserves older issue/email links. The former first-issue-only prompts are superseded. Use the maintained named prompt below; each requires the complete assignment and continuous implementation through testing, debugging and integration.
 
-## Common opening
+| Person | Prompt to give the agent | Human starting point | Full role |
+|---|---|---|---|
+| Alex | [alex.txt](../../agent%20context%20md/alex/alex.txt) | [Human guide](../../agent%20context%20md/alex/HUMAN_START_HERE.md) | [All milestones](../../agent%20context%20md/alex/FULL_ASSIGNMENT.md) |
+| Aldric | [aldric.txt](../../agent%20context%20md/aldric/aldric.txt) | [Human guide](../../agent%20context%20md/aldric/HUMAN_START_HERE.md) | [All milestones](../../agent%20context%20md/aldric/FULL_ASSIGNMENT.md) |
+| Nitheesh | [nitheesh.txt](../../agent%20context%20md/nitheesh/nitheesh.txt) | [Human guide](../../agent%20context%20md/nitheesh/HUMAN_START_HERE.md) | [All milestones](../../agent%20context%20md/nitheesh/FULL_ASSIGNMENT.md) |
+| Stephen | [stephen.txt](../../agent%20context%20md/stephen/stephen.txt) | Private human guide remains outside the repo | [Team gates](../../agent%20context%20md/COMPLETE_ASSIGNMENTS.md) |
 
-```text
-You are helping implement the A-LEMS energy-diagnosis study in this repository.
-Read the repository's existing instructions and docs/agent-context/AGENTS.md,
-README.md, 01-project-brief.md, 03-code-map.md, 04-interfaces-and-data.md,
-and the root agent context md/PR_WORKFLOW.md, plus my role file: [ROLE FILE].
-My assigned issue is [ISSUE ID].
-The intended branch is [BRANCH]. The agreed baseline is [COMMIT].
-
-First inspect the actual checkout, working changes, active configuration and
-relevant existing interfaces. Summarize what already works, what is only a
-source-review concern and what this issue must add. Then implement the smallest
-reviewable change with meaningful local tests. Preserve other people's work.
-Do not invent APIs, hardware access, observed results or scientific novelty.
-Continue independent local work if hardware is unavailable. Do not start a
-cluster campaign without an assigned budget. Scoped feature-branch pushes and
-per-turn context publication are already authorized: follow the root
-agent context md/README.md protocol before ending every completed turn.
-Open a draft PR early, test on your feature branch, and mark it ready only
-when acceptance evidence is complete. Do not self-merge. Continue independent
-work on separate branches while awaiting review; declare dependencies explicitly.
-Finish with the evidence-based progress template and precise remaining work.
-```
-
-## Alex first task
-
-```text
-Use role 06-alex-runtime-measurement.md and start ED-02. Inspect the active
-models.yaml loader and common HTTP adapter. Reproduce the reported Ollama
-stream/response mismatch with representative small fixtures if it still exists.
-Repair the actual defect, preserve the OpenAI-compatible path, and correctly
-label token/timing metadata and partial failures. Do not download a model or
-change the cluster environment for this fixture task. State the exact live
-check still needed, or perform it if my task supplies an available local runtime.
-```
-
-## Aldric first task
-
-```text
-Use role 07-aldric-workloads-verifiers.md and start ED-03. Build one immutable
-local data-analysis goal and an independent correctness verifier in the agreed
-study namespace. Inspect existing tools before choosing an engine. Include
-correct, incorrect, missing-evidence and malformed-output fixtures. Specify
-candidate eligibility and how real tool worker controls will be observed.
-Do not claim energy savings or build a broad benchmark/framework. Leave a
-portable task contract that Nitheesh can execute through the agreed interface.
-```
-
-## Nitheesh first task
-
-```text
-Use role 08-nitheesh-campaign-reproducibility.md and start ED-04. Read the bundled
-planner and complete data contract. Implement a separate fixture-driven run
-ledger with stable identities, terminal outcomes and resumability. Test restart,
-failure and missing-energy cases. Keep planned and executed states distinct.
-Do not add hidden model execution to the planner or start a GPU job. Provide
-a small export and a validation report for the other students to inspect.
-```
-
-## Stephen's method task
-
-```text
-Read role 09-stephen-method-integration.md and the current development evidence
-[ARTIFACTS]. Propose and implement one bounded diagnostic rule using only
-permitted features/profiling results. Define its information cost, budget,
-eligibility and abstention behavior. Compare it fairly with simple screening.
-Keep hidden reference outcomes out of selection. Distinguish an engineering
-prototype from an experimentally supported contribution and report negative
-results. Do not enlarge the search space solely to make baselines look costly.
-```
+Before coding, complete the [required startup checklist](../../agent%20context%20md/STARTUP_CHECKLIST.md). It covers current shared/named context, the implementation objective, all role milestones, interfaces, hardware, tests, workflow and all four latest team records. Fetch current integration without discarding work. Old attachments or branch instructions do not replace the current full scope. The first acknowledgment is followed immediately by execution, not a pause waiting for another assignment.
 
 ## Independent review prompt
 
-```text
-Review [PR/DIFF] against its assigned issue and docs/agent-context contracts.
-Check correctness, actual configuration routing, measurement boundaries, null
-semantics, replay/live distinction, data joins and held-out leakage as relevant.
-Verify the reported tests support the claimed evidence level. Identify concrete
-defects with file/line references; distinguish observations from suspicions.
-Do not change unrelated code or declare SIGMETRICS readiness from passing tests.
-```
+For a bounded review request, inspect the PR against its stated milestone, current shared contracts and [review workflow](../../agent%20context%20md/PR_WORKFLOW.md). Verify correctness, configuration routing, measurement boundaries, null/failure semantics, replay/live distinction, data links and held-out isolation as applicable. Verify the tests support the evidence claimed. Report concrete defects with locations; do not infer paper readiness from passing checks. A review request does not silently reassign the reviewer's whole role.
+
