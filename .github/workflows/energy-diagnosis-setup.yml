@@ -10,6 +10,7 @@ on:
       - 'scripts/publish_agent_context.py'
       - 'scripts/tests/test_publish_agent_context.py'
       - 'tests/test_data_analysis_workload.py'
+      - 'tests/test_study_contracts.py'
       - 'AGENTS.md'
       - '.github/workflows/energy-diagnosis-setup.yml'
   pull_request:
@@ -37,3 +38,5 @@ jobs:
         run: |
           python3 -m pip install --quiet pytest
           python3 -m pytest -q tests/test_data_analysis_workload.py
+      - name: Test the ED-01 shared record contracts and component bridges
+        run: python3 -m pytest -q tests/test_study_contracts.py
