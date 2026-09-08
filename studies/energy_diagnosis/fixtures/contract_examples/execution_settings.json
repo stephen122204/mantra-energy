@@ -1,0 +1,6 @@
+[
+  {"setting_id": "C00", "tool_concurrency": false, "tool_workers": 1, "description": "baseline: sequential tools, one worker"},
+  {"setting_id": "C01", "tool_concurrency": false, "tool_workers": 4, "description": "sequential tools, four workers each"},
+  {"setting_id": "C10", "tool_concurrency": true,  "tool_workers": 1, "description": "independent tools run concurrently, one worker each"},
+  {"setting_id": "C11", "tool_concurrency": true,  "tool_workers": 4, "description": "independent tools run concurrently, four workers each"}
+]
