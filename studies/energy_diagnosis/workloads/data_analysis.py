@@ -54,6 +54,8 @@ class DataAnalysisTask:
             tolerance = Decimal(str(raw["absolute_tolerance"]))
         except (InvalidOperation, ValueError) as exc:
             raise TaskInputError("absolute_tolerance must be numeric") from exc
+        if not tolerance.is_finite():
+            raise TaskInputError("absolute_tolerance must be finite")
         if tolerance <= 0:
             raise TaskInputError("absolute_tolerance must be positive")
         asset_path = (base_dir / str(raw["asset"])).resolve()
