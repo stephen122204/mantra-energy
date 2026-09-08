@@ -1,5 +1,6 @@
 """Exercise publishing against disposable local Git repos; no GitHub writes."""
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -77,6 +78,7 @@ class PublisherTests(unittest.TestCase):
         self.assertEqual(self.remote_text("agent context md/alex/turns/fixture-1.md"), self.note)
         self.assertEqual(self.remote_text("agent context md/aldric/turns/concurrent-1.md"), self.note)
 
+    @unittest.skipIf(os.name == "nt", "native Windows paths are exercised directly by the other tests")
     def test_windows_style_relative_paths_match_git_staged_paths(self):
         """Regression: Windows Path.__str__ uses backslashes, Git reports staged paths with
         forward slashes, so the staged-path allowlist check refused every publish on Windows.
@@ -101,6 +103,22 @@ class PublisherTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "published")
         self.assertEqual(self.remote_text("agent context md/alex/turns/fixture-windows.md"), self.note)
+
+    def test_non_cp1252_note_round_trips_as_utf8(self):
+        """Regression: notes were read/written with the platform default encoding, so a note with
+        an arrow or similar character could fail or be mangled on a Windows code page."""
+        note = self.note + "\nAdapter \u2192 collector \u2192 ledger; \u00d7 and \u2014 included.\n"
+        with patch.dict(os.environ, {"PYTHONIOENCODING": "cp1252"}):
+            result = self.publish(author="aldric", turn="fixture-utf8", note=note)
+        self.assertEqual(result["status"], "published")
+        shown = subprocess.run(
+            ["git", "-C", str(self.remote), "show", f"refs/heads/{publisher.BRANCH}:agent context md/aldric/turns/fixture-utf8.md"],
+            capture_output=True, check=True,
+        )
+        self.assertEqual(shown.stdout.decode("utf-8"), note)
+        # idempotent republish must compare the same UTF-8 bytes
+        again = self.publish(author="aldric", turn="fixture-utf8", note=note)
+        self.assertEqual(again["status"], "already_published")
 
     def test_rejected_push_keeps_source_note_and_cleans_worktrees(self):
         source = self.base / "pending-note.md"
