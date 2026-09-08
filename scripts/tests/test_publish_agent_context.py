@@ -77,6 +77,31 @@ class PublisherTests(unittest.TestCase):
         self.assertEqual(self.remote_text("agent context md/alex/turns/fixture-1.md"), self.note)
         self.assertEqual(self.remote_text("agent context md/aldric/turns/concurrent-1.md"), self.note)
 
+    def test_windows_style_relative_paths_match_git_staged_paths(self):
+        """Regression: Windows Path.__str__ uses backslashes, Git reports staged paths with
+        forward slashes, so the staged-path allowlist check refused every publish on Windows.
+        Simulated on POSIX by giving relative paths a backslash str(); not a native Windows run."""
+        base_cls = type(Path())
+
+        class WindowsStyleRelativePath(base_cls):
+            def __str__(self):
+                text = super().__str__()
+                return text if self.is_absolute() else text.replace("/", "\\")
+
+            def as_posix(self):
+                # Python >= 3.13 derives as_posix() from str(); keep the true POSIX form.
+                return base_cls.__str__(self)
+
+        relative = WindowsStyleRelativePath("agent context md") / "alex" / "LATEST.md"
+        self.assertIn("\\", str(relative))
+        self.assertEqual(relative.as_posix(), "agent context md/alex/LATEST.md")
+
+        with patch.object(publisher, "Path", WindowsStyleRelativePath):
+            result = self.publish(author="alex", turn="fixture-windows")
+
+        self.assertEqual(result["status"], "published")
+        self.assertEqual(self.remote_text("agent context md/alex/turns/fixture-windows.md"), self.note)
+
     def test_rejected_push_keeps_source_note_and_cleans_worktrees(self):
         source = self.base / "pending-note.md"
         source.write_text(self.note)
