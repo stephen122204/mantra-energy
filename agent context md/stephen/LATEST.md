@@ -1,31 +1,32 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-dependency-and-merge-gates.md)
+[Immutable turn record](turns/20260907-complete-assignment-audit.md)
 
 ## Task and current understanding
 
-Stephen requested explicit ownership, dependency order and merge evidence so Grace integration does not become a first integration attempt. Refreshed origin at b642f3e; local lead/named-kickoff-prompts worktree was clean. No open PRs at inspection. Shared v0 interfaces remain proposed shapes rather than merged callable definitions. First workload/verifier is implemented; study runtime and campaign directories remain placeholders. Unpublished local student work is unknown.
+Stephen requested that every agent and human guide communicate the complete role, not just the first part. Audit confirmed a real contradiction: all three kickoff prompts instructed a bounded first task and labeled later work NEXT, ONLY WHEN ASSIGNED. Technical role documents contained larger responsibilities; human guides left replay, suite expansion or selector boundary/campaign support less explicit.
 
 ## Ideas and hypotheses
 
-A small common contract plus a local end-to-end fixture integration will reduce interface surprises. An early Alex-owned Grace capability/model smoke check must run in parallel with development: local tests cannot establish drivers, permissions, energy-domain coverage or resource isolation.
+One named complete checklist per student, required for both human and agent, makes scope reviewable. Explicit all-milestone acknowledgment is necessary to verify uptake; repository edits do not automatically refresh active remote chats.
 
 ## Decisions and rationale
 
-Recommended merge waves: Stephen minimal concrete contracts and contract tests; parallel Alex provider plus collector components, Aldric single-goal executor/controls and task assets, Nitheesh fixture-backed ledger; Stephen-owned integrated local path with fault injection; bounded real Grace goal; four-goal pilot; only then selector, evaluation freeze and expanded suite. Components can merge as fixture-tested, but hardware-dependent issues remain incomplete until real evidence. Aldric owns choosing meaningful tool worker controls with Alex advising environment compatibility. Controlled replay can be a separate subsequent PR after live path works; it is required before replay-based scientific claims.
+Clarify all existing roles and acceptance gates without expanding hardware authorization. Ready software milestones are already assigned and continue in separate PRs. Retain Stephen review, individual session/budget requirements, pilot decision and held-out freeze. Introduce milestone IDs AX1–AX5, AL1–AL6 and NI1–NI5 plus team G0–G6 integration gates. Explicitly distinguish a completed first contribution from a completed role.
 
 ## Changes and artifacts
 
-No implementation changes or merges. Published this coordination summary using the authorized context-only exception. Current assignments remain canonical in docs/agent-context/04-interfaces-and-data.md and named role files. The response partitions those existing responsibilities into reviewable deliverables; proposed tests are acceptance requirements, not claims of existing test coverage.
+PR #18: https://github.com/stephen122204/alems-energy-diagnosis/pull/18
+Branch lead/complete-assignment-handoffs, commit 5762c14, isolated worktree /Users/Stephen/alems-db-exploration/alems-complete-assignments. Pushed 27 documentation/prompt files including new agent context md/COMPLETE_ASSIGNMENTS.md and each student FULL_ASSIGNMENT.md. Root/nested agent instructions, human guides, technical roles, kickoff prompts and workflow entry points require the complete scope. Updated Stephen coordination prompt but did not recreate his private human guide. No code changes, implementation merges, messages to students or mailbox actions.
 
 ## Tests and evidence
 
-Read current shared interfaces, named role files, contributor latest records, root and shared instructions. Queried all issues and open PRs. No tests rerun because this turn is a planning and repository-state inspection, with no code changes. Prior 17-test result is historical component evidence, not end-to-end validation.
+Setup/link/provenance/planning validator passed. git diff --check passed. One-time audit verified every student AGENTS.md, HUMAN_START_HERE.md and name.txt references the full assignment; obsolete stop wording removed; checklists include acceptance/dependencies/timing; private Stephen human guide absent. PR #18 was OPEN and MERGEABLE at inspection; remote checks had not yet been reported. No runtime or hardware tests performed for this documentation change.
 
 ## Open questions and disagreements
 
-No guarantee Grace will require only minor repairs. Remaining hardware evidence includes actual model/tool integration, supported worker controls, telemetry coverage/refresh/overhead and appropriate node isolation. Team-confirmed no-sudo RAPL access remains accepted. Current student completion records are insufficient to call runtime or campaign work ready. Shared interface changes must be reviewed by producer and consumer.
+PR is not merged: shared integration still has old maintained guides until review/merge. Students may have stale email attachments or active agent sessions; no acknowledgment of the new scope has been received. Updated prompts/checklists are available on the PR branch for review. Documentation cannot guarantee autonomous execution when a chat is inactive or an agent fails to follow instructions.
 
 ## Next actions and handoff
 
-Stephen owns ED-01 concrete schema/callables, example records, integrated acceptance command and Windows bootstrap follow-up. Alex ED-02/05 produces normalized model outcomes, session collector and early Grace evidence. Aldric ED-06/08 produces semantic-preserving execution controls, four pilot goals and trace/replay support. Nitheesh ED-04 produces resumable complete records, then ED-09 adds bounded randomized campaign validation and exports. Before Grace acceptance require fresh-checkout local integrated success/failure/missing-telemetry/interruption runs against real component implementations with only external model/sensors stubbed; require real tool execution. After first measured goal, expand to candidate comparison then the bounded pilot. Stephen scientific method/freeze and Nitheesh selector budget/isolation precede held-out evaluation. Larger task suite remains conditional on pilot evidence.
+Stephen reviews/merges PR #18. Then each student fetches current integration without discarding work and supplies the updated prompt or instructs the existing agent to read COMPLETE_ASSIGNMENTS.md, personal FULL_ASSIGNMENT.md, human guide and technical role. Each agent publishes a table for EVERY milestone: status, evidence/PR/tested commit, blocker with owner and next action, and explains full scope to the human. Verify those acknowledgments before assuming everyone has read it. Continue next ready software milestone; preserve hardware and scientific gates. Implementation priorities remain concrete contracts and integrated local success/failure tests with early Grace smoke validation in parallel.
