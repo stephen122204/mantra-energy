@@ -1,0 +1,14 @@
+{
+  "_type": "TaskSpec",
+  "task_id": "data-aggregate-reconcile-v1",
+  "family": "data-analysis",
+  "split": "development",
+  "asset_sha256": "5620e18244fc24c128e8610997ccdab9bd03c612c3ebd8a0abd9452acae0b8cc",
+  "expected_result_sha256": "b8a39f0ded6cfc8a1f4dcfcaa2acded4d1ae60a75b1bce74b35b93c974616b2d",
+  "verifier_version": "data-analysis-verifier-v1",
+  "prompt": "Using sales.csv, report revenue totals by region and by product, reconcile both to one grand total and return the source asset SHA-256 as evidence.",
+  "deadline_s": 300.0,
+  "retry_limit": 1,
+  "eligible_settings": ["C00", "C01", "C10", "C11"],
+  "lineage": "synthetic CC0 asset merged in PR #16"
+}
