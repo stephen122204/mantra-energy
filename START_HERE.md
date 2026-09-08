@@ -45,3 +45,5 @@ The repository-root [agent context md](agent%20context%20md/README.md) contains 
 For a fresh agent session, use the [named kickoff prompts](agent%20context%20md/KICKOFF_PROMPTS.md). They assign the proposed first tasks for Stephen, Alex, Aldric and Nitheesh and link the human team explanation.
 
 The [dependencies and hardware guide](agent%20context%20md/DEPENDENCIES_AND_HARDWARE.md) explains who can start locally, what each person hands off and what must be ready before Grace integration or a scientific pilot.
+
+Read the [PR and independent-testing workflow](agent%20context%20md/PR_WORKFLOW.md) before implementation: early drafts, branch-local testing, parallel issues, explicit dependencies and Stephen-owned merge decisions.

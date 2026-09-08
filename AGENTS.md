@@ -26,4 +26,6 @@ Run `python3 scripts/check_energy_diagnosis_setup.py`. It validates the handoff/
 
 ## Review and evidence
 
+Read `agent context md/PR_WORKFLOW.md` before starting implementation. Open draft PRs early, continue testing on your own branch, and mark them ready only when their acceptance evidence is complete. While review is pending, work on an independent issue in a separate branch or explicitly declare a dependent PR. Stephen owns merge decisions; do not self-merge or infer approval from CI. Shared interfaces require coordination, and hardware tests must identify the exact tested commit and allocation.
+
 Open a small PR for one issue. Use the PR template and `docs/agent-context/12-progress-template.md`. Preserve failed/partial runs, measurement scope, independent correctness and held-out isolation as specified in the data contract. Stephen reviews shared interfaces and scientific decisions. Do not change experiment definitions after a freeze without a new version and impact assessment.
