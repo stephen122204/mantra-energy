@@ -1,32 +1,31 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-complete-assignment-audit.md)
+[Immutable turn record](turns/20260907-grace-readiness-expectation.md)
 
 ## Task and current understanding
 
-Stephen requested that every agent and human guide communicate the complete role, not just the first part. Audit confirmed a real contradiction: all three kickoff prompts instructed a bounded first task and labeled later work NEXT, ONLY WHEN ASSIGNED. Technical role documents contained larger responsibilities; human guides left replay, suite expansion or selector boundary/campaign support less explicit.
+Stephen wants the remaining Aldric implementation completed and tested in preparation for Grace, with a friendly scope clarification. Checked PR #18: still open at 5762c14, not merged. Integration study runtime/campaign directories still contain placeholders; first workload/verifier is present. No readiness claim is justified from this state.
 
 ## Ideas and hypotheses
 
-One named complete checklist per student, required for both human and agent, makes scope reviewable. Explicit all-milestone acknowledgment is necessary to verify uptake; repository edits do not automatically refresh active remote chats.
+Clarify that ready assigned software work continues after the first PR. Make completion about executable tests and integration artifacts, not an optimistic agent-assisted time estimate.
 
 ## Decisions and rationale
 
-Clarify all existing roles and acceptance gates without expanding hardware authorization. Ready software milestones are already assigned and continue in separate PRs. Retain Stephen review, individual session/budget requirements, pilot decision and held-out freeze. Introduce milestone IDs AX1–AX5, AL1–AL6 and NI1–NI5 plus team G0–G6 integration gates. Explicitly distinguish a completed first contribution from a completed role.
+Aldric pre-pilot software scope includes real single-goal controls, four pilot tasks/verifiers and trace/replay implementation with local evidence, followed by shared integration fixes. An early narrow Grace capability smoke check can precede full implementation; a full pilot or replay campaign cannot skip the relevant readiness gates. Larger task expansion remains conditional on the pilot decision. Stephen owns common contracts and combined acceptance; Alex and Nitheesh retain their respective components.
 
 ## Changes and artifacts
 
-PR #18: https://github.com/stephen122204/alems-energy-diagnosis/pull/18
-Branch lead/complete-assignment-handoffs, commit 5762c14, isolated worktree /Users/Stephen/alems-db-exploration/alems-complete-assignments. Pushed 27 documentation/prompt files including new agent context md/COMPLETE_ASSIGNMENTS.md and each student FULL_ASSIGNMENT.md. Root/nested agent instructions, human guides, technical roles, kickoff prompts and workflow entry points require the complete scope. Updated Stephen coordination prompt but did not recreate his private human guide. No code changes, implementation merges, messages to students or mailbox actions.
+No code/document changes or merges in this turn. Prepared a proposed Discord message in chat; no message sent. Existing complete assignment and merge gates are in PR #18. Updated maintained guides are not yet on integration.
 
 ## Tests and evidence
 
-Setup/link/provenance/planning validator passed. git diff --check passed. One-time audit verified every student AGENTS.md, HUMAN_START_HERE.md and name.txt references the full assignment; obsolete stop wording removed; checklists include acceptance/dependencies/timing; private Stephen human guide absent. PR #18 was OPEN and MERGEABLE at inspection; remote checks had not yet been reported. No runtime or hardware tests performed for this documentation change.
+Read current PR state, integration tree and Aldric full checklist from the proposed branch. No code changed or tests rerun. Local fixture tests and published plans are not proof of Grace readiness.
 
 ## Open questions and disagreements
 
-PR is not merged: shared integration still has old maintained guides until review/merge. Students may have stale email attachments or active agent sessions; no acknowledgment of the new scope has been received. Updated prompts/checklists are available on the PR branch for review. Documentation cannot guarantee autonomous execution when a chat is inactive or an agent fails to follow instructions.
+Do not promise less time than originally estimated without implementation evidence. No student acknowledgment of the revised full assignment or integrated execution result is available in this check. PR #18 needs review/merge and existing agents need to fetch/read it.
 
 ## Next actions and handoff
 
-Stephen reviews/merges PR #18. Then each student fetches current integration without discarding work and supplies the updated prompt or instructs the existing agent to read COMPLETE_ASSIGNMENTS.md, personal FULL_ASSIGNMENT.md, human guide and technical role. Each agent publishes a table for EVERY milestone: status, evidence/PR/tested commit, blocker with owner and next action, and explains full scope to the human. Verify those acknowledgments before assuming everyone has read it. Continue next ready software milestone; preserve hardware and scientific gates. Implementation priorities remain concrete contracts and integrated local success/failure tests with early Grace smoke validation in parallel.
+Aldric should read the updated full role, report all milestone statuses and complete the next ready items in separate PRs, escalating exact interface/runtime dependencies while continuing independent work. Before the main experiment Stephen verifies fresh-checkout integrated success, wrong-answer, timeout/failure, missing-telemetry and resume cases; actual control behavior; linked durable outputs; and replay fidelity before replay-based measurements. Validate real model/sensors/isolation in bounded Grace checks. Do not label the project ready merely because the checklist exists.
