@@ -1,31 +1,32 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260907-pr18-status-check.md)
+[Immutable turn record](turns/20260907-pr18-merged-full-role.md)
 
 ## Task and current understanding
 
-Stephen asked whether PR #18 was merged and shared instructions were updated.
+Stephen explicitly directed publication of the updated full-role instructions after learning PR #18 remained unmerged. Interpreted in context as authorization to merge the reviewed PR into shared integration.
 
 ## Ideas and hypotheses
 
-Distinguish published context notes from merged maintained prompts.
+Verify maintained instructions on the actual remote integration ref, not just on the feature branch.
 
 ## Decisions and rationale
 
-Report observed status without treating a status question as merge authorization.
+Confirmed PR #18 was open, mergeable, with successful CI and expected head 6d0e0e768243318b997c45d5c6d62a8ef530546e. Merged using an exact-head guard and a merge commit, preserving history and branches.
 
 ## Changes and artifacts
 
-No merges or maintained-file changes. PR #18 remains open at 6d0e0e7.
+PR #18 is MERGED: https://github.com/stephen122204/alems-energy-diagnosis/pull/18
+Merge commit 29770999ef323a02c227efc54847f79677ddca07 on research/energy-diagnosis. Full-role checklists, continuous implementation instructions, updated human guides and kickoff prompts are now on shared integration. No student messages, mailbox changes or hardware jobs.
 
 ## Tests and evidence
 
-GitHub reports OPEN, no merge commit/date, and successful handoff-and-plan CI. Fetched integration and inspected Aldric prompt: it still contains the old first-task instruction. No runtime tests performed.
+Fetched integration after merge. Verified all three students' name.txt, HUMAN_START_HERE.md, AGENTS.md and FULL_ASSIGNMENT.md contain the updated whole-role execution requirement; obsolete NEXT, ONLY WHEN ASSIGNED absent. Shared COMPLETE_ASSIGNMENTS.md verified. PR setup CI passed before merge; no runtime code changed.
 
 ## Open questions and disagreements
 
-Updated complete-role instructions are on the PR branch, not integration. Publishing Stephen context notes does not install those maintained instructions or update remote student sessions.
+Students' existing sessions must fetch/read the new maintained instructions. No automatic refresh, student acknowledgment or engineering/hardware readiness is claimed by this merge.
 
 ## Next actions and handoff
 
-PR #18 must be merged before students can pick up updated maintained guides from integration. After merge, agents need to fetch/read them and publish full-role acknowledgments. No acknowledgment is claimed here.
+Each agent fetches integration while preserving its branch and uncommitted work, reads the shared plan and personal full assignment, reports all milestone evidence/dependencies, then continues implementation/testing/debugging through ready milestones without stopping at PR/context checkpoints. Stephen verifies acknowledgments and actual integration evidence before the main Grace experiment.
