@@ -59,14 +59,15 @@ def publish(repo, author, turn_id, note, expected_remote=EXPECTED_REMOTE, retrie
             try:
                 target = worktree / relative
                 if target.exists():
-                    if target.read_text() != note:
+                    if target.read_text(encoding="utf-8") != note:
                         raise ValueError("Turn ID already exists with different content; use a new turn ID")
                     return {"status": "already_published", "branch": BRANCH, "path": str(relative), "verified_remote_commit": base}
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(note)
+                target.write_text(note, encoding="utf-8")
                 (worktree / latest).write_text(
                     f"# Latest published context: {author}\n\n"
-                    f"[Immutable turn record](turns/{turn_id}.md)\n\n" + note
+                    f"[Immutable turn record](turns/{turn_id}.md)\n\n" + note,
+                    encoding="utf-8",
                 )
                 git(worktree, "add", "--", relative.as_posix(), latest.as_posix())
                 staged = set(git(worktree, "diff", "--cached", "--name-only", "-z").stdout.rstrip("\0").split("\0"))
@@ -93,7 +94,7 @@ def main():
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     try:
-        receipt = publish(repo, args.author, args.turn_id, args.note.read_text())
+        receipt = publish(repo, args.author, args.turn_id, args.note.read_text(encoding="utf-8"))
     except (ValueError, RuntimeError, OSError) as error:
         parser.exit(1, f"Publication failed: {error}\n")
     print(json.dumps(receipt, indent=2))
