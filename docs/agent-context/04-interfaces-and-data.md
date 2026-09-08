@@ -1,6 +1,6 @@
 # Shared interfaces and data contract
 
-This is the proposed v0 integration contract. It is not a description of existing public Python APIs. Stephen and the three implementers should agree on exact types and module locations in the first interface PR. The complete record semantics are in [starter/data-contract.md](starter/data-contract.md).
+**Implemented contract (ED-01, v0.1):** `studies/energy_diagnosis/contracts.py` defines the shared records (`TaskSpec`, `ExecutionSetting`, `ModelResponse`, `SpanEvent`, `SensorSample`, `MeasurementRecord`, `VerifierResult`, `ExecutionRecord`) with JSON round-trip, validation and worked examples in `studies/energy_diagnosis/fixtures/contract_examples/`; `tests/test_study_contracts.py` runs in CI. Produce and consume those types; propose changes by PR against that module, not by local copies. The prose below remains the design rationale and the record-semantics reference is [starter/data-contract.md](starter/data-contract.md). The callable shapes further down are still illustrative.
 
 ## Component handoffs
 
