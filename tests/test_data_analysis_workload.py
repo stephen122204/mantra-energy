@@ -88,3 +88,31 @@ def test_tolerance_is_contract_defined(task):
     answer["region_totals"]["North"] = float(Decimal("49.009"))
 
     assert verify_answer(task, answer)["passed"] is True
+
+@pytest.mark.parametrize("tolerance", ["Infinity", "-Infinity", "NaN"])
+def test_non_finite_tolerance_is_rejected(task, tolerance):
+    """Regression: an infinite tolerance let an all-zero answer pass; NaN escaped as InvalidOperation."""
+    raw = {
+        "task_id": task.task_id,
+        "asset": "sales.csv",
+        "expected_result": "expected_result.json",
+        "asset_sha256": task.asset_sha256,
+        "expected_result_sha256": task.expected_result_sha256,
+        "verifier_version": VERIFIER_VERSION,
+        "absolute_tolerance": tolerance,
+    }
+
+    with pytest.raises(TaskInputError, match="finite"):
+        type(task).from_mapping(raw)
+
+
+def test_pinned_hashes_match_lf_asset_bytes(task):
+    """Regression: hashes were pinned on CRLF bytes, so the task failed to load on LF checkouts."""
+    import hashlib
+
+    asset_bytes = task.asset_path.read_bytes()
+    expected_bytes = task.expected_result_path.read_bytes()
+
+    assert b"\r\n" not in asset_bytes and b"\r\n" not in expected_bytes
+    assert hashlib.sha256(asset_bytes).hexdigest() == task.asset_sha256
+    assert hashlib.sha256(expected_bytes).hexdigest() == task.expected_result_sha256
