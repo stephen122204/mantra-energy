@@ -446,6 +446,8 @@ class RunLedger:
         jsonl_lines = []
         for row in attempts:
             retried_after = previous_attempt.get(row["planned_run_id"])
+            execution_record = json.loads(row["execution_record_json"]) if row["execution_record_json"] else None
+            measurement = self._measurement_summary(execution_record)
             envelope = {
                 "artifact_type": "simulated_execution_attempt" if json.loads(row["payload_json"])["simulated"] else "execution_attempt",
                 "plan": json.loads(row["payload_json"]),
@@ -460,7 +462,11 @@ class RunLedger:
                     "status": row["status"],
                     "retried_after_attempt_id": retried_after,
                     "retry_reason": retry_reasons.get(retried_after, "") if retried_after else "",
-                    "execution_record": json.loads(row["execution_record_json"]) if row["execution_record_json"] else None,
+                    "execution_status": execution_record["execution_status"] if execution_record else "running",
+                    "verifier_outcome": execution_record["verifier"]["outcome"] if execution_record else "unavailable",
+                    "measurement_status": measurement["status"],
+                    "measurement_reason": measurement["reason"],
+                    "execution_record": execution_record,
                     "artifacts": json.loads(row["artifacts_json"]),
                 },
             }
@@ -475,10 +481,7 @@ class RunLedger:
                 (plan.planned_run_id,),
             ).fetchone()
             record = ExecutionRecord.from_json(latest["execution_record_json"]) if latest and latest["execution_record_json"] else None
-            measurement_status = ""
-            if record is not None:
-                statuses = {measurement.status for measurement in record.measurements}
-                measurement_status = ";".join(sorted(statuses)) if statuses else "unavailable"
+            measurement = self._measurement_summary(record.to_dict() if record else None)
             summary_rows.append({
                 "planned_run_id": plan.planned_run_id,
                 "ordinal": plan.ordinal,
@@ -489,7 +492,8 @@ class RunLedger:
                 "latest_execution_id": latest["execution_id"] if latest else "",
                 "execution_status": record.execution_status if record else "",
                 "verifier_outcome": record.verifier.outcome if record else "",
-                "measurement_status": measurement_status,
+                "measurement_status": measurement["status"],
+                "measurement_reason": measurement["reason"],
                 "simulated": str(plan.simulated).lower(),
             })
 
@@ -632,7 +636,7 @@ class RunLedger:
         fieldnames = [
             "planned_run_id", "ordinal", "task_id", "setting_id", "disposition",
             "attempt_count", "latest_execution_id", "execution_status",
-            "verifier_outcome", "measurement_status", "simulated",
+            "verifier_outcome", "measurement_status", "measurement_reason", "simulated",
         ]
         temporary = path.with_name(f".{path.name}.tmp")
         with temporary.open("w", encoding="utf-8", newline="") as handle:
@@ -640,6 +644,18 @@ class RunLedger:
             writer.writeheader()
             writer.writerows(rows)
         os.replace(temporary, path)
+
+    @staticmethod
+    def _measurement_summary(record: Optional[dict[str, Any]]) -> dict[str, str]:
+        if record is None:
+            return {"status": "unavailable", "reason": "attempt has not produced a terminal execution record"}
+        measurements = record.get("measurements", [])
+        if not measurements:
+            reason = record.get("error") or "no measurement records were produced"
+            return {"status": "unavailable", "reason": reason}
+        statuses = ";".join(sorted({str(item["status"]) for item in measurements}))
+        reasons = "; ".join(sorted({str(item.get("reason", "")) for item in measurements if item.get("reason")}))
+        return {"status": statuses, "reason": reasons}
 
 
 __all__ = [
