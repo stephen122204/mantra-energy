@@ -1,35 +1,5 @@
-# Latest published context: nitheesh
+# Latest context: Nitheesh
 
-[Immutable turn record](turns/20260909T210609Z-issue4-read.md)
+Folder initialized on 5 September 2026. No work-turn record has been published by this contributor yet. This is setup status, not a claim of completed implementation or experiments.
 
-# Turn summary: Nitheesh — 20260909T210609Z-issue4-read
-
-## Task and current understanding
-
-The user asked to read GitHub item #4. The supplied URL is issue ED-04, not a pull request. Current checkout and fetched integration are both `7e3ea27c8d583015a9c5a107576720a59e505082` on `research/energy-diagnosis`, with no reported working-tree changes. ED-04 is the NI1 entry milestone for the resumable fixture execution ledger; Nitheesh's complete role continues through NI2 scheduling/validation, NI3 integration and bounded Grace pilot, NI4 selector budget/reference isolation, and NI5 approved frozen evaluation/export.
-
-## Ideas and hypotheses
-
-The first implementation should consume the merged ED-01 v0.1 contract types and keep planning records separate from immutable execution observations. Stephen's latest contract audit identifies non-finite numeric values, duplicate-domain export overwrites, and endpoint-touch measurement acceptance as relevant risks to coordinate before campaign records rely on those exports. This turn did not test or implement those ideas.
-
-## Decisions and rationale
-
-Treat #4 as an open issue specification rather than a PR review. No ED-04 PR exists in the repository, and the campaign directory contains only its README. Preserve the user's read-only scope: do not create a branch, modify issue metadata, or implement the ledger in this turn. Do not treat the 1,432-row planning template as executed evidence.
-
-## Changes and artifacts
-
-No code or GitHub issue state changed. Read issue #4 and its empty comment thread using authenticated GitHub access, searched all PRs, inspected the integration tree, and read the planner/manifest plus required shared and named context. This context note is the only publication artifact.
-
-## Tests and evidence
-
-Evidence level: source/issue inspection plus setup/planning validation only. GitHub issue #4 is open, unassigned, has no comments, and targets the Engineering pilot milestone. Acceptance requires restart/resume, duplicate prevention, interruption, model failure, verifier failure, missing telemetry, and explicit dispositions without overwriting observations or converting unavailable energy to zero. No ED-04 implementation PR or branch was found. Native Python 3.12 was located at `C:\Users\Nitheesh\AppData\Local\Programs\Python\Python312\python.exe`. The default Windows-locale setup check reproduced Stephen's documented `UnicodeDecodeError` in `scripts/check_energy_diagnosis_setup.py`; rerunning with `-X utf8` passed: portable links, provenance, planner CSV/report, and readiness behavior. This check does not run the upstream runtime, model inference, hardware measurement, or a campaign.
-
-Milestone status: NI1 not started in the inspected tree; NI2 not started and depends on NI1 plus frozen scheduling protocol/executor integration; NI3 not started and hardware-blocked on Alex/Aldric components, ED-07/ED-08 acceptance, and an assigned Grace session/budget; NI4 not started but fixture/dummy-selector work is independently possible, with final semantics owned by Stephen; NI5 conditional on pilot approval, validated measurements, expanded tasks, and Stephen's frozen method/analysis/budget.
-
-## Open questions and disagreements
-
-The user called #4 a PR, but GitHub identifies it as an issue. The exact planned-run-to-contract mapping and callable executor/collector interfaces are not yet implemented. Stephen owns shared schema decisions. Python is installed but not available through the ordinary shell PATH/launcher resolution in the sandbox; use its full path. The setup script's locale-default reads remain a known native-Windows defect, with `-X utf8` as a successful local workaround.
-
-## Next actions and handoff
-
-For an implementation turn, create `nitheesh/ed-04-run-ledger` from current integration, coordinate any required contract hardening with Stephen, implement NI1 using fixtures, and open a draft PR early. Required first evidence is a portable export containing success, verifier failure, interrupted/resumed work, model failure, and missing measurement with stable links and duplicate prevention. No code was pushed in this turn.
+Read [the shared protocol](../README.md) and [SIGMETRICS assessment](../SIGMETRICS_ASSESSMENT.md).
