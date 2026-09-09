@@ -213,6 +213,12 @@ class RunLedgerTests(unittest.TestCase):
         retry_export = next(item for item in envelopes if item["attempt"]["attempt_number"] == 2)
         self.assertEqual(interrupted.attempt_id, retry_export["attempt"]["retried_after_attempt_id"])
         self.assertIn("automatic recovery", retry_export["attempt"]["retry_reason"])
+        interrupted_export = next(
+            item for item in envelopes if item["attempt"]["attempt_id"] == interrupted.attempt_id
+        )
+        self.assertEqual("incomplete", interrupted_export["attempt"]["execution_status"])
+        self.assertEqual("unavailable", interrupted_export["attempt"]["measurement_status"])
+        self.assertEqual("simulated process interruption", interrupted_export["attempt"]["measurement_reason"])
 
     def test_plan_registration_is_idempotent_and_conflicts_are_atomic(self) -> None:
         plan = planned(1)
