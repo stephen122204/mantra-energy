@@ -28,7 +28,7 @@ Stephen's latest contract audit identified positive infinity, duplicate measurem
 
 ## Changes and artifacts
 
-Implementation commit: `e683fcd07a1d221b525f326efb9b3f6f3a3f4d4f` on `nitheesh/ed-04-run-ledger`.
+Implementation commits: `e683fcd07a1d221b525f326efb9b3f6f3a3f4d4f` and final audit fix `4d8b06c936f38e4f3072ea6a5cdf6639370ad2ea` on `nitheesh/ed-04-run-ledger`.
 
 Changed:
 - `studies/energy_diagnosis/campaign/ledger.py`: `PlannedRun`, `ArtifactRef`, `AttemptLease`, and `RunLedger` with registration, claim, finalization, recovery, retry, validation, and export.
@@ -59,10 +59,10 @@ NI2 still needs the concrete Aldric executor callable and Stephen's frozen sched
 ## Next actions and handoff
 
 Milestone status:
-- NI1 / ED-04: fixture-tested in commit `e683fcd`; pending PR review/acceptance by Stephen.
+- NI1 / ED-04: fixture-tested through commit `4d8b06c`; pending PR review/acceptance by Stephen.
 - NI2 / ED-04/09: not started; next independent software milestone after this bounded PR.
 - NI3 / ED-07/09: not started; externally dependent on accepted runtime, collector, executor, tasks, controls, pilot assets, and Grace authorization.
 - NI4 / ED-10/11 support: not started; dummy-selector boundary can proceed independently, final method/freeze depends on Stephen.
 - NI5: conditional on the validated pilot and approved frozen evaluation.
 
-Push only `nitheesh/ed-04-run-ledger` and open a draft PR targeting `research/energy-diagnosis`. Do not merge or push directly to integration. The PR should identify commit `e683fcd`, the fixture-only evidence level, the simulated demo, and remaining hardware/integration limits.
+Push only `nitheesh/ed-04-run-ledger` and open a draft PR targeting `research/energy-diagnosis`. Do not merge or push directly to integration. The PR should identify tested commit `4d8b06c`, the fixture-only evidence level, the simulated demo, and remaining hardware/integration limits.
