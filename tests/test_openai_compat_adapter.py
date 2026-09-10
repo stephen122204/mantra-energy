@@ -317,8 +317,8 @@ def test_interruption_preserves_partial_output_and_elapsed_time(monkeypatch, req
     (None, {'prompt': 2, 'completion': 4, 'total': 6}, 'estimated'),
     ({'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
      {'prompt': 0, 'completion': 0, 'total': 0}, 'provider'),
-    ({'prompt_tokens': 9}, {'prompt': 9, 'completion': 4, 'total': 13}, 'mixed'),
-    ({'completion_tokens': 7}, {'prompt': 2, 'completion': 7, 'total': 9}, 'mixed'),
+    ({'prompt_tokens': 9}, {'prompt': 9, 'completion': 4, 'total': 13}, 'estimated'),
+    ({'completion_tokens': 7}, {'prompt': 2, 'completion': 7, 'total': 9}, 'estimated'),
 ])
 def test_sse_usage_provenance(monkeypatch, openai_adapter, usage, expected, provenance):
     lines = [b'data: {"choices":[{"delta":{"content":"one two three four"}}]}']
@@ -329,6 +329,15 @@ def test_sse_usage_provenance(monkeypatch, openai_adapter, usage, expected, prov
     result = openai_adapter.call('hello world', 0)
     assert result['tokens'] == expected
     assert result['token_provenance'] == provenance
+    from studies.energy_diagnosis.contracts import ModelResponse
+    # The executor supplies request identity and its own clock-domain endpoints.
+    normalized = ModelResponse(
+        request_id='fixture-request', status='completed', model_hash='fixture-model',
+        started_ns=1, ended_ns=2, clock_domain='fixture-clock', text=result['content'],
+        prompt_tokens=result['tokens']['prompt'], completion_tokens=result['tokens']['completion'],
+        token_provenance=result['token_provenance'],
+    )
+    assert ModelResponse.from_json(normalized.to_json()) == normalized
     if not usage or 'completion_tokens' not in usage:
         assert result['phase_metrics']['tpot_ms'] is None
         assert result['phase_metrics']['token_throughput'] is None
