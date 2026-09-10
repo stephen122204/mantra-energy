@@ -2,9 +2,11 @@
 
 # Context instructions for Aldric
 
+**Publication boundary (Stephen, 9 September 2026):** GitHub context is implementation-only: concrete build requirements, interfaces, code decisions with concise rationale, debugging hypotheses, tests, hardware setup, dependencies and handoffs. Keep research ideas, proposed scientific contributions, literature/novelty analysis, mathematical research proposals and venue strategy in private local notes or the conversation, outside Git-tracked paths. Do not copy that material into commits, PRs, issues, context records or attachments. Research-only turns require no repository publication. For mixed turns, publish only the implementation portion. This supersedes earlier instructions to publish all ideas or every turn; it does not reduce the complete assigned coding scope. Before any push, inspect the staged diff and publication text for this boundary.
+
 **Required at startup/resumption:** read [STARTUP_CHECKLIST.md](../STARTUP_CHECKLIST.md), all listed shared context and your full named role. Demonstrate complete scope, interfaces, hardware, test requirements and current team dependencies before coding; then immediately execute the next ready item. Do not stop at acknowledgment.
 
-Use author key `aldric` for this folder. Follow the repository-wide instructions and `agent context md/README.md`. Preserve immutable turn records; correct them with a new record. Publish after every completed turn without requesting confirmation again. Share evidence, decisions, concise rationale and reproducible details; do not publish private internal deliberations, credentials or hidden evaluation outcomes. Do not edit another person's latest record.
+Use author key `aldric` for this folder. Follow the repository-wide instructions and `agent context md/README.md`. Preserve immutable turn records; correct them with a new record. Publish after every completed implementation turn without requesting confirmation again. Share evidence, decisions, concise rationale and reproducible details; do not publish private internal deliberations, credentials or hidden evaluation outcomes. Do not edit another person's latest record.
 
 Read `agent context md/PR_WORKFLOW.md`: use early draft PRs, test on the feature branch, keep dependencies explicit, and continue independent work while awaiting review. Stephen decides code merges; per-turn context uses the direct publisher separately.
 

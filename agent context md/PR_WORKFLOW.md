@@ -6,7 +6,7 @@ This is the common workflow for every contributor and model. Stephen reviews int
 
 **Code and maintained documentation:** one bounded issue per feature branch and PR. This includes shared interfaces, scripts, instructions and experiment definitions. Push autonomously to the assigned feature branch; integrate through Stephen's review. Do not self-merge or enable auto-merge merely because CI passes. These instructions do not grant merge permission; an explicit direction from Stephen can authorize a particular merge.
 
-**Per-turn context:** publish an immutable note and your own LATEST.md through the isolated publisher after every completed turn. These narrow updates go straight to integration so collaborators can read them immediately. They do not need a PR. Do not use context notes as a route to install code, change a shared contract or expose hidden evaluation results.
+**Per-turn context:** publish an immutable note and your own LATEST.md through the isolated publisher after every completed implementation turn. These narrow updates go straight to integration so collaborators can read them immediately. They do not need a PR. Do not use context notes as a route to install code, change a shared contract or expose hidden evaluation results.
 
 ## Lifecycle for each issue
 
