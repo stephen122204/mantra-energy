@@ -5,7 +5,7 @@ OPENAI COMPAT ADAPTER — covers Groq, OpenAI, Ollama Local, Ollama Remote
 
 Purpose:
     One adapter class for all OpenAI-compatible HTTP APIs.
-    Provider differences are only base_url + api_key — zero logic branching.
+    Ollama NDJSON and OpenAI-compatible SSE are normalized explicitly.
 
     Providers handled:
       groq          cloud_api    api.groq.com
@@ -124,33 +124,45 @@ class OpenAICompatAdapter(TextGenABC):
         # Reset stream metrics — prevents stale bleed between calls (SPEC_04)
         self._last_stream_metrics = {}
         self._last_token_provenance = "unknown"
+        self._partial_content = ""
+        self._observed_tokens = {}
         # ── Phase 1: PRE-PROCESSING — local JSON build ────────────────────────
-        t_pre = time.time()
+        t_pre = time.perf_counter()
         payload = self._build_payload(prompt, temperature)
         prompt_bytes = len(str(payload).encode("utf-8"))
-        preprocess_ms = (time.time() - t_pre) * 1000
+        preprocess_ms = (time.perf_counter() - t_pre) * 1000
 
         # ── Network snapshot (cloud only) ─────────────────────────────────────
         net_before = self._get_network_counters() if self._is_cloud else None
 
         # ── Phase 2: WAIT / INFERENCE ─────────────────────────────────────────
-        t_call = time.time()
+        t_call = time.perf_counter()
         try:
             raw = self._http_call(payload)
         except Exception as e:
             logger.error("HTTP call failed [%s]: %s", self.get_name(), e)
-            return self._error_result(str(e), preprocess_ms)
+            return self._error_result(
+                str(e), preprocess_ms, (time.perf_counter() - t_call) * 1000,
+                net_before=net_before,
+            )
 
-        call_ms = (time.time() - t_call) * 1000
+        call_ms = (time.perf_counter() - t_call) * 1000
 
         # CPU sample during remote wait — meaningful only for cloud
         cpu_wait = psutil.cpu_percent(interval=0.05) if self._is_cloud else 0.0
 
         # ── Phase 3: POST-PROCESSING — parse response ─────────────────────────
-        t_post = time.time()
-        content, tokens = self._parse_response(raw, prompt)
+        t_post = time.perf_counter()
+        try:
+            content, tokens = self._parse_response(raw, prompt)
+        except Exception as e:
+            return self._error_result(
+                str(e), preprocess_ms, call_ms,
+                postprocess_ms=(time.perf_counter() - t_post) * 1000,
+                net_before=net_before,
+            )
         response_bytes = len(content.encode("utf-8"))
-        postprocess_ms = (time.time() - t_post) * 1000
+        postprocess_ms = (time.perf_counter() - t_post) * 1000
 
         # ── Assign phase times by provider type ───────────────────────────────
         # Ollama runs inference locally — call_ms is compute, non_local=0
@@ -193,6 +205,7 @@ class OpenAICompatAdapter(TextGenABC):
         )
 
         return {
+            "status": "ok",
             "content": content,
             "tokens": tokens,
             "token_provenance": self._last_token_provenance,
@@ -261,284 +274,189 @@ class OpenAICompatAdapter(TextGenABC):
         return f"{self._base_url}{path}"
 
     def _http_call(self, payload: Dict) -> Dict:
+        """Send exactly one request; never hide an ambiguous failure with a retry.
+
+        Set ``stream: false`` in the model or provider configuration for an
+        endpoint without streaming support. A JSON response to a streaming
+        request is also decoded in place, without submitting inference again.
+        Epoch timestamps remain compatible with existing consumers; elapsed
+        stream durations use a monotonic clock.
         """
-        Execute HTTP POST with streaming enabled to capture TTFT and TPOT.
- 
-        Streams the response and records first-token and last-token timestamps.
-        Assembles the full response body so _parse_response() sees identical
-        input as before. Stores timing in self._last_stream_metrics for call()
-        to pick up — avoids changing the return type of this method.
- 
-        For providers that do not support SSE streaming (e.g. custom endpoints
-        with openai_compat=True but no stream support), falls back to
-        non-streaming POST gracefully.
- 
-        Args:
-            payload: dict ready for requests.post json= parameter
- 
-        Returns:
-            dict: parsed JSON response (identical shape to non-streaming)
- 
-        Raises:
-            requests.HTTPError on non-2xx response
-        """
-        import json as _json
- 
-        # Inject stream=True into payload — providers ignore unknown fields
-        stream_payload = {**payload, "stream": True}
- 
-        url = self._endpoint_url()
-        headers = self._build_headers()
- 
-        first_token_ns = None
-        last_token_ns = None
-        chunk_count = 0
-        usage_completion_tokens = None
-        assembled_content = []
-        usage_prompt_tokens = None
-        terminal_chunk = {}
-        stream_observed = False
- 
+        import json
+
+        stream = self.model_config.get("stream", self.provider_config.get("stream", True))
+        if not isinstance(stream, bool):
+            raise ValueError("stream configuration must be a boolean")
         request_start_ns = time.time_ns()
- 
+        start = time.perf_counter_ns()
+        first = last = None
+        first_epoch = last_epoch = None
+        content = []
+        prompt_count = completion_count = None
+        terminal = {}
+        finish_reason = None
+        complete = False
+        response = None
+        self._last_stream_metrics = {"request_start_ns": request_start_ns}
         try:
-            resp = requests.post(
-                url,
-                json=stream_payload,
-                headers=headers,
-                timeout=120,
-                stream=True,
+            response = requests.post(
+                self._endpoint_url(), json={**payload, "stream": stream},
+                headers=self._build_headers(), timeout=120, stream=stream,
             )
-            resp.raise_for_status()
- 
-            for raw_line in resp.iter_lines():
+            response.raise_for_status()
+            media_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            if not stream or media_type == "application/json":
+                stream = False
+                raw = response.json()
+                if not isinstance(raw, dict):
+                    raise ValueError("provider response must be a JSON object")
+                if raw.get("error"):
+                    raise RuntimeError(str(raw["error"]))
+                if self._is_ollama and raw.get("done") is not True:
+                    raise RuntimeError("Ollama response ended without done=true")
+                return raw
+
+            for raw_line in response.iter_lines():
                 if not raw_line:
                     continue
-                stream_observed = True
-                line = raw_line.decode("utf-8", errors="replace")
+                line = raw_line.decode("utf-8")
                 if self._is_ollama:
-                    # Ollama /api/chat streams newline-delimited JSON, not SSE.
                     data_str = line.strip()
                 else:
-                    # OpenAI-compatible SSE lines are data: {...} / data: [DONE].
                     if not line.startswith("data:"):
                         continue
                     data_str = line[5:].strip()
                     if data_str == "[DONE]":
+                        complete = True
                         break
-
                 try:
-                    chunk = _json.loads(data_str)
-                except _json.JSONDecodeError as e:
-                    if self._is_ollama:
-                        raise ValueError("malformed Ollama NDJSON chunk") from e
-                    continue
-
+                    chunk = json.loads(data_str)
+                except json.JSONDecodeError as e:
+                    raise ValueError("malformed provider stream chunk") from e
+                if not isinstance(chunk, dict):
+                    raise ValueError("provider stream chunk must be a JSON object")
+                if chunk.get("error"):
+                    raise RuntimeError(str(chunk["error"]))
                 if self._is_ollama:
-                    if chunk.get("error"):
-                        raise RuntimeError(str(chunk["error"]))
-                    terminal_chunk = chunk
+                    terminal = chunk
                     delta = chunk.get("message", {}).get("content") or ""
                     if chunk.get("prompt_eval_count") is not None:
-                        usage_prompt_tokens = chunk["prompt_eval_count"]
+                        prompt_count = chunk["prompt_eval_count"]
                     if chunk.get("eval_count") is not None:
-                        usage_completion_tokens = chunk["eval_count"]
+                        completion_count = chunk["eval_count"]
+                    complete = chunk.get("done") is True
                 else:
-                    # Capture usage from final chunk if provider sends it
-                    if chunk.get("usage"):
-                        usage_completion_tokens = chunk["usage"].get("completion_tokens")
-                        usage_prompt_tokens = chunk["usage"].get("prompt_tokens")
-
+                    usage = chunk.get("usage") or {}
+                    if usage.get("prompt_tokens") is not None:
+                        prompt_count = usage["prompt_tokens"]
+                    if usage.get("completion_tokens") is not None:
+                        completion_count = usage["completion_tokens"]
+                    choices = chunk.get("choices") or []
                     delta = ""
-                    choices = chunk.get("choices", [])
                     if choices:
                         delta = choices[0].get("delta", {}).get("content") or ""
- 
+                        if choices[0].get("finish_reason") is not None:
+                            finish_reason = choices[0]["finish_reason"]
+                            complete = True
                 if delta:
-                    if first_token_ns is None:
-                        first_token_ns = time.time_ns()
-                    chunk_count += 1
-                    assembled_content.append(delta)
-                    last_token_ns = time.time_ns()
+                    if not isinstance(delta, str):
+                        raise ValueError("provider content must be text")
+                    now = time.perf_counter_ns()
+                    epoch = time.time_ns()
+                    if first is None:
+                        first, first_epoch = now, epoch
+                    last, last_epoch = now, epoch
+                    content.append(delta)
+                if self._is_ollama and complete:
+                    break
+            if not complete:
+                raise RuntimeError("provider stream ended without a completion marker")
 
-            if self._is_ollama and terminal_chunk.get("done") is not True:
-                raise RuntimeError("Ollama stream ended without terminal done=true")
- 
-        except Exception as e:
-            if self._is_ollama and stream_observed:
-                # A retry here would hide and double-account a partial request.
-                raise
-            # Streaming failed — fall back to non-streaming, no TTFT data
-            logger.warning(
-                "Streaming failed for %s, falling back to non-streaming: %s",
-                self.get_name(), e,
-            )
-            # Capture timing for non-streaming fallback — api_latency_ms
-            # must be non-zero for llm_wait_energy_uj to be computed correctly
-            _fallback_start_ns = time.time_ns()
-            response = requests.post(
-                self._endpoint_url(), json=payload, headers=headers, timeout=120
-            )
-            response.raise_for_status()
-            _fallback_end_ns = time.time_ns()
-            _fallback_ms = (_fallback_end_ns - _fallback_start_ns) / 1e6
-            self._last_stream_metrics = {
-                "streaming_enabled": 0,
-                "ttft_ms": _fallback_ms,  # no TTFT distinction — full round-trip
-                "tpot_ms": 0.0,
-                "token_throughput": 0.0,
-                "first_token_time_ns": _fallback_start_ns,  # request start as proxy
-                "last_token_time_ns": _fallback_end_ns,
-                "request_start_ns": request_start_ns,
-            }
-            return response.json()
- 
-        # Prefer API token count — providers batch tokens per chunk (Groq)
-        token_count = usage_completion_tokens if usage_completion_tokens is not None else chunk_count
-        prompt_token_count = usage_prompt_tokens if usage_prompt_tokens is not None else 0
- 
-        total_ms = (
-            (last_token_ns - request_start_ns) / 1e6 if last_token_ns else 0.0
-        )
-        ttft_ms = (
-            (first_token_ns - request_start_ns) / 1e6
-            if first_token_ns else total_ms
-        )
-        decode_ms = total_ms - ttft_ms
- 
-        tpot_ms = (
-            decode_ms / max(token_count - 1, 1) if token_count > 1 else 0.0
-        )
-        throughput = (
-            token_count / (decode_ms / 1000)
-            if token_count > 1 and decode_ms > 0 else 0.0
-        )
- 
-        # Store for call() to read — avoids changing return type
-        self._last_stream_metrics = {
-            "ttft_ms": ttft_ms,
-            "tpot_ms": tpot_ms,
-            "token_throughput": throughput,
-            "streaming_enabled": 1,
-            "first_token_time_ns": first_token_ns,
-            "last_token_time_ns": last_token_ns,
-            "request_start_ns": request_start_ns,
-        }
- 
-        # Reconstruct the provider-specific response shape expected by
-        # _parse_response while retaining terminal metadata.
-        full_content = "".join(assembled_content)
-        if self._is_ollama:
+            if self._is_ollama:
+                return {
+                    **terminal, "message": {"content": "".join(content)},
+                    "prompt_eval_count": prompt_count, "eval_count": completion_count,
+                }
+            # Only actual provider usage is reconstructed. Chunks are not tokens.
             return {
-                **terminal_chunk,
-                "message": {
-                    **terminal_chunk.get("message", {}),
-                    "content": full_content,
-                },
-                "_streamed": True,
+                "choices": [{"message": {"content": "".join(content)},
+                             "finish_reason": finish_reason}],
+                "usage": {"prompt_tokens": prompt_count, "completion_tokens": completion_count},
             }
-        return {
-            "choices": [
-                {"message": {"content": full_content}, "finish_reason": "stop"}
-            ],
-            "usage": {
-                "prompt_tokens": prompt_token_count,
-                "completion_tokens": token_count,
-                "total_tokens": prompt_token_count + token_count,
-            },
-            "_streamed": True,            # internal flag, ignored by _parse_response
-        }
- 
+        finally:
+            self._partial_content = "".join(content)
+            self._observed_tokens = {
+                key: value for key, value in
+                (("prompt", prompt_count), ("completion", completion_count))
+                if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            }
+            decode_ms = (last - first) / 1e6 if first is not None else None
+            valid_count = (isinstance(completion_count, int)
+                           and not isinstance(completion_count, bool) and completion_count > 1)
+            measured_decode = valid_count and decode_ms is not None and decode_ms > 0
+            self._last_stream_metrics = {
+                "request_start_ns": request_start_ns,
+                "first_token_time_ns": first_epoch,
+                "last_token_time_ns": last_epoch,
+                "ttft_ms": (first - start) / 1e6 if first is not None else None,
+                "tpot_ms": decode_ms / (completion_count - 1) if measured_decode else None,
+                "token_throughput": completion_count / (decode_ms / 1000) if measured_decode else None,
+                "streaming_enabled": int(stream),
+            }
+            if response is not None:
+                response.close()
 
     def _parse_response(self, data: Dict, prompt: str) -> Tuple[str, Dict]:
-        """
-        Extract content + token counts from provider response.
-
-        Ollama chat: data['message']['content'], no token counts in body.
-        OpenAI-compat: data['choices'][0]['message']['content'] + usage.
-
-        Falls back to word-count tokens if provider omits usage field.
-
-        Args:
-            data:   parsed JSON response
-            prompt: original prompt (used for word-count fallback)
-
-        Returns:
-            Tuple[str, dict]: (content, {prompt, completion, total})
-        """
+        """Normalize content and preserve provider/estimated/mixed token origin."""
+        if data.get("error"):
+            raise RuntimeError(str(data["error"]))
         if self._is_ollama:
-            # Ollama returns message.content directly
-            content = data.get("message", {}).get("content", "")
+            content = data["message"]["content"]
             prompt_count = data.get("prompt_eval_count")
             completion_count = data.get("eval_count")
-            if prompt_count is not None and completion_count is not None:
-                tokens = {
-                    "prompt": prompt_count,
-                    "completion": completion_count,
-                    "total": prompt_count + completion_count,
-                }
-                self._last_token_provenance = "provider"
-            else:
-                tokens = {
-                    "prompt": len(prompt.split()),
-                    "completion": len(content.split()),
-                    "total": len(prompt.split()) + len(content.split()),
-                }
-                self._last_token_provenance = "estimated"
         else:
-            # OpenAI-compat: choices[0].message.content
-            if "choices" in data:
-                content = data["choices"][0]["message"]["content"]
-                usage = data.get("usage", {})
-                tokens = {
-                    "prompt": usage.get("prompt_tokens", 0),
-                    "completion": usage.get("completion_tokens", 0),
-                    "total": usage.get("total_tokens", 0),
-                }
-                # Fallback if provider omitted usage (some proxies do this)
-                if tokens["total"] == 0:
-                    tokens = {
-                        "prompt": len(prompt.split()),
-                        "completion": len(content.split()),
-                        "total": len(prompt.split()) + len(content.split()),
-                    }
-                    self._last_token_provenance = "estimated"
-                else:
-                    self._last_token_provenance = "provider"
-            else:
-                # Unexpected format — log and return raw
-                logger.warning("Unexpected response format from %s", self.get_name())
-                content = str(data)
-                tokens = {}
+            content = data["choices"][0]["message"]["content"]
+            usage = data.get("usage") or {}
+            prompt_count = usage.get("prompt_tokens")
+            completion_count = usage.get("completion_tokens")
+        if not isinstance(content, str):
+            raise ValueError("provider content must be text")
+        self._partial_content = content
+        for value in (prompt_count, completion_count):
+            if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
+                raise ValueError("provider token counts must be nonnegative integers")
+        provided = sum(value is not None for value in (prompt_count, completion_count))
+        self._last_token_provenance = {0: "estimated", 1: "mixed", 2: "provider"}[provided]
+        prompt_count = len(prompt.split()) if prompt_count is None else prompt_count
+        completion_count = len(content.split()) if completion_count is None else completion_count
+        return content, {"prompt": prompt_count, "completion": completion_count,
+                         "total": prompt_count + completion_count}
 
-        return content, tokens
+    def _error_result(self, error_msg: str, preprocess_ms: float,
+                      call_ms: float = 0.0, postprocess_ms: float = 0.0,
+                      net_before: Optional[Dict] = None) -> Dict:
+        """Retain failed-request observations without treating partial text as success.
 
-    def _error_result(self, error_msg: str, preprocess_ms: float) -> Dict:
+        An empty token dictionary means unknown, not measured zero. Existing
+        consumers can still use their missing-key defaults. Partial provider
+        counts are observations, not final usage for a completed request.
         """
-        Build standard error result dict — never raises, always returns.
-
-        Args:
-            error_msg:     exception message
-            preprocess_ms: time spent before failure
-
-        Returns:
-            Standard adapter result dict with empty/zero values
-        """
+        total_ms = preprocess_ms + call_ms + postprocess_ms
         phase_metrics = self._make_phase_metrics(
-            total_time_ms=preprocess_ms,
-            preprocess_ms=preprocess_ms,
-            non_local_ms=0.0,
-            local_compute_ms=0.0,
-            postprocess_ms=0.0,
-            app_throughput_kbps=0.0,
-            cpu_percent_during_wait=0.0,
+            total_time_ms=total_ms, preprocess_ms=preprocess_ms,
+            non_local_ms=0.0 if self._is_ollama else call_ms,
+            local_compute_ms=call_ms if self._is_ollama else 0.0,
+            postprocess_ms=postprocess_ms, app_throughput_kbps=0.0,
+            cpu_percent_during_wait=0.0, **self._last_stream_metrics,
         )
+        net_delta = {"bytes_sent": 0, "bytes_recv": 0, "tcp_retransmits": 0}
+        if self._is_cloud and net_before:
+            net_delta = self._network_delta(net_before, self._get_network_counters())
         return {
+            "status": "error", "error": error_msg,
             "content": f"Error: {error_msg}",
-            "tokens": {"prompt": 0, "completion": 0, "total": 0},
-            "total_time_ms": preprocess_ms,
-            "phase_metrics": phase_metrics,
-            "bytes_sent": 0,
-            "bytes_recv": 0,
-            "tcp_retransmits": 0,
+            "partial_content": self._partial_content,
+            "tokens": {}, "token_provenance": "unknown",
+            "observed_tokens": self._observed_tokens,
+            "total_time_ms": total_ms, "phase_metrics": phase_metrics, **net_delta,
         }

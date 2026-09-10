@@ -22,10 +22,15 @@ from core.execution.adapters.openai_compat import OpenAICompatAdapter
 
 
 class StubResponse:
-    def __init__(self, *, lines=(), body=None):
+    def __init__(self, *, lines=(), body=None, headers=None):
         self._lines = list(lines)
         self._body = body
         self.status_code = 200
+        self.headers = headers or {}
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
     def raise_for_status(self):
         return None
@@ -141,20 +146,20 @@ def test_ollama_non_streaming_output(monkeypatch, ollama_adapter):
             "eval_count": 2,
         }
     )
-    responses = iter([requests.ConnectionError("stream unavailable"), non_streaming])
-
+    ollama_adapter.model_config["stream"] = False
+    calls = []
     def post(*args, **kwargs):
-        response = next(responses)
-        if isinstance(response, Exception):
-            raise response
-        return response
-
+        calls.append(kwargs)
+        return non_streaming
     monkeypatch.setattr(requests, "post", post)
 
     result = ollama_adapter.call("Say hello", temperature=0.0)
 
     assert result["content"] == "Hello world"
     assert result["phase_metrics"]["streaming_enabled"] == 0
+    assert len(calls) == 1
+    assert calls[0]["json"]["stream"] is False
+    assert non_streaming.closed
 
 
 def test_openai_compatible_sse_streaming_regression(monkeypatch, openai_adapter):
@@ -261,3 +266,229 @@ def test_ollama_stream_without_terminal_done_is_visible_as_failure(
     result = ollama_adapter.call("Say hello", temperature=0.0)
 
     assert result["content"].startswith("Error:")
+
+@pytest.mark.parametrize('provider', ['ollama_adapter', 'openai_adapter'])
+def test_timeout_before_first_chunk_never_retries(monkeypatch, request, provider):
+    adapter = request.getfixturevalue(provider)
+    calls = []
+    def post(*args, **kwargs):
+        calls.append(kwargs)
+        raise requests.ReadTimeout('request accepted but no response yet')
+    monkeypatch.setattr(requests, 'post', post)
+    result = adapter.call('hello', 0)
+    assert len(calls) == 1
+    assert result['status'] == 'error'
+    assert result['token_provenance'] == 'unknown'
+    assert result['tokens'] == {}
+
+@pytest.mark.parametrize('provider', ['ollama_adapter', 'openai_adapter'])
+def test_interruption_preserves_partial_output_and_elapsed_time(monkeypatch, request, provider):
+    adapter = request.getfixturevalue(provider)
+    clock = {'now': 100.0}
+    class TimedResponse(StubResponse):
+        def iter_lines(self):
+            clock['now'] += .5
+            yield from self._lines
+            clock['now'] += .5
+            raise requests.ConnectionError('interrupted')
+    lines = (encoded_lines({'message': {'content': 'partial'}, 'done': False})
+             if provider == 'ollama_adapter' else
+             [b'data: {"choices":[{"delta":{"content":"partial"}}]}'])
+    response = TimedResponse(lines=lines)
+    calls = []
+    def post(*args, **kwargs):
+        calls.append(kwargs)
+        return response
+    monkeypatch.setattr(requests, 'post', post)
+    module = sys.modules['core.execution.adapters.openai_compat']
+    monkeypatch.setattr(module.time, 'time', lambda: clock['now'])
+    monkeypatch.setattr(module.time, 'perf_counter', lambda: clock['now'])
+    monkeypatch.setattr(module.time, 'perf_counter_ns', lambda: int(clock['now'] * 1e9))
+    result = adapter.call('hello', 0)
+    assert len(calls) == 1
+    assert result['total_time_ms'] == pytest.approx(1000)
+    assert result['partial_content'] == 'partial'
+    assert result['content'].startswith('Error:')
+    assert result['token_provenance'] == 'unknown'
+    phase = 'local_compute_ms' if provider == 'ollama_adapter' else 'non_local_ms'
+    assert result['phase_metrics'][phase] == pytest.approx(1000)
+
+@pytest.mark.parametrize('usage,expected,provenance', [
+    (None, {'prompt': 2, 'completion': 4, 'total': 6}, 'estimated'),
+    ({'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+     {'prompt': 0, 'completion': 0, 'total': 0}, 'provider'),
+    ({'prompt_tokens': 9}, {'prompt': 9, 'completion': 4, 'total': 13}, 'mixed'),
+    ({'completion_tokens': 7}, {'prompt': 2, 'completion': 7, 'total': 9}, 'mixed'),
+])
+def test_sse_usage_provenance(monkeypatch, openai_adapter, usage, expected, provenance):
+    lines = [b'data: {"choices":[{"delta":{"content":"one two three four"}}]}']
+    if usage is not None:
+        lines += [b'data: ' + json.dumps({'choices': [], 'usage': usage}).encode()]
+    lines += [b'data: [DONE]']
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: StubResponse(lines=lines))
+    result = openai_adapter.call('hello world', 0)
+    assert result['tokens'] == expected
+    assert result['token_provenance'] == provenance
+    if not usage or 'completion_tokens' not in usage:
+        assert result['phase_metrics']['tpot_ms'] is None
+        assert result['phase_metrics']['token_throughput'] is None
+
+@pytest.mark.parametrize('provider', ['ollama_adapter', 'openai_adapter'])
+def test_server_can_return_json_without_a_second_request(monkeypatch, request, provider):
+    adapter = request.getfixturevalue(provider)
+    body = ({'message': {'content': 'answer'}, 'done': True,
+             'prompt_eval_count': 0, 'eval_count': 3}
+            if provider == 'ollama_adapter' else
+            {'choices': [{'message': {'content': 'answer'}}],
+             'usage': {'prompt_tokens': 0, 'completion_tokens': 3}})
+    response = StubResponse(body=body, headers={'Content-Type': 'application/json; charset=utf-8'})
+    calls = []
+    def post(*a, **k):
+        calls.append(k)
+        return response
+    monkeypatch.setattr(requests, 'post', post)
+    result = adapter.call('hello', 0)
+    assert len(calls) == 1
+    assert result['content'] == 'answer'
+    assert result['tokens'] == {'prompt': 0, 'completion': 3, 'total': 3}
+    assert result['token_provenance'] == 'provider'
+    assert result['phase_metrics']['streaming_enabled'] == 0
+    assert result['phase_metrics']['ttft_ms'] is None
+    assert result['phase_metrics']['first_token_time_ns'] is None
+    assert response.closed
+
+@pytest.mark.parametrize('response', [
+    StubResponse(lines=[b'data: malformed']),
+    StubResponse(lines=[b'data: {"choices":[{"delta":{"content":"partial"}}]}']),
+    StubResponse(lines=[b'data: {"error":{"message":"server failed"}}']),
+    InterruptedResponse(lines=[b'data: {"choices":[{"delta":{"content":"partial"}}]}']),
+    StubResponse(body={'choices': []}, headers={'Content-Type': 'application/json'}),
+])
+def test_openai_bad_responses_fail_close_and_never_retry(monkeypatch, openai_adapter, response):
+    calls = []
+    def post(*a, **k):
+        calls.append(k)
+        return response
+    monkeypatch.setattr(requests, 'post', post)
+    result = openai_adapter.call('hello', 0)
+    assert len(calls) == 1
+    assert result['status'] == 'error'
+    assert result['content'].startswith('Error:')
+    assert response.closed
+
+
+def test_http_rejection_does_not_retry(monkeypatch, ollama_adapter):
+    response = StubResponse()
+    calls = []
+    def reject():
+        raise requests.HTTPError('400 stream unsupported')
+    response.raise_for_status = reject
+    def post(*a, **k):
+        calls.append(k)
+        return response
+    monkeypatch.setattr(requests, 'post', post)
+    result = ollama_adapter.call('hello', 0)
+    assert result['status'] == 'error'
+    assert len(calls) == 1
+    assert response.closed
+
+
+def test_usage_fields_in_separate_sse_chunks_are_preserved(monkeypatch, openai_adapter):
+    response = StubResponse(lines=[
+        b'data: {"choices":[{"delta":{"content":"hello"}}],"usage":{"prompt_tokens":10}}',
+        b'data: {"choices":[],"usage":{"completion_tokens":8}}',
+        b'data: [DONE]',
+    ])
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: response)
+    result = openai_adapter.call('hello', 0)
+    assert result['tokens'] == {'prompt': 10, 'completion': 8, 'total': 18}
+    assert result['token_provenance'] == 'provider'
+
+
+def test_failed_call_does_not_reuse_previous_content_or_usage(monkeypatch, ollama_adapter, ollama_stream_response):
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: ollama_stream_response)
+    assert ollama_adapter.call('hello', 0)['status'] == 'ok'
+    def fail(*a, **k):
+        raise requests.ReadTimeout('no response')
+    monkeypatch.setattr(requests, 'post', fail)
+    failed = ollama_adapter.call('hello', 0)
+    assert failed['partial_content'] == ''
+    assert failed['observed_tokens'] == {}
+    assert failed['tokens'] == {}
+    assert failed['phase_metrics']['first_token_time_ns'] is None
+
+
+def test_failure_retains_observed_provider_counts_and_network_delta(monkeypatch, openai_adapter):
+    response = InterruptedResponse(lines=[
+        b'data: {"choices":[{"delta":{"content":"partial"}}],"usage":{"prompt_tokens":4}}',
+    ])
+    snapshots = iter([{'bytes_sent': 10, 'bytes_recv': 20, 'tcp_retransmits': 0},
+                      {'bytes_sent': 110, 'bytes_recv': 220, 'tcp_retransmits': 1}])
+    monkeypatch.setattr(openai_adapter, '_get_network_counters', lambda: next(snapshots))
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: response)
+    result = openai_adapter.call('hello', 0)
+    assert result['observed_tokens'] == {'prompt': 4}
+    assert result['tokens'] == {}
+    assert result['bytes_sent'] == 100
+    assert result['bytes_recv'] == 200
+    assert result['tcp_retransmits'] == 1
+
+
+def test_stream_durations_ignore_wall_clock_adjustments(monkeypatch, ollama_adapter):
+    mono = iter([100_000_000, 200_000_000, 300_000_000])
+    wall = iter([3_000_000_000, 2_000_000_000, 1_000_000_000])
+    module = sys.modules['core.execution.adapters.openai_compat']
+    monkeypatch.setattr(module.time, 'perf_counter_ns', lambda: next(mono))
+    monkeypatch.setattr(module.time, 'time_ns', lambda: next(wall))
+    response = StubResponse(lines=encoded_lines(
+        {'message': {'content': 'one '}, 'done': False},
+        {'message': {'content': 'two'}, 'done': True, 'prompt_eval_count': 2, 'eval_count': 2},
+    ))
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: response)
+    result = ollama_adapter.call('hello', 0)
+    assert result['phase_metrics']['ttft_ms'] == pytest.approx(100)
+    assert result['phase_metrics']['tpot_ms'] == pytest.approx(100)
+    assert result['phase_metrics']['token_throughput'] == pytest.approx(20)
+
+
+@pytest.mark.parametrize('provider', ['ollama_adapter', 'openai_adapter'])
+def test_real_http_client_reads_local_fixture_stream(request, provider):
+    """Exercise requests' real line iterator/headers, without a model or remote API."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+    adapter = request.getfixturevalue(provider)
+    seen = []
+    if provider == 'ollama_adapter':
+        body = b'\n'.join(encoded_lines(
+            {'message': {'content': 'hello'}, 'done': False},
+            {'message': {'content': ''}, 'done': True, 'prompt_eval_count': 2, 'eval_count': 1},
+        )) + b'\n'
+        media_type = 'application/x-ndjson'
+    else:
+        body = (b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'
+                b'data: {"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":1}}\n\n'
+                b'data: [DONE]\n\n')
+        media_type = 'text/event-stream'
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+            self.send_response(200)
+            self.send_header('Content-Type', media_type)
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        def log_message(self, *args):
+            pass
+    with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        adapter._base_url = f'http://127.0.0.1:{server.server_port}'
+        try:
+            result = adapter.call('hello', 0)
+        finally:
+            server.shutdown()
+            thread.join(timeout=2)
+    assert len(seen) == 1
+    assert result['status'] == 'ok'
+    assert result['content'] == 'hello'
+    assert result['tokens'] == {'prompt': 2, 'completion': 1, 'total': 3}
