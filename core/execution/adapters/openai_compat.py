@@ -123,6 +123,7 @@ class OpenAICompatAdapter(TextGenABC):
         """
         # Reset stream metrics — prevents stale bleed between calls (SPEC_04)
         self._last_stream_metrics = {}
+        self._last_token_provenance = "unknown"
         # ── Phase 1: PRE-PROCESSING — local JSON build ────────────────────────
         t_pre = time.time()
         payload = self._build_payload(prompt, temperature)
@@ -194,6 +195,7 @@ class OpenAICompatAdapter(TextGenABC):
         return {
             "content": content,
             "tokens": tokens,
+            "token_provenance": self._last_token_provenance,
             "total_time_ms": total_ms,
             "phase_metrics": phase_metrics,
             **net_delta,  # bytes_sent, bytes_recv, tcp_retransmits
@@ -294,6 +296,8 @@ class OpenAICompatAdapter(TextGenABC):
         usage_completion_tokens = None
         assembled_content = []
         usage_prompt_tokens = None
+        terminal_chunk = {}
+        stream_observed = False
  
         request_start_ns = time.time_ns()
  
@@ -310,28 +314,45 @@ class OpenAICompatAdapter(TextGenABC):
             for raw_line in resp.iter_lines():
                 if not raw_line:
                     continue
-                # SSE lines are: b"data: {...}" or b"data: [DONE]"
+                stream_observed = True
                 line = raw_line.decode("utf-8", errors="replace")
-                if not line.startswith("data:"):
-                    continue
-                data_str = line[5:].strip()
-                if data_str == "[DONE]":
-                    break
- 
+                if self._is_ollama:
+                    # Ollama /api/chat streams newline-delimited JSON, not SSE.
+                    data_str = line.strip()
+                else:
+                    # OpenAI-compatible SSE lines are data: {...} / data: [DONE].
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+
                 try:
                     chunk = _json.loads(data_str)
-                except _json.JSONDecodeError:
+                except _json.JSONDecodeError as e:
+                    if self._is_ollama:
+                        raise ValueError("malformed Ollama NDJSON chunk") from e
                     continue
- 
-                # Capture usage from final chunk if provider sends it
-                if chunk.get("usage"):
-                    usage_completion_tokens = chunk["usage"].get("completion_tokens")
-                    usage_prompt_tokens = chunk["usage"].get("prompt_tokens")
- 
-                delta = ""
-                choices = chunk.get("choices", [])
-                if choices:
-                    delta = choices[0].get("delta", {}).get("content") or ""
+
+                if self._is_ollama:
+                    if chunk.get("error"):
+                        raise RuntimeError(str(chunk["error"]))
+                    terminal_chunk = chunk
+                    delta = chunk.get("message", {}).get("content") or ""
+                    if chunk.get("prompt_eval_count") is not None:
+                        usage_prompt_tokens = chunk["prompt_eval_count"]
+                    if chunk.get("eval_count") is not None:
+                        usage_completion_tokens = chunk["eval_count"]
+                else:
+                    # Capture usage from final chunk if provider sends it
+                    if chunk.get("usage"):
+                        usage_completion_tokens = chunk["usage"].get("completion_tokens")
+                        usage_prompt_tokens = chunk["usage"].get("prompt_tokens")
+
+                    delta = ""
+                    choices = chunk.get("choices", [])
+                    if choices:
+                        delta = choices[0].get("delta", {}).get("content") or ""
  
                 if delta:
                     if first_token_ns is None:
@@ -339,8 +360,14 @@ class OpenAICompatAdapter(TextGenABC):
                     chunk_count += 1
                     assembled_content.append(delta)
                     last_token_ns = time.time_ns()
+
+            if self._is_ollama and terminal_chunk.get("done") is not True:
+                raise RuntimeError("Ollama stream ended without terminal done=true")
  
         except Exception as e:
+            if self._is_ollama and stream_observed:
+                # A retry here would hide and double-account a partial request.
+                raise
             # Streaming failed — fall back to non-streaming, no TTFT data
             logger.warning(
                 "Streaming failed for %s, falling back to non-streaming: %s",
@@ -367,8 +394,8 @@ class OpenAICompatAdapter(TextGenABC):
             return response.json()
  
         # Prefer API token count — providers batch tokens per chunk (Groq)
-        token_count = usage_completion_tokens if usage_completion_tokens else chunk_count
-        prompt_token_count= usage_prompt_tokens if usage_prompt_tokens else 0
+        token_count = usage_completion_tokens if usage_completion_tokens is not None else chunk_count
+        prompt_token_count = usage_prompt_tokens if usage_prompt_tokens is not None else 0
  
         total_ms = (
             (last_token_ns - request_start_ns) / 1e6 if last_token_ns else 0.0
@@ -398,9 +425,18 @@ class OpenAICompatAdapter(TextGenABC):
             "request_start_ns": request_start_ns,
         }
  
-        # Reconstruct a minimal OpenAI-compat response dict so _parse_response
-        # sees the same shape it always has — no changes needed there
+        # Reconstruct the provider-specific response shape expected by
+        # _parse_response while retaining terminal metadata.
         full_content = "".join(assembled_content)
+        if self._is_ollama:
+            return {
+                **terminal_chunk,
+                "message": {
+                    **terminal_chunk.get("message", {}),
+                    "content": full_content,
+                },
+                "_streamed": True,
+            }
         return {
             "choices": [
                 {"message": {"content": full_content}, "finish_reason": "stop"}
@@ -433,12 +469,22 @@ class OpenAICompatAdapter(TextGenABC):
         if self._is_ollama:
             # Ollama returns message.content directly
             content = data.get("message", {}).get("content", "")
-            # Ollama does not reliably return token counts in non-stream mode
-            tokens = {
-                "prompt": len(prompt.split()),
-                "completion": len(content.split()),
-                "total": len(prompt.split()) + len(content.split()),
-            }
+            prompt_count = data.get("prompt_eval_count")
+            completion_count = data.get("eval_count")
+            if prompt_count is not None and completion_count is not None:
+                tokens = {
+                    "prompt": prompt_count,
+                    "completion": completion_count,
+                    "total": prompt_count + completion_count,
+                }
+                self._last_token_provenance = "provider"
+            else:
+                tokens = {
+                    "prompt": len(prompt.split()),
+                    "completion": len(content.split()),
+                    "total": len(prompt.split()) + len(content.split()),
+                }
+                self._last_token_provenance = "estimated"
         else:
             # OpenAI-compat: choices[0].message.content
             if "choices" in data:
@@ -456,6 +502,9 @@ class OpenAICompatAdapter(TextGenABC):
                         "completion": len(content.split()),
                         "total": len(prompt.split()) + len(content.split()),
                     }
+                    self._last_token_provenance = "estimated"
+                else:
+                    self._last_token_provenance = "provider"
             else:
                 # Unexpected format — log and return raw
                 logger.warning("Unexpected response format from %s", self.get_name())
