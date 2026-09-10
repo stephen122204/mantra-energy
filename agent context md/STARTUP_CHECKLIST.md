@@ -1,5 +1,7 @@
 # Required startup: load the complete current context
 
+**Publication boundary (Stephen, 9 September 2026):** GitHub context is implementation-only: concrete build requirements, interfaces, code decisions with concise rationale, debugging hypotheses, tests, hardware setup, dependencies and handoffs. Keep research ideas, proposed scientific contributions, literature/novelty analysis, mathematical research proposals and venue strategy in private local notes or the conversation, outside Git-tracked paths. Do not copy that material into commits, PRs, issues, context records or attachments. Research-only turns require no repository publication. For mixed turns, publish only the implementation portion. This supersedes earlier instructions to publish all ideas or every turn; it does not reduce the complete assigned coding scope. Before any push, inspect the staged diff and publication text for this boundary.
+
 Use this checklist when starting OR resuming an agent for this study, including when an old email attachment, old issue prompt or older branch started the session. Read the current maintained assignment from `origin/research/energy-diagnosis`; do not rely only on memory, an old prompt, an issue title or a latest-note summary. These requirements apply even if your model/tool does not automatically load AGENTS.md.
 
 ## 1. Inspect and refresh without losing work
@@ -19,7 +21,7 @@ Read these documents, not only this list:
 | [Complete assignments](COMPLETE_ASSIGNMENTS.md), [human overview](HUMAN_START_HERE.md) | Entire team responsibility, dependencies, first milestone versus full role, G0–G6 acceptance |
 | [Shared interfaces](../docs/agent-context/04-interfaces-and-data.md), [full data contract](../docs/agent-context/starter/data-contract.md) | Producer/consumer types, IDs, errors, verification, clocks, energy domains, raw data and hidden-reference boundaries; distinguish proposed shapes from implemented APIs |
 | [Hardware/access](../docs/agent-context/05-hardware-and-access.md), [dependencies/hardware](DEPENDENCIES_AND_HARDWARE.md) | Grace model/GPU versus CPU tools, actual session requirements, measurement scope and ownership. Alex has reported no-sudo RAPL access; session identity/coverage/isolation still require evidence |
-| [Fall timeline](FALL_TIMELINE.md), [research assessment](SIGMETRICS_ASSESSMENT.md) | Evidence deadlines, pilot/expansion decisions, novelty uncertainty and study limits |
+| [Fall timeline](FALL_TIMELINE.md), [implementation validation boundaries](SIGMETRICS_ASSESSMENT.md) | Evidence deadlines, pilot/expansion decisions and implementation validation limits |
 | [PR workflow](PR_WORKFLOW.md), [shared publication protocol](README.md), [turn template](TURN_TEMPLATE.md), [progress template](../docs/agent-context/12-progress-template.md) | Small PRs without stopping implementation, tests, exact evidence, autonomous scoped pushes and review ownership |
 
 Read the actual code, task issues and relevant open/merged PRs as well. An issue describes a reviewable unit; it does not replace the full assignment. Planning rows are not experiment results. Older setup instructions describe historical preparation; do not recreate existing repos/branches or restart completed work.

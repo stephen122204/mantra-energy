@@ -8,7 +8,7 @@
 
 Can a small amount of profiling tell us how to run an AI-agent task using less measured energy while still completing it correctly and within acceptable time? A-LEMS provides the execution and measurement foundation. Our intended contribution is a useful, economical recommendation about execution, validated on new goals against simple alternatives. A larger configuration sweep or another hardware comparison would not establish that contribution.
 
-We are targeting SIGMETRICS, but neither novelty nor publication readiness is established. The first work builds the trustworthy evidence needed to decide whether the idea deserves a full evaluation. Read the [research assessment](SIGMETRICS_ASSESSMENT.md) for the distinction between conference fit and an established contribution.
+We are targeting SIGMETRICS, but neither novelty nor publication readiness is established. The first work builds the trustworthy evidence needed to decide whether the idea deserves a full evaluation. Read the [implementation validation boundaries](SIGMETRICS_ASSESSMENT.md) for what each kind of test establishes.
 
 ## Background before you start the agent
 
@@ -41,7 +41,7 @@ The named guides and earlier PR workflow documents are merged. Use current repos
 
 Each person owns the meaning and credibility of their result. Read your assignment, make sure you can explain what a passing test establishes, inspect a representative output and a failure, and flag assumptions you cannot verify. Arrange your own repository/cluster access and coordinate resource use with Stephen. Decide with Stephen when a component is ready for real integration. An agent's confident summary is not experimental evidence.
 
-Your agent can inspect existing code, reproduce defects, implement scoped changes, create meaningful tests and small fixtures, run those tests, and prepare reproducible handoffs. It should push its scoped branch changes autonomously, open/update a draft PR, and publish a reviewable context summary after every completed turn using the supplied helper. Shared notes contain understanding, hypotheses, concise rationale and evidence, never private internal reasoning transcripts. Agents do not merge their own PRs or run an unbudgeted campaign.
+Your agent can inspect existing code, reproduce defects, implement scoped changes, create meaningful tests and small fixtures, run those tests, and prepare reproducible handoffs. It should push its scoped branch changes autonomously, open/update a draft PR, and publish a reviewable context summary after every completed implementation turn using the supplied helper. Shared notes contain understanding, hypotheses, concise rationale and evidence, never private internal reasoning transcripts. Agents do not merge their own PRs or run an unbudgeted campaign.
 
 At the first check-in, provide your GitHub username if access is pending, your development environment, a short explanation of your assigned question, and the first PR or a specific blocker. At each handoff, provide the PR, tested commit, exact test results, a small example artifact, missing evidence and the next action. Keep one issue per PR; test on your branch while Stephen reviews and start another independent issue separately if useful. Coordinate changes to shared interfaces before implementing incompatible versions.
 

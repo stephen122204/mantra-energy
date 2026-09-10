@@ -1,5 +1,7 @@
 # Agent instructions for the energy-diagnosis handoff
 
+**Publication boundary (Stephen, 9 September 2026):** GitHub context is implementation-only: concrete build requirements, interfaces, code decisions with concise rationale, debugging hypotheses, tests, hardware setup, dependencies and handoffs. Keep research ideas, proposed scientific contributions, literature/novelty analysis, mathematical research proposals and venue strategy in private local notes or the conversation, outside Git-tracked paths. Do not copy that material into commits, PRs, issues, context records or attachments. Research-only turns require no repository publication. For mixed turns, publish only the implementation portion. This supersedes earlier instructions to publish all ideas or every turn; it does not reduce the complete assigned coding scope. Before any push, inspect the staged diff and publication text for this boundary.
+
 **Before starting or resuming:** follow the [required context-loading checklist](../../agent%20context%20md/STARTUP_CHECKLIST.md). Read the complete current shared and named context; demonstrate all-role understanding, then continue implementation in the same session. This applies even with an old kickoff attachment or an agent that does not automatically load AGENTS.md.
 
 **Required full scope:** read [complete team assignments and merge gates](../../agent%20context%20md/COMPLETE_ASSIGNMENTS.md) and your named full-role checklist. The first issue is only the first milestone. At the next agent session, account for every milestone and continue ready assigned work; retain explicit hardware and pilot-expansion gates.
@@ -31,9 +33,9 @@ Read README.md and the assigned role before coding. These are project instructio
 - Account for profiling, initialization, failures and preparation. Keep separately reported categories explicit; do not silently make them free.
 - No invented speedup, significance threshold, novelty guarantee or acceptance probability. A configuration sweep alone does not establish a novel diagnostic method.
 
-## Autonomous publication after every completed turn
+## Autonomous publication after every completed implementation turn
 
-The latest user instruction authorizes context pushes and scoped feature-branch code pushes without reconfirmation. Follow the root `agent context md/README.md` protocol and publisher. Fetch all contributors' latest context before starting dependent work. Publish a detailed decision/evidence/understanding summary after each completed turn, including failed or no-code turns. This is not permission to share private internal deliberations, credentials, or held-out reference outcomes. Keep code integration through PRs; direct integration pushes are limited to the publisher's per-author context paths.
+The latest user instruction authorizes context pushes and scoped feature-branch code pushes without reconfirmation. Follow the root `agent context md/README.md` protocol and publisher. Fetch all contributors' latest context before starting dependent work. Publish a detailed decision/evidence/understanding summary after each completed implementation turn, including failed or no-code turns. This is not permission to share private internal deliberations, credentials, or held-out reference outcomes. Keep code integration through PRs; direct integration pushes are limited to the publisher's per-author context paths.
 
 ## End every work session
 

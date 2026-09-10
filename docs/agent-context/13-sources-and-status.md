@@ -1,6 +1,6 @@
 # Evidence and source status
 
-Prepared 5 September 2026. This pack is a curated synthesis of the project's earlier code/literature review and Stephen's latest Alex screenshots. It is not an exhaustive literature search or a fresh full repository audit.
+Prepared 5 September 2026. This pack records the earlier code review and reported hardware access. It is not an exhaustive literature search or a fresh full repository audit.
 
 ## Evidence levels
 
@@ -15,24 +15,12 @@ Prepared 5 September 2026. This pack is a curated synthesis of the project's ear
 1. Alex now reports usable team GPU allocations and approved Explore ACCESS. Older documents saying ACCESS was only submitted are historical.
 2. Active model routing uses models.yaml through core/models_loader.py; the remaining models.json is not sufficient evidence of current runtime configuration.
 3. vLLM provider/model entries already exist. Do not assume a vLLM integration must be built from scratch; verify execution behavior and select one runtime.
-4. The selected paper direction is energy diagnosis, not thermal wear/lifetime estimation or a platform-count exercise.
+4. Implement the assigned energy measurement and workload contracts; changes to the research direction are coordinated privately with Stephen.
 5. No planner output is experimental data. No source-review defect is yet a measured failure without reproduction.
 
-## Closest research to inspect before strong novelty claims
+## Publication boundary
 
-The earlier review identified the following as relevant. These short characterizations guide reading and are not a complete citation audit. Stephen should recheck precise claims against the papers before writing a submission.
-
-| Source | Why it matters |
-|---|---|
-| [A-LEMS](https://arxiv.org/abs/2605.22883) | Existing goal-level accounting; distinguish the new decision capability |
-| [Causal Agent Replay](https://arxiv.org/abs/2606.08275) | Agent interventions/replay already exist |
-| [JouleShare](https://arxiv.org/abs/2608.00026) | Request replay and inference energy attribution are close prior work |
-| [Cost–Utility Alignment](https://arxiv.org/abs/2608.26195) | Broad profiling-to-adaptation framing is not itself new |
-| [ML.ENERGY](https://papers.nips.cc/paper_files/paper/2025/file/9dc510e3d7b0b3b2a58ffed7a3ad6b0f-Paper-Datasets_and_Benchmarks_Track.pdf) | Energy/service frontiers and configuration evaluation |
-| [AgenticBench thesis](https://digitalcommons.calpoly.edu/theses/3324/) | Verifiable agent workloads and energy profiling |
-| [Minos](https://arxiv.org/abs/2604.03591) | Lower-cost prediction/profiling comparison and SIGMETRICS contribution pattern |
-
-Do not claim to invent replay, phase attribution, Shapley allocation or energy per goal. The intended gap is a validated and economical intervention decision under the declared hardware/workflow conditions. That gap is a hypothesis to test against these and newer papers.
+Research reviews and contribution strategy are maintained privately outside this repository. Shared context contains the implementation contracts and operational references needed to build and validate the software.
 
 ## Operational primary sources
 
@@ -46,4 +34,4 @@ Do not claim to invent replay, phase attribution, Shapley allocation or energy p
 - [Linux powercap](https://cdn.kernel.org/doc/html/latest/power/powercap/powercap.html): energy domains/counter semantics.
 - [NVIDIA NVML](https://docs.nvidia.com/deploy/nvml-api/): device telemetry API; capability depends on device/driver/access.
 
-Do not load all papers into every student's prompt. Runtime students mainly need the code and measurement contracts; Stephen owns the broader novelty review.
+Use the code and measurement contracts for implementation. Keep broader research reviews outside shared context.
