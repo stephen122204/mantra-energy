@@ -18,7 +18,7 @@ import sqlite3
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 from studies.energy_diagnosis.contracts import (
     ExecutionRecord,
@@ -139,6 +139,7 @@ class AttemptLease:
     execution_id: str
     attempt_id: str
     attempt_number: int
+    actual_order: int
     session_id: str
     started_ns: int
     clock_domain: str
@@ -162,6 +163,7 @@ CREATE TABLE IF NOT EXISTS attempts (
     execution_id TEXT NOT NULL UNIQUE,
     planned_run_id TEXT NOT NULL REFERENCES plans(planned_run_id),
     attempt_number INTEGER NOT NULL,
+    actual_order INTEGER,
     session_id TEXT NOT NULL,
     started_ns INTEGER NOT NULL,
     ended_ns INTEGER,
@@ -169,6 +171,9 @@ CREATE TABLE IF NOT EXISTS attempts (
     status TEXT NOT NULL CHECK (status IN ('running', 'terminal')),
     execution_record_json TEXT,
     artifacts_json TEXT NOT NULL DEFAULT '[]',
+    checkpoints_json TEXT NOT NULL DEFAULT '[]',
+    claim_metadata_json TEXT NOT NULL DEFAULT '{}',
+    outcome_metadata_json TEXT,
     UNIQUE (planned_run_id, attempt_number),
     CHECK ((status = 'running') = (execution_record_json IS NULL))
 );
@@ -193,6 +198,7 @@ class RunLedger:
         self._db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
         self._db.row_factory = sqlite3.Row
         self._db.executescript(_SCHEMA)
+        self._migrate_attempt_columns()
 
     def close(self) -> None:
         self._db.close()
@@ -202,6 +208,34 @@ class RunLedger:
 
     def __exit__(self, *_: object) -> None:
         self.close()
+
+    def _migrate_attempt_columns(self) -> None:
+        """Add NI2 ordering/metadata columns without invalidating NI1 ledgers."""
+        columns = {row["name"] for row in self._db.execute("PRAGMA table_info(attempts)")}
+        additions = {
+            "actual_order": "INTEGER",
+            "claim_metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+            "outcome_metadata_json": "TEXT",
+            "checkpoints_json": "TEXT NOT NULL DEFAULT '[]'",
+        }
+        for name, declaration in additions.items():
+            if name not in columns:
+                self._db.execute(f"ALTER TABLE attempts ADD COLUMN {name} {declaration}")
+        missing = self._db.execute(
+            "SELECT attempt_id FROM attempts WHERE actual_order IS NULL ORDER BY rowid"
+        ).fetchall()
+        next_order = self._db.execute(
+            "SELECT COALESCE(MAX(actual_order), 0) + 1 FROM attempts"
+        ).fetchone()[0]
+        for row in missing:
+            self._db.execute(
+                "UPDATE attempts SET actual_order = ? WHERE attempt_id = ?",
+                (next_order, row["attempt_id"]),
+            )
+            next_order += 1
+        self._db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS attempts_actual_order ON attempts(actual_order)"
+        )
 
     def register_plan(self, runs: Iterable[PlannedRun]) -> None:
         """Register immutable plan slots; identical registration is idempotent."""
@@ -234,7 +268,57 @@ class RunLedger:
             self._rollback()
             raise
 
-    def claim_next(self, *, session_id: str, started_ns: int, clock_domain: str) -> Optional[AttemptLease]:
+    def checkpoint(
+        self,
+        lease: AttemptLease,
+        artifacts: Iterable[ArtifactRef] = (),
+        *,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Durably attach partial artifacts and metadata to a running attempt."""
+        artifact_list = tuple(artifacts)
+        self._validate_artifacts(artifact_list)
+        checkpoint_metadata = dict(metadata or {})
+        _canonical_json(checkpoint_metadata)
+        self._begin()
+        try:
+            row = self._db.execute(
+                "SELECT a.*, p.payload_json, p.active_attempt_id FROM attempts a JOIN plans p USING (planned_run_id) WHERE a.attempt_id = ?",
+                (lease.attempt_id,),
+            ).fetchone()
+            if row is None:
+                raise LedgerValidationError(f"unknown attempt: {lease.attempt_id}")
+            if row["status"] != "running" or row["active_attempt_id"] != lease.attempt_id:
+                raise LedgerConflictError(f"attempt {lease.attempt_id} is already terminal or is not active")
+            plan = PlannedRun.from_dict(json.loads(row["payload_json"]))
+            if self._lease_from_row(row, plan.simulated) != lease:
+                raise LedgerConflictError(f"attempt lease does not match persisted identity: {lease.attempt_id}")
+            merged = self._merge_artifacts(
+                tuple(ArtifactRef(**item) for item in json.loads(row["artifacts_json"])), artifact_list
+            )
+            checkpoints = json.loads(row["checkpoints_json"])
+            checkpoints.append({
+                "sequence": len(checkpoints) + 1,
+                "artifacts": [artifact.to_dict() for artifact in artifact_list],
+                "metadata": checkpoint_metadata,
+            })
+            self._db.execute(
+                "UPDATE attempts SET artifacts_json = ?, checkpoints_json = ? WHERE attempt_id = ? AND status = 'running'",
+                (_canonical_json([artifact.to_dict() for artifact in merged]), _canonical_json(checkpoints), lease.attempt_id),
+            )
+            self._commit()
+        except Exception:
+            self._rollback()
+            raise
+
+    def claim_next(
+        self,
+        *,
+        session_id: str,
+        started_ns: int,
+        clock_domain: str,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> Optional[AttemptLease]:
         """Claim the next pending slot, or return None if busy or exhausted.
 
         One ledger admits at most one running goal, including across connections.
@@ -243,12 +327,21 @@ class RunLedger:
         _non_empty(session_id, "session_id")
         _non_empty(clock_domain, "clock_domain")
         _require(isinstance(started_ns, int) and not isinstance(started_ns, bool) and started_ns >= 0, "started_ns must be a non-negative integer")
+        metadata_json = _canonical_json(dict(metadata or {}))
 
         self._begin()
         try:
             if self._db.execute("SELECT 1 FROM attempts WHERE status = 'running' LIMIT 1").fetchone():
                 self._commit()
                 return None
+            previous_end = self._db.execute(
+                "SELECT MAX(ended_ns) FROM attempts WHERE clock_domain = ? AND status = 'terminal'",
+                (clock_domain,),
+            ).fetchone()[0]
+            _require(
+                previous_end is None or started_ns >= previous_end,
+                "started_ns overlaps an earlier terminal attempt in the same clock domain",
+            )
             row = self._db.execute(
                 "SELECT * FROM plans WHERE disposition = 'pending' ORDER BY ordinal, planned_run_id LIMIT 1"
             ).fetchone()
@@ -264,12 +357,15 @@ class RunLedger:
                 (plan.planned_run_id,),
             ).fetchone()["number"]
             attempt_number = previous + 1
+            actual_order = self._db.execute(
+                "SELECT COALESCE(MAX(actual_order), 0) + 1 FROM attempts"
+            ).fetchone()[0]
             _require(attempt_number <= plan.retry_limit + 1, f"retry limit exhausted for {plan.planned_run_id}")
             execution_id = f"exec-{uuid.uuid4()}"
             attempt_id = f"attempt-{uuid.uuid4()}"
             self._db.execute(
-                "INSERT INTO attempts(attempt_id, execution_id, planned_run_id, attempt_number, session_id, started_ns, clock_domain, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'running')",
-                (attempt_id, execution_id, plan.planned_run_id, attempt_number, session_id, started_ns, clock_domain),
+                "INSERT INTO attempts(attempt_id, execution_id, planned_run_id, attempt_number, actual_order, session_id, started_ns, clock_domain, status, claim_metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)",
+                (attempt_id, execution_id, plan.planned_run_id, attempt_number, actual_order, session_id, started_ns, clock_domain, metadata_json),
             )
             cursor = self._db.execute(
                 "UPDATE plans SET disposition = 'running', active_attempt_id = ?, last_attempt_id = ? WHERE planned_run_id = ? AND disposition = 'pending'",
@@ -282,6 +378,7 @@ class RunLedger:
                 execution_id=execution_id,
                 attempt_id=attempt_id,
                 attempt_number=attempt_number,
+                actual_order=actual_order,
                 session_id=session_id,
                 started_ns=started_ns,
                 clock_domain=clock_domain,
@@ -296,13 +393,16 @@ class RunLedger:
         lease: AttemptLease,
         record: ExecutionRecord,
         artifacts: Iterable[ArtifactRef] = (),
+        *,
+        metadata: Mapping[str, Any] | None = None,
     ) -> None:
         """Validate and permanently finalize a running attempt."""
         artifact_list = tuple(artifacts)
         self._validate_artifacts(artifact_list)
+        metadata_json = _canonical_json(dict(metadata or {}))
         self._begin()
         try:
-            self._finalize_tx(lease, record, artifact_list, requeue=False)
+            self._finalize_tx(lease, record, artifact_list, metadata_json=metadata_json, requeue=False)
             self._commit()
         except Exception:
             self._rollback()
@@ -355,7 +455,11 @@ class RunLedger:
                     notes="Recovered after interruption; the prior observation is retained.",
                 )
                 may_retry = lease.attempt_number <= plan.retry_limit
-                self._finalize_tx(lease, record, (), requeue=may_retry)
+                recovery_metadata = _canonical_json({
+                    "owned_work_terminated": True,
+                    "recovery": {"reason": reason, "termination_endpoint_known": True},
+                })
+                self._finalize_tx(lease, record, (), metadata_json=recovery_metadata, requeue=may_retry)
                 if may_retry:
                     self._db.execute(
                         "INSERT INTO retry_requests VALUES (?, ?, ?)",
@@ -367,6 +471,29 @@ class RunLedger:
             self._rollback()
             raise
         return tuple(recovered)
+
+    def record_unknown_interruption(self, *, session_id: str, reason: str) -> tuple[AttemptLease, ...]:
+        """Checkpoint an interruption whose termination endpoint is unknown.
+
+        The attempt deliberately remains running and blocks further claims.  A
+        later reconciliation must either supply the original-clock endpoint to
+        :meth:`recover_interrupted` or retain the attempt as unresolved.
+        """
+        _non_empty(session_id, "session_id")
+        _non_empty(reason, "reason")
+        rows = self._db.execute(
+            "SELECT a.*, p.payload_json FROM attempts a JOIN plans p USING (planned_run_id) WHERE a.status = 'running' AND a.session_id = ? ORDER BY a.actual_order",
+            (session_id,),
+        ).fetchall()
+        leases = tuple(
+            self._lease_from_row(row, PlannedRun.from_dict(json.loads(row["payload_json"])).simulated)
+            for row in rows
+        )
+        for lease in leases:
+            self.checkpoint(lease, metadata={
+                "interruption": {"reason": reason, "termination_endpoint_known": False}
+            })
+        return leases
 
     def schedule_retry(self, planned_run_id: str, *, reason: str) -> None:
         """Return a terminal plan to pending while retaining its prior attempt."""
@@ -402,6 +529,10 @@ class RunLedger:
         for attempt in attempts:
             by_plan.setdefault(attempt["planned_run_id"], []).append(attempt)
 
+        actual_orders = [attempt["actual_order"] for attempt in attempts]
+        if any(not isinstance(order, int) or isinstance(order, bool) for order in actual_orders) or sorted(actual_orders) != list(range(1, len(attempts) + 1)):
+            errors.append("attempt actual_order values are not unique and contiguous")
+
         for row in plans:
             try:
                 plan = PlannedRun.from_dict(json.loads(row["payload_json"]))
@@ -424,6 +555,29 @@ class RunLedger:
                 warnings.append(f"{plan.planned_run_id}: pending")
 
         for row in attempts:
+            for field in ("claim_metadata_json", "outcome_metadata_json"):
+                if row[field] is not None:
+                    try:
+                        value = json.loads(row[field])
+                        _require(isinstance(value, dict), f"{field} must contain a JSON object")
+                        _require(_canonical_json(value) == row[field], f"{field} is not canonical JSON")
+                    except Exception as error:
+                        errors.append(f"{row['attempt_id']}: invalid {field}: {error}")
+            try:
+                checkpoints = json.loads(row["checkpoints_json"])
+                _require(isinstance(checkpoints, list), "checkpoints_json must contain a JSON array")
+                _require(
+                    [item.get("sequence") for item in checkpoints] == list(range(1, len(checkpoints) + 1)),
+                    "checkpoint sequences are not contiguous",
+                )
+                _require(_canonical_json(checkpoints) == row["checkpoints_json"], "checkpoints_json is not canonical JSON")
+            except Exception as error:
+                errors.append(f"{row['attempt_id']}: invalid checkpoints_json: {error}")
+            try:
+                artifacts = tuple(ArtifactRef(**item) for item in json.loads(row["artifacts_json"]))
+                self._validate_artifacts(artifacts)
+            except Exception as error:
+                errors.append(f"{row['attempt_id']}: invalid artifacts: {error}")
             if row["status"] == "running":
                 warnings.append(f"{row['attempt_id']}: running")
                 continue
@@ -433,8 +587,6 @@ class RunLedger:
                 lease = self._lease_from_row(row, plan.simulated)
                 self._validate_record_identity(plan, lease, record)
                 self._validate_record_safety(record)
-                artifacts = tuple(ArtifactRef(**item) for item in json.loads(row["artifacts_json"]))
-                self._validate_artifacts(artifacts)
             except Exception as error:
                 errors.append(f"{row['attempt_id']}: invalid terminal attempt: {error}")
 
@@ -453,7 +605,7 @@ class RunLedger:
         destination.mkdir(parents=True, exist_ok=True)
         report = self.validate()
         attempts = self._db.execute(
-            "SELECT a.*, p.ordinal, p.payload_json, p.disposition FROM attempts a JOIN plans p USING (planned_run_id) ORDER BY p.ordinal, p.planned_run_id, a.attempt_number"
+            "SELECT a.*, p.ordinal, p.payload_json, p.disposition FROM attempts a JOIN plans p USING (planned_run_id) ORDER BY a.actual_order"
         ).fetchall()
         plans = self._db.execute("SELECT * FROM plans ORDER BY ordinal, planned_run_id").fetchall()
         retry_reasons = {
@@ -474,6 +626,7 @@ class RunLedger:
                     "attempt_id": row["attempt_id"],
                     "execution_id": row["execution_id"],
                     "attempt_number": row["attempt_number"],
+                    "actual_order": row["actual_order"],
                     "session_id": row["session_id"],
                     "started_ns": row["started_ns"],
                     "ended_ns": row["ended_ns"],
@@ -487,6 +640,9 @@ class RunLedger:
                     "measurement_reason": measurement["reason"],
                     "execution_record": execution_record,
                     "artifacts": json.loads(row["artifacts_json"]),
+                    "checkpoints": json.loads(row["checkpoints_json"]),
+                    "claim_metadata": json.loads(row["claim_metadata_json"]),
+                    "outcome_metadata": json.loads(row["outcome_metadata_json"]) if row["outcome_metadata_json"] else None,
                 },
             }
             jsonl_lines.append(_canonical_json(envelope))
@@ -512,6 +668,7 @@ class RunLedger:
                 (plan.planned_run_id,),
             ).fetchone()
             record = ExecutionRecord.from_json(latest["execution_record_json"]) if latest and latest["execution_record_json"] else None
+            outcome_metadata = json.loads(latest["outcome_metadata_json"]) if latest and latest["outcome_metadata_json"] else {}
             measurement = self._measurement_summary(record.to_dict() if record else None)
             summary_rows.append({
                 "planned_run_id": plan.planned_run_id,
@@ -521,10 +678,17 @@ class RunLedger:
                 "disposition": plan_row["disposition"],
                 "attempt_count": self._db.execute("SELECT COUNT(*) FROM attempts WHERE planned_run_id = ?", (plan.planned_run_id,)).fetchone()[0],
                 "latest_execution_id": latest["execution_id"] if latest else "",
+                "latest_actual_order": latest["actual_order"] if latest else "",
                 "execution_status": record.execution_status if record else "",
                 "verifier_outcome": record.verifier.outcome if record else "",
                 "measurement_status": measurement["status"],
                 "measurement_reason": measurement["reason"],
+                "actual_setting_id": outcome_metadata.get("actual_setting_id", ""),
+                "actual_tool_concurrency": outcome_metadata.get("actual_tool_concurrency", ""),
+                "actual_tool_workers": outcome_metadata.get("actual_tool_workers", ""),
+                "fidelity_status": outcome_metadata.get("fidelity_status", ""),
+                "owned_work_terminated": outcome_metadata.get("owned_work_terminated", ""),
+                "failure_reason": outcome_metadata.get("failure_reason", ""),
                 "simulated": str(plan.simulated).lower(),
             })
 
@@ -544,6 +708,7 @@ class RunLedger:
         record: ExecutionRecord,
         artifacts: tuple[ArtifactRef, ...],
         *,
+        metadata_json: str,
         requeue: bool,
     ) -> None:
         row = self._db.execute(
@@ -561,10 +726,13 @@ class RunLedger:
         self._validate_record_identity(plan, lease, record)
         self._validate_record_safety(record)
         record_json = _canonical_json(record.to_dict())
-        artifacts_json = _canonical_json([artifact.to_dict() for artifact in artifacts])
+        existing_artifacts = tuple(ArtifactRef(**item) for item in json.loads(row["artifacts_json"]))
+        merged_artifacts = self._merge_artifacts(existing_artifacts, artifacts)
+        self._validate_artifacts(merged_artifacts)
+        artifacts_json = _canonical_json([artifact.to_dict() for artifact in merged_artifacts])
         self._db.execute(
-            "UPDATE attempts SET ended_ns = ?, status = 'terminal', execution_record_json = ?, artifacts_json = ? WHERE attempt_id = ? AND status = 'running'",
-            (record.ended_ns, record_json, artifacts_json, lease.attempt_id),
+            "UPDATE attempts SET ended_ns = ?, status = 'terminal', execution_record_json = ?, artifacts_json = ?, outcome_metadata_json = ? WHERE attempt_id = ? AND status = 'running'",
+            (record.ended_ns, record_json, artifacts_json, metadata_json, lease.attempt_id),
         )
         disposition = "pending" if requeue else "terminal"
         self._db.execute(
@@ -644,12 +812,26 @@ class RunLedger:
                 raise LedgerValidationError(f"artifact hash mismatch: {artifact.path}")
 
     @staticmethod
+    def _merge_artifacts(existing: tuple[ArtifactRef, ...], new: tuple[ArtifactRef, ...]) -> tuple[ArtifactRef, ...]:
+        merged = list(existing)
+        by_path = {artifact.path: artifact for artifact in existing}
+        for artifact in new:
+            prior = by_path.get(artifact.path)
+            if prior is not None and prior != artifact:
+                raise LedgerConflictError(f"artifact path already has a different immutable reference: {artifact.path}")
+            if prior is None:
+                by_path[artifact.path] = artifact
+                merged.append(artifact)
+        return tuple(merged)
+
+    @staticmethod
     def _lease_from_row(row: sqlite3.Row, simulated: bool) -> AttemptLease:
         return AttemptLease(
             planned_run_id=row["planned_run_id"],
             execution_id=row["execution_id"],
             attempt_id=row["attempt_id"],
             attempt_number=row["attempt_number"],
+            actual_order=row["actual_order"],
             session_id=row["session_id"],
             started_ns=row["started_ns"],
             clock_domain=row["clock_domain"],
@@ -675,8 +857,10 @@ class RunLedger:
     def _atomic_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         fieldnames = [
             "planned_run_id", "ordinal", "task_id", "setting_id", "disposition",
-            "attempt_count", "latest_execution_id", "execution_status",
+            "attempt_count", "latest_execution_id", "latest_actual_order", "execution_status",
             "verifier_outcome", "measurement_status", "measurement_reason", "simulated",
+            "actual_setting_id", "actual_tool_concurrency", "actual_tool_workers",
+            "fidelity_status", "owned_work_terminated", "failure_reason",
         ]
         temporary = path.with_name(f".{path.name}.tmp")
         with temporary.open("w", encoding="utf-8", newline="") as handle:
