@@ -11,6 +11,7 @@ on:
       - 'scripts/tests/test_publish_agent_context.py'
       - 'tests/test_data_analysis_workload.py'
       - 'tests/test_study_contracts.py'
+      - 'tests/test_campaign_ledger.py'
       - 'AGENTS.md'
       - '.github/workflows/energy-diagnosis-setup.yml'
   pull_request:
@@ -40,3 +41,13 @@ jobs:
           python3 -m pytest -q tests/test_data_analysis_workload.py
       - name: Test the ED-01 shared record contracts and component bridges
         run: python3 -m pytest -q tests/test_study_contracts.py
+      - name: Test the ED-04 ledger, recovery, and exports
+        run: python3 -m pytest -q tests/test_campaign_ledger.py
+
+  windows-ledger:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Test the portable ledger on native Windows (fixture only)
+        run: python -X utf8 -m unittest discover -s tests -p test_campaign_ledger.py -v
