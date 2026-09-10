@@ -101,7 +101,7 @@ def _record(
 
 
 def create_demo(output_dir: Path, source_commit: str) -> dict[str, Path]:
-    """Create the fixture ledger and return its three export paths."""
+    """Create the fixture ledger and return its export paths."""
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     database = output_dir / "fixture-ledger.sqlite3"
@@ -143,7 +143,7 @@ def create_demo(output_dir: Path, source_commit: str) -> dict[str, Path]:
         assert interrupted is not None
 
     with RunLedger(database, artifact_root=artifact_root) as ledger:
-        ledger.recover_interrupted(ended_ns=750, reason="simulated process interruption")
+        ledger.recover_interrupted(session_id="fixture-session-demo", clock_domain="fixture-host:boot-demo", ended_ns=750, reason="simulated process interruption")
         retry = ledger.claim_next(session_id="fixture-session-demo", started_ns=800, clock_domain="fixture-host:boot-demo")
         assert retry is not None and retry.planned_run_id == interrupted.planned_run_id
         ledger.finalize(retry, _record(retry, by_id[retry.planned_run_id]))
