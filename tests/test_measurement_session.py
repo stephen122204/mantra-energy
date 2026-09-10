@@ -1,9 +1,24 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from core.readers.measurement_schema import SCHEMA_DUMMY, SCHEMA_RAPL_X86, SCHEMA_SPBM_ARM
 from studies.energy_diagnosis.runtime.measurement import (
     MeasurementSession,
+    EnvironmentIdentity,
     probe_capabilities,
+)
+
+
+ENVIRONMENT = EnvironmentIdentity(
+    source_revision="fixture-commit",
+    hostname="fixture-host",
+    boot_id="fixture-boot",
+    allocation_id="fixture-allocation",
+    cpu_allocation="2 fixture CPUs",
+    devices=("fixture-device",),
+    isolation="simulated fixture; no physical isolation claim",
 )
 
 
@@ -46,7 +61,8 @@ class MeasurementSessionTests(unittest.TestCase):
     def run_session(self, readings, *, teardown=lambda: None, clock=None):
         clock = clock or Clock()
         session = MeasurementSession(
-            Reader(readings), session_id="session-1", monotonic_ns=clock,
+            Reader(readings), environment=ENVIRONMENT,
+            session_id="session-1", monotonic_ns=clock,
             wall_time_ns=lambda: 1_700_000_000, teardown=teardown,
         )
         session.start_session()
@@ -112,7 +128,7 @@ class MeasurementSessionTests(unittest.TestCase):
         }
         reader = Reader([values, values, values], schema=SCHEMA_SPBM_ARM)
         clock = Clock()
-        session = MeasurementSession(reader, monotonic_ns=clock)
+        session = MeasurementSession(reader, environment=ENVIRONMENT, monotonic_ns=clock)
         session.start_session(); session.start_goal(); session.end_goal()
         artifacts = session.finish_session()
         by_domain = {m.domain_id: m for m in artifacts.measurements}
@@ -121,7 +137,9 @@ class MeasurementSessionTests(unittest.TestCase):
         self.assertIn("cannot integrate", by_domain["SOC_PKG"].reason)
 
     def test_lifecycle_rejects_finish_before_goal_end(self):
-        session = MeasurementSession(Reader([reading(1)]), monotonic_ns=Clock())
+        session = MeasurementSession(
+            Reader([reading(1)]), environment=ENVIRONMENT, monotonic_ns=Clock()
+        )
         session.start_session()
         with self.assertRaisesRegex(RuntimeError, "captured goal endpoint"):
             session.finish_session()
@@ -131,6 +149,7 @@ class CapabilityTests(unittest.TestCase):
     def test_probe_distinguishes_denied_access(self):
         report = probe_capabilities(
             Reader([], error=PermissionError("fixture")),
+            environment=ENVIRONMENT,
             monotonic_ns=Clock(), wall_time_ns=lambda: 9,
         )
         self.assertTrue(all(d.access == "denied" for d in report.domains))
@@ -139,6 +158,7 @@ class CapabilityTests(unittest.TestCase):
     def test_probe_distinguishes_unsupported_reader(self):
         report = probe_capabilities(
             Reader([], available=False, schema=SCHEMA_DUMMY),
+            environment=ENVIRONMENT,
             monotonic_ns=Clock(), wall_time_ns=lambda: 9,
         )
         self.assertEqual(report.domains, ())
@@ -147,11 +167,25 @@ class CapabilityTests(unittest.TestCase):
     def test_probe_marks_individually_missing_domains(self):
         report = probe_capabilities(
             Reader([reading(10, core=None)]),
+            environment=ENVIRONMENT,
             monotonic_ns=Clock(), wall_time_ns=lambda: 9,
         )
         access = {d.domain_id: d.access for d in report.domains}
         self.assertEqual(access["PACKAGE"], "readable")
         self.assertEqual(access["CORE"], "unavailable")
+
+    def test_capability_report_has_durable_environment_json(self):
+        report = probe_capabilities(
+            Reader([reading(10)]), environment=ENVIRONMENT,
+            monotonic_ns=Clock(), wall_time_ns=lambda: 9,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "capability.json"
+            report.write_json(path)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["environment"]["source_revision"], "fixture-commit")
+        self.assertEqual(payload["environment"]["devices"], ["fixture-device"])
+        self.assertEqual(payload["domains"][0]["access"], "readable")
 
 
 if __name__ == "__main__":

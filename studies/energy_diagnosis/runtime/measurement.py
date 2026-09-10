@@ -9,11 +9,36 @@ from __future__ import annotations
 
 import time
 import uuid
+import dataclasses
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Mapping, Optional
 
 from core.readers.measurement_schema import ENERGY_COUNTER, DomainDescriptor
 from studies.energy_diagnosis.contracts import MeasurementRecord, SensorSample
+
+
+class _JsonRecord:
+    def to_dict(self):
+        return dataclasses.asdict(self)
+
+    def write_json(self, path) -> None:
+        Path(path).write_text(
+            json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+
+@dataclass(frozen=True)
+class EnvironmentIdentity:
+    source_revision: str
+    hostname: str
+    boot_id: str
+    allocation_id: str
+    cpu_allocation: str
+    devices: tuple[str, ...]
+    isolation: str
 
 
 @dataclass(frozen=True)
@@ -28,7 +53,8 @@ class DomainCapability:
 
 
 @dataclass(frozen=True)
-class CapabilityReport:
+class CapabilityReport(_JsonRecord):
+    environment: EnvironmentIdentity
     reader_name: str
     source: str
     sampling_hz: int
@@ -51,8 +77,9 @@ class CounterTransition:
 
 
 @dataclass(frozen=True)
-class SessionArtifacts:
+class SessionArtifacts(_JsonRecord):
     session_id: str
+    environment: EnvironmentIdentity
     clock_domain: str
     wall_clock_start_ns: int
     wall_clock_end_ns: int
@@ -72,6 +99,7 @@ class MeasurementSession:
         self,
         reader,
         *,
+        environment: EnvironmentIdentity,
         session_id: Optional[str] = None,
         clock_domain: str = "host-monotonic",
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
@@ -79,6 +107,7 @@ class MeasurementSession:
         teardown: Optional[Callable[[], None]] = None,
     ) -> None:
         self.reader = reader
+        self.environment = environment
         self.schema = reader.get_measurement_schema()
         self.session_id = session_id or str(uuid.uuid4())
         self.clock_domain = clock_domain
@@ -127,6 +156,7 @@ class MeasurementSession:
         self._state = "finished"
         return SessionArtifacts(
             session_id=self.session_id,
+            environment=self.environment,
             clock_domain=self.clock_domain,
             wall_clock_start_ns=self.wall_clock_start_ns,
             wall_clock_end_ns=self.wall_clock_end_ns,
@@ -234,6 +264,7 @@ class MeasurementSession:
 def probe_capabilities(
     reader,
     *,
+    environment: EnvironmentIdentity,
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     wall_time_ns: Callable[[], int] = time.time_ns,
 ) -> CapabilityReport:
@@ -278,6 +309,7 @@ def probe_capabilities(
         for d in schema.domains
     )
     return CapabilityReport(
+        environment=environment,
         reader_name=reader.get_name(),
         source=schema.source,
         sampling_hz=schema.sampling_hz,
