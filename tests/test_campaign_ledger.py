@@ -168,7 +168,7 @@ class RunLedgerTests(unittest.TestCase):
             interrupted = self.claim(ledger, 700)
 
         with RunLedger(self.database) as resumed:
-            recovered = resumed.recover_interrupted(ended_ns=750, reason="simulated process interruption")
+            recovered = resumed.recover_interrupted(session_id="fixture-session-01", clock_domain="fixture-host:boot-01", ended_ns=750, reason="simulated process interruption")
             self.assertEqual((interrupted,), recovered)
 
             retry = self.claim(resumed, 800)
@@ -353,6 +353,82 @@ class RunLedgerTests(unittest.TestCase):
         summary = paths["dispositions"].read_text(encoding="utf-8")
         self.assertIn("fixture-model-failure", summary)
         self.assertIn("fixture-missing-telemetry", summary)
+
+    def test_next_goal_cannot_start_while_another_attempt_is_running(self) -> None:
+        with RunLedger(self.database) as first:
+            first.register_plan([planned(1), planned(2)])
+            lease = self.claim(first)
+            with RunLedger(self.database) as second:
+                self.assertIsNone(second.claim_next(
+                    session_id="fixture-session-02", started_ns=110,
+                    clock_domain="fixture-host:boot-01",
+                ))
+            first.finalize(lease, outcome(lease, planned(1)))
+            self.assertEqual(planned(2).planned_run_id, self.claim(first, 300).planned_run_id)
+
+    def test_short_sensor_window_cannot_be_exported_as_full_goal_energy(self) -> None:
+        with RunLedger(self.database) as ledger:
+            ledger.register_plan([planned(1)])
+            lease = self.claim(ledger)
+            record = outcome(lease, planned(1))
+            short = replace(record.measurements[0], start_ns=150, end_ns=175)
+            with self.assertRaisesRegex(LedgerValidationError, "goal window"):
+                ledger.finalize(lease, replace(record, measurements=(short,)))
+            ledger.finalize(lease, record)
+
+    def test_model_clock_and_window_must_match_the_goal(self) -> None:
+        with RunLedger(self.database) as ledger:
+            ledger.register_plan([planned(1)])
+            lease = self.claim(ledger)
+            record = outcome(lease, planned(1))
+            for response in (
+                replace(record.model_response, clock_domain="fixture-other-host:boot-02"),
+                replace(record.model_response, ended_ns=record.ended_ns + 1),
+            ):
+                with self.subTest(response=response):
+                    with self.assertRaises(LedgerValidationError):
+                        ledger.finalize(lease, replace(record, model_response=response))
+            ledger.finalize(lease, record)
+
+    def test_export_preserves_full_unattempted_plan_and_pending_retry(self) -> None:
+        plan = planned(1, retry_limit=1)
+        with RunLedger(self.database) as ledger:
+            ledger.register_plan([plan, planned(2)])
+            lease = self.claim(ledger)
+            ledger.finalize(lease, outcome(lease, plan, execution_status="crashed", verifier_outcome="unavailable"))
+            ledger.schedule_retry(plan.planned_run_id, reason="retry after transient failure")
+            paths = ledger.export(self.root / "pending-export")
+        self.assertIn("plans", paths)
+        plans = [json.loads(line) for line in paths["plans"].read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(planned(2).to_dict(), plans[1]["plan"])
+        self.assertEqual("pending", plans[1]["disposition"])
+        self.assertEqual(lease.attempt_id, plans[0]["retry_requests"][0]["after_attempt_id"])
+        self.assertEqual("retry after transient failure", plans[0]["retry_requests"][0]["reason"])
+
+    def test_recovery_is_scoped_and_rejects_a_different_boot_clock(self) -> None:
+        with RunLedger(self.database) as ledger:
+            ledger.register_plan([planned(1, retry_limit=1)])
+            lease = self.claim(ledger)
+        with RunLedger(self.database) as ledger:
+            self.assertEqual((), ledger.recover_interrupted(
+                session_id="fixture-unrelated-session", clock_domain=lease.clock_domain,
+                ended_ns=150, reason="unrelated recovery",
+            ))
+            with self.assertRaisesRegex(LedgerValidationError, "clock_domain"):
+                ledger.recover_interrupted(
+                    session_id=lease.session_id, clock_domain="fixture-host:boot-02",
+                    ended_ns=1000, reason="reboot with a different monotonic clock",
+                )
+            self.assertEqual(1, ledger.validate()["counts"]["running"])
+            self.assertEqual((lease,), ledger.recover_interrupted(
+                session_id=lease.session_id, clock_domain=lease.clock_domain,
+                ended_ns=150, reason="retained original-clock termination endpoint",
+            ))
+            paths = ledger.export(self.root / "recovered")
+            row = json.loads(paths["attempts"].read_text(encoding="utf-8"))
+            self.assertEqual(150, row["attempt"]["ended_ns"])
+            self.assertEqual("incomplete", row["attempt"]["execution_status"])
+            self.assertEqual("unavailable", row["attempt"]["measurement_status"])
 
 
 if __name__ == "__main__":
