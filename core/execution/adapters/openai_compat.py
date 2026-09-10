@@ -407,7 +407,7 @@ class OpenAICompatAdapter(TextGenABC):
                 response.close()
 
     def _parse_response(self, data: Dict, prompt: str) -> Tuple[str, Dict]:
-        """Normalize content and preserve provider/estimated/mixed token origin."""
+        """Normalize content using the shared provider/estimated provenance values."""
         if data.get("error"):
             raise RuntimeError(str(data["error"]))
         if self._is_ollama:
@@ -426,7 +426,9 @@ class OpenAICompatAdapter(TextGenABC):
             if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
                 raise ValueError("provider token counts must be nonnegative integers")
         provided = sum(value is not None for value in (prompt_count, completion_count))
-        self._last_token_provenance = {0: "estimated", 1: "mixed", 2: "provider"}[provided]
+        # The shared contract has one provenance for the entire count record.
+        # Any estimated field makes that record estimated; retain known counts.
+        self._last_token_provenance = "provider" if provided == 2 else "estimated"
         prompt_count = len(prompt.split()) if prompt_count is None else prompt_count
         completion_count = len(content.split()) if completion_count is None else completion_count
         return content, {"prompt": prompt_count, "completion": completion_count,
