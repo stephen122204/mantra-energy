@@ -1,48 +1,47 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260909-novelty-overlap-correction.md)
-
-# Novelty assessment correction — 9 September 2026
+[Immutable turn record](turns/20260909-architecture-research-candidates.md)
 
 ## Task and current understanding
 
-Stephen asked what defensible novelty remains and what happens if the planned study finds no useful effect. Refreshed integration e18f7c3e5344dbf11b07ce14b3f544e15f551b5c; no new shared commits since the preceding review. All role/milestone status and implementation dependencies remain in [the PR #22 handoff](20260909-pr22-review-and-team-handoff.md). This is a research assessment, not a changed implementation assignment or frozen experiment protocol.
+Stephen asked to consider creative architecture-dependent research questions, including MoE, rather than constrain the SIGMETRICS contribution to the existing configuration selector. This is exploratory research guidance, not a change to assignments or authorization for a larger hardware campaign.
 
 ## Ideas and hypotheses
 
-A candidate refinement is the decision of whether additional energy optimization trials are worthwhile for short-lived or infrequently reused agent workloads when transferable profiles may be unreliable. Compare reuse of existing profiles, bounded new trials and retaining a fixed default. The potential result would be a measured applicability/break-even region and a useful selection/stopping method, supported by real task variation, correctness, latency and all costs. This is an unvalidated hypothesis; it is not an established uniquely unaddressed problem.
+Candidate A: agent tool boundaries may provide advance information about the next MoE expert working set. Test whether tool identity and execution phase add predictive value beyond recent routing history, and whether useful transfers can fit into otherwise idle tool windows without competing excessively with tool CPU, memory or I/O work. A useful outcome requires net energy or latency improvements under fixed correctness, including prediction and transfer overhead.
 
-The basic inequality that future savings must exceed measurement/testing expense is accounting, not a novel algorithm. Generic cost-aware autotuning, value-of-information rules and abstention are existing ideas. A contribution would need a specific new mechanism, predictive method or substantial empirical finding beyond applying these labels to agents.
+Candidate B: identify and predict conditions under which dense versus MoE energy rankings reverse over verified goals as context retention, memory pressure and tool behavior change. Comparing two architectures alone is insufficient; within-model interventions and a predictive boundary are needed to explain the mechanism. Model-family and quality differences confound architectural causality.
+
+Candidate C: quantify whether energy-tail events at agent transitions create goal deadline or energy-budget violations that average token metrics miss. A useful contribution would require a predictive or preventive method and enough independent runs for credible tail estimates; the four-task pilot is insufficient evidence.
 
 ## Decisions and rationale
 
-The broad statement that workflow information plus profiles can optimize agent energy is already covered by close work. Correct earlier optimistic framing before committing to that as the paper contribution. Do not claim all prior work ignores profiling costs, unseen tasks, dynamic agent behavior, or resource constraints.
+Prefer a bounded feasibility probe of Candidate A before proposing a change to the paper. First test whether tool/phase labels add held-out predictive signal to routing-history baselines. Then test whether that signal can improve actual transfers, with no speculative transfers as a baseline. No claim that this gap is unique has been verified. Combining existing caching and tool-idleness techniques alone does not establish novelty.
 
-Keep the bounded engineering work useful for reliable measurements. Before expanding the physical campaign, Stephen must formulate the exact contrast to the closest systems and use development evidence to establish a real decision opportunity. Four controls may be adequately handled by ordinary screening. Do not manufacture task distributions or enlarge controls only to disadvantage baselines.
+Do not infer an offloading mechanism when all model weights fit on the GPU. Use a fully resident control and, if justified, a real memory-constrained deployment; artificial memory limits alone are weaker evidence. A large-memory H100 may conceal this mechanism for a small MoE. Model choice and usable hardware require a probe before committing resources.
 
 ## Changes and artifacts
 
-No implementation, assignment, candidate or campaign change. Published this correction so agents do not infer novelty from infrastructure completion. Relevant primary sources:
-
-- [Murakkab, OSDI 2026](https://www.usenix.org/conference/osdi26/presentation/chaudhry), [paper](https://www.usenix.org/system/files/osdi26-chaudhry.pdf). Profile-guided agent workflow/model/hardware optimization with accuracy/latency/energy tradeoffs. Section 3.3 describes offline profiles, profile reuse, and explicitly amortizing workflow profiling across subsequent invocations. Section 4.4 discusses dynamic coding workflows; Section 4.8 tests workflow-profile generality on a separate benchmark. It is a central novelty comparator, not merely adjacent background.
-- [Minos](https://arxiv.org/abs/2604.03591): low-cost power/performance profiling and classification to reduce profiling of unseen GPU workloads. Reduced profiling cost by itself is not a new claim.
-- [Zeus, NSDI 2023](https://arxiv.org/abs/2208.06102): online exploration/exploitation plus just-in-time energy profiling for recurring DNN training. Different workload, relevant method precedent.
-- [Causal Agent Replay](https://arxiv.org/abs/2606.08275): interventions and stochastic forward replay for agent-failure attribution. Replay itself is not new.
-- [JouleShare](https://arxiv.org/abs/2608.00026): request-level energy attribution for batched LLM serving. Distinguish accounting allocation from intervention savings.
-- [AgenticBench thesis](https://digitalcommons.calpoly.edu/theses/3324/): agent task scoring with energy/cost signals, persistent records and tradeoff analysis. A verifiable energy benchmark/ledger alone is not a distinctive method.
+Research context only. No code, student assignments, frozen configurations or reservations changed. Existing executor, verifier, ledger and telemetry work remains useful across these candidates.
 
 ## Tests and evidence
 
-Targeted web search and primary-source inspection on 9 September 2026. Read Murakkab's official proceedings abstract and relevant paper sections on profiling, dynamic workflows, transition overhead, and profile generality. Reviewed Minos/Zeus primary abstracts and other linked primary records. This is not an exhaustive literature review or proof that the candidate refinement is absent from all prior work. No new code tests or physical experiments ran; prior PR #22 evidence remains unchanged.
+Primary sources inspected during this turn:
+
+- https://arxiv.org/abs/2606.21428 — MoE/dense throughput, memory and energy comparisons on consumer/edge hardware already exist.
+- https://arxiv.org/abs/2603.11114 — task-conditioned MoE routing signatures already reported; not proof of tool-boundary prediction or system benefits.
+- https://proceedings.iclr.cc/paper_files/paper/2026/hash/6a7a2238da2b755e6dc1dbe278c60c2a-Abstract-Conference.html — routing consistency and offloading efficiency across 20 MoE models.
+- https://arxiv.org/abs/2606.21868 — WiSP already handles expert/KV memory competition, includes agentic workloads, and reports that speculative expert prefetch did not benefit single-stream decode under its measured bandwidth limits.
+- https://arxiv.org/abs/2606.00866 — MORI already exploits tool-call idleness for KV offloading. Tool pauses alone are not an unoccupied contribution.
+- https://arxiv.org/abs/2608.15127 — broad characterization of agentic serving bottlenecks already exists.
+- https://arxiv.org/abs/2411.08982 — batching and aggregate expert activation are an existing research topic.
+
+No experiments run and no new implementation tested this turn. These sources narrow candidate claims; this is not an exhaustive novelty audit.
 
 ## Open questions and disagreements
 
-We cannot currently assert a gap that nobody else has addressed. In particular, simply adding CPU energy, independent correctness, profiling cost, or a new agent dataset to established optimization does not automatically make a non-incremental contribution.
-
-A null advantage has several interpretations: inadequate measurement precision; ineffective controls or unrealistic tasks; a valid reproducible region where existing cheap choices suffice. Only the last, if substantial and supported across meaningful settings with a predictive explanation/boundary, may support a negative-result contribution. Lack of statistical significance is not proof of equivalence. A tiny pilot with no gain is not a publication guarantee.
+Does tool information improve prediction beyond token/routing history on held-out tasks? Does the target backend expose expert IDs, cache residency and actual transfers? Are useful transfers possible during tool execution without consuming more energy or worsening host-side work? Does a policy improve over established expert cache/prefetch and tool-idleness baselines? Is this feasible on the current deadline? Unresolved.
 
 ## Next actions and handoff
 
-Stephen owns the sharper novelty comparison and decision problem. Current candidate: characterize when profile reuse/new trials are worth their full energy cost over an explicit reuse horizon, then test whether workflow observations improve this decision beyond strong simple alternatives. This direction is under discussion, not a committed new assignment.
-
-Students continue the complete software roles in the preceding handoff. The existing runner, raw measurements, verified tasks and retained failures support testing either a positive optimization result or a meaningful limit. Do not start a larger campaign or change task selection to create a favorable result. G5 scientific opportunity remains a real gate; if there is no substantial new insight after valid pilot/development checks, reassess the Fall submission rather than promise acceptance.
+If Stephen selects Candidate A for exploration, specify a bounded probe with expert-routing traces, phase/tool boundaries, bytes transferred, cache misses, KV reuse, CPU/GPU energy and instrumentation overhead. Begin with controlled request traces, then independently verified live goals. Include no-prefetch, routing-history prediction, phase-aware prediction and fully resident controls. A lack of predictive information or a bandwidth bottleneck is a decision to revise the candidate, not automatically a publishable negative result. Continue current authorized integration work without silently replacing the student scope.
