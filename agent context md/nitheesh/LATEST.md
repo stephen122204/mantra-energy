@@ -1,42 +1,27 @@
 # Latest published context: nitheesh
 
-[Immutable turn record](turns/20260910T164434Z-ni2-bounded-runner.md)
+[Immutable turn record](turns/20260910T165303Z-ni2-pr25-delivery.md)
 
-## Task and current understanding
+## Current milestone
 
-NI1 is merged. NI2's independent fixture-ready scheduler/runner portion is implemented on `nitheesh/ni2-bounded-runner` from integration commit `d4f8616443651bb81f15da46f7720a4027d6987d`. It adapts an injected one-goal executor and does not duplicate Aldric's executor. The original integration checkout remains untouched.
+NI1 is merged. NI2's fixture-ready scheduler/runner is in draft PR [#25](https://github.com/stephen122204/alems-energy-diagnosis/pull/25), targeting `research/energy-diagnosis` from `nitheesh/ni2-bounded-runner`. The tested implementation commit is `aa94c61`; shared contract-v0.1 is unchanged.
 
-## Decisions and implementation
+The runner provides deterministic seeded order within declared blocks, global actual attempt order, requested/observed execution metadata, durable partial checkpoints, one-goal cleanup and same-clock overlap gates, known/unknown interruption handling without fabricated time, complete deterministic exports, and per-attempt analysis eligibility.
 
-- Deterministic seeded ordering is confined to declared preparation blocks.
-- Every claim receives a transactionally persisted global actual order, including retries.
-- Requested and observed settings/resources, preparation hash, costs, fidelity, sensor gaps, overlap reports, cleanup confirmation, and failure reason are retained outside the unchanged shared contract.
-- Executor callbacks can durably checkpoint partial artifacts and metadata.
-- Unexpected exits and surviving work keep the attempt running and block all new goals.
-- Known original-clock termination becomes an immutable incomplete attempt with policy-bounded retry. Unknown endpoints are explicitly checkpointed without a fabricated end time and remain unresolved/running.
-- Deterministic raw/summary exports retain all attempts and plan dispositions. Campaign validation flags structural mismatches and records per-attempt analysis eligibility/exclusion reasons.
+## Evidence and limits
 
-Implementation commit: `aa94c61`.
+- Local NI2/ledger/contracts/workload fixtures: 44 passed, 5 subtests passed.
+- Python compilation and UTF-8 setup validation: passed.
+- PR `handoff-and-plan` and `windows-ledger` checks: passed.
+- Evidence is fixture-only. No model, Grace, hardware, sensor, pilot, or campaign execution occurred.
 
-## Tests and evidence
+## Dependencies and next actions
 
-Fixture evidence only:
+- Keep PR #25 draft until Stephen reviews the callback/protocol boundary; Stephen retains merge authority.
+- Aldric's final executor mapping and Stephen's frozen schedule fields remain integration dependencies.
+- A permanently unknown terminal endpoint still needs a shared representation; PR #25 preserves it as an unresolved checkpoint without inventing time.
+- NI3 remains gated by accepted producers, pilot assets, an assigned Grace session/budget, and approval.
+- NI4 dummy-selector budget/reference-isolation controls are the next independent milestone and must use a separate integration-based branch/PR.
 
-- NI2 runner + merged ledger + shared contract + workload bridge: 44 passed, 5 subtests passed.
-- Python compilation: passed.
-- UTF-8 setup/planning validator: passed.
-
-No model, Grace, hardware, sensor, pilot, or campaign execution occurred.
-
-## Open dependencies
-
-Aldric's final executor callable/result mapping and Stephen's frozen scheduling protocol remain integration dependencies. A permanently unknown terminal endpoint still needs a shared contract representation; the runner preserves it as an unresolved checkpoint without inventing time. NI3 remains gated by accepted producers, pilot assets, a Grace allocation/session budget, and approval.
-
-## Next actions
-
-- Push `nitheesh/ni2-bounded-runner` and open a draft PR targeting `research/energy-diagnosis`; Stephen retains merge authority.
-- Coordinate the executor adapter and final protocol fields when Aldric/Stephen publish them.
-- Begin NI4 dummy-selector access/budget controls on a separate branch/PR while NI2 is reviewed.
-
-This context update is intentionally on the feature branch for review; the user's branch-only restriction forbids the context publisher's direct integration path.
+The existing integration checkout remains untouched. This context is on the feature branch for review because the user's branch-only restriction forbids direct context publication to integration.
 
