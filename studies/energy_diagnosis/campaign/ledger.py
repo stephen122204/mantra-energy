@@ -235,13 +235,20 @@ class RunLedger:
             raise
 
     def claim_next(self, *, session_id: str, started_ns: int, clock_domain: str) -> Optional[AttemptLease]:
-        """Atomically claim the next pending plan slot, or return ``None``."""
+        """Claim the next pending slot, or return None if busy or exhausted.
+
+        One ledger admits at most one running goal, including across connections.
+        A caller must finish/terminate owned work before finalizing its lease.
+        """
         _non_empty(session_id, "session_id")
         _non_empty(clock_domain, "clock_domain")
         _require(isinstance(started_ns, int) and not isinstance(started_ns, bool) and started_ns >= 0, "started_ns must be a non-negative integer")
 
         self._begin()
         try:
+            if self._db.execute("SELECT 1 FROM attempts WHERE status = 'running' LIMIT 1").fetchone():
+                self._commit()
+                return None
             row = self._db.execute(
                 "SELECT * FROM plans WHERE disposition = 'pending' ORDER BY ordinal, planned_run_id LIMIT 1"
             ).fetchone()
@@ -301,19 +308,31 @@ class RunLedger:
             self._rollback()
             raise
 
-    def recover_interrupted(self, *, ended_ns: int, reason: str) -> tuple[AttemptLease, ...]:
-        """Finalize all persisted running attempts and requeue eligible slots."""
+    def recover_interrupted(
+        self, *, session_id: str, clock_domain: str, ended_ns: int, reason: str,
+    ) -> tuple[AttemptLease, ...]:
+        """Recover one session using a known termination endpoint in its clock.
+
+        Call only after owned processes have terminated. ``ended_ns`` must come
+        from the original host/boot clock (or retained endpoint evidence), never
+        from the restart host's clock. Unknown termination times are not accepted
+        by this v0.1 interface; retain the running attempt pending reconciliation.
+        """
+        _non_empty(session_id, "session_id")
+        _non_empty(clock_domain, "clock_domain")
         _require(isinstance(ended_ns, int) and not isinstance(ended_ns, bool) and ended_ns >= 0, "ended_ns must be a non-negative integer")
         _non_empty(reason, "reason")
         recovered: list[AttemptLease] = []
         self._begin()
         try:
             rows = self._db.execute(
-                "SELECT a.*, p.payload_json FROM attempts a JOIN plans p USING (planned_run_id) WHERE a.status = 'running' ORDER BY p.ordinal, a.attempt_number"
+                "SELECT a.*, p.payload_json FROM attempts a JOIN plans p USING (planned_run_id) WHERE a.status = 'running' AND a.session_id = ? ORDER BY p.ordinal, a.attempt_number",
+                (session_id,),
             ).fetchall()
             for row in rows:
                 plan = PlannedRun.from_dict(json.loads(row["payload_json"]))
                 lease = self._lease_from_row(row, plan.simulated)
+                _require(clock_domain == lease.clock_domain, f"recovery clock_domain differs from original attempt {lease.attempt_id}")
                 _require(ended_ns >= lease.started_ns, f"ended_ns precedes start for {lease.attempt_id}")
                 record = ExecutionRecord(
                     goal_execution_id=lease.execution_id,
@@ -473,9 +492,21 @@ class RunLedger:
             jsonl_lines.append(_canonical_json(envelope))
             previous_attempt[row["planned_run_id"]] = row["attempt_id"]
 
+        plan_lines: list[str] = []
         summary_rows: list[dict[str, Any]] = []
         for plan_row in plans:
             plan = PlannedRun.from_dict(json.loads(plan_row["payload_json"]))
+            plan_lines.append(_canonical_json({
+                "plan": plan.to_dict(),
+                "payload_sha256": plan_row["payload_sha256"],
+                "disposition": plan_row["disposition"],
+                "active_attempt_id": plan_row["active_attempt_id"],
+                "last_attempt_id": plan_row["last_attempt_id"],
+                "retry_requests": [dict(row) for row in self._db.execute(
+                    "SELECT r.after_attempt_id, r.reason FROM retry_requests r JOIN attempts a ON a.attempt_id = r.after_attempt_id WHERE r.planned_run_id = ? ORDER BY a.attempt_number",
+                    (plan.planned_run_id,),
+                ).fetchall()],
+            }))
             latest = self._db.execute(
                 "SELECT * FROM attempts WHERE planned_run_id = ? ORDER BY attempt_number DESC LIMIT 1",
                 (plan.planned_run_id,),
@@ -498,12 +529,14 @@ class RunLedger:
             })
 
         jsonl_path = destination / "attempts.jsonl"
+        plans_path = destination / "plans.jsonl"
         csv_path = destination / "dispositions.csv"
         report_path = destination / "validation-report.json"
         self._atomic_text(jsonl_path, "\n".join(jsonl_lines) + ("\n" if jsonl_lines else ""))
+        self._atomic_text(plans_path, "\n".join(plan_lines) + ("\n" if plan_lines else ""))
         self._atomic_csv(csv_path, summary_rows)
         self._atomic_text(report_path, json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n")
-        return {"attempts": jsonl_path, "dispositions": csv_path, "validation": report_path}
+        return {"attempts": jsonl_path, "plans": plans_path, "dispositions": csv_path, "validation": report_path}
 
     def _finalize_tx(
         self,
@@ -572,12 +605,19 @@ class RunLedger:
             domains.add(measurement.domain_id)
             if measurement.start_ns < record.started_ns or measurement.end_ns > record.ended_ns:
                 raise LedgerValidationError(f"measurement {measurement.domain_id} is not fully bounded by the execution window")
+            if measurement.status == "valid" and (
+                measurement.start_ns != record.started_ns or measurement.end_ns != record.ended_ns
+            ):
+                raise LedgerValidationError(f"valid measurement {measurement.domain_id} must cover the full goal window")
             for name in ("energy_j", "coverage"):
                 value = getattr(measurement, name)
                 if value is not None and (isinstance(value, bool) or not math.isfinite(value)):
                     raise LedgerValidationError(f"measurement {measurement.domain_id} has invalid {name}")
         response = record.model_response
         if response is not None:
+            _require(response.clock_domain == record.clock_domain, "model response clock_domain differs from execution")
+            _require(record.started_ns <= response.started_ns <= response.ended_ns <= record.ended_ns,
+                     "model response is not bounded by the execution window")
             for name in ("prompt_tokens", "completion_tokens"):
                 value = getattr(response, name)
                 if isinstance(value, bool):
