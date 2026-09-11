@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 # 10 Hz matches cpu_samples and interrupt_samples rate.
 # NVML caps at ~50 Hz; 10 Hz balances detail vs collector overhead.
 DEFAULT_SAMPLING_HZ = 10
+MEASUREMENT_CUMULATIVE_ENERGY = 'cumulative_energy'
+MEASUREMENT_SAMPLED_POWER = 'sampled_power'
 
 # 2000 samples = ~3.3 min at 10 Hz before oldest-drop kicks in.
 MAX_QUEUE_SIZE = 2000
@@ -57,6 +59,16 @@ class GpuSample:
     mem_used_mb: Optional[int]
     temperature_c: Optional[int]
     source: str
+    measurement_kind: str = MEASUREMENT_CUMULATIVE_ENERGY
+    monotonic_start_ns: Optional[int] = None
+    monotonic_end_ns: Optional[int] = None
+    power_start_mw: Optional[int] = None
+    power_end_mw: Optional[int] = None
+    coverage_complete: bool = True
+    unavailable_reason: Optional[str] = None
+    physical_refresh_note: Optional[str] = None
+    acquisition_start_ns: Optional[int] = None
+    acquisition_end_ns: Optional[int] = None
 
     def to_dict(self):
         # type: () -> Dict[str, Any]
@@ -77,6 +89,16 @@ class GpuSample:
             'mem_used_mb':     self.mem_used_mb,
             'temperature_c':   self.temperature_c,
             'source':          self.source,
+            'measurement_kind': self.measurement_kind,
+            'monotonic_start_ns': self.monotonic_start_ns,
+            'monotonic_end_ns': self.monotonic_end_ns,
+            'power_start_mw': self.power_start_mw,
+            'power_end_mw': self.power_end_mw,
+            'coverage_complete': self.coverage_complete,
+            'unavailable_reason': self.unavailable_reason,
+            'physical_refresh_note': self.physical_refresh_note,
+            'acquisition_start_ns': self.acquisition_start_ns,
+            'acquisition_end_ns': self.acquisition_end_ns,
         }
 
 
@@ -87,6 +109,7 @@ class NoneBackend:
     PAC-4 compliant: never raises, always returns None gracefully.
     """
     SOURCE = 'none'
+    MEASUREMENT_KIND = None
 
     def is_available(self):
         # type: () -> bool
@@ -123,6 +146,7 @@ class MSRPP1Backend:
     No util/clock/memory signals via this backend — those columns NULL.
     """
     SOURCE = 'msr_pp1'
+    MEASUREMENT_KIND = MEASUREMENT_CUMULATIVE_ENERGY
     # 2^(-14) J = 61.0352 µJ per LSB — from MSR 0x606 bits[12:8]=14
     ENERGY_UNIT_UJ = 61.0352
 
@@ -184,17 +208,21 @@ class NVMLBackend:
     """
     NVIDIA GPU backend via nvidia-ml-py (pynvml).
     Covers: Alex Flesher RTX 2070 Super, GN100 GB10 fallback if DCGM absent.
- 
+
     Primary: nvmlDeviceGetTotalEnergyConsumption() — cumulative mJ counter.
     Fallback: nvmlDeviceGetPowerUsage() instantaneous mW when counter absent.
     Confidence: 1.0 cumulative, 0.85 power-integration fallback.
     """
     SOURCE = 'nvml'
+    PHYSICAL_REFRESH_NOTE = (
+        'NVML power telemetry may refresh or average more slowly than polling'
+    )
  
     def __init__(self):
         self._handle = None
         self._gpu_count = 0
         self._has_energy_counter = False
+        self._has_power_reading = False
         self._pynvml = None
         self._init_nvml()
  
@@ -217,6 +245,11 @@ class NVMLBackend:
             except pynvml.NVMLError:
                 self._has_energy_counter = False
                 logger.info("NVMLBackend: falling back to power integration")
+            try:
+                pynvml.nvmlDeviceGetPowerUsage(self._handle)
+                self._has_power_reading = True
+            except pynvml.NVMLError:
+                self._has_power_reading = False
         except Exception as e:
             logger.debug("NVMLBackend init failed: %s", e)
             self._handle = None
@@ -224,11 +257,19 @@ class NVMLBackend:
     def is_available(self):
         # type: () -> bool
         return self._handle is not None
+
+    @property
+    def measurement_kind(self):
+        if self._has_energy_counter:
+            return MEASUREMENT_CUMULATIVE_ENERGY
+        if self._has_power_reading:
+            return MEASUREMENT_SAMPLED_POWER
+        return None
  
     def read_energy_uj(self, gpu_index=0):
         # type: (int) -> Optional[int]
         """
-        Read cumulative energy in µJ (mJ counter x1000) or mW for integration.
+        Read cumulative energy in µJ (mJ counter x1000).
         Returns None on failure — never raises (PAC-4 compliant).
         """
         if self._handle is None:
@@ -238,10 +279,7 @@ class NVMLBackend:
                 # nvmlDeviceGetTotalEnergyConsumption returns mJ — convert to µJ
                 mj = self._pynvml.nvmlDeviceGetTotalEnergyConsumption(self._handle)
                 return int(mj * 1000)
-            else:
-                # Instantaneous mW — GPUCollector integrates power x dt
-                mw = self._pynvml.nvmlDeviceGetPowerUsage(self._handle)
-                return int(mw)
+            return None
         except Exception as e:
             logger.warning("NVMLBackend.read_energy_uj failed: %s", e)
             return None
@@ -252,6 +290,11 @@ class NVMLBackend:
         if self._handle is None:
             return {}
         signals = {}
+        try:
+            signals['power_mw'] = int(
+                self._pynvml.nvmlDeviceGetPowerUsage(self._handle))
+        except Exception:
+            pass
         try:
             util = self._pynvml.nvmlDeviceGetUtilizationRates(self._handle)
             signals['util_gpu_pct'] = float(util.gpu)
@@ -340,6 +383,7 @@ class DCGMBackend:
     Run scripts/setup_dcgm_venv.sh once after activating venv on GN100.
     """
     SOURCE = 'dcgm'
+    MEASUREMENT_KIND = MEASUREMENT_CUMULATIVE_ENERGY
     # DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION — cumulative mJ counter
     FIELD_TOTAL_ENERGY = 156
     # DCGM_FI_DEV_GPU_UTIL — GPU utilization percent
@@ -480,6 +524,7 @@ class IOKitBackend:
     Confidence: 0.90 (Apple internal counter, not independently validated).
     """
     SOURCE = 'iokit'
+    MEASUREMENT_KIND = MEASUREMENT_SAMPLED_POWER
  
     def __init__(self):
         # Probe once at init — avoids repeated sudo calls during sampling
@@ -505,16 +550,19 @@ class IOKitBackend:
     def is_available(self):
         # type: () -> bool
         return self._available
- 
+
     def read_energy_uj(self, gpu_index=0):
         # type: (int) -> Optional[int]
         """
-        Returns instantaneous GPU power in mW via powermetrics.
-        GPUCollector multiplies by dt to get energy — stored in power_mw field.
-        Returns None on failure.
+        IOKit exposes sampled power, not a cumulative energy counter.
         """
+        return None
+
+    def read_signals(self, gpu_index=0):
+        # type: (int) -> Dict[str, Any]
+        """Read the raw sampled GPU power without presenting it as energy."""
         if not self._available:
-            return None
+            return {}
         try:
             import subprocess
             import re
@@ -524,17 +572,9 @@ class IOKitBackend:
                 capture_output=True, timeout=5, text=True
             )
             match = re.search(r'gpu_power.*?(\d+\.?\d*)', result.stdout)
-            if match:
-                return int(float(match.group(1)))
-            return None
-        except Exception as e:
-            logger.warning("IOKitBackend.read_energy_uj failed: %s", e)
-            return None
- 
-    def read_signals(self, gpu_index=0):
-        # type: (int) -> Dict[str, Any]
-        """No additional signals from powermetrics in current implementation."""
-        return {}
+            return {'power_mw': int(float(match.group(1)))} if match else {}
+        except Exception:
+            return {}
  
     def get_gpu_info(self):
         # type: () -> List[Dict[str, Any]]
@@ -573,6 +613,7 @@ class ROCmBackend:
     Activate when AMD hardware joins the lab.
     """
     SOURCE = 'rocm_smi'
+    MEASUREMENT_KIND = None
  
     def is_available(self):
         # type: () -> bool
@@ -630,7 +671,9 @@ class GPUCollector:
 
         # Previous sample state for delta computation
         self._prev_energy_uj = None
+        self._prev_power_mw = None
         self._prev_ts_ns = None
+        self._prev_monotonic_ns = None
 
         logger.info("GPUCollector: backend=%s available=%s",
                     self.source, self.backend.is_available())
@@ -705,7 +748,9 @@ class GPUCollector:
         self._samples_taken = 0
         self._samples_dropped = 0
         self._prev_energy_uj = None
+        self._prev_power_mw = None
         self._prev_ts_ns = None
+        self._prev_monotonic_ns = None
 
         self._thread = threading.Thread(
             target=self._sampling_loop,
@@ -725,6 +770,21 @@ class GPUCollector:
         if self._thread is not None:
             self._thread.join(timeout=2.0)
             self._thread = None
+
+        kind = getattr(
+            self.backend, 'measurement_kind',
+            getattr(self.backend, 'MEASUREMENT_KIND', None),
+        )
+        if (kind == MEASUREMENT_SAMPLED_POWER
+                and self._prev_monotonic_ns is not None):
+            # There is no power observation exactly at stop(). Preserve that
+            # uncovered tail explicitly instead of extrapolating or zeroing it.
+            stop_monotonic_ns = time.monotonic_ns()
+            stop_epoch_ns = time.time_ns()
+            tail = self._build_sample(
+                stop_epoch_ns, stop_monotonic_ns, kind, None, None, {})
+            tail.unavailable_reason = 'missing_end_sample'
+            self._enqueue(tail)
 
         samples = []
         while not self._queue.empty():
@@ -751,60 +811,36 @@ class GPUCollector:
         Queue full → oldest dropped (same policy as HighFrequencySampler).
         """
         logger.debug("GPUCollector._sampling_loop started")
-        next_sample = time.time()
+        next_sample = time.monotonic()
 
         while self._running:
             try:
-                ts_ns = time.time_ns()
-                energy_uj = self.backend.read_energy_uj(gpu_index=0)
+                acquisition_start_ns = time.monotonic_ns()
+                epoch_start_ns = time.time_ns()
+                kind = getattr(
+                    self.backend, 'measurement_kind',
+                    getattr(self.backend, 'MEASUREMENT_KIND',
+                            MEASUREMENT_CUMULATIVE_ENERGY),
+                )
+                energy_uj = (self.backend.read_energy_uj(gpu_index=0)
+                             if kind == MEASUREMENT_CUMULATIVE_ENERGY else None)
                 signals = self.backend.read_signals(gpu_index=0)
+                power_mw = signals.get('power_mw')
+                acquisition_end_ns = time.monotonic_ns()
+                epoch_end_ns = time.time_ns()
+                monotonic_ns = (acquisition_start_ns + acquisition_end_ns) // 2
+                ts_ns = (epoch_start_ns + epoch_end_ns) // 2
 
-                # Skip first sample — no previous reading for delta
-                if (self._prev_ts_ns is not None
-                        and energy_uj is not None
-                        and self._prev_energy_uj is not None):
-
-                    interval_ns = ts_ns - self._prev_ts_ns
-                    delta_uj = energy_uj - self._prev_energy_uj
-
-                    if delta_uj < 0:
-                        # Counter wrapped — skip sample, update prev, continue
-                        logger.warning(
-                            "GPUCollector: counter wraparound detected "
-                            "(prev=%d cur=%d), skipping sample",
-                            self._prev_energy_uj, energy_uj)
-                    else:
-                        sample = GpuSample(
-                            gpu_index=0,
-                            sample_start_ns=self._prev_ts_ns,
-                            sample_end_ns=ts_ns,
-                            interval_ns=interval_ns,
-                            energy_start_uj=self._prev_energy_uj,
-                            energy_end_uj=energy_uj,
-                            energy_uj=delta_uj,
-                            power_mw=signals.get('power_mw'),
-                            util_gpu_pct=signals.get('util_gpu_pct'),
-                            util_mem_pct=signals.get('util_mem_pct'),
-                            sm_clock_mhz=signals.get('sm_clock_mhz'),
-                            mem_clock_mhz=signals.get('mem_clock_mhz'),
-                            mem_used_mb=signals.get('mem_used_mb'),
-                            temperature_c=signals.get('temperature_c'),
-                            source=self.source,
-                        )
-                        # Oldest-drop policy — same as HighFrequencySampler
-                        try:
-                            self._queue.put_nowait(sample)
-                            self._samples_taken += 1
-                        except queue.Full:
-                            try:
-                                self._queue.get_nowait()
-                                self._queue.put_nowait(sample)
-                                self._samples_dropped += 1
-                            except queue.Empty:
-                                pass
+                sample = self._build_sample(
+                    ts_ns, monotonic_ns, kind, energy_uj, power_mw, signals,
+                    acquisition_start_ns, acquisition_end_ns)
+                if sample is not None:
+                    self._enqueue(sample)
 
                 self._prev_energy_uj = energy_uj
+                self._prev_power_mw = power_mw
                 self._prev_ts_ns = ts_ns
+                self._prev_monotonic_ns = monotonic_ns
 
             except Exception as e:
                 # Never crash the sampling thread — log and continue
@@ -812,8 +848,89 @@ class GPUCollector:
 
             # Precise sleep to maintain configured Hz
             next_sample += self.interval
-            sleep_time = next_sample - time.time()
+            sleep_time = next_sample - time.monotonic()
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
         logger.debug("GPUCollector._sampling_loop exited")
+
+    def _enqueue(self, sample):
+        """Queue one raw interval record, retaining unavailable intervals."""
+        try:
+            self._queue.put_nowait(sample)
+            self._samples_taken += 1
+        except queue.Full:
+            try:
+                self._queue.get_nowait()
+                self._queue.put_nowait(sample)
+                self._samples_dropped += 1
+            except queue.Empty:
+                pass
+
+    def _build_sample(self, ts_ns, monotonic_ns, kind, energy_uj, power_mw,
+                      signals, acquisition_start_ns=None, acquisition_end_ns=None):
+        """Build an auditable counter delta or sampled-power interval."""
+        first = self._prev_monotonic_ns is None
+        interval_ns = 0 if first else monotonic_ns - self._prev_monotonic_ns
+        start_epoch_ns = ts_ns if first else self._prev_ts_ns
+        delta_uj = None
+        complete = not first
+        reason = 'missing_start_sample' if first else None
+
+        if kind == MEASUREMENT_CUMULATIVE_ENERGY:
+            if first:
+                return None
+            if energy_uj is None or self._prev_energy_uj is None:
+                complete = False
+                reason = 'missing_energy_counter'
+            else:
+                delta_uj = energy_uj - self._prev_energy_uj
+                if delta_uj < 0:
+                    delta_uj = None
+                    complete = False
+                    reason = 'counter_decrease_or_reset'
+        elif kind == MEASUREMENT_SAMPLED_POWER:
+            if power_mw is None or self._prev_power_mw is None:
+                complete = False
+                reason = ('missing_start_sample' if first
+                          else 'missing_power_endpoint')
+            elif interval_ns <= 0:
+                complete = False
+                reason = 'nonpositive_monotonic_interval'
+            else:
+                # Trapezoidal integration: mW * ns / 1e6 = microjoules.
+                delta_uj = int(round(
+                    ((self._prev_power_mw + power_mw) / 2.0)
+                    * interval_ns / 1_000_000.0
+                ))
+        else:
+            complete = False
+            reason = 'unsupported_energy_measurement'
+
+        return GpuSample(
+            gpu_index=0,
+            sample_start_ns=start_epoch_ns,
+            sample_end_ns=ts_ns,
+            interval_ns=interval_ns,
+            energy_start_uj=(self._prev_energy_uj if kind == MEASUREMENT_CUMULATIVE_ENERGY else None),
+            energy_end_uj=(energy_uj if kind == MEASUREMENT_CUMULATIVE_ENERGY else None),
+            energy_uj=delta_uj,
+            power_mw=power_mw,
+            util_gpu_pct=signals.get('util_gpu_pct'),
+            util_mem_pct=signals.get('util_mem_pct'),
+            sm_clock_mhz=signals.get('sm_clock_mhz'),
+            mem_clock_mhz=signals.get('mem_clock_mhz'),
+            mem_used_mb=signals.get('mem_used_mb'),
+            temperature_c=signals.get('temperature_c'),
+            source=self.source,
+            measurement_kind=kind,
+            monotonic_start_ns=(monotonic_ns if first else self._prev_monotonic_ns),
+            monotonic_end_ns=monotonic_ns,
+            power_start_mw=self._prev_power_mw,
+            power_end_mw=power_mw,
+            coverage_complete=complete,
+            unavailable_reason=reason,
+            physical_refresh_note=getattr(self.backend, 'PHYSICAL_REFRESH_NOTE', None),
+            acquisition_start_ns=acquisition_start_ns,
+            acquisition_end_ns=acquisition_end_ns,
+        )

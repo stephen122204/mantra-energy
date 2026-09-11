@@ -35,6 +35,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -685,6 +686,16 @@ def detect_turbostat_columns() -> Dict[str, Any]:
 # ============================================================================
 
 
+def rapl_domain_key(base: str, kernel_name: str) -> str:
+    """Return a config key that cannot collapse same-named socket zones."""
+    domain_name = kernel_name.replace("intel-rapl:", "")
+    zone = os.path.basename(base)
+    match = re.match(r"intel-rapl:(\d+)(?::\d+)?$", zone)
+    if match and not domain_name.startswith("package-"):
+        return f"{domain_name}-{match.group(1)}"
+    return domain_name
+
+
 def detect_rapl_paths() -> Tuple[Dict[str, str], List[str]]:
     """Detect RAPL paths and available domains."""
     rapl_paths = {}
@@ -693,7 +704,9 @@ def detect_rapl_paths() -> Tuple[Dict[str, str], List[str]]:
     # Check both possible locations
     search_paths = [
         "/sys/class/powercap/intel-rapl*",
+        "/sys/class/powercap/intel-rapl:*/intel-rapl:*",
         "/sys/devices/virtual/powercap/intel-rapl*",
+        "/sys/devices/virtual/powercap/intel-rapl:*/intel-rapl:*",
     ]
 
     for pattern in search_paths:
@@ -717,8 +730,9 @@ def detect_rapl_paths() -> Tuple[Dict[str, str], List[str]]:
                     else:
                         domain_name = os.path.basename(base)
 
-                    # Clean up domain name
-                    domain_name = domain_name.replace("intel-rapl:", "")
+                    # Clean up domain name and qualify repeated child-domain
+                    # names by socket. Two `dram` zones must never collide.
+                    domain_name = rapl_domain_key(base, domain_name)
 
                     if domain_name not in rapl_paths:
                         rapl_paths[domain_name] = energy_file

@@ -80,7 +80,8 @@ class EnergyCollector:
             d.native_key: d for d in self._schema.domains
         }
 
-        # Wraparound ceiling: 2^counter_width_bits µJ
+        # Legacy fallback only. A descriptor's observed sysfs maximum takes
+        # precedence so every RAPL domain wraps independently.
         self._wrap_max: int = (1 << self._schema.counter_width_bits)
 
         # Sampling state
@@ -190,10 +191,12 @@ class EnergyCollector:
                     if descriptor.domain_type == ENERGY_COUNTER:
                         # Cumulative counter: compute delta with wraparound correction
                         if c is not None and p is not None:
-                            delta = c - p
-                            if delta < 0:
-                                # Counter wrapped around: add wrap ceiling
-                                delta += self._wrap_max
+                            delta = self._counter_delta(p, c, descriptor)
+                            if delta is None:
+                                logger.warning(
+                                    "EnergyCollector: reset/decrease for %s; "
+                                    "interval omitted", native_key)
+                                continue
                             domains[descriptor.canonical_name] = delta
                         # If either is None: domain unavailable this tick, skip silently
                         # Never substitute zero — absent means not measured
@@ -228,3 +231,13 @@ class EnergyCollector:
     def schema(self) -> MeasurementSchema:
         """Expose schema for inspection by energy_engine diagnostics."""
         return self._schema
+
+    def _counter_delta(self, previous, current, descriptor):
+        """Return one domain delta, or None for a reset/non-wrap decrease."""
+        delta = current - previous
+        if delta >= 0:
+            return delta
+        maximum = descriptor.max_energy_range_uj or self._wrap_max
+        if previous >= maximum * 0.9 and current <= maximum * 0.1:
+            return delta + maximum
+        return None
