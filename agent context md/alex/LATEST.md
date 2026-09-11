@@ -1,55 +1,62 @@
 # Latest published context: alex
 
-[Immutable turn record](turns/20260911T024535Z-grace-capability-preflight.md)
+[Immutable turn record](turns/20260911T033031Z-ed05-grace-collector-repair.md)
 
-# Turn summary: Alex — 20260911T024535Z-grace-capability-preflight
+# Turn summary: Alex — ED-05 Grace collector repair
 
-**Publication boundary:** This record contains hardware/runtime capability evidence and implementation handoff details only.
+**Publication boundary:** This record contains implementation requirements, concrete technical rationale, code changes, tests, hardware setup evidence and handoffs only.
 
 ## Task and current understanding
 
-Alex supplied results from a non-model Grace preflight at integration commit `72463d0623b9ce912b02c6ed92dc5f5e068672cb`. The checkout was clean on `research/energy-diagnosis`. No model was downloaded or executed, Ollama was not installed, and no start/end workload energy measurement occurred.
+Grace capability preflight established that the allocated A100 exposes sampled board power but not the tested cumulative NVIDIA energy query, and that `g002` exposes four readable Intel RAPL zones: package and DRAM on each of two sockets. The existing NVML fallback treated power as a cumulative energy counter, while fixed RAPL mappings could not retain the four zone identities. No model inference or workload-energy run was authorized for this turn.
 
-Alex has individual Grace access and independently obtained interactive Slurm job `19728005` on compute node `g002`: partition `gpu`, one A100, eight CPUs, 128 GB memory and one-hour limit. Access itself is no longer treated as blocked. Specific substantial runs still need a named allocation/session and bounded budget, and ED-09 expansion remains gated.
+The repair extends existing ED-05 draft PR #27 rather than AX4 PR #28. The defects directly affect ED-05 measurement correctness and were discovered while physically validating that deliverable. The branch remains `alex/ed-05-measurement-session`; exact pushed/tested head is `0c6b68a127c0fdc68d10d22c5ce50ea9cf76da17`.
 
 ## Ideas and hypotheses
 
-The default CentOS Python 3.6.8 is unsuitable: the repository advertises Python 3.10+ and merged study code uses Python 3.10 syntax. Grace provides newer Python and Anaconda modules, so the next safe step is module/environment discovery rather than installation. An existing vLLM environment for `meta-llama/Llama-3.1-8B-Instruct` could validate the OpenAI-compatible runtime path and support AX3/ED-07, but it cannot exercise the Ollama `/api/chat` response parser.
+Backend measurement kind must be explicit because cumulative counter deltas and sampled-power integration have incompatible units and failure behavior. For sampled power, trapezoidal integration over consecutive observations preserves rising and falling values without confusing a power decrease with counter wrap. Poll scheduling can remain 10 Hz while elapsed time uses monotonic observation timestamps; the raw record must note that device telemetry may physically refresh or average at a different rate.
+
+A fixed x86 schema cannot describe repeated kernel names on multiple sockets. The RAPL schema should be derived from configured accessible zones, qualify repeated domains by socket, and retain kernel metadata and per-zone counter ranges. Legacy one-socket canonical names remain unchanged for compatibility.
 
 ## Decisions and rationale
 
-Treat the supplied energy values only as raw capability snapshots. On `g002`, Alex directly read both socket package counters and both DRAM counters in microjoules, including their maximum counter ranges. This establishes read permission and declared counter scope, not workload energy. The job allocated only eight of the node's 48 CPUs and one of two A100s; without exclusive-node evidence, socket-wide RAPL includes activity beyond the job and cannot be attributed as isolated job energy.
-
-Use Python 3.11 as the initial compatibility target unless the existing vLLM environment requires another supported Python. Grace's official module inventory lists Python 3.10.8, 3.11.5, 3.12.3 and 3.13.1 plus Anaconda3 releases. No Ollama or vLLM module appears in the published Grace inventory, but live `module spider`/`mla` output is the authority. Grace supports Singularity with NVIDIA passthrough; using a container would still require a reviewed existing image or later authorized download.
-
-Strict evidence for the Ollama-specific ED-02 repair requires one real Ollama-compatible `/api/chat` response through the repaired adapter. A vLLM-only request is useful but does not validate Ollama NDJSON parsing. Native installation is not inherently required if an existing approved Ollama binary, shared environment, container image or reachable loopback service and compatible existing model artifact are available.
+- NVML now reports `cumulative_energy`, `sampled_power`, or unsupported explicitly. Power is never returned from `read_energy_uj()`.
+- Sampled-power energy uses trapezoidal integration with actual monotonic elapsed nanoseconds. Raw epoch and monotonic timestamps, acquisition brackets, both power endpoints, derived energy, coverage status, reason and refresh note are retained.
+- Missing endpoints produce unavailable intervals, not zero. First and final uncovered boundaries are explicit. `EnergyEngine` refuses to publish a partial sampled-power integral as total GPU energy.
+- `nvidia-ml-py>=13.0.0` is declared. It was not installed during this turn.
+- RAPL hardware detection now visits child zones and produces distinct keys such as `dram-0` and `dram-1`.
+- Dynamic RAPL descriptors retain native key/path, kernel name, socket, parent, individual `max_energy_range_uj`, and `socket-wide` scope. Dual-socket names are `PACKAGE_SOCKET_0`, `DRAM_SOCKET_0`, `PACKAGE_SOCKET_1`, and `DRAM_SOCKET_1`; matching catalog entries and migration were added.
+- Per-domain decreases are treated as wraps only when they cross that domain's recorded high/low counter edges; other decreases are resets and omitted. Failed safe reads return `None`, never fabricated zero.
+- The generic `EnergySample.total_uj` no longer automatically sums potentially overlapping or independent domains.
 
 ## Changes and artifacts
 
-No code changed. No model/runtime/container/package was installed or downloaded. No model request, tool execution, collector session or campaign ran.
-
-Verified hardware facts supplied by Alex:
-
-- Compute host `g002`, Intel Xeon Gold 6248R, x86_64, two sockets, 24 cores/socket, 48 online CPUs, one thread/core.
-- Assigned GPU: NVIDIA A100-PCIE-40GB, UUID `GPU-1f093ecc-211c-d69f-29fc-d85007055715`, 40960 MiB, driver `580.126.20`, power management enabled; no GPU process before workload.
-- Readable RAPL: package-0 and package-1 counters, each maximum `262143328850` microjoules; DRAM child counter for each package, each maximum `65712999613` microjoules.
-- Example raw values were observed for all four domains. They are not deltas and not workload-energy measurements.
-- Login node `login5` default Python is 3.6.8. The supplied boot ID belongs to the login node, not compute node `g002`.
+Changed collector/reader paths, persistence, schema catalog/migration, hardware detection and dependency declaration. Added `tests/test_gpu_power_integration.py` and `tests/test_rapl_grace_domains.py`. Draft PR #27 was updated with exact evidence and limitations: https://github.com/stephen122204/alems-energy-diagnosis/pull/27.
 
 ## Tests and evidence
 
-Evidence level: **hardware capability-discovered**, not workload-measured, model-validated or campaign-validated.
+Exact tested commit: `0c6b68a127c0fdc68d10d22c5ce50ea9cf76da17`.
 
-Satisfied AX3/ED-05 capability elements: individual allocation execution, source revision, compute hostname, requested/assigned resource shape, GPU model/UUID/driver/memory, pre-workload no-process observation, CPU topology, direct read permission for two CPU-package and two DRAM domains, units, example raw values and maximum ranges.
+- `python3 scripts/check_energy_diagnosis_setup.py` — passed; setup/planning scope only.
+- `python3 -m pytest -q tests/test_gpu_power_integration.py tests/test_rapl_grace_domains.py tests/test_energy_collector.py tests/test_measurement_session.py tests/test_study_contracts.py tests/test_campaign_ledger.py tests/test_data_analysis_workload.py` — 67 passed, 5 subtests passed in 0.97 seconds.
+- Focused `python3 -m py_compile` for all changed Python implementation/tests — passed.
+- `git diff --check` and committed-object whitespace check — passed.
+- Full unqualified `python3 -m pytest -q` remains unusable because existing `tests/test_engine.py` exits during collection when `core.readers.fallback.dummy_thermal_reader` and generated `config/hw_config.json` are absent. A second broad collection attempt also found the existing environment lacks `sqlparse`, and `tests/test_rapl_direct.py` requires generated `config/hw_config.json`. These are not failures of the focused ED-05 tests.
 
-Still open: compute-node boot ID, charged Slurm account, actual CPU affinity, exclusive/sharing state, other node jobs/processes, GPU cumulative-energy API and units, CPU/GPU increment/duplicate/native-refresh characterization, resets/wrap behavior, collector compatibility, raw acquisition brackets, start/end workload deltas, endpoint stability on hardware, enabled/disabled overhead, model/runtime operation, verifier/ledger integration and persistent artifact hashes.
+Test coverage includes nonuniform intervals, increasing/decreasing power, missing power, incomplete start/end coverage, unsupported energy measurement, raw database persistence, partial-total rejection, four Grace-like RAPL zones, detector key qualification, independent ranges, independent wrap/reset behavior, separate package/DRAM results and no implicit domain total.
+
+Evidence level is locally fixture-tested based on real Grace capability findings. The hardware facts motivated the implementation, but no workload energy was measured and this code has not yet been executed on Grace.
 
 ## Open questions and disagreements
 
-The current published Grace module list contains no Ollama or vLLM entry. Live module discovery and Alex's existing vLLM access method must be inspected. It is unknown whether the model is exposed through a shared Conda environment, a module, a container, a local service or a separate workflow. Existing Hugging Face/vLLM weights are not automatically an Ollama model artifact.
+Grace still must verify that the separate Python 3.11 environment imports NVML, selects the intended A100, preserves all four real paths, and produces durable samples through the installed database migration. The A100's observed power refresh/duplicate cadence, collector overhead and bounded-window coverage remain empirical checks. CPU package readings cover whole sockets, not only affinity `4-11`; comparative CPU-energy validation needs exclusive-node or another validated isolation arrangement.
 
-RAPL package and DRAM domains overlap by physical hierarchy and span whole sockets. They must be retained separately with parent/coverage metadata; summing package plus DRAM may double count depending on platform semantics. One allocated GPU does not imply the second GPU or host sockets were idle.
+Strict ED-02 still needs an Ollama-compatible real `/api/chat` response. Existing vLLM can validate the OpenAI-compatible AX3/AX4 path but not that repair.
 
 ## Next actions and handoff
 
-Run only non-destructive discovery next: inspect live Python/Anaconda/Ollama/vLLM/Singularity modules, existing Conda environments, current module state, the existing vLLM command/environment and GPU energy query support. Capture compute-node boot ID, job account, CPU binding and node-sharing evidence in the next allocation. Do not install packages, pull a container, download weights or issue a model request yet.
+1. In a small A100 allocation, create/use the separate approved Python 3.11 A-LEMS environment and run collector-only import/backend/domain/persistence checks with no inference.
+2. Capture idle timestamped A100 power for a short bounded window to characterize duplicates, physical refresh behavior, missingness, coverage and overhead.
+3. After collector compatibility passes, run one small existing vLLM inference with vLLM and A-LEMS in separate environments, retaining exact runtime/model/device/config and raw measurement records.
+4. Validate the Ollama-specific ED-02 path separately later using an approved user-local runtime/container and compatible model artifact. Do not infer Ollama correctness from vLLM.
+5. Do not run ED-09 or a larger campaign until the pilot gate is explicitly satisfied.
