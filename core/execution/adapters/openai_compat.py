@@ -1,11 +1,11 @@
 """
 ================================================================================
-OPENAI COMPAT ADAPTER — covers Groq, OpenAI, Ollama Local, Ollama Remote
+OPENAI COMPAT ADAPTER — covers vLLM, Groq, OpenAI, and Ollama
 ================================================================================
 
 Purpose:
-    One adapter class for all OpenAI-compatible HTTP APIs.
-    Provider differences are only base_url + api_key — zero logic branching.
+    One adapter class for OpenAI-compatible HTTP APIs and Ollama's native API.
+    Endpoint selection, authentication, and execution locality are independent.
 
     Providers handled:
       groq          cloud_api    api.groq.com
@@ -13,8 +13,8 @@ Purpose:
       ollama_local  local_ollama localhost:11434
       ollama_remote local_ollama 129.153.71.47:11434
 
-    Network metrics captured for cloud providers, zeroed for local ollama —
-    because local HTTP to 127.0.0.1 / LAN produces meaningless OS counters.
+    Network metrics are captured for non-local providers and zeroed for local
+    loopback providers, regardless of which response protocol they use.
 
 PAC: inherits TextGenABC — factory resolves, never imported directly elsewhere.
 
@@ -32,9 +32,6 @@ import requests
 from core.execution.adapters.base import TextGenABC
 
 logger = logging.getLogger(__name__)
-
-# Providers where HTTP goes over real network — capture OS network counters
-_CLOUD_TYPES = {"cloud_api"}
 
 # Ollama chat endpoint path — same for local and remote
 _OLLAMA_CHAT_PATH = "/api/chat"
@@ -59,16 +56,27 @@ class OpenAICompatAdapter(TextGenABC):
         """
         super().__init__(provider_config, model_config)
 
-        self._type = provider_config.get("type", "")          # local_ollama vs cloud_api
         self._base_url = provider_config.get("base_url", "").rstrip("/")
         self._api_key_env = provider_config.get("api_key_env", "")
         self._is_ollama = provider_config.get("provider_id", "").startswith("ollama")      # controls endpoint + response parsing
-        # derive is_cloud from network_type or is_local — works for all providers
-        self._is_cloud = (
-            self._type in _CLOUD_TYPES or
-            model_config.get("network_type") == "internet" or
-            model_config.get("is_local") == False
-        )
+        # Protocol and locality are independent. vLLM and Ollama can both use
+        # loopback HTTP, while their remote variants use the same wire format.
+        is_local = provider_config.get("is_local", model_config.get("is_local"))
+        network_type = provider_config.get(
+            "network_type", model_config.get("network_type", ""))
+        execution_site = provider_config.get(
+            "execution_site", model_config.get("execution_site", ""))
+        transport = provider_config.get(
+            "transport", model_config.get("transport", ""))
+        if is_local is None:
+            is_local = (
+                network_type == "loopback" or
+                execution_site == "host" or
+                transport == "loopback_http"
+            )
+        self._is_local = bool(is_local)
+        self._is_cloud = not self._is_local
+        self._requires_api_key = bool(self._api_key_env)
 
         # Lazy-resolve API key at call time — env may be set after init
         import os
@@ -91,18 +99,23 @@ class OpenAICompatAdapter(TextGenABC):
         """
         Check adapter readiness without raising.
 
-        For cloud: API key env var must be set.
-        For ollama: attempt HEAD to /api/tags — timeout 2s.
+        Providers requiring credentials are ready when their API key is set.
+        Ollama probes /api/tags; unauthenticated OpenAI-compatible services
+        (including local or remote vLLM) probe /models.
 
         Returns:
             bool
         """
-        if self._is_cloud:
+        if self._requires_api_key:
             # Cloud requires API key in env
             return bool(self._api_key)
-        # Local ollama: ping tags endpoint to verify server is running
+        # Server readiness follows protocol, independently of execution site.
+        readiness_url = (
+            f"{self._base_url}/api/tags" if self._is_ollama
+            else f"{self._base_url}/models"
+        )
         try:
-            r = requests.get(f"{self._base_url}/api/tags", timeout=2)
+            r = requests.get(readiness_url, timeout=2)
             return r.status_code == 200
         except Exception:
             return False
@@ -123,6 +136,7 @@ class OpenAICompatAdapter(TextGenABC):
         """
         # Reset stream metrics — prevents stale bleed between calls (SPEC_04)
         self._last_stream_metrics = {}
+        self._last_token_provenance = "unknown"
         # ── Phase 1: PRE-PROCESSING — local JSON build ────────────────────────
         t_pre = time.time()
         payload = self._build_payload(prompt, temperature)
@@ -151,10 +165,9 @@ class OpenAICompatAdapter(TextGenABC):
         response_bytes = len(content.encode("utf-8"))
         postprocess_ms = (time.time() - t_post) * 1000
 
-        # ── Assign phase times by provider type ───────────────────────────────
-        # Ollama runs inference locally — call_ms is compute, non_local=0
-        # Cloud waits for remote inference — call_ms is non_local, compute=0
-        if self._is_ollama:
+        # ── Assign phase times by execution locality ──────────────────────────
+        # Protocol selection is intentionally independent of this decision.
+        if self._is_local:
             non_local_ms = 0.0
             local_compute_ms = call_ms
             # Throughput over total time for local (no network bottleneck)
@@ -194,6 +207,7 @@ class OpenAICompatAdapter(TextGenABC):
         return {
             "content": content,
             "tokens": tokens,
+            "token_provenance": self._last_token_provenance,
             "total_time_ms": total_ms,
             "phase_metrics": phase_metrics,
             **net_delta,  # bytes_sent, bytes_recv, tcp_retransmits
@@ -282,8 +296,12 @@ class OpenAICompatAdapter(TextGenABC):
         """
         import json as _json
  
-        # Inject stream=True into payload — providers ignore unknown fields
+        # Ask OpenAI-compatible servers for a terminal usage chunk. Native
+        # Ollama /api/chat has a different payload contract.
         stream_payload = {**payload, "stream": True}
+        if (not self._is_ollama and
+                self.provider_config.get("stream_usage_supported", True)):
+            stream_payload["stream_options"] = {"include_usage": True}
  
         url = self._endpoint_url()
         headers = self._build_headers()
@@ -292,6 +310,7 @@ class OpenAICompatAdapter(TextGenABC):
         last_token_ns = None
         chunk_count = 0
         usage_completion_tokens = None
+        usage_total_tokens = None
         assembled_content = []
         usage_prompt_tokens = None
  
@@ -327,6 +346,7 @@ class OpenAICompatAdapter(TextGenABC):
                 if chunk.get("usage"):
                     usage_completion_tokens = chunk["usage"].get("completion_tokens")
                     usage_prompt_tokens = chunk["usage"].get("prompt_tokens")
+                    usage_total_tokens = chunk["usage"].get("total_tokens")
  
                 delta = ""
                 choices = chunk.get("choices", [])
@@ -367,8 +387,17 @@ class OpenAICompatAdapter(TextGenABC):
             return response.json()
  
         # Prefer API token count — providers batch tokens per chunk (Groq)
-        token_count = usage_completion_tokens if usage_completion_tokens else chunk_count
-        prompt_token_count= usage_prompt_tokens if usage_prompt_tokens else 0
+        provider_usage = (
+            usage_prompt_tokens is not None and
+            usage_completion_tokens is not None
+        )
+        token_count = (usage_completion_tokens
+                       if provider_usage else chunk_count)
+        prompt_token_count = usage_prompt_tokens if provider_usage else 0
+        total_token_count = (
+            usage_total_tokens if provider_usage and usage_total_tokens is not None
+            else prompt_token_count + token_count
+        )
  
         total_ms = (
             (last_token_ns - request_start_ns) / 1e6 if last_token_ns else 0.0
@@ -408,9 +437,10 @@ class OpenAICompatAdapter(TextGenABC):
             "usage": {
                 "prompt_tokens": prompt_token_count,
                 "completion_tokens": token_count,
-                "total_tokens": prompt_token_count + token_count,
+                "total_tokens": total_token_count,
             },
             "_streamed": True,            # internal flag, ignored by _parse_response
+            "_token_provenance": "provider" if provider_usage else "estimated",
         }
  
 
@@ -439,28 +469,37 @@ class OpenAICompatAdapter(TextGenABC):
                 "completion": len(content.split()),
                 "total": len(prompt.split()) + len(content.split()),
             }
+            self._last_token_provenance = "estimated"
         else:
             # OpenAI-compat: choices[0].message.content
             if "choices" in data:
                 content = data["choices"][0]["message"]["content"]
-                usage = data.get("usage", {})
-                tokens = {
-                    "prompt": usage.get("prompt_tokens", 0),
-                    "completion": usage.get("completion_tokens", 0),
-                    "total": usage.get("total_tokens", 0),
-                }
-                # Fallback if provider omitted usage (some proxies do this)
-                if tokens["total"] == 0:
+                usage = data.get("usage") or {}
+                prompt_tokens = usage.get("prompt_tokens")
+                completion_tokens = usage.get("completion_tokens")
+                if prompt_tokens is not None and completion_tokens is not None:
+                    total_tokens = usage.get("total_tokens")
+                    tokens = {
+                        "prompt": prompt_tokens,
+                        "completion": completion_tokens,
+                        "total": (total_tokens if total_tokens is not None
+                                  else prompt_tokens + completion_tokens),
+                    }
+                    self._last_token_provenance = data.get(
+                        "_token_provenance", "provider")
+                else:
                     tokens = {
                         "prompt": len(prompt.split()),
                         "completion": len(content.split()),
                         "total": len(prompt.split()) + len(content.split()),
                     }
+                    self._last_token_provenance = "estimated"
             else:
                 # Unexpected format — log and return raw
                 logger.warning("Unexpected response format from %s", self.get_name())
                 content = str(data)
                 tokens = {}
+                self._last_token_provenance = "unknown"
 
         return content, tokens
 
@@ -487,6 +526,7 @@ class OpenAICompatAdapter(TextGenABC):
         return {
             "content": f"Error: {error_msg}",
             "tokens": {"prompt": 0, "completion": 0, "total": 0},
+            "token_provenance": "unknown",
             "total_time_ms": preprocess_ms,
             "phase_metrics": phase_metrics,
             "bytes_sent": 0,
