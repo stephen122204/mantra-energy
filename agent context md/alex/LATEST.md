@@ -1,69 +1,55 @@
 # Latest published context: alex
 
-[Immutable turn record](turns/20260911T000852Z-ax4-local-integration.md)
+[Immutable turn record](turns/20260911T024535Z-grace-capability-preflight.md)
 
-# Turn summary: Alex — 20260911T000852Z-ax4-local-integration
+# Turn summary: Alex — 20260911T024535Z-grace-capability-preflight
 
-**Publication boundary:** This record contains implementation requirements, decisions, tests, hardware setup dependencies and handoff details only.
+**Publication boundary:** This record contains hardware/runtime capability evidence and implementation handoff details only.
 
 ## Task and current understanding
 
-AX4 / ED-07 requires the shared task, real runtime, collector, independent verifier and durable ledger to produce one linked goal record locally and then on Grace. This turn completes only the explicitly simulated local producer/consumer seam. The branch `alex/ed-07-local-integration` starts from fetched integration `18d712d78801169ff74527dbc6a8d85fda31cfc5`; exact tested and pushed head is `a906906605568a28225e2cfbc14ee1d026a81ccf`. Draft PR #28 targets `research/energy-diagnosis`: https://github.com/stephen122204/alems-energy-diagnosis/pull/28.
+Alex supplied results from a non-model Grace preflight at integration commit `72463d0623b9ce912b02c6ed92dc5f5e068672cb`. The checkout was clean on `research/energy-diagnosis`. No model was downloaded or executed, Ollama was not installed, and no start/end workload energy measurement occurred.
 
-The current integration branch contains ED-01 contracts, Aldric's ED-03 task/verifier and Nitheesh's ED-04 ledger. It does not contain Aldric's bounded executor/controls, Alex's ED-02 repair (draft PR #24) or Alex's ED-05 session implementation (draft PR #27). This AX4 branch does not copy or depend on those unfinished branches. Instead, runtime and measurement providers are injected through the documented shared callable/record shapes and marked simulated.
-
-Alex clarified that he has individual Grace access and can run experiments. Access alone is therefore not a blocker. Repository requirements still call for a booked/assigned compute session, named allocation and bounded run budget for hardware work, and ED-09/main campaign expansion remains gated. A single controlled capability/integration run can be prepared once its exact allocation, installed model/runtime and run budget are recorded.
-
-Milestone status:
-
-| Milestone | Status/evidence | Remaining |
-|---|---|---|
-| AX1 / ED-02 | Fixture/fix checkpoint confirmed by Stephen; draft PR #24 head `d0d4e85` | One real response with actual configuration/runtime/device evidence |
-| AX2 / ED-05 | Fixture-tested draft PR #27 head `47472d4` | Review/integration and actual sensor evidence |
-| AX3 / ED-05/12 | Local capability software prepared; Alex confirms Grace access | Record exact allocation/session/budget, then actual domains, refresh/coverage, isolation and overhead |
-| AX4 / ED-07/09 | Local simulated integration fixture-tested in PR #28 at `a906906` | Reviewed runtime/measurement dependencies, Aldric executor/controls, then one real Grace goal; bounded pilot still gated |
-| AX5 / post-pilot | Conditional | Validated pilot and frozen runtime/measurement definition |
+Alex has individual Grace access and independently obtained interactive Slurm job `19728005` on compute node `g002`: partition `gpu`, one A100, eight CPUs, 128 GB memory and one-hour limit. Access itself is no longer treated as blocked. Specific substantial runs still need a named allocation/session and bounded budget, and ED-09 expansion remains gated.
 
 ## Ideas and hypotheses
 
-The safe local seam is a narrow orchestrator consuming only the merged contracts. It should reject producer identity or clock mismatches before a record can enter the ledger. Runtime and measurement implementations can later replace simulated providers without changing the durable `ExecutionRecord` consumer boundary. Repeated exports of the same finalized attempt should remain byte-identical even though newly claimed attempts receive unique IDs.
+The default CentOS Python 3.6.8 is unsuitable: the repository advertises Python 3.10+ and merged study code uses Python 3.10 syntax. Grace provides newer Python and Anaconda modules, so the next safe step is module/environment discovery rather than installation. An existing vLLM environment for `meta-llama/Llama-3.1-8B-Instruct` could validate the OpenAI-compatible runtime path and support AX3/ED-07, but it cannot exercise the Ollama `/api/chat` response parser.
 
 ## Decisions and rationale
 
-Added a single-goal orchestrator that validates task/plan/verifier identities, claims a ledger attempt, calls an injected runtime, independently verifies completed structured output, closes an injected measurement window, validates response/sample/measurement timing and identity, writes integrity-pinned model-output/raw-sample artifacts and finalizes the ledger. Failed runtime responses retain model status, error and partial token counts; verification becomes unavailable rather than pass. Wrong completed output remains a completed execution with verifier failure. Missing CPU/GPU energy remains null with reasons.
+Treat the supplied energy values only as raw capability snapshots. On `g002`, Alex directly read both socket package counters and both DRAM counters in microjoules, including their maximum counter ranges. This establishes read permission and declared counter scope, not workload energy. The job allocated only eight of the node's 48 CPUs and one of two A100s; without exclusive-node evidence, socket-wide RAPL includes activity beyond the job and cannot be attributed as isolated job energy.
 
-The implementation does not define Aldric's executor or controls, alter the workload, change the frozen contract, change Nitheesh's ledger, or absorb open PR code. It does not claim that simulated runtime or sensor providers are real components.
+Use Python 3.11 as the initial compatibility target unless the existing vLLM environment requires another supported Python. Grace's official module inventory lists Python 3.10.8, 3.11.5, 3.12.3 and 3.13.1 plus Anaconda3 releases. No Ollama or vLLM module appears in the published Grace inventory, but live `module spider`/`mla` output is the authority. Grace supports Singularity with NVIDIA passthrough; using a container would still require a reviewed existing image or later authorized download.
+
+Strict evidence for the Ollama-specific ED-02 repair requires one real Ollama-compatible `/api/chat` response through the repaired adapter. A vLLM-only request is useful but does not validate Ollama NDJSON parsing. Native installation is not inherently required if an existing approved Ollama binary, shared environment, container image or reachable loopback service and compatible existing model artifact are available.
 
 ## Changes and artifacts
 
-- `studies/energy_diagnosis/integration.py`: integration protocols, identity/timing validation, single-goal orchestration and deterministic artifact writing.
-- `tests/test_integrated_goal.py`: simulated success, wrong answer, runtime failure, missing energy, identity mismatch, timing and deterministic export checks.
-- `studies/energy_diagnosis/README.md`: local seam and evidence boundary.
-- Exact commit: `a906906605568a28225e2cfbc14ee1d026a81ccf`.
-- Draft PR: https://github.com/stephen122204/alems-energy-diagnosis/pull/28.
-- No model execution, tool-control execution, Grace job, physical sensor measurement or pilot ran.
+No code changed. No model/runtime/container/package was installed or downloaded. No model request, tool execution, collector session or campaign ran.
+
+Verified hardware facts supplied by Alex:
+
+- Compute host `g002`, Intel Xeon Gold 6248R, x86_64, two sockets, 24 cores/socket, 48 online CPUs, one thread/core.
+- Assigned GPU: NVIDIA A100-PCIE-40GB, UUID `GPU-1f093ecc-211c-d69f-29fc-d85007055715`, 40960 MiB, driver `580.126.20`, power management enabled; no GPU process before workload.
+- Readable RAPL: package-0 and package-1 counters, each maximum `262143328850` microjoules; DRAM child counter for each package, each maximum `65712999613` microjoules.
+- Example raw values were observed for all four domains. They are not deltas and not workload-energy measurements.
+- Login node `login5` default Python is 3.6.8. The supplied boot ID belongs to the login node, not compute node `g002`.
 
 ## Tests and evidence
 
-Evidence level: **fixture-tested local integration**, not hardware-tested or campaign-validated.
+Evidence level: **hardware capability-discovered**, not workload-measured, model-validated or campaign-validated.
 
-- `python3 scripts/check_energy_diagnosis_setup.py` — passed; setup/planning only.
-- `python3 -m pytest -q tests/test_integrated_goal.py tests/test_campaign_ledger.py tests/test_data_analysis_workload.py tests/test_study_contracts.py tests/test_energy_collector.py` — 52 passed, 5 subtests passed in 0.88s at exact commit `a906906605568a28225e2cfbc14ee1d026a81ccf`.
-- `python3 -m py_compile studies/energy_diagnosis/integration.py tests/test_integrated_goal.py` — passed.
-- `git diff --check` — passed.
-- PR #28 GitHub checks `handoff-and-plan` and `windows-ledger` — passed at the exact head.
-- An attempted command included `tests/test_openai_compat_adapter.py`, but integration does not contain that unmerged PR #24 file; pytest stopped before running tests. No adapter-regression pass is claimed from that command. The available merged suites were then run successfully as listed above.
+Satisfied AX3/ED-05 capability elements: individual allocation execution, source revision, compute hostname, requested/assigned resource shape, GPU model/UUID/driver/memory, pre-workload no-process observation, CPU topology, direct read permission for two CPU-package and two DRAM domains, units, example raw values and maximum ranges.
 
-Local fixtures prove linked success, independent rejection of wrong output, model failure with partial accounting, null unavailable CPU/GPU measurements, exact goal boundaries, runtime metadata preservation, artifact references, producer/consumer mismatch rejection and byte-identical repeat exports. They do not prove actual model/tool execution, physical energy, device/domain coverage or isolation.
+Still open: compute-node boot ID, charged Slurm account, actual CPU affinity, exclusive/sharing state, other node jobs/processes, GPU cumulative-energy API and units, CPU/GPU increment/duplicate/native-refresh characterization, resets/wrap behavior, collector compatibility, raw acquisition brackets, start/end workload deltas, endpoint stability on hardware, enabled/disabled overhead, model/runtime operation, verifier/ledger integration and persistent artifact hashes.
 
 ## Open questions and disagreements
 
-Full local G2 still lacks Aldric's merged single-goal executor/real controls, and the reviewed Alex runtime/measurement implementations are not on integration. Therefore PR #28 is a contract integration seam, not a complete real-component local gate. Full ED-07 requires actual inference and tool computation plus valid linked CPU/GPU observations.
+The current published Grace module list contains no Ollama or vLLM entry. Live module discovery and Alex's existing vLLM access method must be inspected. It is unknown whether the model is exposed through a shared Conda environment, a module, a container, a local service or a separate workflow. Existing Hugging Face/vLLM weights are not automatically an Ollama model artifact.
 
-The repository's model registry declares `ollama_local/tinyllama-1b` and `vllm_local/Mistral-7B-Instruct-v0.3`, but registration is not installation. The exact existing model artifact/runtime on Grace must be inspected before choosing a command; no model should be downloaded merely to run the smoke check. Grace CPU package energy support is also not established by the x86-oriented RAPL reader names or by prior access reports; actual node APIs and physical scope must be recorded.
+RAPL package and DRAM domains overlap by physical hierarchy and span whole sockets. They must be retained separately with parent/coverage metadata; summing package plus DRAM may double count depending on platform semantics. One allocated GPU does not imply the second GPU or host sockets were idle.
 
 ## Next actions and handoff
 
-For one smallest controlled Grace validation, first record an explicit short session budget, account/allocation, actual assigned CPU/GPU resources and sharing state. In the allocation capture source commit, environment/package lock, hostname/boot ID, scheduler job/account, `nvidia-smi` GPU UUID/model/driver/CUDA/process state, CPU topology/allocation, readable powercap or operator-provided CPU-energy domains, and the installed local runtime/model list without downloading anything. Select one already-installed loopback runtime/model, start one server if needed, and issue one task response through the reviewed adapter. Run the merged data-analysis task through Aldric's reviewed executor when available, bracket it with the reviewed session provider, verify independently, finalize one ledger attempt and retain raw samples plus exported records. Compare one short repeatable no-op/control workload with collection disabled/enabled only for overhead; do not start ED-09.
-
-Before executing, the exact commands must be adapted to Grace's scheduler account/partition and the actually installed runtime. Required evidence includes command transcript, source/runtime/model/tokenizer hashes, request/response metadata, actual device residency, raw CPU/GPU samples and units, acquisition/goal/session times, domain manifest/overlap, duplicate/refresh coverage, sharing/isolation, overhead procedure, verifier result, ledger validation and artifact hashes. This one bounded run can address ED-02 live response, ED-05/AX3 capability evidence and ED-07 integrated live validation, but only if the missing reviewed executor/runtime/measurement dependencies are present on the tested revision.
+Run only non-destructive discovery next: inspect live Python/Anaconda/Ollama/vLLM/Singularity modules, existing Conda environments, current module state, the existing vLLM command/environment and GPU energy query support. Capture compute-node boot ID, job account, CPU binding and node-sharing evidence in the next allocation. Do not install packages, pull a container, download weights or issue a model request yet.
