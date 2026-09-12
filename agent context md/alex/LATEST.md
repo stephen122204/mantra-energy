@@ -1,217 +1,76 @@
 # Latest published context: alex
 
-[Immutable turn record](turns/alex-grace-ed05-20260911.md)
+[Immutable turn record](turns/20260911T-ed02-grace-validation.md)
+
+# Turn summary: Alex — 20260911T-ed02-grace-validation
 
 ## Task and current understanding
 
-Validate ED-05 Grace energy measurement behavior on real hardware and gather useful evidence toward ED-07 integration.
+Review ED-02 PR #24 after the completed real Grace validation, update its evidence, and mark it ready if every issue-level acceptance criterion is satisfied. The exact validated branch tip is `d0d4e85b0e75d53e97fa934c455cf561358e2f6a`; fetched integration was `2b38b34`. The existing local worktree was clean but older, so branch contents were inspected from the fetched remote ref and focused tests were run from an isolated archive of the exact tip.
 
-Exact tested commit:
+ED-02 issue #2 requires meaningful Ollama/OpenAI-compatible fixtures, resolved active-registry evidence, truthful token/timing metadata, and one real local response. The previously missing live-runtime criterion is now satisfied by the 11 September 2026 Grace run.
 
-0c6b68a127c0fdc68d10d22c5ce50ea9cf76da17
+Alex full-role status at this checkpoint:
 
-Validation worktree:
-
-/scratch/user/alexflesher03/research/alems-ed05-validation
-
-The worktree remained clean and detached at the exact tested commit.
-
-Grace validation established that A-LEMS can:
-- access the assigned NVIDIA A100
-- use NVML cumulative GPU energy
-- discover and read all four Grace RAPL domains
-- preserve socket-qualified RAPL metadata
-- communicate with a real local vLLM server
-- execute a real Llama 3.1 8B inference while GPU and RAPL measurement are active
-
-ED-05 hardware compatibility is substantially validated.
-
-ED-07 is not fully closed because the final measured run was performed with a manually constructed adapter configuration rather than proving the complete normal executor -> measurement -> DB/ledger persistence path.
-
-ED-02 remains separate and still requires a real Ollama /api/chat response through the repaired Ollama parser.
+| Milestone | Status | Evidence / dependency | Next action / owner |
+|---|---|---|---|
+| AX1 / ED-02 | hardware-tested; ready for review | PR #24 at `d0d4e85`; real Ollama call and 32 focused tests pass | Stephen reviews and decides merge |
+| AX2 / ED-05 | fixture-tested and hardware-tested on separate branch | Latest published ED-05 evidence at `0c6b68a`; separate scope | Continue only in ED-05 review/integration flow |
+| AX3 / ED-05/12 | substantially hardware-tested | Grace runtime, GPU, RAPL and NVML capability evidence exists; isolation limitations remain separate | Stephen coordinates later measurement session/isolation decisions |
+| AX4 / ED-07/09 | in progress / dependency-gated | Requires reviewed runtime, collector, executor, ledger and integrated Grace path | Component owners and Stephen integrate; no ED-07 changes in this turn |
+| AX5 | conditional | Requires pilot approval and frozen runtime/measurement protocol | Stephen owns approval/freeze; Alex supports approved campaign evidence |
 
 ## Ideas and hypotheses
 
-The Grace A100 supports NVML cumulative energy measurement, which is preferable to integrating sampled power.
-
-The Grace RAPL structure contains two package domains and two DRAM domains:
-- PACKAGE_SOCKET_0
-- DRAM_SOCKET_0
-- PACKAGE_SOCKET_1
-- DRAM_SOCKET_1
-
-The RAPL domains are socket-wide. Therefore measurements from a nonexclusive allocation are useful for hardware compatibility and integration smoke testing, but should not be treated as isolated comparative CPU-energy measurements.
-
-During integration testing, three likely A-LEMS issues were identified:
-
-1. OpenAICompatAdapter.is_available() returned False even though a real vLLM request succeeded. This may be related to the model being supplied through an in-memory configuration rather than registered under vllm_local.
-
-2. A-LEMS reported prompt token count as zero even though direct vLLM responses correctly report prompt tokens. The OpenAI-compatible parsing path may be dropping the prompt-token count.
-
-3. vllm_local inference time was reported as non_local_ms while local_compute_ms was zero. OpenAICompatAdapter appears to treat only Ollama as local compute, even when vLLM runs locally on the same Grace node.
+The initial Ollama CPU fallback was caused by runtime GPU backend discovery/configuration: Grace exposed the allocated A100 correctly, and Ollama's CUDA 13 backend detected it when invoked with the required backend/library path. This is reproducibility information, not evidence of an ED-02 adapter defect.
 
 ## Decisions and rationale
 
-A separate Python 3.11 environment was used for A-LEMS:
+The PR description now distinguishes the implementation sequence explicitly: `9a0d3b6` is the Ollama NDJSON stream-handling repair; `ad7c751` preserves failure/request accounting and token provenance; `d0d4e85` aligns provenance with the shared `ModelResponse` contract. This prevents the later accounting refinements from obscuring the original defect and repair.
 
-/scratch/user/alexflesher03/venvs/alems-py311
-
-The existing vLLM Python 3.12 environment was preserved unchanged:
-
-/scratch/user/alexflesher03/vllm-project/vllm-env
-
-The two environments communicated through the local OpenAI-compatible endpoint:
-
-http://127.0.0.1:8000/v1
-
-No new vLLM installation or model download was performed.
-
-The already-cached model used for the real workload was:
-
-meta-llama/Llama-3.1-8B-Instruct
-
-The tracked config/models.yaml file was not modified just to register the test model, because the goal was to preserve evidence against the exact tested commit.
-
-A temporary in-memory OpenAICompatAdapter configuration was used for the final workload test.
-
-NO_PROXY/no_proxy was set for localhost because HPRC proxy variables otherwise sent 127.0.0.1 curl requests through the Squid proxy.
+PR #24 was marked Ready because its exact head is the validated commit, all four current CI checks are successful, the focused regression suite passes, and the real provider response closes the only stated remaining acceptance criterion. ED-05 and ED-07 remain separate milestones and were not treated as blockers for bounded ED-02 acceptance.
 
 ## Changes and artifacts
 
-No tracked repository files were modified during this validation session.
+No feature-branch files or code were changed. No ED-05, ED-07, or unrelated implementation was modified.
 
-Key evidence artifacts:
+Updated PR #24's description with:
 
-/scratch/user/alexflesher03/alems-ed05-vllm-measured-run.json
+- exact Grace node/job/GPU/Ollama/model and validated commit;
+- live adapter configuration and result metrics;
+- direct NDJSON terminal-metadata behavior;
+- provider token provenance and local-compute classification;
+- concise CUDA 13 setup/fallback reproducibility note;
+- SCRATCH artifact paths;
+- focused test and CI results;
+- explicit ED-02 acceptance and Ready-for-review status.
 
-/scratch/user/alexflesher03/vllm-project/llama-ed05.log
+PR: https://github.com/stephen122204/alems-energy-diagnosis/pull/24
 
-/scratch/user/alexflesher03/alems-gpu-idle-10hz.jsonl
+Grace artifacts:
 
-The measured-run JSON contains:
-- model/provider identity
-- wall-clock timing
-- model response
-- adapter token/timing data
-- RAPL start/end/deltas
-- GPU samples
-- cumulative GPU interval energy
-- note that RAPL scope is socket-wide
+- `$SCRATCH/alems/artifacts/ed02/grace-validation-environment.txt`
+- `$SCRATCH/alems/artifacts/ed02/live-adapter-result.txt`
+- `$SCRATCH/alems/artifacts/ed02/ollama-stream-response.jsonl`
+- `$SCRATCH/alems/artifacts/ed02/ollama-server-g087-cuda.log`
+- `$SCRATCH/alems/artifacts/ed02/pytest-openai-compat-final.txt`
 
 ## Tests and evidence
 
-Focused Grace RAPL regression test:
+Hardware-tested on Grace node `g087`, Slurm job `19734356`, NVIDIA A100-PCIE-40GB, Ollama `0.34.0`, model `llama3.2:1b`, clean frozen checkout `d0d4e85`.
 
-python -m pytest -q tests/test_rapl_grace_domains.py
+The real streaming adapter call reported `Available: True`, `status: ok`, prompt/completion/total tokens `43/32/75`, `token_provenance: provider`, `streaming_enabled: 1`, `local_compute_ms: 34872.836677357554`, and `non_local_ms: 0.0`. Direct `/api/chat` evidence contained multiple `done:false` NDJSON records and a terminal `done:true` record with provider usage/timing metadata. `ollama ps` reported `100% GPU`; `nvidia-smi` showed approximately 2938 MiB used by `llama-server`.
 
-Result:
+Grace focused regression: `python -m pytest -q tests/test_openai_compat_adapter.py` — 32 passed; checkout remained clean.
 
-3 passed
+Independent exact-tip rerun: `python3 -m pytest -q tests/test_openai_compat_adapter.py` — 32 passed. The sandboxed attempt first produced 30 passes and two localhost-bind permission failures; rerunning with loopback socket permission passed all 32, confirming the failures were execution-sandbox restrictions rather than code failures.
 
-Live RAPLReader hardware check succeeded for:
-- PACKAGE_SOCKET_0
-- DRAM_SOCKET_0
-- PACKAGE_SOCKET_1
-- DRAM_SOCKET_1
-
-The reader preserved:
-- native sysfs paths
-- kernel names
-- socket IDs
-- parent relationships
-- max_energy_range_uj
-- socket-wide scope
-
-A-LEMS GPUCollector idle validation:
-- backend: NVML
-- source: nvml
-- measurement kind: cumulative_energy
-- 300 samples
-- approximately 10 Hz
-- complete coverage for all samples
-- 955.628 J summed interval energy
-
-Independent direct NVML testing confirmed that nvmlDeviceGetTotalEnergyConsumption increased consistently with approximately 32 W idle power.
-
-A real vLLM server was started on Grace using:
-- vLLM 0.21.0
-- NVIDIA A100-PCIE-40GB
-- meta-llama/Llama-3.1-8B-Instruct
-
-A direct OpenAI-compatible request succeeded and returned:
-
-GRACE VLLM OK
-
-Direct vLLM usage:
-- prompt tokens: 45
-- completion tokens: 7
-- total tokens: 52
-
-A real measured workload was then executed through A-LEMS OpenAICompatAdapter while GPUCollector and RAPLReader were active.
-
-Compute node:
-
-g092
-
-Measured wall time:
-
-11500.677604 ms
-
-GPU:
-- 114 samples
-- source: nvml
-- measurement kind: cumulative_energy
-- complete interval energy: 664.282 J
-
-RAPL deltas:
-- PACKAGE_SOCKET_0: 629.836400 J
-- DRAM_SOCKET_0: 86.316006 J
-- PACKAGE_SOCKET_1: 692.839779 J
-- DRAM_SOCKET_1: 116.357709 J
-
-The model produced a valid response explaining why merge sort is O(n log n).
-
-Adapter token result:
-- prompt: 0
-- completion: 106
-- total: 106
-
-Adapter phase metrics included:
-- total_time_ms: 11445.349931716919
-- non_local_ms: 11445.332765579224
-- local_compute_ms: 0.0
-- ttft_ms: 10122.23981
-- tpot_ms: 12.46613519047619
-- token_throughput: 80.98129806060983
-- streaming_enabled: 1
+GitHub Actions run `34521294017` at `d0d4e85`: `handoff-and-plan`, `windows-ledger`, `adapter-fixtures (ubuntu-latest)`, and `adapter-fixtures (windows-latest)` all successful.
 
 ## Open questions and disagreements
 
-Why does OpenAICompatAdapter.is_available() return False when the same adapter can successfully complete the vLLM request?
-
-Why is prompt token usage reported as zero in A-LEMS when the direct vLLM API reports prompt tokens correctly?
-
-Should local vLLM inference time be classified as local_compute_ms instead of non_local_ms?
-
-The normal executor -> measurement -> DB/ledger path has not yet been demonstrated with this real workload, so ED-07 should remain open.
-
-The RAPL workload values came from socket-wide counters on a nonexclusive node and should not be used as isolated comparative CPU/DRAM benchmark results.
-
-ED-02 remains open until a real Ollama /api/chat response is validated through the repaired parser.
+No remaining ED-02 acceptance blocker was found. Stephen's code review and merge decision remain pending. ED-05 measurement-session completion and ED-07 end-to-end integration are intentionally separate and unchanged.
 
 ## Next actions and handoff
 
-1. Publish this Alex context note.
-
-2. Update the ED-05 / ED-07 draft PR with the real Grace validation evidence and clearly state the remaining limitations.
-
-3. Investigate and fix or document the three integration issues:
-   - vllm_local availability behavior
-   - missing prompt-token count
-   - incorrect local/non-local phase classification
-
-4. Run the normal executor -> measurement -> DB/ledger persistence path with a real local provider and verify stored records.
-
-5. Complete the separate ED-02 live Ollama /api/chat parser validation.
-
-6. Do not claim isolated comparative RAPL measurements until a whole-node exclusive or otherwise validated isolation strategy is used.
+Stephen reviews PR #24 and decides whether to merge. The PR is Ready for review and was not merged. Continue ED-05/ED-07 work only through their separate branches and review scopes.
