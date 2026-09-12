@@ -19,8 +19,16 @@ from studies.energy_diagnosis.workloads.bounded_executor import (
     ToolCall,
 )
 
-VERSION = "moe-tools-v2"
+VERSION = "moe-tools-v3"
 BUGGY = "def net_cents(price, count, discount):\n    return price * count * (100 - discount) // 100\n"
+REPAIR_LANGUAGE = (
+    "This is a constrained arithmetic repair: pricing.py must contain exactly one "
+    "function def net_cents(price, count, discount), with exactly one return statement. "
+    "Its expression may use only these three parameters, integer literals, parentheses, "
+    "+, -, *, //, %, and unary + or -. No imports, function calls, assignments, "
+    "annotations, defaults, decorators, extra parameters, docstrings, or other statements "
+    "are allowed. Return a Python int. Comments are allowed."
+)
 
 
 def create_tasks(root):
@@ -59,14 +67,16 @@ def create_tasks(root):
             "Join orders to product prices, exclude returned orders, and return exact revenue_cents_by_region and total_cents using the pipeline tool.",
         ),
         PilotTask(
-            "pricing-repair-v1",
+            "pricing-repair-v2",
             "repository-repair",
             "synthetic-pricing-v1",
             repo,
             {},
             asset_hash(repo),
             (),
-            "Repair net_cents(price, count, discount) to return integer cents rounded half up after applying an integer percentage discount. Inputs are nonnegative integer price/count and discount 0..100. Read the source, edit pricing.py, and execute visible tests. Return {done:true} when finished.",
+            "Repair net_cents(price, count, discount) to return integer cents rounded half up after applying an integer percentage discount. Inputs are nonnegative integer price/count and discount 0..100. "
+            + REPAIR_LANGUAGE
+            + " Read the source, edit pricing.py, and execute visible tests. Return {done:true} when finished.",
         ),
     )
 
@@ -161,7 +171,6 @@ class HiddenRepositoryCheck:
                 ast.Mult,
                 ast.FloorDiv,
                 ast.Mod,
-                ast.Div,
                 ast.USub,
                 ast.UAdd,
             )
@@ -170,7 +179,21 @@ class HiddenRepositoryCheck:
                 or not isinstance(tree.body[0], ast.FunctionDef)
                 or tree.body[0].name != "net_cents"
                 or tree.body[0].decorator_list
+                or tree.body[0].returns is not None
+                or tree.body[0].type_comment is not None
+                or getattr(tree.body[0], "type_params", [])
+                or len(tree.body[0].body) != 1
+                or not isinstance(tree.body[0].body[0], ast.Return)
+                or [a.arg for a in tree.body[0].args.args] != ["price", "count", "discount"]
+                or tree.body[0].args.posonlyargs
+                or tree.body[0].args.kwonlyargs
+                or tree.body[0].args.vararg is not None
+                or tree.body[0].args.kwarg is not None
+                or tree.body[0].args.defaults
+                or tree.body[0].args.kw_defaults
                 or any(not isinstance(n, allowed) for n in ast.walk(tree))
+                or any(isinstance(n, ast.arg) and (n.annotation is not None or n.type_comment is not None) for n in ast.walk(tree))
+                or any(isinstance(n, ast.Constant) and type(n.value) is not int for n in ast.walk(tree))
                 or any(
                     isinstance(n, ast.Name)
                     and n.id not in {"price", "count", "discount"}
@@ -179,7 +202,7 @@ class HiddenRepositoryCheck:
             ):
                 return {
                     "passed": False,
-                    "reason": "function must be pure arithmetic without imports or calls",
+                    "reason": "source violates the declared constrained arithmetic repair language",
                 }
             (p / "pricing.py").write_text(source)
             cases = [
@@ -201,7 +224,7 @@ class HiddenRepositoryCheck:
                 + repr(cases)
                 + "\nexpected="
                 + repr(expected)
-                + "\nactual=[net_cents(*c) for c in cases]\nprint(json.dumps({'passed': actual == expected, 'checks': len(cases)}))\n"
+                + "\nactual=[net_cents(*c) for c in cases]\nprint(json.dumps({'passed': all(type(v) is int for v in actual) and actual == expected, 'checks': len(cases)}))\n"
             )
             # Model edits cannot replace the verification command or reference data.
             result = subprocess.run(
