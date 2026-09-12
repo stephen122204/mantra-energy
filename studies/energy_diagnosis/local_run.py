@@ -315,6 +315,23 @@ class GoalExecutor:
                         )
                     )
                 local_events = []
+                token = None
+
+                def record_tool_event(event):
+                    nonlocal token
+                    local_events.append(event)
+                    # Start only after a child enters tool invocation, rather
+                    # than while the parent is still launching that process.
+                    # The child never waits for this callback: receipt can lag
+                    # behind body completion on short tools, which stays visible
+                    # in body timestamps and observed_ns.
+                    if (
+                        self.lifecycle
+                        and token is None
+                        and event["event"] == "body_start"
+                    ):
+                        token = self.lifecycle.start_pause()
+
                 tool = PilotAssetTool(str(task.asset_path), task.family)
                 if (
                     self.simulated
@@ -330,20 +347,17 @@ class GoalExecutor:
                         self.timeout_seconds
                         - (time.monotonic_ns() - lease.started_ns) / 1e9,
                     ),
-                    event_sink=local_events.append,
+                    event_sink=record_tool_event,
                 )
                 pause_error = None
                 if self.lifecycle:
-                    token = self.lifecycle.start_pause()
                     try:
                         outcomes = tool_executor.execute(graph)
-                    except Exception:
-                        owned_terminated = False
-                        raise
                     finally:
                         events.extend(local_events)
                         try:
-                            self.lifecycle.end_pause(token)
+                            if token is not None:
+                                self.lifecycle.end_pause(token)
                         except Exception as exc:
                             pause_error = exc
                 else:

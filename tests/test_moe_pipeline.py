@@ -43,6 +43,8 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
     )
     assert first["executed"] == 8
     assert first["validation"]["valid"]
+    manifest = json.loads((output / "moe-manifest.json").read_text())
+    assert manifest["execution_protocol"] == "tool-body-notification-v1"
     assert all(
         x["startup_seconds"] > 0 and x["resume_barrier_seconds"] >= 0
         for x in first["summary"]["settings"].values()
@@ -60,6 +62,15 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         else:
             assert not transfers
         assert any(e["event"] == "tool_pause_start" for e in events)
+        tools = json.loads(path.with_name("events.json").read_text())
+        body_starts = [e for e in tools if e["event"] == "body_start"]
+        pauses = [e for e in events if e["event"] == "tool_pause_start"]
+        assert len(pauses) == len(body_starts)  # These tasks have one tool per decision.
+        for pause, body in zip(pauses, body_starts):
+            assert pause["monotonic_ns"] >= body["observed_ns"] >= body["monotonic_ns"]
+        if policy == "demand":
+            assert not any(e["event"] == "preparation_admitted" for e in events)
+            assert len([e for e in events if e["event"] == "preparation_skipped"]) == len(pauses)
         assert events[-1]["event"] == "goal_end"
         calls = json.loads(path.with_name("model-calls.json").read_text())
         assert "expected" not in json.loads(calls[0]["prompt"])
@@ -214,6 +225,21 @@ def test_byte_budgets_history_and_no_future_inputs():
     assert paired_interval([(1, 2), (3, 4)])["interval"] == [1, 1]
     with pytest.raises(ValueError):
         Policy("bounded", 128, bytes_per_second=float("nan"))
+
+
+def test_demand_pause_does_not_call_preparation_backend():
+    class NoPreparation:
+        def snapshot_experts(self):
+            pytest.fail("demand must not enumerate expert state")
+
+        def prepare_experts(self, *args):
+            pytest.fail("demand must not issue an empty preparation RPC")
+
+    control = Lifecycle(NoPreparation(), Policy("demand"))
+    control.goal = "owned-fixture"
+    token = control.start_pause()
+    assert token == (0, "owned-fixture:pause:1")
+    assert [e["event"] for e in control.events] == ["tool_pause_start", "preparation_skipped"]
 
 
 def test_native_bridge_calls_actual_native_methods():
