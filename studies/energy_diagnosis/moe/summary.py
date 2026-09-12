@@ -50,6 +50,13 @@ def summarize(root):
             else:
                 import hashlib
 
+                for artifact in attempt["artifacts"]:
+                    artifact_path = root / artifact["path"]
+                    if (
+                        hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+                        != artifact["sha256"]
+                    ):
+                        raise ValueError("attempt artifact hash mismatch")
                 reference = next(
                     a for a in attempt["artifacts"] if a["role"] == "execution-record"
                 )
@@ -103,17 +110,61 @@ def summarize(root):
                 else "",
             )
         prepared_bytes = 0
+        resume_barrier_ns = (
+            startup_ns
+        ) = routing_hook_ns = transfer_bracket_ns = unused_bytes = 0
         for path, _ in entries:
             events_path = path.with_name("expert-events.json")
             if events_path.exists():
-                prepared_bytes += sum(
-                    e["transfer"]["transferred_bytes"]
-                    for e in json.loads(events_path.read_text())
-                    if e["event"] == "expert_transfer"
-                    and e["transfer"]["outcome"] == "completed"
+                events = json.loads(events_path.read_text())
+                finishes = {}
+                for event in events:
+                    kind = event["event"]
+                    if kind == "expert_transfer":
+                        transfer = event["transfer"]
+                        transfer_bracket_ns += transfer["transfer_ns"]
+                        if transfer["outcome"] == "completed":
+                            prepared_bytes += transfer["transferred_bytes"]
+                    elif kind == "tools_finished":
+                        finishes[event["pause_id"]] = event["monotonic_ns"]
+                    elif kind == "model_resume" and event["pause_id"] in finishes:
+                        resume_barrier_ns += (
+                            event["monotonic_ns"] - finishes[event["pause_id"]]
+                        )
+                    elif kind == "goal_start":
+                        window = event["startup_window"]
+                        startup_ns += window["end_ns"] - window["start_ns"]
+                    elif kind in {
+                        "prepared_not_used_by_goal_end",
+                        "prepared_not_used_before_reprepare",
+                    }:
+                        unused_bytes += event["prepared"]["transferred_bytes"]
+            calls_path = path.with_name("model-calls.json")
+            if calls_path.exists():
+                routing_hook_ns += sum(
+                    c["adapter"].get("backend", {}).get("hook_ns", 0)
+                    for c in json.loads(calls_path.read_text())
                 )
+        components_complete = all(
+            r["execution_status"] == "completed"
+            and path.with_name("expert-events.json").exists()
+            and path.with_name("model-calls.json").exists()
+            for path, r in entries
+        )
         result[setting] = dict(
-            completed_preparation_bytes=prepared_bytes,
+            component_totals_complete=components_complete,
+            completed_preparation_bytes=prepared_bytes if components_complete else None,
+            prepared_bytes_not_requested=unused_bytes if components_complete else None,
+            startup_seconds=startup_ns / 1e9 if components_complete else None,
+            resume_barrier_seconds=resume_barrier_ns / 1e9
+            if components_complete
+            else None,
+            python_routing_hook_seconds=routing_hook_ns / 1e9
+            if components_complete
+            else None,
+            summed_transfer_host_bracket_seconds=transfer_bracket_ns / 1e9
+            if components_complete
+            else None,
             attempts=len(entries),
             successful=successes,
             invalid_energy_attempts=invalid,

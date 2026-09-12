@@ -43,6 +43,10 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
     )
     assert first["executed"] == 8
     assert first["validation"]["valid"]
+    assert all(
+        x["startup_seconds"] > 0 and x["resume_barrier_seconds"] > 0
+        for x in first["summary"]["settings"].values()
+    )
     assert all(x["successful"] == 2 for x in first["summary"]["settings"].values())
     for path in (output / "goals").glob("*/expert-events.json"):
         events = json.loads(path.read_text())
