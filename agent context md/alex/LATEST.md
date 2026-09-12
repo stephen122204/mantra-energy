@@ -1,76 +1,52 @@
 # Latest published context: alex
 
-[Immutable turn record](turns/20260911T-ed02-grace-validation.md)
+[Immutable turn record](turns/20260912T-ed02-copilot-fixes.md)
 
-# Turn summary: Alex — 20260911T-ed02-grace-validation
+# Turn summary: Alex — 20260912T-ed02-copilot-fixes
 
 ## Task and current understanding
 
-Review ED-02 PR #24 after the completed real Grace validation, update its evidence, and mark it ready if every issue-level acceptance criterion is satisfied. The exact validated branch tip is `d0d4e85b0e75d53e97fa934c455cf561358e2f6a`; fetched integration was `2b38b34`. The existing local worktree was clean but older, so branch contents were inspected from the fetched remote ref and focused tests were run from an isolated archive of the exact tip.
+Address four correctness findings on ED-02 PR #24 without changing ED-05/ED-07 or unrelated code. The requested Grace checkout path was unavailable in this execution environment, so work used a fresh temporary clone attached to the existing `alex/ed-02-local-runtime` tracking branch. Old head was `d0d4e85b0e75d53e97fa934c455cf561358e2f6a`; fetched integration was `8869321859a0c794d1d940c7f5ec4accc0ec7682`.
 
-ED-02 issue #2 requires meaningful Ollama/OpenAI-compatible fixtures, resolved active-registry evidence, truthful token/timing metadata, and one real local response. The previously missing live-runtime criterion is now satisfied by the 11 September 2026 Grace run.
-
-Alex full-role status at this checkpoint:
-
-| Milestone | Status | Evidence / dependency | Next action / owner |
-|---|---|---|---|
-| AX1 / ED-02 | hardware-tested; ready for review | PR #24 at `d0d4e85`; real Ollama call and 32 focused tests pass | Stephen reviews and decides merge |
-| AX2 / ED-05 | fixture-tested and hardware-tested on separate branch | Latest published ED-05 evidence at `0c6b68a`; separate scope | Continue only in ED-05 review/integration flow |
-| AX3 / ED-05/12 | substantially hardware-tested | Grace runtime, GPU, RAPL and NVML capability evidence exists; isolation limitations remain separate | Stephen coordinates later measurement session/isolation decisions |
-| AX4 / ED-07/09 | in progress / dependency-gated | Requires reviewed runtime, collector, executor, ledger and integrated Grace path | Component owners and Stephen integrate; no ED-07 changes in this turn |
-| AX5 | conditional | Requires pilot approval and frozen runtime/measurement protocol | Stephen owns approval/freeze; Alex supports approved campaign evidence |
+Alex milestone status: AX1/ED-02 remains hardware-tested and Ready for review with this correctness follow-up; AX2/ED-05 and AX3/ED-05/12 retain their separate fixture/hardware evidence; AX4/ED-07/09 remains integration-dependent; AX5 remains conditional on Stephen's pilot/freeze. Only AX1 files were changed.
 
 ## Ideas and hypotheses
 
-The initial Ollama CPU fallback was caused by runtime GPU backend discovery/configuration: Grace exposed the allocated A100 correctly, and Ollama's CUDA 13 backend detected it when invoked with the required backend/library path. This is reproducibility information, not evidence of an ED-02 adapter defect.
+Protocol shape and execution locality are independent. `_is_ollama` must select endpoint/response parsing, while `_is_cloud` must select local versus non-local timing and throughput windows. Provider counts received before a later parse failure remain valid observations but cannot become successful final token accounting.
 
 ## Decisions and rationale
 
-The PR description now distinguishes the implementation sequence explicitly: `9a0d3b6` is the Ollama NDJSON stream-handling repair; `ad7c751` preserves failure/request accounting and token provenance; `d0d4e85` aligns provenance with the shared `ModelResponse` contract. This prevents the later accounting refinements from obscuring the original defect and repair.
+Capture JSON token fields into `_http_call`'s existing local count variables before returning so its `finally` block retains valid observations. Preserve failure semantics: final `tokens` remains empty and provenance unknown.
 
-PR #24 was marked Ready because its exact head is the validated commit, all four current CI checks are successful, the focused regression suite passes, and the real provider response closes the only stated remaining acceptance criterion. ED-05 and ED-07 remain separate milestones and were not treated as blockers for bounded ED-02 acceptance.
+Normalize only `None` stream content to empty text. Validate every other value as a string before truthiness filtering, so falsy malformed values cannot bypass validation.
+
+Use `_is_cloud` for success and failure timing attribution. Remote endpoints use `non_local_ms` and their network-time throughput window; local endpoints use `local_compute_ms` and the local total-time throughput window.
 
 ## Changes and artifacts
 
-No feature-branch files or code were changed. No ED-05, ED-07, or unrelated implementation was modified.
+Commit `00769dc41eba0e1f2418028fc9fd1d6ef7238a43` (`Fix adapter failure observations and locality timing`) was pushed normally to `origin/alex/ed-02-local-runtime`.
 
-Updated PR #24's description with:
+Changed only:
 
-- exact Grace node/job/GPU/Ollama/model and validated commit;
-- live adapter configuration and result metrics;
-- direct NDJSON terminal-metadata behavior;
-- provider token provenance and local-compute classification;
-- concise CUDA 13 setup/fallback reproducibility note;
-- SCRATCH artifact paths;
-- focused test and CI results;
-- explicit ED-02 acceptance and Ready-for-review status.
+- `core/execution/adapters/openai_compat.py`
+- `tests/test_openai_compat_adapter.py`
 
-PR: https://github.com/stephen122204/alems-energy-diagnosis/pull/24
-
-Grace artifacts:
-
-- `$SCRATCH/alems/artifacts/ed02/grace-validation-environment.txt`
-- `$SCRATCH/alems/artifacts/ed02/live-adapter-result.txt`
-- `$SCRATCH/alems/artifacts/ed02/ollama-stream-response.jsonl`
-- `$SCRATCH/alems/artifacts/ed02/ollama-server-g087-cuda.log`
-- `$SCRATCH/alems/artifacts/ed02/pytest-openai-compat-final.txt`
+PR #24 description was updated with the correctness follow-up and exact validation. It remains Ready and unmerged. No ED-05 or ED-07 files changed.
 
 ## Tests and evidence
 
-Hardware-tested on Grace node `g087`, Slurm job `19734356`, NVIDIA A100-PCIE-40GB, Ollama `0.34.0`, model `llama3.2:1b`, clean frozen checkout `d0d4e85`.
+- `python3 -m pytest -q tests/test_openai_compat_adapter.py` — 44 passed.
+- `python3 -m pytest -q tests/test_openai_compat_adapter.py tests/test_study_contracts.py tests/test_campaign_ledger.py tests/test_data_analysis_workload.py tests/test_db_config.py tests/test_energy_collector.py scripts/tests/test_publish_agent_context.py` — 97 passed, 5 subtests passed, one pre-existing `test_db_config` return-value warning.
+- `python3 -m compileall -q core/execution/adapters/openai_compat.py` — passed.
+- `git diff --check` — passed.
+- GitHub Actions run `34669955722` — all four jobs passed on Linux/Windows.
 
-The real streaming adapter call reported `Available: True`, `status: ok`, prompt/completion/total tokens `43/32/75`, `token_provenance: provider`, `streaming_enabled: 1`, `local_compute_ms: 34872.836677357554`, and `non_local_ms: 0.0`. Direct `/api/chat` evidence contained multiple `done:false` NDJSON records and a terminal `done:true` record with provider usage/timing metadata. `ollama ps` reported `100% GPU`; `nvidia-smi` showed approximately 2938 MiB used by `llama-server`.
-
-Grace focused regression: `python -m pytest -q tests/test_openai_compat_adapter.py` — 32 passed; checkout remained clean.
-
-Independent exact-tip rerun: `python3 -m pytest -q tests/test_openai_compat_adapter.py` — 32 passed. The sandboxed attempt first produced 30 passes and two localhost-bind permission failures; rerunning with loopback socket permission passed all 32, confirming the failures were execution-sandbox restrictions rather than code failures.
-
-GitHub Actions run `34521294017` at `d0d4e85`: `handoff-and-plan`, `windows-ledger`, `adapter-fixtures (ubuntu-latest)`, and `adapter-fixtures (windows-latest)` all successful.
+Focused tests cover Ollama and OpenAI-compatible JSON failure observations, `0`/`False`/`[]` streamed content rejection for Ollama NDJSON and OpenAI SSE, and remote-Ollama/local-vLLM success/failure timing plus throughput locality.
 
 ## Open questions and disagreements
 
-No remaining ED-02 acceptance blocker was found. Stephen's code review and merge decision remain pending. ED-05 measurement-session completion and ED-07 end-to-end integration are intentionally separate and unchanged.
+No code blocker remains. GitHub's requested-reviewer REST endpoint was tried with both `Copilot` and the observed bot login `copilot-pull-request-reviewer[bot]`, but the PR still reports no requested reviewers; a fresh Copilot review could not be confirmed through the API.
 
 ## Next actions and handoff
 
-Stephen reviews PR #24 and decides whether to merge. The PR is Ready for review and was not merged. Continue ED-05/ED-07 work only through their separate branches and review scopes.
+Stephen and Copilot review commit `00769dc`. Stephen retains the merge decision. Nothing was merged, and ED-05/ED-07 remain untouched.
