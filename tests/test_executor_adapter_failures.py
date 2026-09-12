@@ -1,6 +1,7 @@
 """Regression coverage for structured adapter failures at executor boundaries."""
 
 import importlib
+import sqlite3
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -27,15 +28,20 @@ sys.modules.setdefault("core.execution.tools.real_tools", _tools)
 
 LinearExecutor = importlib.import_module("core.execution.linear").LinearExecutor
 AgenticExecutor = importlib.import_module("core.execution.agentic").AgenticExecutor
+from core.execution.adapters.base import TextGenABC
+from core.execution.adapters.openai_compat import OpenAICompatAdapter
+from core.database.schema import CREATE_LLM_INTERACTIONS
+from core.database.sqlite_adapter import SQLiteAdapter
 
 
 class StubAdapter:
+    require_success = OpenAICompatAdapter.require_success
+
     def __init__(self, result):
         self.result = result
 
     def call(self, prompt, temperature):
         return self.result
-
 
 def adapter_result(*, failed):
     phase_metrics = {
@@ -139,3 +145,34 @@ def test_successful_adapter_result_remains_successful(kind):
     assert result["tokens"] == {"prompt": 2, "completion": 1, "total": 3}
     assert interaction["status"] == "success"
     assert interaction["response"] == "answer"
+
+
+def test_default_adapter_contract_does_not_infer_legacy_failure_shapes():
+    legacy = {
+        "content": "Error: historical adapter sentinel",
+        "execution": {"status": "failure"},
+    }
+
+    assert TextGenABC.require_success(None, legacy) is legacy
+
+
+def test_existing_persistence_keeps_supported_failure_evidence():
+    result = linear_executor(adapter_result(failed=True)).execute("hello")
+    interaction = {**result["pending_interactions"][0], "run_id": 1}
+    database = SQLiteAdapter({"path": ":memory:"})
+    database.conn = sqlite3.connect(":memory:")
+    database.conn.executescript(CREATE_LLM_INTERACTIONS)
+
+    database.insert_llm_interaction(interaction)
+    row = database.conn.execute(
+        """SELECT status, error_message, response, prompt_tokens, total_tokens,
+                  total_time_ms, local_compute_ms, bytes_recv_approx
+           FROM llm_interactions"""
+    ).fetchone()
+
+    assert row == (
+        "failure", "stream interrupted", "Error: stream interrupted",
+        None, None, 12.0, 10.0, 5,
+    )
+    assert interaction["partial_content"] == "partial"
+    assert interaction["observed_tokens"] == {"prompt": 4}
