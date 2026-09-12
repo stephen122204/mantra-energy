@@ -44,7 +44,7 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
     assert first["executed"] == 8
     assert first["validation"]["valid"]
     manifest = json.loads((output / "moe-manifest.json").read_text())
-    assert manifest["execution_protocol"] == "planned-tool-body-admission-v1"
+    assert manifest["execution_protocol"] == "planned-body-initialized-window-v1"
     assert all(
         x["startup_seconds"] > 0 and x["resume_barrier_seconds"] >= 0
         for x in first["summary"]["settings"].values()
@@ -52,6 +52,7 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
     assert all(x["successful"] == 2 for x in first["summary"]["settings"].values())
     barrier_totals = Counter()
     barrier_counts = Counter()
+    inner_totals = Counter()
     for path in (output / "goals").glob("*/expert-events.json"):
         events = json.loads(path.read_text())
         policy = events[0]["policy"]["name"]
@@ -85,6 +86,23 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         measurement = json.loads(path.with_name("measurement.json").read_text())
         record = json.loads(path.with_name("record.json").read_text())
         assert record["started_ns"] <= planning_starts[0]["monotonic_ns"]
+        inner = json.loads(path.with_name("initialized-model-window.json").read_text())
+        assert inner["status"] == "valid"
+        checkpoint = measurement["checkpoints"]
+        for window in inner["measurements"]:
+            domain = [s for s in measurement["samples"] if s["domain_id"] == window["domain_id"]]
+            begin = next(s for s in domain if f":{checkpoint['initialized_model_start']}:" in s["sample_id"])
+            end = next(s for s in domain if f":{checkpoint['initialized_model_end']}:" in s["sample_id"])
+            assert window["energy_j"] == pytest.approx((end["value"] - begin["value"]) / 1e6)
+            assert events[0]["startup_window"]["end_ns"] <= begin["acquired_start_ns"]
+            assert begin["acquired_end_ns"] <= planning_starts[0]["monotonic_ns"]
+            assert all(begin["acquired_end_ns"] <= s["start_ns"] <= s["end_ns"] <= end["acquired_start_ns"] for s in record["spans"])
+            assert end["acquired_end_ns"] <= events[-1]["monotonic_ns"]
+            before = next(m for m in inner["before_task_window"]["measurements"] if m["domain_id"] == window["domain_id"])
+            after = next(m for m in inner["after_task_window"]["measurements"] if m["domain_id"] == window["domain_id"])
+            outer = next(m for m in record["measurements"] if m["domain_id"] == window["domain_id"])
+            assert before["energy_j"] + window["energy_j"] + after["energy_j"] == pytest.approx(outer["energy_j"])
+            inner_totals[record["setting_id"], window["domain_id"]] += window["energy_j"]
         # Some Windows monotonic clocks resolve a short boundary to the same
         # tick. Check ordering and independent raw arithmetic, not duration > 0.
         finished = {
@@ -110,11 +128,26 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         assert row["resume_barrier_seconds"] == pytest.approx(
             barrier_totals[setting] / 1e9
         )
+        assert row["initialized_model"]["attempts_with_valid_window"] == 2
+        for domain, cost in row["initialized_model"]["energy"].items():
+            assert cost["total_attempt_joules"] == pytest.approx(inner_totals[setting, domain])
+            assert cost["joules_per_success"] == pytest.approx(inner_totals[setting, domain] / 2)
+            assert cost["before_task_window_joules"] + cost["total_attempt_joules"] + cost["after_task_window_joules"] == pytest.approx(row["energy"][domain]["total_attempt_joules"])
     again = command(
         output, "--policies", "demand,history,fixed,bounded", "--max-runs", "8"
     )
     assert again["executed"] == 0
     assert again["validation"]["counts"]["attempts"] == 8
+    # An adjacent JSON file is not evidence unless the ledger registered it.
+    from studies.energy_diagnosis.moe.summary import summarize
+    exports = output / "exports" / "attempts.jsonl"
+    rows = [json.loads(line) for line in exports.read_text().splitlines()]
+    for row in rows:
+        row["attempt"]["artifacts"] = [a for a in row["attempt"]["artifacts"] if a["role"] != "initialized-model-window"]
+    exports.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+    unregistered = summarize(output)
+    assert all(row["initialized_model"]["attempts_with_valid_window"] == 0 for row in unregistered["settings"].values())
+    assert all(cost["total_attempt_joules"] is None for row in unregistered["settings"].values() for cost in row["initialized_model"]["energy"].values())
 
 
 @pytest.mark.parametrize(
@@ -138,6 +171,7 @@ def test_failures_and_controls_are_not_silently_eligible(tmp_path, case):
         root, "--fixture-case", case, "--policies", "fixed", "--max-runs", "1"
     )
     record = json.loads(next((root / "goals").glob("*/record.json")).read_text())
+    inner = json.loads(next((root / "goals").glob("*/initialized-model-window.json")).read_text())
     assert record["simulated"] is True
     if case in {
         "wrong_answer",
@@ -154,6 +188,7 @@ def test_failures_and_controls_are_not_silently_eligible(tmp_path, case):
         assert summary["successful"] == 0
         assert all(d["joules_per_success"] is None for d in summary["energy"].values())
     if case == "missing_telemetry":
+        assert inner["status"] == "unavailable"
         assert any(m["energy_j"] is None for m in record["measurements"])
         assert (
             next(iter(result["summary"]["settings"].values()))[
@@ -161,6 +196,9 @@ def test_failures_and_controls_are_not_silently_eligible(tmp_path, case):
             ]
             == 1
         )
+        summary = next(iter(result["summary"]["settings"].values()))["initialized_model"]
+        assert summary["energy"]["GPU_FIXTURE"]["total_attempt_joules"] is None
+        assert summary["energy"]["CPU_FIXTURE"]["total_attempt_joules"] is not None
     if case == "wrong_prediction":
         events = json.loads(
             next((root / "goals").glob("*/expert-events.json")).read_text()
@@ -174,6 +212,13 @@ def test_failures_and_controls_are_not_silently_eligible(tmp_path, case):
             e["event"] == "preparation_admitted" and e["ack"]["rejected_bytes"]
             for e in events
         )
+    if case in {"cancel_failure", "drain_failure", "dropped", "model_failure"}:
+        assert inner["status"] != "valid"
+    if case in {"wrong_answer", "wrong_prediction", "locked", "tool_failure", "broken_ack"}:
+        assert inner["status"] == "valid"  # Failed outcomes still have measured cost.
+    if case == "wrong_answer":
+        costs = next(iter(result["summary"]["settings"].values()))["initialized_model"]["energy"]
+        assert all(c["total_attempt_joules"] > 0 and c["joules_per_success"] is None for c in costs.values())
 
 
 def test_late_transfer_stale_callback_and_clean_reset(tmp_path):
@@ -203,6 +248,11 @@ def test_late_transfer_stale_callback_and_clean_reset(tmp_path):
     with pytest.raises(RuntimeError, match="stale"):
         control.end_pause(token)
     control.plan_pause()
+    control.settle_work()
+    assert b.process is not None  # The model remains resident after task work settles.
+    with pytest.raises(RuntimeError, match="generation outside"):
+        control.before_model("after-seal")
+    control.settle_work()  # Idempotent; no second device work interval.
     control.end_goal()
     assert any(e["event"] == "preparation_plan_discarded" for e in control.events)
     assert control._pause_plan is None

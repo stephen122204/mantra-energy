@@ -28,9 +28,54 @@ def paired_interval(pairs, *, seed=7, draws=2000):
     )
 
 
+def _initialized_costs(entries, successes, domains, registered_windows):
+    windows = []
+    for path, record in entries:
+        artifact = path.with_name("initialized-model-window.json")
+        window = json.loads(artifact.read_text()) if path in registered_windows else None
+        if window is not None and (
+            window.get("goal_execution_id") != record["goal_execution_id"]
+            or window.get("clock_domain") != record["clock_domain"]
+            or window.get("protocol") != "initialized-model-fresh-process-v1"
+        ):
+            raise ValueError("initialized-model window identity or protocol mismatch")
+        windows.append(window)
+
+    def total(domain, part=None):
+        values = []
+        for window in windows:
+            if window is None or window.get("status") == "invalid":
+                return None
+            records = (window if part is None else window.get(part, {})).get("measurements", [])
+            value = next((m.get("energy_j") for m in records
+                          if m["domain_id"] == domain and m["status"] == "valid"), None)
+            if value is None:
+                return None
+            values.append(value)
+        return sum(values) if values else None
+
+    energy = {}
+    for domain in domains:
+        joules = total(domain)
+        energy[domain] = dict(
+            total_attempt_joules=joules,
+            joules_per_success=joules / successes if joules is not None and successes else None,
+            before_task_window_joules=total(domain, "before_task_window"),
+            after_task_window_joules=total(domain, "after_task_window"),
+        )
+    return dict(
+        scope="initialized model, fresh process-local state; not persistent warm-cache serving",
+        attempts=len(windows),
+        attempts_with_valid_window=sum(w is not None and w.get("status") == "valid" for w in windows),
+        energy=energy,
+        missingness="Any missing/invalid domain value makes its full-attempt total unavailable; failures remain included.",
+    )
+
+
 def summarize(root):
     root = Path(root)
     groups = defaultdict(list)
+    registered_windows = set()
     attempts_path = root / "exports" / "attempts.jsonl"
     if attempts_path.exists():
         for line in attempts_path.read_text().splitlines():
@@ -64,6 +109,11 @@ def summarize(root):
                     raise ValueError("execution artifact hash mismatch")
                 if json.loads(path.read_text()) != record:
                     raise ValueError("export and execution artifact disagree")
+                for artifact in attempt["artifacts"]:
+                    if artifact["role"] == "initialized-model-window":
+                        if root / artifact["path"] != path.with_name("initialized-model-window.json"):
+                            raise ValueError("initialized-model artifact path mismatch")
+                        registered_windows.add(path)
             groups[record["setting_id"]].append((path, record))
     else:
         raise ValueError("summary requires the complete ledger attempt export")
@@ -174,6 +224,7 @@ def summarize(root):
             if all(r["ended_ns"] is not None for _, r in entries)
             else None,
             energy=energies,
+            initialized_model=_initialized_costs(entries, successes, domains, registered_windows),
             records=[str(p.relative_to(root)) for p, _ in entries],
         )
     return dict(

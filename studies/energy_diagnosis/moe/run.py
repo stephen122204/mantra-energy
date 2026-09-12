@@ -25,7 +25,7 @@ from .backend import ProcessBackend, BackendAdapter
 from .control import Lifecycle, Policy
 from .workloads import create_tasks, WorkloadRuntime, VERSION
 
-EXECUTION_PROTOCOL = "planned-tool-body-admission-v1"
+EXECUTION_PROTOCOL = "planned-body-initialized-window-v1"
 
 
 def run(args):
@@ -170,6 +170,7 @@ def run(args):
                     timeout_seconds=args.deadline,
                     simulated=simulated,
                     lifecycle=lifecycle,
+                    initialized_model_window=True,
                     workload_runtime=WorkloadRuntime(
                         root, args.fixture_case if simulated else None
                     ),

@@ -95,7 +95,7 @@ allocation and cache evidence. A native smoke exits nonzero on incorrect output,
 missing energy or invalid control behavior. Never interpret a structurally valid
 ledger as proof of a successful model run.
 
-Execution protocol `planned-tool-body-admission-v1` separates candidate selection
+Execution protocol `planned-body-initialized-window-v1` separates candidate selection
 from transfer admission. The goal executor calls `plan_pause()` before launching
 the tool graph, recording `preparation_planning_start/end` inside the measured
 goal. Planning enumerates/selects experts but admits no transfers. `start_pause()`
@@ -119,6 +119,27 @@ The model's top-k router remains unchanged. Queued work is cancelled at tool end
 already-issued work must drain before model resume. Timeout or backend failure
 kills and reaps the owned worker before final cost is captured. Process cleanup failure, or forced native termination before device work was confirmed idle, makes the energy interval invalid. No remote API or fixture fallback is
 used in native mode.
+
+## Initialized-model measurement window
+
+The MoE command also captures real counter checkpoints after model initialization
+and after task-owned work has drained and the independent verifier has run. The
+model remains resident until the second checkpoint; it is released afterward.
+`initialized-model-window.json` records this interval and the before/after portions
+of the outer goal. All raw checkpoint readings and acquisition brackets remain in
+`measurement.json`. For valid cumulative counters, the three energy portions sum
+to the original outer goal total; endpoint timing brackets may overlap at shared
+boundaries. Periodic and checkpoint reads are serialized. No duration is subtracted
+from an energy measurement.
+
+The extra interval is explicitly an initialized model with fresh process-local
+state, not a persistent warm-cache serving session. The outer deadline still
+includes initialization, and the original outer totals retain loading, planning,
+verification, failed attempts and model release. Do not replace those totals
+silently with the inner interval or drop failed/missing-window attempts. A failed
+drain cannot seal a valid inner interval; unverified final termination invalidates
+its energy as well. Default non-MoE GoalExecutor callers retain their existing
+lifecycle order. Changing this protocol requires a fresh campaign directory.
 
 ## Controls and records
 
