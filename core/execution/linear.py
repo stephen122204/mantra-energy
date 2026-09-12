@@ -38,7 +38,6 @@ from datetime import datetime
 import json
 
 from core.utils.debug import dprint
-from core.execution.adapter_result import require_adapter_success
 from core.execution.model_factory import ModelFactory
 
 logger = logging.getLogger(__name__)
@@ -289,7 +288,7 @@ class LinearExecutor:
         try:
             result          = self._adapter.call(prompt, temp)
             self._last_adapter_result = result
-            result          = require_adapter_success(result)
+            result          = self._adapter.require_success(result)
             content         = result["content"]
             tokens          = result["tokens"]
             api_latency_ms  = result["total_time_ms"]
@@ -397,6 +396,7 @@ class LinearExecutor:
             "total_bytes_recv": net_metrics['bytes_recv'],
             "total_tcp_retransmits": net_metrics['tcp_retransmits'],
             'error': error,
+            'error_message': error,
             'compute_time_ms': compute_time_ms,
             'local_compute_ms': phase_metrics.get('local_compute_ms', 0),
             # New phase metrics

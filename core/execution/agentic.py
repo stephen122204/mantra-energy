@@ -46,7 +46,6 @@ import psutil
 import requests
 
 from core.utils.debug import dprint
-from core.execution.adapter_result import require_adapter_success
 from core.execution.model_factory import ModelFactory
 
 logger = logging.getLogger(__name__)
@@ -1073,7 +1072,8 @@ You can use tools like calculator or web search if needed.
             return {"content": "Error: No API key", "tokens": {}}
  
         try:
-            result              = require_adapter_success(self._adapter.call(prompt, temp))
+            result              = self._adapter.call(prompt, temp)
+            result              = self._adapter.require_success(result)
             content             = result["content"]
             tokens              = result["tokens"]
             total_time_ms       = result["total_time_ms"]

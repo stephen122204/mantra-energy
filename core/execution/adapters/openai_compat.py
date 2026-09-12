@@ -29,7 +29,7 @@ from typing import Any, Dict, Optional, Tuple
 import psutil
 import requests
 
-from core.execution.adapters.base import TextGenABC
+from core.execution.adapters.base import AdapterCallError, TextGenABC
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +209,12 @@ class OpenAICompatAdapter(TextGenABC):
             "phase_metrics": phase_metrics,
             **net_delta,  # bytes_sent, bytes_recv, tcp_retransmits
         }
+
+    def require_success(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Reject this adapter's explicit structured failure at persistence boundaries."""
+        if result.get("status") == "error":
+            raise AdapterCallError(result)
+        return result
 
     # -------------------------------------------------------------------------
     # Internal helpers
