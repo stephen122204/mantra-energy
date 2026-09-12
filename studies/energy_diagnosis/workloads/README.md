@@ -16,3 +16,12 @@ The existing `core.execution.tools.real_tools.DatabaseQueryTool` uses synchronou
 SQLite connections and exposes no worker/thread control. It is suitable for a
 portable fixture path, but no worker-based intervention is eligible from that
 tool until an engine with an observable setting is selected and measured.
+
+`bounded_executor.py` is the AL2 single-goal boundary. It accepts a finite
+dependency graph, admits only one or two ready calls, maps dependency results
+with `$result:<call_id>`, and records ready/start/end events with monotonic
+timestamps and configured controls. Tools may expose a `workers` argument; the
+executor records configured and observed workers without treating a generic
+environment variable as a control. The adapter tests use the existing
+`CodeExecutorTool` for real computation and a deterministic worker probe for
+control-effect evidence.
