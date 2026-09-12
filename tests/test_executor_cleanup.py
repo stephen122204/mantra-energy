@@ -141,6 +141,7 @@ def test_body_observer_failure_reaps_tool_and_allows_next_goal(tmp_path, error_t
     import psutil
 
     marker = str(tmp_path / "observer-failure")
+    observed_worker = []
 
     def broken_observer(event):
         if event["event"] == "body_start":
@@ -148,12 +149,16 @@ def test_body_observer_failure_reaps_tool_and_allows_next_goal(tmp_path, error_t
             while not Path(marker + ".started").exists() and time.monotonic() < until:
                 time.sleep(0.002)
             assert Path(marker + ".started").exists()
+            observed_worker.append(psutil.Process(int(Path(marker + ".started").read_text())))
             raise error_type("observer failure")
 
     executor = BoundedToolExecutor({"t": SideEffectTool()}, event_sink=broken_observer)
     with pytest.raises(error_type, match="observer failure"):
         executor.execute([ToolCall("t", "t", {"path": marker, "delay": 20})])
-    assert not psutil.pid_exists(int(Path(marker + ".started").read_text()))
+    # Check termination of the process observed before failure. A bare PID
+    # presence check is not a portable wait/exit-status check (nor PID identity).
+    # Zero timeout requires it to have exited already when execute returned.
+    observed_worker[0].wait(timeout=0)
     assert not Path(marker).exists()
     executor.event_sink = None
     assert executor.execute([
