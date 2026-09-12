@@ -1,0 +1,346 @@
+diff --git a/core/model/model_topology.cpp b/core/model/model_topology.cpp
+index 3bf3469..505e766 100644
+--- a/core/model/model_topology.cpp
++++ b/core/model/model_topology.cpp
+@@ -81,6 +81,11 @@ void Node::SetDevice(const torch::Device& target_device, bool on_demand,
+     return;
+   }
+ 
++  alems::PlacementRecord placement;
++  placement.node = id; placement.bytes = byte_size;
++  placement.start_ns = alems::now_ns(); placement.source = device.str();
++  placement.destination = target_device.str(); placement.on_demand = on_demand;
++
+   // if (kCudaStreamH2D == NULL) {
+   //     auto cudaError = cudaStreamCreateWithFlags(&kCudaStreamH2D,
+   //     cudaStreamNonBlocking); if (cudaError != cudaSuccess) {
+@@ -239,6 +244,9 @@ void Node::SetDevice(const torch::Device& target_device, bool on_demand,
+     }
+   }
+   device = target_device;
++  placement.return_ns = alems::now_ns();
++  placement.completed_at_return = transfer_event == nullptr || *transfer_event == nullptr;
++  alems::placement_log.append(std::move(placement));
+ }
+ 
+ ArcherTopologyHandle::ArcherTopologyHandle() {}
+diff --git a/core/prefetch/archer_prefetch_handle.cpp b/core/prefetch/archer_prefetch_handle.cpp
+index f19d2a5..9392003 100644
+--- a/core/prefetch/archer_prefetch_handle.cpp
++++ b/core/prefetch/archer_prefetch_handle.cpp
+@@ -394,6 +394,10 @@ std::vector<PrefetchSample> ArcherPrefetchHandle::DrainPrefetchSamples() {
+   return kTaskPool->DrainPrefetchSamples();
+ }
+ 
++std::uint64_t ArcherPrefetchHandle::GetDroppedPrefetchSamples() {
++  return kTaskPool->GetDroppedPrefetchSamples();
++}
++
+ std::int64_t ArcherPrefetchHandle::GetInflightPrefetchBytes() {
+   return kTaskPool->GetInflightPrefetchBytes();
+ }
+@@ -746,3 +750,11 @@ std::uint64_t ArcherPrefetchHandle::BeginMemoryResize(int device_id,
+ }
+ 
+ void ArcherPrefetchHandle::EndMemoryResize(std::uint64_t token) { (void)token; }
++
++// Caller must quiesce transfers/generation before reading mutable placement.
++std::tuple<std::uint64_t, std::int64_t, std::string>
++ArcherPrefetchHandle::AlemsExpertInfo(std::uint32_t tensor_id) const {
++  auto node = kTopologyHandle->GetNodeFromTensorID(tensor_id);
++  TORCH_CHECK(node != nullptr, "unknown expert tensor ", tensor_id);
++  return {static_cast<std::uint64_t>(node->id), node->byte_size, node->device.str()};
++}
+diff --git a/core/prefetch/archer_prefetch_handle.h b/core/prefetch/archer_prefetch_handle.h
+index 6927dc2..d1482c9 100644
+--- a/core/prefetch/archer_prefetch_handle.h
++++ b/core/prefetch/archer_prefetch_handle.h
+@@ -46,6 +46,12 @@ class ArcherPrefetchHandle {
+       const std::vector<std::uint32_t>& keep_tensor_ids);
+   std::vector<PrefetchSample> DrainPrefetchSamples();
+   std::int64_t GetInflightPrefetchBytes();
++  std::uint64_t GetDroppedPrefetchSamples();
++  std::tuple<std::uint64_t, std::int64_t, std::string> AlemsExpertInfo(std::uint32_t tensor_id) const;
++  std::vector<alems::PlacementRecord> AlemsDrainPlacements() { return alems::placement_log.drain(); }
++  std::uint64_t AlemsDroppedPlacements() { return alems::placement_log.dropped(); }
++  std::int64_t AlemsClockNs() const { return alems::now_ns(); }
++  int AlemsTransferApiVersion() const { return 1; }
+ 
+   void OffloadTensor(torch::Tensor& tensor, const std::uint32_t tensor_id);
+   void RegisterTensor(torch::Tensor& tensor, const std::uint32_t tensor_id);
+diff --git a/core/prefetch/task_scheduler.cpp b/core/prefetch/task_scheduler.cpp
+index e263f11..528a252 100644
+--- a/core/prefetch/task_scheduler.cpp
++++ b/core/prefetch/task_scheduler.cpp
+@@ -529,7 +529,10 @@ void ArcherTaskPool::GPUThreadFunc(int gpu_id, int thread_id) {
+ 
+     lock.unlock();
+ 
++    if (task->measurement_ticket) task->measurement_ticket->start();
++    const bool measurement_was_resident = node->device == task->dst_device;
+     ResidencyTicket residency_ticket;
++    try {
+     if (!task->on_demand && managed) {
+       residency_ticket = kExpertResidencyManager->BeginAdmission(
+           node, gpu_id, task->phase,
+@@ -575,6 +578,20 @@ void ArcherTaskPool::GPUThreadFunc(int gpu_id, int thread_id) {
+       node->state = 0;
+       node->cv.notify_all();
+     }
++    if (task->measurement_ticket) {
++      const bool arrived = node->device == task->dst_device;
++      task->measurement_ticket->finish(
++          measurement_was_resident ? "already_resident" : arrived ? "completed" : "not_transferred",
++          !measurement_was_resident && arrived ? task->scheduled_bytes : 0);
++    }
++    } catch (...) {
++      if (residency_ticket.valid && residency_ticket.id != 0 && kExpertResidencyManager)
++        kExpertResidencyManager->AbortAdmission(residency_ticket);
++      if (task->measurement_ticket) task->measurement_ticket->finish("failed", 0);
++      // An unowned legacy/demand failure cannot be turned into a successful
++      // model output. Let the process fail; its supervisor preserves failure.
++      if (!task->measurement_ticket) std::terminate();
++    }
+   }
+ }
+ 
+@@ -640,55 +657,28 @@ PrefetchAdmission ArcherTaskPool::AdmitPrefetchTasks(
+     const std::vector<std::pair<NodePtr, std::int64_t>>& costed_nodes,
+     std::uint32_t priority, std::uint64_t generation, std::int64_t layer_id,
+     std::int64_t max_inflight_bytes) {
++  if (priority == 0 || priority >= NUM_PRIORITY)
++    throw std::invalid_argument("prefetch priority must be 1..19");
+   PrefetchAdmission admission;
+-  std::vector<TaskPtr> to_enqueue;
+-
+-  {
+-    std::lock_guard<std::mutex> lock(prefetch_accounting_mutex_);
+-    for (const auto& entry : costed_nodes) {
+-      const NodePtr& node = entry.first;
+-      std::int64_t bytes = entry.second;
+-      if (node == nullptr || bytes <= 0) continue;
+-      auto tensor_id = static_cast<std::uint32_t>(node->id);
+-      if (!prefetch_accounting_.TryAdmit(tensor_id, bytes,
+-                                         max_inflight_bytes)) {
+-        continue;
+-      }
+-      tensor_generation_[tensor_id] = generation;
+-      tensor_layer_[tensor_id] = layer_id;
+-
+-      auto task = std::make_shared<Task>();
+-      task->on_demand = false;
+-      task->node = node;
+-      task->priority = priority;
+-      task->src_device = node->device;
+-      task->dst_device = node->default_device;
+-      task->request_id = 0;
+-      task->generation = generation;
+-      task->layer_id = layer_id;
+-      task->scheduled_bytes = bytes;
+-      task->enqueue_ns =
+-          std::chrono::duration_cast<std::chrono::nanoseconds>(
+-              std::chrono::steady_clock::now().time_since_epoch())
+-              .count();
+-
+-      admission.accepted_tensor_ids.push_back(tensor_id);
+-      admission.accepted_bytes += bytes;
+-      to_enqueue.push_back(task);
+-    }
+-    admission.inflight_bytes = prefetch_accounting_.inflight_bytes();
+-  }
+-
+-  for (auto& task : to_enqueue) {
+-    if (task->src_device == task->dst_device) {
+-      task->node->state = 0;
+-      task->node->cv.notify_all();
+-      continue;
+-    }
+-    std::lock_guard<std::mutex> lock(unified_mutex_);
+-    unified_queue_[task->priority].push_back(task);
+-  }
+-
++  std::lock_guard<std::mutex> lock(unified_mutex_);
++  for (const auto& entry : costed_nodes) {
++    const auto& node = entry.first;
++    const auto bytes = entry.second;
++    if (!node || bytes <= 0) continue;
++    auto ticket = measurement_ledger_.admit(node->id, bytes, max_inflight_bytes,
++                                           generation, layer_id, node->device.str());
++    if (!ticket) { admission.rejected_bytes += bytes; continue; }
++    admission.accepted_tensor_ids.push_back(node->id);
++    admission.accepted_bytes += bytes;
++    auto task = std::make_shared<Task>();
++    task->node = node; task->priority = priority; task->request_id = 0;
++    task->src_device = node->device; task->dst_device = node->default_device;
++    task->generation = generation; task->layer_id = layer_id;
++    task->scheduled_bytes = bytes; task->measurement_ticket = ticket;
++    if (task->src_device == task->dst_device) ticket->finish("already_resident", 0);
++    else unified_queue_[priority].push_back(task);
++  }
++  admission.inflight_bytes = measurement_ledger_.inflight();
+   return admission;
+ }
+ 
+@@ -696,42 +686,28 @@ std::int64_t ArcherTaskPool::CancelQueuedPrefetch(
+     std::uint64_t generation, std::int64_t layer_id,
+     const std::unordered_set<std::uint32_t>& keep_tensor_ids) {
+   std::int64_t canceled = 0;
+-  std::lock_guard<std::mutex> account_lock(prefetch_accounting_mutex_);
+-  std::lock_guard<std::mutex> queue_lock(unified_mutex_);
++  std::lock_guard<std::mutex> lock(unified_mutex_);
+   for (std::uint32_t i = 1; i < NUM_PRIORITY; ++i) {
+     auto& queue = unified_queue_[i];
+-    queue.erase(
+-        std::remove_if(
+-            queue.begin(), queue.end(),
+-            [&](const TaskPtr& t) {
+-              if (t == nullptr || t->node == nullptr) return false;
+-              if (t->generation != generation || t->layer_id != layer_id)
+-                return false;
+-              auto tensor_id = static_cast<std::uint32_t>(t->node->id);
+-              if (keep_tensor_ids.count(tensor_id) > 0) return false;
+-              std::int64_t bytes = prefetch_accounting_.CancelQueued(tensor_id);
+-              if (bytes > 0) {
+-                canceled += bytes;
+-                t->node->exec_state.store(NodeExecState::IDLE,
+-                                          std::memory_order_release);
+-              }
+-              return true;
+-            }),
+-        queue.end());
++    queue.erase(std::remove_if(queue.begin(), queue.end(), [&](const TaskPtr& t) {
++      if (!t || !t->node || t->generation != generation ||
++          (layer_id >= 0 && t->layer_id != layer_id) ||
++          keep_tensor_ids.count(t->node->id)) return false;
++      if (t->measurement_ticket) {
++        t->measurement_ticket->finish("cancelled", 0);
++        canceled += t->scheduled_bytes;
++      }
++      return true;
++    }), queue.end());
+   }
+   return canceled;
+ }
+ 
+ std::vector<PrefetchSample> ArcherTaskPool::DrainPrefetchSamples() {
+-  std::lock_guard<std::mutex> lock(prefetch_accounting_mutex_);
+-  std::vector<PrefetchSample> drained;
+-  drained.swap(prefetch_samples_);
+-  return drained;
++  return measurement_ledger_.drain();
+ }
+-
+ std::int64_t ArcherTaskPool::GetInflightPrefetchBytes() {
+-  std::lock_guard<std::mutex> lock(prefetch_accounting_mutex_);
+-  return prefetch_accounting_.inflight_bytes();
++  return measurement_ledger_.inflight();
+ }
+ 
+ std::string ArcherTaskPool::DebugString(
+diff --git a/core/prefetch/task_scheduler.h b/core/prefetch/task_scheduler.h
+index 45bcc59..2348450 100644
+--- a/core/prefetch/task_scheduler.h
++++ b/core/prefetch/task_scheduler.h
+@@ -19,6 +19,7 @@
+ #include <vector>
+ 
+ #include "base/noncopyable.h"
++#include "prefetch/alems_transfer_lifecycle.h"
+ #include "common/pytorch.h"
+ #include "model/model_topology.h"
+ #include "prefetch/expert_residency.h"
+@@ -218,16 +219,7 @@ struct PrefetchAdmission {
+   std::int64_t inflight_bytes = 0;
+ };
+ 
+-struct PrefetchSample {
+-  std::uint64_t generation = 0;
+-  std::int64_t layer_id = -1;
+-  std::uint32_t tensor_id = 0;
+-  std::int64_t bytes = 0;
+-  std::int64_t queue_wait_ns = 0;
+-  std::int64_t transfer_ns = 0;
+-  std::string source_device;
+-  std::string outcome;
+-};
++using PrefetchSample = alems::TransferRecord;
+ 
+ struct Task {
+   bool on_demand = false;
+@@ -247,6 +239,7 @@ struct Task {
+   std::int64_t enqueue_ns = 0;
+   std::int64_t start_ns = 0;
+ 
++  std::shared_ptr<alems::TransferTicket> measurement_ticket;
+   bool remove_layer = false;
+ 
+   std::string DebugString() {
+@@ -304,6 +297,7 @@ class ArcherTaskPool : public base::noncopyable {
+       const std::unordered_set<std::uint32_t>& keep_tensor_ids);
+   std::vector<PrefetchSample> DrainPrefetchSamples();
+   std::int64_t GetInflightPrefetchBytes();
++  std::uint64_t GetDroppedPrefetchSamples() { return measurement_ledger_.dropped(); }
+ 
+   void ReplaceCacheCandidates(const NodePtrList& candidates) {
+     std::lock_guard<std::mutex> lock(unified_mutex_);
+@@ -338,7 +332,7 @@ class ArcherTaskPool : public base::noncopyable {
+     main_thread_stop_flag_.store(true, std::memory_order_release);
+     for (auto& thread_list : exec_threads_) {
+       for (auto& thread : thread_list) {
+-        if (thread.joinable()) thread.detach();
++        if (thread.joinable()) thread.join();
+       }
+     }
+   }
+@@ -379,11 +373,7 @@ class ArcherTaskPool : public base::noncopyable {
+ 
+   std::atomic<bool> main_thread_stop_flag_;
+ 
+-  std::mutex prefetch_accounting_mutex_;
+-  PrefetchQueueAccounting prefetch_accounting_;
+-  std::unordered_map<std::uint32_t, std::uint64_t> tensor_generation_;
+-  std::unordered_map<std::uint32_t, std::int64_t> tensor_layer_;
+-  std::vector<PrefetchSample> prefetch_samples_;
++  alems::TransferLedger measurement_ledger_;
+ };
+ 
+ extern std::unique_ptr<ArcherTaskPool> kTaskPool;
+diff --git a/core/python/py_archer_prefetch.cpp b/core/python/py_archer_prefetch.cpp
+index 51c2033..c3fa5d1 100644
+--- a/core/python/py_archer_prefetch.cpp
++++ b/core/python/py_archer_prefetch.cpp
+@@ -22,7 +22,21 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+       .def_readonly("rejected_bytes", &PrefetchAdmission::rejected_bytes)
+       .def_readonly("inflight_bytes", &PrefetchAdmission::inflight_bytes);
+ 
++  py::class_<alems::PlacementRecord>(m, "AlemsPlacementRecord")
++      .def_readonly("node", &alems::PlacementRecord::node)
++      .def_readonly("bytes", &alems::PlacementRecord::bytes)
++      .def_readonly("start_ns", &alems::PlacementRecord::start_ns)
++      .def_readonly("return_ns", &alems::PlacementRecord::return_ns)
++      .def_readonly("source", &alems::PlacementRecord::source)
++      .def_readonly("destination", &alems::PlacementRecord::destination)
++      .def_readonly("on_demand", &alems::PlacementRecord::on_demand)
++      .def_readonly("completed_at_return", &alems::PlacementRecord::completed_at_return);
++
+   py::class_<PrefetchSample>(m, "prefetch_sample")
++      .def_readonly("enqueue_ns", &PrefetchSample::enqueue_ns)
++      .def_readonly("start_ns", &PrefetchSample::start_ns)
++      .def_readonly("end_ns", &PrefetchSample::end_ns)
++      .def_readonly("transferred_bytes", &PrefetchSample::transferred_bytes)
+       .def_readonly("generation", &PrefetchSample::generation)
+       .def_readonly("layer_id", &PrefetchSample::layer_id)
+       .def_readonly("tensor_id", &PrefetchSample::tensor_id)
+@@ -133,6 +147,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+            py::arg("keep_tensor_ids"))
+       .def("drain_prefetch_samples",
+            &ArcherPrefetchHandle::DrainPrefetchSamples)
++      .def("alems_drain_placements", &ArcherPrefetchHandle::AlemsDrainPlacements)
++      .def("alems_dropped_placements", &ArcherPrefetchHandle::AlemsDroppedPlacements)
++      .def("alems_clock_ns", &ArcherPrefetchHandle::AlemsClockNs)
++      .def("alems_expert_info", &ArcherPrefetchHandle::AlemsExpertInfo)
++      .def("alems_transfer_api_version", &ArcherPrefetchHandle::AlemsTransferApiVersion)
++      .def("get_dropped_prefetch_samples", &ArcherPrefetchHandle::GetDroppedPrefetchSamples)
+       .def("get_inflight_prefetch_bytes",
+            &ArcherPrefetchHandle::GetInflightPrefetchBytes)
+       .def("replace_cache_candidates",
