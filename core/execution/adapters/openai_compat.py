@@ -343,15 +343,15 @@ class OpenAICompatAdapter(TextGenABC):
                     raise RuntimeError(str(chunk["error"]))
                 if self._is_ollama:
                     terminal = chunk
+                    if chunk.get("prompt_eval_count") is not None:
+                        prompt_count = chunk["prompt_eval_count"]
+                    if chunk.get("eval_count") is not None:
+                        completion_count = chunk["eval_count"]
                     delta = chunk.get("message", {}).get("content")
                     if delta is None:
                         delta = ""
                     elif not isinstance(delta, str):
                         raise ValueError("provider content must be text")
-                    if chunk.get("prompt_eval_count") is not None:
-                        prompt_count = chunk["prompt_eval_count"]
-                    if chunk.get("eval_count") is not None:
-                        completion_count = chunk["eval_count"]
                     complete = chunk.get("done") is True
                 else:
                     usage = chunk.get("usage") or {}

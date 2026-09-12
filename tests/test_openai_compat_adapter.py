@@ -417,6 +417,26 @@ def test_stream_rejects_falsy_non_text_content(
     assert result['content'] == 'Error: provider content must be text'
 
 
+def test_malformed_ollama_terminal_retains_provider_token_observations(
+    monkeypatch, ollama_adapter
+):
+    response = StubResponse(lines=encoded_lines({
+        'message': {'content': False},
+        'done': True,
+        'prompt_eval_count': 7,
+        'eval_count': 3,
+    }))
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: response)
+
+    result = ollama_adapter.call('hello', 0)
+
+    assert result['status'] == 'error'
+    assert result['tokens'] == {}
+    assert result['token_provenance'] == 'unknown'
+    assert result['observed_tokens'] == {'prompt': 7, 'completion': 3}
+    assert result['content'] == 'Error: provider content must be text'
+
+
 def locality_adapter(provider_id, *, is_cloud):
     return OpenAICompatAdapter(
         {
