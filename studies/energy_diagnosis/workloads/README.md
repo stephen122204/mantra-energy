@@ -16,3 +16,9 @@ The existing `core.execution.tools.real_tools.DatabaseQueryTool` uses synchronou
 SQLite connections and exposes no worker/thread control. It is suitable for a
 portable fixture path, but no worker-based intervention is eligible from that
 tool until an engine with an observable setting is selected and measured.
+
+`trace_replay.py` records model/tool inputs, dependency links, controls,
+monotonic lifecycle events, outputs and hashes. Conditional replay invokes the
+provided model and tool runners again and labels the resulting trace explicitly;
+it is not saved-output playback. Live execution and replay divergence remain
+software evidence until tested with actual inference and tools.
