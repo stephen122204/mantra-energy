@@ -174,7 +174,10 @@ class ProcessBackend:
                 _, alive = psutil.wait_procs(descendants, timeout=10)
                 if alive:
                     raise RuntimeError("backend child termination unverified")
-            p.wait(timeout=10)
+            # Releasing a large pinned host-memory model can delay Linux process
+            # exit after SIGKILL. Keep a finite bound, but allow the observed
+            # multi-gigabyte teardown to finish before rejecting ownership.
+            p.wait(timeout=60)
             if self.reader_thread is not threading.current_thread():
                 self.reader_thread.join(timeout=2)
             if self.reader_thread.is_alive():
