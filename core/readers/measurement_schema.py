@@ -34,6 +34,11 @@ class DomainDescriptor:
     canonical_name: str            # energy_domains.name e.g. "PACKAGE", "CPU_E"
     domain_type:    str            # "ENERGY_COUNTER" or "POWER_RAIL"
     parent_domain:  Optional[str]  # canonical_name of parent, None for roots
+    native_path: Optional[str] = None
+    kernel_name: Optional[str] = None
+    socket_id: Optional[int] = None
+    max_energy_range_uj: Optional[int] = None
+    scope: Optional[str] = None
 
 
 # Domain type constants — use these, never raw strings

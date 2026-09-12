@@ -4,6 +4,8 @@
 
 **Required full scope:** read [complete team assignments and merge gates](agent%20context%20md/COMPLETE_ASSIGNMENTS.md) and your named full-role checklist. The first issue is only the first milestone. At the next agent session, account for every milestone and continue ready assigned work; retain explicit hardware and pilot-expansion gates.
 
+For the integrated build, start with [the local runtime guide](studies/energy_diagnosis/RUN_LOCAL.md): installation, the full regression command, fixture execution and node preflight.
+
 Build and validate the assigned software components using the shared contracts. Research planning is maintained privately.
 
 This is the team's private development repository, based on A-LEMS. The research method and experiments remain to be implemented and validated. GPU access is team-reported; telemetry, individual accounts and isolation require preflight.

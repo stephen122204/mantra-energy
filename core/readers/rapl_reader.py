@@ -28,6 +28,7 @@ Author: Deepak Panigrahy
 
 import logging
 import os
+import re
 import time
 import subprocess
 from pathlib import Path
@@ -121,7 +122,7 @@ class RAPLReader:
 
         # Validate which paths are actually accessible
         self.available_paths = {}
-        self.domain_map = {}  # Maps standard names to actual paths
+        self.domain_map = {}  # Preserves configured native names without collapsing sockets
 
         for domain_name, path in self.rapl_paths.items():
             if self._validate_path(path):
@@ -129,7 +130,7 @@ class RAPLReader:
 
                 # Map to standard domain name if possible
                 std_name = self._get_standard_domain(domain_name)
-                self.domain_map[std_name] = path
+                self.domain_map[domain_name] = path
 
                 logger.debug(
                     "RAPL domain available: %s -> %s (%s)", domain_name, std_name, path
@@ -306,7 +307,7 @@ class RAPLReader:
 
         return readings
 
-    def read_energy_safe(self, max_retries: int = 3) -> Dict[str, int]:
+    def read_energy_safe(self, max_retries: int = 3) -> Dict[str, Optional[int]]:
         """
         Read energy with retry logic for transient failures.
 
@@ -315,7 +316,7 @@ class RAPLReader:
 
         Returns:
             Dictionary mapping domain names to energy in microjoules
-            (may be zeros if all retries fail)
+            Unavailable domains are None after all retries; never fabricated zero.
 
         Req 1.46: Used by high-frequency sampler to ensure robust readings.
         """
@@ -327,7 +328,7 @@ class RAPLReader:
                     logger.error(f"RAPL read failed after {max_retries} attempts: {e}")
                     # Get domains via method
                     domains = self.get_available_domains()
-                    return {domain: 0 for domain in domains}
+                    return {domain: None for domain in domains}
                 logger.debug(f"RAPL read attempt {attempt+1} failed, retrying...")
                 time.sleep(0.01)  # Brief pause before retry
         return {}  # Fallback (shouldn't reach here)
@@ -478,9 +479,69 @@ class RAPLReader:
         return list(self.available_paths.keys())
 
     def get_measurement_schema(self):
-        """Return RAPL x86 measurement schema — 32-bit counters at 100 Hz."""
-        from core.readers.measurement_schema import SCHEMA_RAPL_X86
-        return SCHEMA_RAPL_X86
+        """Describe every accessible RAPL zone without collapsing sockets."""
+        from core.readers.measurement_schema import (
+            DomainDescriptor, ENERGY_COUNTER, MeasurementSchema,
+        )
+        descriptors = []
+        package_sockets = {
+            self._socket_id_from_path(path)
+            for native_key, path in self.available_paths.items()
+            if self._get_standard_domain(
+                self._read_metadata(Path(path).parent / "name") or native_key
+            ) == "package"
+        }
+        multi_socket = len(package_sockets) > 1
+        for native_key, path in self.available_paths.items():
+            path_obj = Path(path)
+            zone_dir = path_obj.parent
+            kernel_name = self._read_metadata(zone_dir / "name") or native_key
+            maximum = self._read_metadata(zone_dir / "max_energy_range_uj", integer=True)
+            socket_id = self._socket_id_from_path(path)
+            kind = self._get_standard_domain(kernel_name)
+            suffix = "SOCKET_{}".format(socket_id) if socket_id is not None else native_key.upper()
+            if kind == "package":
+                canonical = ("PACKAGE_{}".format(suffix)
+                             if multi_socket else "PACKAGE")
+                parent = None
+            elif kind == "dram":
+                canonical = ("DRAM_{}".format(suffix)
+                             if multi_socket else "DRAM")
+                parent = ("PACKAGE_{}".format(suffix)
+                          if multi_socket else "PACKAGE")
+            else:
+                canonical = ("{}_{}".format(kind.upper(), suffix)
+                             if multi_socket else kind.upper())
+                parent = (("PACKAGE_{}".format(suffix) if multi_socket else "PACKAGE")
+                          if socket_id is not None else None)
+            descriptors.append(DomainDescriptor(
+                native_key=native_key,
+                canonical_name=canonical,
+                domain_type=ENERGY_COUNTER,
+                parent_domain=parent,
+                native_path=str(path_obj),
+                kernel_name=kernel_name,
+                socket_id=socket_id,
+                max_energy_range_uj=maximum,
+                scope="socket-wide",
+            ))
+        return MeasurementSchema(
+            source="RAPL", domains=tuple(descriptors), sampling_hz=100,
+            counter_width_bits=32,
+        )
+
+    @staticmethod
+    def _read_metadata(path: Path, integer: bool = False):
+        try:
+            value = path.read_text(encoding="utf-8").strip()
+            return int(value) if integer else value
+        except (OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _socket_id_from_path(path: str) -> Optional[int]:
+        match = re.search(r"intel-rapl:(\d+)(?::\d+)?(?:/energy_uj)?$", path)
+        return int(match.group(1)) if match else None
     
     def read_energy_uj(self) -> dict:
         """EnergyReaderABC interface — delegates to read_energy_safe()."""

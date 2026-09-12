@@ -1,0 +1,3 @@
+All files under pilot_assets/ are synthetic fixtures created for the A-LEMS
+energy-diagnosis study and dedicated to the public domain under CC0 1.0. They
+contain no personal, proprietary, or third-party repository content.
