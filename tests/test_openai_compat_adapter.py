@@ -366,6 +366,120 @@ def test_server_can_return_json_without_a_second_request(monkeypatch, request, p
     assert result['phase_metrics']['first_token_time_ns'] is None
     assert response.closed
 
+
+@pytest.mark.parametrize('provider,body,expected', [
+    ('ollama_adapter',
+     {'message': {'content': False}, 'done': True,
+      'prompt_eval_count': 4, 'eval_count': 2},
+     {'prompt': 4, 'completion': 2}),
+    ('openai_adapter',
+     {'choices': [{'message': {'content': False}}],
+      'usage': {'prompt_tokens': 4, 'completion_tokens': 2}},
+     {'prompt': 4, 'completion': 2}),
+])
+def test_json_parse_failure_retains_provider_token_observations(
+    monkeypatch, request, provider, body, expected
+):
+    adapter = request.getfixturevalue(provider)
+    adapter.model_config['stream'] = False
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: StubResponse(body=body))
+
+    result = adapter.call('hello', 0)
+
+    assert result['status'] == 'error'
+    assert result['tokens'] == {}
+    assert result['token_provenance'] == 'unknown'
+    assert result['observed_tokens'] == expected
+
+
+@pytest.mark.parametrize('provider,bad_content', [
+    ('ollama_adapter', 0),
+    ('ollama_adapter', False),
+    ('ollama_adapter', []),
+    ('openai_adapter', 0),
+    ('openai_adapter', False),
+    ('openai_adapter', []),
+])
+def test_stream_rejects_falsy_non_text_content(
+    monkeypatch, request, provider, bad_content
+):
+    adapter = request.getfixturevalue(provider)
+    chunk = ({'message': {'content': bad_content}, 'done': True}
+             if provider == 'ollama_adapter' else
+             {'choices': [{'delta': {'content': bad_content}, 'finish_reason': 'stop'}]})
+    lines = (encoded_lines(chunk) if provider == 'ollama_adapter' else
+             [b'data: ' + json.dumps(chunk).encode(), b'data: [DONE]'])
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: StubResponse(lines=lines))
+
+    result = adapter.call('hello', 0)
+
+    assert result['status'] == 'error'
+    assert result['content'] == 'Error: provider content must be text'
+
+
+def locality_adapter(provider_id, *, is_cloud):
+    return OpenAICompatAdapter(
+        {
+            'provider_id': provider_id,
+            'type': 'cloud_api' if is_cloud else 'local_openai',
+            'base_url': 'https://example.invalid' if is_cloud else 'http://127.0.0.1:8000',
+        },
+        {
+            'model_id': 'fixture-model',
+            'max_tokens': 32,
+            'network_type': 'internet' if is_cloud else 'loopback',
+            'is_local': not is_cloud,
+            '_resolved_api_key': 'fixture-key' if is_cloud else None,
+            'stream': False,
+        },
+    )
+
+
+@pytest.mark.parametrize('provider_id,is_cloud,body', [
+    ('ollama_remote', True,
+     {'message': {'content': 'answer'}, 'done': True,
+      'prompt_eval_count': 1, 'eval_count': 1}),
+    ('vllm_local', False,
+     {'choices': [{'message': {'content': 'answer'}}],
+      'usage': {'prompt_tokens': 1, 'completion_tokens': 1}}),
+])
+@pytest.mark.parametrize('fails', [False, True])
+def test_timing_attribution_follows_locality_not_protocol(
+    monkeypatch, provider_id, is_cloud, body, fails
+):
+    adapter = locality_adapter(provider_id, is_cloud=is_cloud)
+    times = iter([1.0, 1.1, 2.0, 3.0] if fails else [1.0, 1.1, 2.0, 3.0, 4.0, 4.1])
+    throughput_latencies = []
+    module = sys.modules['core.execution.adapters.openai_compat']
+    monkeypatch.setattr(module.time, 'perf_counter', lambda: next(times))
+    if fails:
+        def fail(*args, **kwargs):
+            raise requests.ConnectionError('provider unavailable')
+        monkeypatch.setattr(requests, 'post', fail)
+    else:
+        monkeypatch.setattr(requests, 'post', lambda *a, **k: StubResponse(body=body))
+        monkeypatch.setattr(
+            adapter, '_throughput_kbps',
+            lambda prompt_bytes, response_bytes, latency_ms: throughput_latencies.append(
+                latency_ms
+            ) or 1.0,
+        )
+    if is_cloud:
+        monkeypatch.setattr(adapter, '_get_network_counters', lambda: None)
+        monkeypatch.setattr(module.psutil, 'cpu_percent', lambda **kwargs: 0.0)
+
+    result = adapter.call('hello', 0)
+
+    assert result['status'] == ('error' if fails else 'ok')
+    local_ms = result['phase_metrics']['local_compute_ms']
+    non_local_ms = result['phase_metrics']['non_local_ms']
+    expected = (0.0, 1000.0) if is_cloud else (1000.0, 0.0)
+    assert (local_ms, non_local_ms) == expected
+    if not fails:
+        assert throughput_latencies == pytest.approx(
+            [1000.0 if is_cloud else 1200.0]
+        )
+
 @pytest.mark.parametrize('response', [
     StubResponse(lines=[b'data: malformed']),
     StubResponse(lines=[b'data: {"choices":[{"delta":{"content":"partial"}}]}']),

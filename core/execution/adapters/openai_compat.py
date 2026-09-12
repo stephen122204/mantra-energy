@@ -164,20 +164,16 @@ class OpenAICompatAdapter(TextGenABC):
         response_bytes = len(content.encode("utf-8"))
         postprocess_ms = (time.perf_counter() - t_post) * 1000
 
-        # ── Assign phase times by provider type ───────────────────────────────
-        # Ollama runs inference locally — call_ms is compute, non_local=0
-        # Cloud waits for remote inference — call_ms is non_local, compute=0
-        if self._is_ollama:
-            non_local_ms = 0.0
-            local_compute_ms = call_ms
-            # Throughput over total time for local (no network bottleneck)
-            kbps = self._throughput_kbps(prompt_bytes, response_bytes,
-                                          preprocess_ms + call_ms + postprocess_ms)
-        else:
+        # ── Assign phase times by execution locality ──────────────────────────
+        if self._is_cloud:
             non_local_ms = call_ms
             local_compute_ms = 0.0
-            # Throughput over network time only for cloud
             kbps = self._throughput_kbps(prompt_bytes, response_bytes, non_local_ms)
+        else:
+            non_local_ms = 0.0
+            local_compute_ms = call_ms
+            kbps = self._throughput_kbps(prompt_bytes, response_bytes,
+                                          preprocess_ms + call_ms + postprocess_ms)
 
         total_ms = preprocess_ms + call_ms + postprocess_ms
 
@@ -310,6 +306,14 @@ class OpenAICompatAdapter(TextGenABC):
                 raw = response.json()
                 if not isinstance(raw, dict):
                     raise ValueError("provider response must be a JSON object")
+                if self._is_ollama:
+                    prompt_count = raw.get("prompt_eval_count")
+                    completion_count = raw.get("eval_count")
+                else:
+                    usage = raw.get("usage")
+                    if isinstance(usage, dict):
+                        prompt_count = usage.get("prompt_tokens")
+                        completion_count = usage.get("completion_tokens")
                 if raw.get("error"):
                     raise RuntimeError(str(raw["error"]))
                 if self._is_ollama and raw.get("done") is not True:
@@ -339,7 +343,11 @@ class OpenAICompatAdapter(TextGenABC):
                     raise RuntimeError(str(chunk["error"]))
                 if self._is_ollama:
                     terminal = chunk
-                    delta = chunk.get("message", {}).get("content") or ""
+                    delta = chunk.get("message", {}).get("content")
+                    if delta is None:
+                        delta = ""
+                    elif not isinstance(delta, str):
+                        raise ValueError("provider content must be text")
                     if chunk.get("prompt_eval_count") is not None:
                         prompt_count = chunk["prompt_eval_count"]
                     if chunk.get("eval_count") is not None:
@@ -354,13 +362,15 @@ class OpenAICompatAdapter(TextGenABC):
                     choices = chunk.get("choices") or []
                     delta = ""
                     if choices:
-                        delta = choices[0].get("delta", {}).get("content") or ""
+                        delta = choices[0].get("delta", {}).get("content")
+                        if delta is None:
+                            delta = ""
+                        elif not isinstance(delta, str):
+                            raise ValueError("provider content must be text")
                         if choices[0].get("finish_reason") is not None:
                             finish_reason = choices[0]["finish_reason"]
                             complete = True
                 if delta:
-                    if not isinstance(delta, str):
-                        raise ValueError("provider content must be text")
                     now = time.perf_counter_ns()
                     epoch = time.time_ns()
                     if first is None:
@@ -446,8 +456,8 @@ class OpenAICompatAdapter(TextGenABC):
         total_ms = preprocess_ms + call_ms + postprocess_ms
         phase_metrics = self._make_phase_metrics(
             total_time_ms=total_ms, preprocess_ms=preprocess_ms,
-            non_local_ms=0.0 if self._is_ollama else call_ms,
-            local_compute_ms=call_ms if self._is_ollama else 0.0,
+            non_local_ms=call_ms if self._is_cloud else 0.0,
+            local_compute_ms=0.0 if self._is_cloud else call_ms,
             postprocess_ms=postprocess_ms, app_throughput_kbps=0.0,
             cpu_percent_during_wait=0.0, **self._last_stream_metrics,
         )
