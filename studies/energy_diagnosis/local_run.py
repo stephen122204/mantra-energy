@@ -167,6 +167,7 @@ class GoalExecutor:
         simulated,
         lifecycle=None,
         workload_runtime=None,
+        initialized_model_window=False,
     ):
         self.tasks = tasks
         self.adapter = adapter
@@ -177,6 +178,9 @@ class GoalExecutor:
         self.simulated = simulated
         self.lifecycle = lifecycle
         self.workload_runtime = workload_runtime
+        self.initialized_model_window = initialized_model_window
+        if initialized_model_window and lifecycle is None:
+            raise ValueError("initialized-model measurement requires an owned lifecycle")
 
     def __call__(self, request):
         plan = request.scheduled_run.planned_run
@@ -194,6 +198,14 @@ class GoalExecutor:
         status = "incomplete"
         error = "step budget exhausted"
         owned_terminated = True
+        inner_started = inner_settled = False
+        inner_window = dict(
+            protocol="initialized-model-fresh-process-v1",
+            status="unavailable", reason="initialized boundary not captured",
+            measurements=[], clock_domain=lease.clock_domain,
+            goal_execution_id=lease.execution_id,
+            scope="model initialized before task; fresh process caches; outer deadline and startup/release costs retained",
+        )
         prefix = Path("goals") / lease.execution_id
         context = dict(
             task_id=task.task_id,
@@ -205,6 +217,9 @@ class GoalExecutor:
         try:
             if self.lifecycle:
                 self.lifecycle.begin_goal(lease.attempt_id)
+            if self.initialized_model_window:
+                self.measurement.checkpoint("initialized_model_start")
+                inner_started = True
             if self.workload_runtime:
                 self.workload_runtime.begin(task, lease)
                 context.update(self.workload_runtime.context(task))
@@ -419,13 +434,19 @@ class GoalExecutor:
                 owned_terminated = False
         if self.lifecycle:
             try:
-                self.lifecycle.end_goal()
+                if self.initialized_model_window:
+                    self.lifecycle.settle_work()
+                    inner_settled = True
+                else:
+                    self.lifecycle.end_goal()
             except Exception as exc:
                 status, error = "crashed", f"{error}; expert cleanup failed: {exc}"
-                owned_terminated = (
-                    owned_terminated and self.lifecycle.backend.process is None
-                )
-        if self.lifecycle:
+                if not self.initialized_model_window:
+                    owned_terminated = (
+                        owned_terminated and self.lifecycle.backend.process is None
+                    )
+                inner_window["reason"] = f"task work not confirmed idle: {exc}"
+        if self.lifecycle and not self.initialized_model_window:
             owned_terminated = (
                 owned_terminated and self.lifecycle.backend.owned_work_terminated
             )
@@ -463,7 +484,47 @@ class GoalExecutor:
                 ),
             )
         )
+        if self.initialized_model_window:
+            try:
+                if inner_started and inner_settled and self.lifecycle.backend.idle_confirmed:
+                    self.measurement.checkpoint("initialized_model_end")
+                    inner_measurements = self.measurement.measure_between(
+                        "initialized_model_start", "initialized_model_end"
+                    )
+                    inner_valid = bool(inner_measurements) and all(
+                        m.status == "valid" for m in inner_measurements
+                    )
+                    inner_window.update(
+                        status="valid" if inner_valid else "unavailable",
+                        reason="" if inner_valid else "missing or invalid counter data",
+                        measurements=[m.to_dict() for m in inner_measurements],
+                    )
+            except Exception as exc:
+                inner_window.update(status="unavailable", reason=f"checkpoint failed: {exc}")
+            finally:
+                try:
+                    self.lifecycle.end_goal()
+                except Exception as exc:
+                    status, error = "crashed", f"{error}; expert release failed: {exc}"
+                owned_terminated = owned_terminated and self.lifecycle.backend.owned_work_terminated
+            if not owned_terminated:
+                inner_window.update(status="invalid", reason="final owned-work termination unverified")
+                inner_window["measurements"] = [
+                    dict(m, status="invalid", energy_j=None, coverage=None,
+                         reason="final owned-work termination unverified")
+                    for m in inner_window["measurements"]
+                ]
         measured = self.measurement.finish_goal()
+        if self.initialized_model_window:
+            for name, begin, end in (
+                ("before_task_window", "goal_start", "initialized_model_start"),
+                ("after_task_window", "initialized_model_end", "goal_end"),
+            ):
+                try:
+                    portion = self.measurement.measure_between(begin, end)
+                    inner_window[name] = dict(measurements=[m.to_dict() for m in portion])
+                except Exception as exc:
+                    inner_window[name] = dict(measurements=[], reason=str(exc))
         if not owned_terminated:
             measured = replace(
                 measured,
@@ -478,6 +539,9 @@ class GoalExecutor:
                     for m in measured.measurements
                 ),
             )
+            if self.initialized_model_window:
+                for name in ("before_task_window", "after_task_window"):
+                    inner_window[name] = dict(measurements=[], reason="final owned-work termination unverified")
         record = ExecutionRecord(
             lease.execution_id,
             lease.planned_run_id,
@@ -521,6 +585,11 @@ class GoalExecutor:
                     "expert-events",
                 )
             )
+        if self.initialized_model_window:
+            artifacts.append(write_artifact(
+                self.artifact_root, prefix / "initialized-model-window.json",
+                inner_window, "initialized-model-window",
+            ))
         metadata = OutcomeMetadata(
             plan.setting_id,
             plan.tool_concurrency,

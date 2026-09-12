@@ -94,6 +94,7 @@ class Lifecycle:
         self.request_id = ""
         self.pause_index = 0
         self._pause_plan = None
+        self.work_settled = False
 
     def emit(self, kind, **fields):
         self.events.append(
@@ -130,6 +131,7 @@ class Lifecycle:
         self.events, self.history, self.pending = [], Counter(), {}
         self.pause_index = 0
         self._pause_plan = None
+        self.work_settled = False
         self.emit(
             "goal_start",
             policy=asdict(self.policy),
@@ -139,12 +141,14 @@ class Lifecycle:
         )
 
     def before_model(self, request_id):
-        if self.goal is None or self.pause is not None or self._pause_plan is not None:
+        if self.goal is None or self.pause is not None or self._pause_plan is not None or self.work_settled:
             raise RuntimeError("generation outside active goal or before pause drain")
         self.request_id = request_id
         self.emit("model_start")
 
     def after_model(self):
+        if self.work_settled:
+            raise RuntimeError("model observation after work was settled")
         for event in self.backend.drain_demands():
             key = (event["layer"], event["expert"])
             self.history[key] += event.get("tokens", 1)
@@ -164,7 +168,7 @@ class Lifecycle:
 
     def plan_pause(self):
         """Select before launching tools; this issues no transfer admission."""
-        if self.goal is None or self.pause is not None or self._pause_plan is not None:
+        if self.goal is None or self.pause is not None or self._pause_plan is not None or self.work_settled:
             raise RuntimeError("invalid preparation planning state")
         upcoming = f"{self.goal}:pause:{self.pause_index + 1}"
         self.emit("preparation_planning_start", upcoming_pause_id=upcoming)
@@ -185,7 +189,7 @@ class Lifecycle:
 
     def start_pause(self):
         plan = self._pause_plan
-        if self.goal is None or self.pause is not None or plan is None:
+        if self.goal is None or self.pause is not None or plan is None or self.work_settled:
             raise RuntimeError("invalid pause start")
         if (
             plan.generation != self.generation or plan.goal_id != self.goal
@@ -263,21 +267,30 @@ class Lifecycle:
             elif row["outcome"] in {"failed", "not_transferred"}:
                 raise RuntimeError("native preparation failed")
 
-    def end_goal(self, timeout_seconds=10):
+    def settle_work(self, timeout_seconds=10):
+        """Confirm task-owned device work is idle without releasing the model."""
         if self.goal is None:
+            raise RuntimeError("no owned goal to settle")
+        if self.work_settled:
             return
         if self._pause_plan is not None:
             self.emit("preparation_plan_discarded", reason="no_tool_body_admission")
             self._pause_plan = None
+        self.backend.cancel_pending_preparation(self.generation)
+        self.backend.drain_owned_work(timeout_seconds)
+        self._collect_transfers()
+        for key, row in self.pending.items():
+            self.emit(
+                "prepared_not_used_by_goal_end", expert=list(key), prepared=row
+            )
+        self.work_settled = True
+        self.emit("preparation_drained")
+
+    def end_goal(self, timeout_seconds=10):
+        if self.goal is None:
+            return
         try:
-            self.backend.cancel_pending_preparation(self.generation)
-            self.backend.drain_owned_work(timeout_seconds)
-            self._collect_transfers()
-            for key, row in self.pending.items():
-                self.emit(
-                    "prepared_not_used_by_goal_end", expert=list(key), prepared=row
-                )
-            self.emit("preparation_drained")
+            self.settle_work(timeout_seconds)
         finally:
             # Backend ownership ends even on drain/cancel failure; supervisor reaps it.
             self.backend.end_goal()

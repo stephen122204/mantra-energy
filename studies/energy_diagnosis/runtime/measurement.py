@@ -12,6 +12,9 @@ import math
 import uuid
 import dataclasses
 import json
+import re
+import threading
+from functools import wraps
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Optional
@@ -93,6 +96,15 @@ class SessionArtifacts(_JsonRecord):
     samples: tuple[SensorSample, ...]
     transitions: tuple[CounterTransition, ...]
     measurements: tuple[MeasurementRecord, ...]
+    checkpoints: dict[str, str] = dataclasses.field(default_factory=dict)
+
+
+def _serialized(method):
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return call
 
 
 class MeasurementSession:
@@ -122,7 +134,10 @@ class MeasurementSession:
         self._brackets: dict[str, tuple[int, int]] = {}
         self._state = "created"
         self._sample_number = 0
+        self._lock = threading.RLock()
+        self._checkpoints = {}
 
+    @_serialized
     def start_session(self) -> None:
         if self._state != "created":
             raise RuntimeError("measurement session has already started")
@@ -131,6 +146,7 @@ class MeasurementSession:
         self._read_endpoint("session_start")
         self._state = "session_started"
 
+    @_serialized
     def start_goal(self) -> int:
         if self._state != "session_started":
             raise RuntimeError("goal can only start in an active session")
@@ -139,11 +155,42 @@ class MeasurementSession:
         self._state = "goal_started"
         return self.goal_start_ns
 
+    @_serialized
     def sample_goal(self) -> None:
         if self._state != "goal_started":
             raise RuntimeError("goal is not active")
         self._read_endpoint(f"goal_sample_{len(self._raw)}")
 
+    @_serialized
+    def checkpoint(self, name: str) -> tuple[int, int]:
+        """Capture actual counters inside the goal, never a retrospective label."""
+        if self._state != "goal_started":
+            raise RuntimeError("checkpoint requires an active goal")
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name):
+            raise ValueError("invalid checkpoint name")
+        if name in {"goal_start", "goal_end"}:
+            raise ValueError("checkpoint name is reserved")
+        if name in self._checkpoints:
+            raise ValueError("checkpoint is immutable")
+        label = f"checkpoint_{name}"
+        self._read_endpoint(label)
+        self._checkpoints[name] = label
+        return self._brackets[label]
+
+    @_serialized
+    def measure_between(self, start: str, end: str) -> tuple[MeasurementRecord, ...]:
+        """Derive a named subinterval using every intervening counter reading."""
+        endpoints = {"goal_start": "goal_start", "goal_end": "goal_end", **self._checkpoints}
+        if start not in endpoints or end not in endpoints or any(
+            endpoints[key] not in self._raw for key in (start, end)
+        ):
+            raise ValueError("both checkpoints must have been captured")
+        _, measurements = self._derive_measurements(
+            endpoints[start], endpoints[end]
+        )
+        return tuple(measurements)
+
+    @_serialized
     def end_goal(self) -> int:
         if self._state != "goal_started":
             raise RuntimeError("goal is not active")
@@ -153,11 +200,19 @@ class MeasurementSession:
         return self.goal_end_ns
 
     def finish_session(self) -> SessionArtifacts:
-        if self._state != "goal_ended":
-            raise RuntimeError("finish_session requires a captured goal endpoint")
+        with self._lock:
+            if self._state != "goal_ended":
+                raise RuntimeError("finish_session requires a captured goal endpoint")
+            self._state = "finishing"
         # The goal endpoint is already immutable. Teardown belongs to the wider
-        # session span and must never redefine goal_end_ns.
-        self._teardown()
+        # session span and must never redefine goal_end_ns. Do not hold the read
+        # lock across teardown: it may need to join a sampling thread.
+        try:
+            self._teardown()
+        except BaseException:
+            with self._lock:
+                self._state = "goal_ended"
+            raise
         self.session_end_ns = self._monotonic_ns()
         self.wall_clock_end_ns = self._wall_time_ns()
         transitions, measurements = self._derive_measurements()
@@ -176,6 +231,7 @@ class MeasurementSession:
             samples=tuple(self._samples),
             transitions=tuple(transitions),
             measurements=tuple(measurements),
+            checkpoints=dict(self._checkpoints),
         )
 
     def _read_endpoint(self, label: str) -> None:
@@ -220,15 +276,20 @@ class MeasurementSession:
                 )
             )
 
-    def _derive_measurements(self):
-        start = self._raw["goal_start"]
-        end = self._raw["goal_end"]
+    def _derive_measurements(self, start_label="goal_start", end_label="goal_end"):
+        ordered = list(self._raw)
+        first, last = ordered.index(start_label), ordered.index(end_label)
+        if first >= last:
+            raise ValueError("measurement interval must have ordered distinct endpoints")
+        labels = ordered[first:last + 1]
+        start = self._raw[start_label]
+        end = self._raw[end_label]
+        start_ns, end_ns = self._brackets[start_label][0], self._brackets[end_label][1]
         transitions: list[CounterTransition] = []
         measurements: list[MeasurementRecord] = []
         for domain in self.schema.domains:
             raw_start = start.get(domain.native_key)
             raw_end = end.get(domain.native_key)
-            labels = [label for label in self._raw if label == "goal_start" or label.startswith("goal_sample_") or label == "goal_end"]
             intervals = [self._counter_delta(domain, self._raw[a].get(domain.native_key), self._raw[b].get(domain.native_key))
                          for a, b in zip(labels, labels[1:])]
             invalid = next((item for item in intervals if item[1] is None), None)
@@ -252,8 +313,8 @@ class MeasurementSession:
                 measurements.append(MeasurementRecord(
                     session_id=self.session_id,
                     domain_id=domain.canonical_name,
-                    start_ns=self.goal_start_ns,
-                    end_ns=self.goal_end_ns,
+                    start_ns=start_ns,
+                    end_ns=end_ns,
                     status="unavailable",
                     method="counter-difference",
                     reason=reason,
@@ -262,8 +323,8 @@ class MeasurementSession:
                 measurements.append(MeasurementRecord(
                     session_id=self.session_id,
                     domain_id=domain.canonical_name,
-                    start_ns=self.goal_start_ns,
-                    end_ns=self.goal_end_ns,
+                    start_ns=start_ns,
+                    end_ns=end_ns,
                     status="valid",
                     method="counter-difference-with-wrap" if status == "wrapped" else "counter-difference",
                     energy_j=float(delta) / 1_000_000,
