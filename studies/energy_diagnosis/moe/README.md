@@ -122,7 +122,7 @@ repair is one pure arithmetic function, not arbitrary repository development.
 Every goal starts from a hash-checked copy of its immutable input. Tools and final
 checks use the existing bounded process executor.
 
-The summary includes failed-attempt costs by physical domain, marks missing energy
+The summary exports startup time, resume-barrier time, summed transfer host brackets, Python routing-hook time, and prepared bytes not requested. The resume barrier includes cancellation/drain/reporting overhead; summed transfer brackets can overlap and must not be added to goal duration. It includes failed-attempt costs by physical domain, marks missing energy
 unknown, and leaves joules per success undefined when there are zero successes.
 `paired_interval` is for independent task/session pairs, not sensor samples or
 tokens. A smoke campaign cannot establish an uncertainty estimate for general
