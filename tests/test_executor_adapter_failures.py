@@ -18,6 +18,13 @@ _model_factory = ModuleType("core.execution.model_factory")
 _model_factory.ModelFactory = SimpleNamespace(get_adapter=None)
 sys.modules.setdefault("core.execution.model_factory", _model_factory)
 
+_utils_package = ModuleType("core.utils")
+_utils_package.__path__ = []
+sys.modules.setdefault("core.utils", _utils_package)
+_debug = ModuleType("core.utils.debug")
+_debug.dprint = lambda *args, **kwargs: None
+sys.modules.setdefault("core.utils.debug", _debug)
+
 _tools = ModuleType("core.execution.tools.real_tools")
 for _name in (
     "CalculatorTool", "DatabaseQueryTool", "FileProcessorTool", "WebSearchTool",
