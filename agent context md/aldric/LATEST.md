@@ -1,51 +1,37 @@
 # Latest published context: aldric
 
-[Immutable turn record](turns/20260912T002404Z-ed06.md)
+[Immutable turn record](turns/20260912T004900Z-ed08.md)
 
 ## Task and current understanding
 
-Aldric workloads/verifiers role resumed from clean branch `aldric/ed-06-executor` at fetched integration commit `ad334e6`. The maintained assignment makes AL2 ED-06 the next ready software milestone after AL1/ED-03. The owned component must execute one finite goal graph with one or two concurrent ready calls, one or four workers per tool, dependency ordering, result mapping, and explicit failure/timeout outcomes. Existing `core.execution.tools.real_tools` is synchronous and has no generic worker setting, so the study executor accepts worker-aware tools and records configured/observed values rather than inventing an environment variable control.
+Aldric's complete role is AL1 first verifier, AL2 single-goal controls, AL3 four pilot tasks, AL4 trace/replay, AL5 Grace integration, and conditional AL6 expansion. Integration was fetched at `ad334e6`. AL1 is already merged in PR #16. AL2 was implemented separately at commit `da6e6c2` on `aldric/ed-06-executor` with 7 passing focused tests. This turn implements the next independent software milestone AL3 on `aldric/ed-08-pilot-tasks`.
 
 ## Ideas and hypotheses
 
-A study-local executor can remain behind the unresolved ED-01 shared interface while giving Nitheesh a single-goal callable boundary. A deterministic worker-aware probe can prove that the worker control changes actual thread execution, while an existing A-LEMS `CodeExecutorTool` supplies real subprocess computation. Ready-call concurrency and dependency timing are observable through monotonic lifecycle events.
+A useful pilot suite needs different resource/dependency behavior rather than four variants of one template. Two synthetic CSV goals support aggregate computation and worker-eligible tool work; two synthetic repository snapshots support file inventory/check evidence and concurrency-only eligibility. Independent verification must read the immutable assets rather than trust manifest expected values or agent output.
 
 ## Decisions and rationale
 
-Implemented AL2 in `studies/energy_diagnosis/workloads/bounded_executor.py` with eligible controls restricted to `{1,2}` concurrent calls and `{1,4}` workers per tool. Graph validation rejects duplicate IDs, unknown tools, missing dependencies and cycles. `$result:<call_id>` arguments are resolved only after successful dependencies. Ready/start/end events include monotonic timestamps, dependencies and control settings. Failed or timed-out calls produce explicit outcomes and dependent calls are skipped; executor shutdown cancels pending futures without waiting on timed-out work.
-
-The existing tool module received narrow Windows portability changes: POSIX `resource` falls back to process CPU time, optional HTTP/SQL/symbolic dependencies do not block unrelated tool imports, and `CodeExecutorTool` uses `sys.executable` instead of a hardcoded `python3`. `core.execution` exports are lazy so isolated tool imports do not load the full optional model runtime. These changes are implementation compatibility fixes needed to exercise the existing tool on Windows; Linux behavior remains the default path.
+Added four unique tasks under two families with four distinct lineage labels. `pilot_tasks.py` validates manifest identity, containment, canonical file/tree hashes and recomputes CSV totals or sorted repository file manifests before checking structured answers. Data tasks declare `tool_concurrency` and `tool_workers`; repository tasks declare only `tool_concurrency` because their fixed file inventory does not expose a meaningful worker setting. All assets are synthetic and CC0, with manifest hashes pinned.
 
 ## Changes and artifacts
 
-Commit `da6e6c2` is pushed to `origin/aldric/ed-06-executor`; review URL: https://github.com/stephen122204/alems-energy-diagnosis/pull/new/aldric/ed-06-executor. Added bounded executor and focused tests, and documented the boundary in the workloads README. No shared schema or ED-01 API was changed. AL1 files were not rebuilt.
-
-Status at this turn:
-
-| Milestone | Status | Evidence / dependency | Next action / owner |
-|---|---|---|---|
-| AL1 / ED-03 | accepted, fixture-tested | PR #16 merged; current local ignored `sales.csv` bytes do not match newer task hash pins, so combined regression is blocked by local asset integrity | Reconcile the ignored asset with the current contract; Stephen/Aldric review |
-| AL2 / ED-06 executor | fixture-tested, PR open | `da6e6c2`; 7 focused tests pass; Grace validation and shared contract integration remain | Stephen reviews interface; Nitheesh consumes executor |
-| AL3 / ED-08 pilot tasks | not started | Can proceed locally after task boundary review; needs two data and two repository goals | Add second family and four assets in separate PR |
-| AL4 / ED-06 replay | not started | Depends on executor; no live model/replay evidence | Add trace/replay PR with actual inference/tool boundary |
-| AL5 / ED-07/09 Grace integration | blocked for hardware | Requires Alex runtime, assigned Grace allocation/session/budget, and Nitheesh ledger | Run one real verified goal when session is assigned |
-| AL6 / ED-11 expansion | conditional | Requires Stephen pilot approval and frozen task/lineage split; no held-out work started | Wait for freeze; then build approved suite |
+AL3 commit `99f9156` is pushed to `origin/aldric/ed-08-pilot-tasks`; review URL: https://github.com/stephen122204/alems-energy-diagnosis/pull/new/aldric/ed-08-pilot-tasks. Added `pilot_tasks.py`, four immutable asset groups, manifest/license, focused tests, and workload documentation. No shared schema or ED-01 interface was changed. The repository family remains deliberately small and fixture-sized; it is software acceptance evidence, not representative energy evidence.
 
 ## Tests and evidence
 
-- `python -m pytest -q tests/test_bounded_executor.py`: 7 passed.
-- `python -m py_compile core/execution/__init__.py core/execution/tools/real_tools.py studies/energy_diagnosis/workloads/bounded_executor.py tests/test_bounded_executor.py`: passed.
+- `python -m pytest -q tests/test_pilot_tasks.py`: 4 passed.
+- `python -m py_compile studies/energy_diagnosis/workloads/pilot_tasks.py tests/test_pilot_tasks.py`: passed.
 - `git diff --check`: passed before commit.
-- `PYTHONUTF8=1 python scripts/check_energy_diagnosis_setup.py`: passed.
-- Combined AL2 + ED-03 run: 7 AL2 tests passed, 12 ED-03 tests errored because the ignored local `sales.csv` hash is `745e...` while the current task contract pins `5620...`; this was not changed in this milestone.
-- VS Code diagnostics report no code errors; Pylance reports unresolved `pytest` for the system interpreter despite pytest being runnable by `python -m pytest`.
+- VS Code diagnostics: no errors in the two new Python files.
+- Asset hashes were computed and pinned for both CSV files and both canonical directory trees.
 
-Evidence level is fixture-tested and code-reviewed locally. No model inference, Grace execution, energy collection, or hardware validation occurred. The real-tool test exercises `CodeExecutorTool` subprocess computation locally; it is not hardware evidence.
+Evidence is fixture-tested and code-reviewed locally. No model, live tool graph, Grace allocation, energy collector, or hardware session ran during AL3. AL2's focused suite remains 7 passed on its separate branch. The combined ED-03 regression remains blocked by the current ignored local `sales.csv` bytes not matching the newer task contract hash pins; this turn did not modify that asset or contract.
 
 ## Open questions and disagreements
 
-The exact ED-01 shared callable/event types remain the integration dependency; this PR intentionally exposes a narrow local `ToolCall`/`ToolOutcome` boundary rather than silently changing shared contracts. The current local ignored ED-03 asset must be refreshed or its contract provenance clarified before the full regression suite is green. The timeout implementation records/cancels the future but cannot forcibly terminate arbitrary Python threads; a future runtime integration should decide whether tool processes require stronger isolation.
+The exact ED-01 producer/consumer types for task identity, candidate controls, events and verifier outcomes remain to be mapped; these AL3 APIs are intentionally local. Repository snapshots are synthetic stand-ins and need a realism decision before any claim about repository workload energy. AL4 replay still requires actual inference/tool execution and cannot be satisfied by saved output playback. AL5 needs Alex's runtime, an individually authorized Grace allocation/session/budget and Nitheesh's ledger integration. AL6 is conditional on Stephen's pilot/freeze decision and must not inspect held-out outcomes.
 
 ## Next actions and handoff
 
-Stephen should review the AL2 boundary and portability changes. Alex should advise whether the selected existing tool and worker evidence are compatible with Grace. Nitheesh can consume `BoundedToolExecutor.execute` after the shared contract mapping is agreed. Aldric's next independent software milestone is AL3: add the second repository-analysis family and four pilot task specifications in a separate PR. Hardware work remains dependent on an individually authorized Grace session, allocation and budget.
+Stephen reviews the AL2 and AL3 boundaries and decides the shared contract mapping. Alex advises Grace compatibility and meaningful tool controls. Nitheesh consumes the four task specs/verifiers and later validates ledger/export links. Aldric's next software action is the separate AL4 trace/replay implementation after the executor interface is reviewed; local fixture trace tests can proceed without hardware, while live replay remains blocked until a model runtime is available.
