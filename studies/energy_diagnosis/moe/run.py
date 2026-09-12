@@ -25,7 +25,7 @@ from .backend import ProcessBackend, BackendAdapter
 from .control import Lifecycle, Policy
 from .workloads import create_tasks, WorkloadRuntime, VERSION
 
-EXECUTION_PROTOCOL = "tool-body-notification-v1"
+EXECUTION_PROTOCOL = "planned-tool-body-admission-v1"
 
 
 def run(args):

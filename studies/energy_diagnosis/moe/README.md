@@ -95,8 +95,14 @@ allocation and cache evidence. A native smoke exits nonzero on incorrect output,
 missing energy or invalid control behavior. Never interpret a structurally valid
 ledger as proof of a successful model run.
 
-Execution protocol `tool-body-notification-v1` admits preparation only after the
-parent receives the first tool's `body_start` event in a model-request tool graph.
+Execution protocol `planned-tool-body-admission-v1` separates candidate selection
+from transfer admission. The goal executor calls `plan_pause()` before launching
+the tool graph, recording `preparation_planning_start/end` inside the measured
+goal. Planning enumerates/selects experts but admits no transfers. `start_pause()`
+consumes that plan only after the parent receives the first tool's `body_start`
+event in the graph; it records `preparation_dispatch_start` before the native RPC.
+Plans cannot cross a model request, goal or policy change, and an unused plan is
+discarded at goal end. Selection and dispatch overhead are retained in goal cost.
 The worker emits that event after deserialization and immediately before tool
 invocation. It never waits for preparation. `body_end` brackets invocation even
 when the tool raises; forced termination can leave it absent. Existing `start`
