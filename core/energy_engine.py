@@ -1027,6 +1027,14 @@ class EnergyEngine:
             return msr_total
         if not self.last_gpu_samples:
             return None
+        if any(
+            getattr(s, "measurement_kind", None) == "sampled_power"
+            and not getattr(s, "coverage_complete", True)
+            and getattr(s, "interval_ns", 0) > 0
+            for s in self.last_gpu_samples
+        ):
+            # Do not publish a partial sampled-power integral as total energy.
+            return None
         measured = [
             s.energy_uj for s in self.last_gpu_samples
             if s.energy_uj is not None

@@ -16,7 +16,7 @@ NFR DC-1: 30% inline comment coverage maintained.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,6 @@ class EnergySample:
         return canonical_name in self.domains
 
     @property
-    def total_uj(self) -> int:
-        """Sum of all measured domain deltas. Useful for sanity checks."""
-        # Note: do not use for attribution — domains may overlap (parent+child)
-        return sum(self.domains.values())
+    def total_uj(self) -> Optional[int]:
+        """No implicit total: measured domains may overlap or be independent."""
+        return None
