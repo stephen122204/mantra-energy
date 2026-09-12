@@ -1076,6 +1076,7 @@ You can use tools like calculator or web search if needed.
             result              = self._adapter.require_success(result)
             content             = result["content"]
             tokens              = result["tokens"]
+            token_provenance    = result.get("token_provenance", "unknown")
             total_time_ms       = result["total_time_ms"]
             phase_metrics       = result["phase_metrics"]
             preprocess_ms       = phase_metrics["preprocess_ms"]
@@ -1101,6 +1102,7 @@ You can use tools like calculator or web search if needed.
                 "prompt_tokens":            tokens.get("prompt", 0),
                 "completion_tokens":        tokens.get("completion", 0),
                 "total_tokens":             tokens.get("total", 0),
+                "token_provenance":         token_provenance,
                 "total_time_ms":            total_time_ms,
                 "preprocess_ms":            preprocess_ms,
                 "non_local_ms":             non_local_ms,
@@ -1129,6 +1131,7 @@ You can use tools like calculator or web search if needed.
             return {
                 "content":                  content,
                 "tokens":                   tokens,
+                "token_provenance":         token_provenance,
                 "total_time_ms":            total_time_ms,
                 "preprocess_ms":            preprocess_ms,
                 "non_local_ms":             non_local_ms,
