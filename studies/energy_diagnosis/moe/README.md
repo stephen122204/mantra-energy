@@ -141,6 +141,24 @@ drain cannot seal a valid inner interval; unverified final termination invalidat
 its energy as well. Default non-MoE GoalExecutor callers retain their existing
 lifecycle order. Changing this protocol requires a fresh campaign directory.
 
+Each command writes `window-audit.json`. It independently replays the exported
+raw counters and checks registered artifact hashes, source/clock/session identity,
+checkpoint ordering, task-span containment, drain/release evidence, and the
+outer/before/initialized/after totals. Native qualification exits with code 5 if
+this audit fails or any required domain/ownership evidence is missing. To audit a
+saved packet without changing its records:
+
+```sh
+python -m studies.energy_diagnosis.moe.audit_windows /path/to/campaign
+```
+
+The standalone command exits 2 on absent/inconsistent evidence; an audit that
+reconciles correctly recorded missing counters can pass with
+`all_domains_measured: false`. It retains incorrect outcomes and explicitly marks
+simulation. It reports acquisition-duration brackets without inventing exact
+simultaneous boundaries. Counter replay assumes at most one wrap between adjacent
+readings; it is not external sensor calibration or model-output qualification.
+
 ## Controls and records
 
 - `demand`: no speculative expert admission.
@@ -171,6 +189,11 @@ The data task performs a 20,000-row join/filter/aggregation with an independent 
 reference. The repository task reads, repairs, compiles and runs visible checks,
 then verifies pure arithmetic code against 90 separate test cases. Its allowed
 repair is one pure arithmetic function, not arbitrary repository development.
+Workload version `moe-tools-v3` exposes the exact permitted repair language in the
+prompt and checks the function signature, expression structure and integer result
+type. The changed task is `pricing-repair-v2`; it retains lineage
+`synthetic-pricing-v1`. Earlier task outcomes keep their original version and
+must not be retroactively regraded. Use a new campaign directory for this version.
 Every goal starts from a hash-checked copy of its immutable input. Tools and final
 checks use the existing bounded process executor.
 

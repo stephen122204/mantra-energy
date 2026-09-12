@@ -217,6 +217,8 @@ def test_failures_and_controls_are_not_silently_eligible(tmp_path, case):
     if case in {"wrong_answer", "wrong_prediction", "locked", "tool_failure", "broken_ack"}:
         assert inner["status"] == "valid"  # Failed outcomes still have measured cost.
     if case == "wrong_answer":
+        assert result["window_audit"]["audit_passed"]
+        assert result["window_audit"]["results"][0]["verifier_outcome"] == "fail"
         costs = next(iter(result["summary"]["settings"].values()))["initialized_model"]["energy"]
         assert all(c["total_attempt_joules"] > 0 and c["joules_per_success"] is None for c in costs.values())
 
