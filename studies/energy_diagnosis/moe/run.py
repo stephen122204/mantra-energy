@@ -25,6 +25,8 @@ from .backend import ProcessBackend, BackendAdapter
 from .control import Lifecycle, Policy
 from .workloads import create_tasks, WorkloadRuntime, VERSION
 
+EXECUTION_PROTOCOL = "tool-body-notification-v1"
+
 
 def run(args):
     simulated = args.mode == "fixture"
@@ -67,6 +69,7 @@ def run(args):
             max_tokens=args.max_tokens,
             deadline=args.deadline,
             mode=args.mode,
+            execution_protocol=EXECUTION_PROTOCOL,
         )
     )
     by_setting = {f"C00-{p.name}-{digest(asdict(p))[:12]}": p for p in policies}
@@ -107,6 +110,7 @@ def run(args):
         config=config,
         source_revision=revision,
         fingerprint=fingerprint,
+        execution_protocol=EXECUTION_PROTOCOL,
         policies={sid: asdict(p) for sid, p in by_setting.items()},
         schedule=schedule.to_dict(),
         measurement_scope="CPU-package and GPU-board only; includes backend startup, tools, transfers, cleanup and verification",

@@ -66,7 +66,12 @@ def _call_process(connection, tool, call, args, workers):
 
             job_handle = create_windows_job()
         connection.send(("start", time.monotonic_ns()))
-        raw = _invoke(cloudpickle.loads(tool), args, workers)
+        implementation = cloudpickle.loads(tool)
+        connection.send(("body_start", time.monotonic_ns()))
+        try:
+            raw = _invoke(implementation, args, workers)
+        finally:
+            connection.send(("body_end", time.monotonic_ns()))
         success = bool(getattr(raw, "success", True))
         outcome = ToolOutcome(
             call.call_id,
@@ -225,21 +230,29 @@ class BoundedToolExecutor:
                 for call_id, state in list(running.items()):
                     process, connection, admitted, started = state
                     outcome = None
-                    try:
-                        while connection.poll():
-                            kind, value = connection.recv()
-                            if kind == "start":
-                                state[3] = True
-                                self.max_observed_concurrency = max(
-                                    self.max_observed_concurrency,
-                                    sum(int(item[3]) for item in running.values()),
-                                )
-                                self._emit("start", by_id[call_id], timestamp=value)
-                            else:
-                                outcome = value
+                    while True:
+                        try:
+                            if not connection.poll():
                                 break
-                    except (EOFError, OSError):
-                        pass
+                            kind, value = connection.recv()
+                        except (EOFError, OSError):
+                            break
+                        # Observer errors, including OSError from an external
+                        # controller, must propagate and trigger owned cleanup.
+                        if kind == "start":
+                            state[3] = True
+                            self.max_observed_concurrency = max(
+                                self.max_observed_concurrency,
+                                sum(int(item[3]) for item in running.values()),
+                            )
+                            self._emit("start", by_id[call_id], timestamp=value)
+                        elif kind in {"body_start", "body_end"}:
+                            self._emit(kind, by_id[call_id], timestamp=value)
+                        elif kind == "outcome":
+                            outcome = value
+                            break
+                        else:
+                            raise BoundedExecutionError("unknown tool worker event")
                     if (
                         outcome is None
                         and time.monotonic() - admitted >= self.timeout_seconds
@@ -319,6 +332,7 @@ class BoundedToolExecutor:
             depends_on=list(call.depends_on),
             max_concurrent_calls=self.max_concurrent_calls,
             workers_per_tool=self.workers_per_tool,
+            observed_ns=time.monotonic_ns(),
         )
         if outcome is not None:
             record.update(

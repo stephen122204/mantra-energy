@@ -60,6 +60,8 @@ def test_timed_out_process_stops_before_next_goal(tmp_path):
     assert Path(path + ".started").exists(), "probe must actually enter the tool"
     assert result["slow"].status == "timed_out"
     assert result["child"].status == "skipped"
+    assert any(e["event"] == "body_start" for e in events)
+    assert not any(e["event"] == "body_end" for e in events)
     import psutil
 
     assert not psutil.pid_exists(int(Path(path + ".started").read_text()))
@@ -132,3 +134,28 @@ def test_tool_descendants_are_reaped_after_success():
         assert process.status() == psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
         pass
+
+
+@pytest.mark.parametrize("error_type", [ValueError, OSError])
+def test_body_observer_failure_reaps_tool_and_allows_next_goal(tmp_path, error_type):
+    import psutil
+
+    marker = str(tmp_path / "observer-failure")
+
+    def broken_observer(event):
+        if event["event"] == "body_start":
+            until = time.monotonic() + 3
+            while not Path(marker + ".started").exists() and time.monotonic() < until:
+                time.sleep(0.002)
+            assert Path(marker + ".started").exists()
+            raise error_type("observer failure")
+
+    executor = BoundedToolExecutor({"t": SideEffectTool()}, event_sink=broken_observer)
+    with pytest.raises(error_type, match="observer failure"):
+        executor.execute([ToolCall("t", "t", {"path": marker, "delay": 20})])
+    assert not psutil.pid_exists(int(Path(marker + ".started").read_text()))
+    assert not Path(marker).exists()
+    executor.event_sink = None
+    assert executor.execute([
+        ToolCall("next", "t", {"path": marker + "next", "delay": 0})
+    ])["next"].status == "completed"

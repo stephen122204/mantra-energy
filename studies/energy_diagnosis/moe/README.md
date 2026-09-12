@@ -95,7 +95,20 @@ allocation and cache evidence. A native smoke exits nonzero on incorrect output,
 missing energy or invalid control behavior. Never interpret a structurally valid
 ledger as proof of a successful model run.
 
-During tools, candidate expert preparation is admitted by actual node byte sizes.
+Execution protocol `tool-body-notification-v1` admits preparation only after the
+parent receives the first tool's `body_start` event in a model-request tool graph.
+The worker emits that event after deserialization and immediately before tool
+invocation. It never waits for preparation. `body_end` brackets invocation even
+when the tool raises; forced termination can leave it absent. Existing `start`
+and `end` events retain process-start and completed-cleanup semantics. Each event
+also records parent `observed_ns`, so delayed notification is distinguishable
+from actual tool time. Short tools may finish before preparation starts; these
+timestamps alone do not establish useful overlap. The protocol is recorded in
+the campaign manifest and fingerprint; use a new output directory for old runs.
+Demand-only pauses skip expert enumeration and the empty preparation RPC;
+ownership, cancellation/drain validation and transfer logging remain active.
+
+Candidate expert preparation is admitted by actual node byte sizes.
 The model's top-k router remains unchanged. Queued work is cancelled at tool end;
 already-issued work must drain before model resume. Timeout or backend failure
 kills and reaps the owned worker before final cost is captured. Process cleanup failure, or forced native termination before device work was confirmed idle, makes the energy interval invalid. No remote API or fixture fallback is

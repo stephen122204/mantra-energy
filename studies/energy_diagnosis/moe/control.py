@@ -154,6 +154,11 @@ class Lifecycle:
         self.pause_index += 1
         self.pause = f"{self.goal}:pause:{self.pause_index}"
         self.emit("tool_pause_start")
+        if self.policy.name == "demand":
+            # Do not enumerate thousands of experts or issue an empty RPC for
+            # the no-preparation control. Goal-end ownership checks still run.
+            self.emit("preparation_skipped", reason="demand_only")
+            return self.generation, self.pause
         snapshot = self.backend.snapshot_experts()
         selected, reason = self.policy.select(snapshot, self.history)
         ack = self.backend.prepare_experts(
