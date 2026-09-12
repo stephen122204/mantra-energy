@@ -165,6 +165,8 @@ class GoalExecutor:
         max_steps,
         timeout_seconds,
         simulated,
+        lifecycle=None,
+        workload_runtime=None,
     ):
         self.tasks = tasks
         self.adapter = adapter
@@ -173,6 +175,8 @@ class GoalExecutor:
         self.max_steps = max_steps
         self.timeout_seconds = timeout_seconds
         self.simulated = simulated
+        self.lifecycle = lifecycle
+        self.workload_runtime = workload_runtime
 
     def __call__(self, request):
         plan = request.scheduled_run.planned_run
@@ -199,6 +203,11 @@ class GoalExecutor:
             tool_results=tool_results,
         )
         try:
+            if self.lifecycle:
+                self.lifecycle.begin_goal(lease.attempt_id)
+            if self.workload_runtime:
+                self.workload_runtime.begin(task, lease)
+                context.update(self.workload_runtime.context(task))
             for step in range(self.max_steps):
                 if (
                     time.monotonic_ns() - lease.started_ns
@@ -210,6 +219,8 @@ class GoalExecutor:
                 self.adapter.model_config["request_timeout_seconds"] = max(
                     0.001, self.timeout_seconds - (started - lease.started_ns) / 1e9
                 )
+                if self.lifecycle:
+                    self.lifecycle.before_model(f"{lease.attempt_id}:model:{step}")
                 raw = self.adapter.call(prompt, 0.0)
                 ended = time.monotonic_ns()
                 tokens = raw.get("tokens") or {}
@@ -244,11 +255,15 @@ class GoalExecutor:
                         error=response.error,
                     )
                 )
+                if self.lifecycle and ok:
+                    self.lifecycle.after_model()
                 if not ok:
                     status, error = "crashed", response.error
                     # A disconnected live inference server may still own work.
                     # Checkpoint and stop the campaign until its termination is verified.
-                    owned_terminated = self.simulated
+                    owned_terminated = (
+                        self.simulated or raw.get("owned_work_terminated") is True
+                    )
                     break
                 try:
                     decision = json.loads(response.text)
@@ -270,7 +285,21 @@ class GoalExecutor:
                     )
                     break
                 graph = []
+                runtime_tools = {}
                 for c in calls:
+                    if self.workload_runtime:
+                        if not isinstance(c, dict):
+                            raise ValueError("tool call must be an object")
+                        runtime_tools[c["tool"]] = self.workload_runtime.tool(task, c)
+                        graph.append(
+                            ToolCall(
+                                str(c["id"]),
+                                c["tool"],
+                                c.get("args", {}),
+                                tuple(c.get("depends_on", ())),
+                            )
+                        )
+                        continue
                     if (
                         not isinstance(c, dict)
                         or c.get("tool") != "inspect_asset"
@@ -292,8 +321,8 @@ class GoalExecutor:
                     and self.adapter.model_config.get("fixture_case") == "tool_timeout"
                 ):
                     tool = DelayedFixtureTool(tool)
-                outcomes = BoundedToolExecutor(
-                    {"inspect_asset": tool},
+                tool_executor = BoundedToolExecutor(
+                    runtime_tools or {"inspect_asset": tool},
                     max_concurrent_calls=2 if plan.tool_concurrency else 1,
                     workers_per_tool=plan.tool_workers,
                     timeout_seconds=max(
@@ -302,8 +331,24 @@ class GoalExecutor:
                         - (time.monotonic_ns() - lease.started_ns) / 1e9,
                     ),
                     event_sink=local_events.append,
-                ).execute(graph)
-                events.extend(local_events)
+                )
+                pause_error = None
+                if self.lifecycle:
+                    token = self.lifecycle.start_pause()
+                    try:
+                        outcomes = tool_executor.execute(graph)
+                    except Exception:
+                        owned_terminated = False
+                        raise
+                    finally:
+                        events.extend(local_events)
+                        try:
+                            self.lifecycle.end_pause(token)
+                        except Exception as exc:
+                            pause_error = exc
+                else:
+                    outcomes = tool_executor.execute(graph)
+                    events.extend(local_events)
                 for c in graph:
                     outcome = outcomes[c.call_id]
                     tool_results.append(asdict(outcome))
@@ -335,6 +380,8 @@ class GoalExecutor:
                             error=outcome.error or "",
                         )
                     )
+                if pause_error is not None:
+                    raise pause_error
                 if any(o.status != "completed" for o in outcomes.values()):
                     status = (
                         "timed_out"
@@ -352,21 +399,37 @@ class GoalExecutor:
 
             if isinstance(exc, BoundedExecutionError):
                 owned_terminated = False
+        if self.lifecycle:
+            try:
+                self.lifecycle.end_goal()
+            except Exception as exc:
+                status, error = "crashed", f"{error}; expert cleanup failed: {exc}"
+                owned_terminated = (
+                    owned_terminated and self.lifecycle.backend.process is None
+                )
+        if self.lifecycle:
+            owned_terminated = (
+                owned_terminated and self.lifecycle.backend.owned_work_terminated
+            )
         verify_start = time.monotonic_ns()
         if status == "completed":
             try:
-                result = verify_pilot(task, answer)
+                result = (
+                    self.workload_runtime.verify(task, answer)
+                    if self.workload_runtime
+                    else verify_pilot(task, answer)
+                )
                 verifier = VerifierResult(
-                    PILOT_VERIFIER_VERSION,
+                    plan.verifier_version,
                     "pass" if result["passed"] else "fail",
                     result["reason"],
                 )
             except Exception as exc:
                 verifier = VerifierResult(
-                    PILOT_VERIFIER_VERSION, "unavailable", str(exc)
+                    plan.verifier_version, "unavailable", str(exc)
                 )
         else:
-            verifier = VerifierResult(PILOT_VERIFIER_VERSION, "unavailable", error)
+            verifier = VerifierResult(plan.verifier_version, "unavailable", error)
         verify_end = time.monotonic_ns()
         spans.append(
             SpanEvent(
@@ -430,6 +493,15 @@ class GoalExecutor:
         ]:
             artifacts.append(
                 write_artifact(self.artifact_root, prefix / name, payload, role)
+            )
+        if self.lifecycle:
+            artifacts.append(
+                write_artifact(
+                    self.artifact_root,
+                    prefix / "expert-events.json",
+                    self.lifecycle.events,
+                    "expert-events",
+                )
             )
         metadata = OutcomeMetadata(
             plan.setting_id,

@@ -1,0 +1,9 @@
+{
+  "backend_commit": "6da092fc98e7246bfa1b2f9b2a480524b8697a7e",
+  "model_revision": "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe",
+  "model_path": "/REPLACE/allocated-storage/qwen3-30b-a3b-instruct-2507",
+  "offload_path": "/REPLACE/allocated-storage/moe-offload",
+  "build_manifest": "/REPLACE/allocated-storage/moe-infinity/alems-build.json",
+  "device_memory_ratio": 0.65,
+  "max_context": 4096
+}
