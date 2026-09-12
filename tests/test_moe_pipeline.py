@@ -44,7 +44,7 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
     assert first["executed"] == 8
     assert first["validation"]["valid"]
     manifest = json.loads((output / "moe-manifest.json").read_text())
-    assert manifest["execution_protocol"] == "tool-body-notification-v1"
+    assert manifest["execution_protocol"] == "planned-tool-body-admission-v1"
     assert all(
         x["startup_seconds"] > 0 and x["resume_barrier_seconds"] >= 0
         for x in first["summary"]["settings"].values()
@@ -65,7 +65,14 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         tools = json.loads(path.with_name("events.json").read_text())
         body_starts = [e for e in tools if e["event"] == "body_start"]
         pauses = [e for e in events if e["event"] == "tool_pause_start"]
+        planning_starts = [e for e in events if e["event"] == "preparation_planning_start"]
+        planning_ends = [e for e in events if e["event"] == "preparation_planning_end"]
+        ready = [e for e in tools if e["event"] == "ready"]
         assert len(pauses) == len(body_starts)  # These tasks have one tool per decision.
+        assert len(planning_starts) == len(planning_ends) == len(pauses)
+        for begin, end, tool_ready, pause in zip(planning_starts, planning_ends, ready, pauses):
+            assert begin["upcoming_pause_id"] == end["upcoming_pause_id"] == pause["pause_id"]
+            assert begin["monotonic_ns"] <= end["monotonic_ns"] <= tool_ready["monotonic_ns"]
         for pause, body in zip(pauses, body_starts):
             assert pause["monotonic_ns"] >= body["observed_ns"] >= body["monotonic_ns"]
         if policy == "demand":
@@ -77,6 +84,7 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         # Fixture sensor counter deltas are independent of transfer success.
         measurement = json.loads(path.with_name("measurement.json").read_text())
         record = json.loads(path.with_name("record.json").read_text())
+        assert record["started_ns"] <= planning_starts[0]["monotonic_ns"]
         # Some Windows monotonic clocks resolve a short boundary to the same
         # tick. Check ordering and independent raw arithmetic, not duration > 0.
         finished = {
@@ -178,6 +186,7 @@ def test_late_transfer_stale_callback_and_clean_reset(tmp_path):
     control = Lifecycle(b, Policy("fixed", 64))
     control.begin_goal("g1")
     control.history[(0, 0)] = 1
+    control.plan_pause()
     token = control.start_pause()
     # Ensure transfer has started before queued-only cancellation.
     time.sleep(0.03)
@@ -185,13 +194,18 @@ def test_late_transfer_stale_callback_and_clean_reset(tmp_path):
     control.end_pause(token)
     assert time.monotonic() - begin >= 0.08
     assert any(e["event"] == "expert_transfer" for e in control.events)
+    control.request_id = "g1-request"
     control.end_goal()
     assert b.process is None
     control.begin_goal("g2")
     assert not control.history
+    assert control.request_id == ""
     with pytest.raises(RuntimeError, match="stale"):
         control.end_pause(token)
+    control.plan_pause()
     control.end_goal()
+    assert any(e["event"] == "preparation_plan_discarded" for e in control.events)
+    assert control._pause_plan is None
 
 
 def test_hung_rpc_is_killed_not_retried(tmp_path):
@@ -237,9 +251,49 @@ def test_demand_pause_does_not_call_preparation_backend():
 
     control = Lifecycle(NoPreparation(), Policy("demand"))
     control.goal = "owned-fixture"
+    control.plan_pause()
     token = control.start_pause()
     assert token == (0, "owned-fixture:pause:1")
-    assert [e["event"] for e in control.events] == ["tool_pause_start", "preparation_skipped"]
+    assert [e["event"] for e in control.events] == [
+        "preparation_planning_start", "preparation_planning_end",
+        "tool_pause_start", "preparation_skipped",
+    ]
+
+
+def test_planning_does_not_admit_transfers_and_cannot_cross_model_requests():
+    class Probe:
+        def __init__(self):
+            self.calls = []
+
+        def snapshot_experts(self):
+            self.calls.append("snapshot")
+            return [Expert(0, 0, 10, 1, 64, "cpu")]
+
+        def prepare_experts(self, selected, generation, budget):
+            self.calls.append("prepare")
+            assert len(selected) == 1 and selected[0].node == 1 and budget == 64
+            return dict(accepted_nodes=[1], accepted_bytes=64, inflight_bytes=64)
+
+    backend = Probe()
+    control = Lifecycle(backend, Policy("fixed", 64))
+    control.goal = "g"
+    control.history[(0, 0)] = 1
+    with pytest.raises(RuntimeError, match="invalid pause"):
+        control.start_pause()
+    control.plan_pause()
+    assert backend.calls == ["snapshot"]
+    with pytest.raises(RuntimeError, match="planning state"):
+        control.plan_pause()
+    with pytest.raises(RuntimeError, match="generation outside"):
+        control.before_model("intervening-request")
+    control.request_id = "changed-request"
+    with pytest.raises(RuntimeError, match="stale preparation"):
+        control.start_pause()
+    control.request_id = ""
+    control.start_pause()
+    assert backend.calls == ["snapshot", "prepare"]  # No snapshot on admission.
+    with pytest.raises(RuntimeError, match="invalid pause"):
+        control.start_pause()
 
 
 def test_native_bridge_calls_actual_native_methods():

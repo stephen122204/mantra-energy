@@ -338,6 +338,10 @@ class GoalExecutor:
                     and self.adapter.model_config.get("fixture_case") == "tool_timeout"
                 ):
                     tool = DelayedFixtureTool(tool)
+                if self.lifecycle:
+                    # Selection is charged inside the goal window, before tool
+                    # launch. Admission itself waits for body-start notification.
+                    self.lifecycle.plan_pause()
                 tool_executor = BoundedToolExecutor(
                     runtime_tools or {"inspect_asset": tool},
                     max_concurrent_calls=2 if plan.tool_concurrency else 1,

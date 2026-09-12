@@ -71,6 +71,17 @@ class Policy:
         return selected, "ranked_history"
 
 
+@dataclass(frozen=True)
+class _PreparationPlan:
+    generation: int
+    goal_id: str
+    request_id: str
+    pause_index: int
+    policy: Policy
+    experts: tuple[Expert, ...]
+    reason: str
+
+
 class Lifecycle:
     """Only one owned goal and one pause at a time; callbacks cannot cross goals."""
 
@@ -82,6 +93,7 @@ class Lifecycle:
         self.pending = {}
         self.request_id = ""
         self.pause_index = 0
+        self._pause_plan = None
 
     def emit(self, kind, **fields):
         self.events.append(
@@ -113,9 +125,11 @@ class Lifecycle:
         self.backend.reset_goal_state()
         startup_end = self.clock()
         self.goal, self.pause = goal_id, None
+        self.request_id = ""
         self.generation += 1
         self.events, self.history, self.pending = [], Counter(), {}
         self.pause_index = 0
+        self._pause_plan = None
         self.emit(
             "goal_start",
             policy=asdict(self.policy),
@@ -125,7 +139,7 @@ class Lifecycle:
         )
 
     def before_model(self, request_id):
-        if self.goal is None or self.pause is not None:
+        if self.goal is None or self.pause is not None or self._pause_plan is not None:
             raise RuntimeError("generation outside active goal or before pause drain")
         self.request_id = request_id
         self.emit("model_start")
@@ -148,9 +162,38 @@ class Lifecycle:
         self._collect_transfers()
         self.emit("model_end")
 
+    def plan_pause(self):
+        """Select before launching tools; this issues no transfer admission."""
+        if self.goal is None or self.pause is not None or self._pause_plan is not None:
+            raise RuntimeError("invalid preparation planning state")
+        upcoming = f"{self.goal}:pause:{self.pause_index + 1}"
+        self.emit("preparation_planning_start", upcoming_pause_id=upcoming)
+        if self.policy.name == "demand":
+            selected, reason = [], "demand_only"
+        else:
+            selected, reason = self.policy.select(
+                self.backend.snapshot_experts(), self.history
+            )
+        self._pause_plan = _PreparationPlan(
+            self.generation, self.goal, self.request_id, self.pause_index + 1,
+            self.policy, tuple(selected), reason,
+        )
+        self.emit(
+            "preparation_planning_end", upcoming_pause_id=upcoming,
+            selected_experts=len(selected), reason=reason,
+        )
+
     def start_pause(self):
-        if self.goal is None or self.pause is not None:
+        plan = self._pause_plan
+        if self.goal is None or self.pause is not None or plan is None:
             raise RuntimeError("invalid pause start")
+        if (
+            plan.generation != self.generation or plan.goal_id != self.goal
+            or plan.request_id != self.request_id
+            or plan.pause_index != self.pause_index + 1 or plan.policy != self.policy
+        ):
+            raise RuntimeError("stale preparation plan")
+        self._pause_plan = None  # A plan is consumed at most once, including failure.
         self.pause_index += 1
         self.pause = f"{self.goal}:pause:{self.pause_index}"
         self.emit("tool_pause_start")
@@ -159,8 +202,8 @@ class Lifecycle:
             # the no-preparation control. Goal-end ownership checks still run.
             self.emit("preparation_skipped", reason="demand_only")
             return self.generation, self.pause
-        snapshot = self.backend.snapshot_experts()
-        selected, reason = self.policy.select(snapshot, self.history)
+        selected, reason = plan.experts, plan.reason
+        self.emit("preparation_dispatch_start")
         ack = self.backend.prepare_experts(
             selected, self.generation, self.policy.byte_budget
         )
@@ -223,6 +266,9 @@ class Lifecycle:
     def end_goal(self, timeout_seconds=10):
         if self.goal is None:
             return
+        if self._pause_plan is not None:
+            self.emit("preparation_plan_discarded", reason="no_tool_body_admission")
+            self._pause_plan = None
         try:
             self.backend.cancel_pending_preparation(self.generation)
             self.backend.drain_owned_work(timeout_seconds)
