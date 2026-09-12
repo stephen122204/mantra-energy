@@ -15,6 +15,7 @@ TESTS = [
     "test_adapter_provider_routes.py",
     "test_executor_adapter_failures.py",
     "test_measurement_session.py",
+    "test_energy_collector.py",
     "test_gpu_power_integration.py",
     "test_rapl_grace_domains.py",
     "test_integrated_goal.py",

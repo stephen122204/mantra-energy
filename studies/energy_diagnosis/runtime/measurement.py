@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
-from core.readers.measurement_schema import ENERGY_COUNTER, DomainDescriptor
+from core.readers.measurement_schema import ENERGY_COUNTER, DomainDescriptor, MeasurementSchema
 from studies.energy_diagnosis.contracts import MeasurementRecord, SensorSample
 
 
@@ -56,6 +56,7 @@ class DomainCapability:
 @dataclass(frozen=True)
 class CapabilityReport(_JsonRecord):
     environment: EnvironmentIdentity
+    measurement_schema: MeasurementSchema
     reader_name: str
     source: str
     sampling_hz: int
@@ -81,6 +82,7 @@ class CounterTransition:
 class SessionArtifacts(_JsonRecord):
     session_id: str
     environment: EnvironmentIdentity
+    measurement_schema: MeasurementSchema
     clock_domain: str
     wall_clock_start_ns: int
     wall_clock_end_ns: int
@@ -163,6 +165,7 @@ class MeasurementSession:
         return SessionArtifacts(
             session_id=self.session_id,
             environment=self.environment,
+            measurement_schema=self.schema,
             clock_domain=self.clock_domain,
             wall_clock_start_ns=self.wall_clock_start_ns,
             wall_clock_end_ns=self.wall_clock_end_ns,
@@ -332,6 +335,7 @@ def probe_capabilities(
     )
     return CapabilityReport(
         environment=environment,
+        measurement_schema=schema,
         reader_name=reader.get_name(),
         source=schema.source,
         sampling_hz=schema.sampling_hz,
