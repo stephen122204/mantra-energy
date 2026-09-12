@@ -18,3 +18,7 @@ The planning-only manifest and generator remain in [starter](../../docs/agent-co
 seam used by local AX4 fixtures. Runtime and measurement providers are injected
 through the documented shared shapes; simulated providers remain explicitly
 labeled and are not Grace evidence.
+
+## Integrated execution
+
+Use [RUN_LOCAL.md](RUN_LOCAL.md) for installation, portable regression checks, the complete fixture run, node preflight and a bounded live-model invocation. Hardware acceptance is separate from fixture success.

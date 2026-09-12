@@ -1,0 +1,9 @@
+# Portable study runtime and its fixture tests; no model download or hardware job.
+requests>=2.32,<3
+psutil>=6,<8
+PyYAML>=6,<7
+sympy>=1.13,<2
+sqlparse>=0.5,<1
+cloudpickle>=3.1,<4
+nvidia-ml-py>=13,<14
+pytest>=8,<10

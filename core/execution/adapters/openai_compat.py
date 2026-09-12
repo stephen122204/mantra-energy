@@ -23,6 +23,7 @@ Author: A-LEMS Chunk 7
 """
 
 import logging
+import math
 import time
 from typing import Any, Dict, Optional, Tuple
 
@@ -63,12 +64,12 @@ class OpenAICompatAdapter(TextGenABC):
         self._base_url = provider_config.get("base_url", "").rstrip("/")
         self._api_key_env = provider_config.get("api_key_env", "")
         self._is_ollama = provider_config.get("provider_id", "").startswith("ollama")      # controls endpoint + response parsing
-        # derive is_cloud from network_type or is_local — works for all providers
-        self._is_cloud = (
-            self._type in _CLOUD_TYPES or
-            model_config.get("network_type") == "internet" or
-            model_config.get("is_local") == False
-        )
+        # Execution location is independent of the HTTP protocol.
+        locality = model_config.get("is_local", provider_config.get("is_local"))
+        network = model_config.get("network_type", provider_config.get("network_type"))
+        self._is_cloud = (locality is False or network in {"internet", "lan"}
+                          or (locality is None and self._type in _CLOUD_TYPES))
+        self._is_local = not self._is_cloud
 
         # Lazy-resolve API key at call time — env may be set after init
         import os
@@ -97,12 +98,13 @@ class OpenAICompatAdapter(TextGenABC):
         Returns:
             bool
         """
-        if self._is_cloud:
-            # Cloud requires API key in env
+        if self._is_cloud and self._api_key_env:
+            # External API readiness uses its configured credential
             return bool(self._api_key)
         # Local ollama: ping tags endpoint to verify server is running
         try:
-            r = requests.get(f"{self._base_url}/api/tags", timeout=2)
+            path = "/api/tags" if self._is_ollama else "/models"
+            r = requests.get(f"{self._base_url}{path}", timeout=2)
             return r.status_code == 200
         except Exception:
             return False
@@ -289,21 +291,27 @@ class OpenAICompatAdapter(TextGenABC):
         stream = self.model_config.get("stream", self.provider_config.get("stream", True))
         if not isinstance(stream, bool):
             raise ValueError("stream configuration must be a boolean")
+        request_timeout = self.model_config.get("request_timeout_seconds", 120)
+        if isinstance(request_timeout, bool) or not isinstance(request_timeout, (int, float)) or not math.isfinite(request_timeout) or request_timeout <= 0:
+            raise ValueError("request_timeout_seconds must be finite and positive")
         request_start_ns = time.time_ns()
         start = time.perf_counter_ns()
         first = last = None
         first_epoch = last_epoch = None
         content = []
-        prompt_count = completion_count = None
+        prompt_count = completion_count = total_count = None
         terminal = {}
         finish_reason = None
         complete = False
         response = None
         self._last_stream_metrics = {"request_start_ns": request_start_ns}
+        request_payload = {**payload, "stream": stream}
+        if stream and not self._is_ollama:
+            request_payload["stream_options"] = {"include_usage": True}
         try:
             response = requests.post(
-                self._endpoint_url(), json={**payload, "stream": stream},
-                headers=self._build_headers(), timeout=120, stream=stream,
+                self._endpoint_url(), json=request_payload,
+                headers=self._build_headers(), timeout=request_timeout, stream=stream,
             )
             response.raise_for_status()
             media_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
@@ -327,6 +335,9 @@ class OpenAICompatAdapter(TextGenABC):
                 return raw
 
             for raw_line in response.iter_lines():
+                line_time = time.perf_counter_ns()
+                if (line_time - start) / 1e9 > request_timeout:
+                    raise TimeoutError("stream exceeded request deadline")
                 if not raw_line:
                     continue
                 line = raw_line.decode("utf-8")
@@ -365,6 +376,8 @@ class OpenAICompatAdapter(TextGenABC):
                         prompt_count = usage["prompt_tokens"]
                     if usage.get("completion_tokens") is not None:
                         completion_count = usage["completion_tokens"]
+                    if usage.get("total_tokens") is not None:
+                        total_count = usage["total_tokens"]
                     choices = chunk.get("choices") or []
                     delta = ""
                     if choices:
@@ -377,7 +390,7 @@ class OpenAICompatAdapter(TextGenABC):
                             finish_reason = choices[0]["finish_reason"]
                             complete = True
                 if delta:
-                    now = time.perf_counter_ns()
+                    now = line_time
                     epoch = time.time_ns()
                     if first is None:
                         first, first_epoch = now, epoch
@@ -397,7 +410,7 @@ class OpenAICompatAdapter(TextGenABC):
             return {
                 "choices": [{"message": {"content": "".join(content)},
                              "finish_reason": finish_reason}],
-                "usage": {"prompt_tokens": prompt_count, "completion_tokens": completion_count},
+                "usage": {"prompt_tokens": prompt_count, "completion_tokens": completion_count, "total_tokens": total_count},
             }
         finally:
             self._partial_content = "".join(content)
@@ -426,6 +439,7 @@ class OpenAICompatAdapter(TextGenABC):
         """Normalize content using the shared provider/estimated provenance values."""
         if data.get("error"):
             raise RuntimeError(str(data["error"]))
+        total_count = None
         if self._is_ollama:
             content = data["message"]["content"]
             prompt_count = data.get("prompt_eval_count")
@@ -435,10 +449,11 @@ class OpenAICompatAdapter(TextGenABC):
             usage = data.get("usage") or {}
             prompt_count = usage.get("prompt_tokens")
             completion_count = usage.get("completion_tokens")
+            total_count = usage.get("total_tokens")
         if not isinstance(content, str):
             raise ValueError("provider content must be text")
         self._partial_content = content
-        for value in (prompt_count, completion_count):
+        for value in (prompt_count, completion_count, total_count):
             if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
                 raise ValueError("provider token counts must be nonnegative integers")
         provided = sum(value is not None for value in (prompt_count, completion_count))
@@ -448,7 +463,7 @@ class OpenAICompatAdapter(TextGenABC):
         prompt_count = len(prompt.split()) if prompt_count is None else prompt_count
         completion_count = len(content.split()) if completion_count is None else completion_count
         return content, {"prompt": prompt_count, "completion": completion_count,
-                         "total": prompt_count + completion_count}
+                         "total": prompt_count + completion_count if total_count is None else total_count}
 
     def _error_result(self, error_msg: str, preprocess_ms: float,
                       call_ms: float = 0.0, postprocess_ms: float = 0.0,

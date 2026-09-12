@@ -53,9 +53,19 @@ def run_integrated_goal(
         clock_domain=measurement.clock_domain,
     )
     if lease is None:
+        measurement.finish_goal()
         raise IntegrationError("the planned run is not available to claim")
 
-    response = runtime.generate(task_spec)
+    try:
+        response = runtime.generate(task_spec)
+    except BaseException as exc:
+        # Preserve cleanup and available observations, but do not invent a
+        # complete model outcome or termination timestamp for recovery.
+        measured = measurement.finish_goal()
+        artifacts = _write_artifacts(artifact_root, plan, lease.attempt_number, None, measured.samples)
+        ledger.checkpoint(lease, artifacts, metadata={"runtime_exception": type(exc).__name__,
+            "owned_work_termination": "unverified"})
+        raise
     answer = None
     if response.status == "completed":
         try:

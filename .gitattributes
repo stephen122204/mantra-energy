@@ -7,3 +7,6 @@
 # Immutable workload assets: hashes are pinned on LF bytes
 studies/energy_diagnosis/workloads/assets/sales.csv text eol=lf
 studies/energy_diagnosis/workloads/assets/expected_result.json text eol=lf
+
+# All pilot identities use canonical LF checkout bytes on Windows and Linux.
+studies/energy_diagnosis/workloads/pilot_assets/** text eol=lf

@@ -1,9 +1,77 @@
 {
-  "manifest_version": "pilot-v1",
+  "manifest_version": "pilot-v2",
   "tasks": [
-    {"task_id": "data-units-v1", "family": "data", "lineage": "synthetic-sales-a", "asset": "data_units.csv", "asset_sha256": "74594fb5ba81607babee78dc89686d5800105637723b04e70ffe57dacad74c63", "expected": {"total_units": 10, "total_revenue": 50}, "eligible_controls": ["tool_concurrency", "tool_workers"]},
-    {"task_id": "data-weighted-v1", "family": "data", "lineage": "synthetic-sales-b", "asset": "data_weighted.csv", "asset_sha256": "c1d2493941daad59e047b621e8042d07c0ac76a54ce68ce12f67a8a17f011911", "expected": {"total_units": 7, "total_revenue": 38}, "eligible_controls": ["tool_concurrency", "tool_workers"]},
-    {"task_id": "repo-checks-v1", "family": "repository", "lineage": "fixture-repo-a", "asset": "repo_a", "asset_sha256": "4f767f1261cf4453af0a61c82ea0c5d6c523803754a3be74fdbdad1871606dd8", "expected": {"file_count": 3, "checks": ["README.md", "src/main.py", "tests/test_main.py"]}, "eligible_controls": ["tool_concurrency"]},
-    {"task_id": "repo-checks-v2", "family": "repository", "lineage": "fixture-repo-b", "asset": "repo_b", "asset_sha256": "dc344e90940e3f7992ea83feefc8fd3ce243f12f15ea7dd1afed2a252fa07c09", "expected": {"file_count": 4, "checks": ["README.md", "src/parse.py", "src/report.py", "tests/test_parse.py"]}, "eligible_controls": ["tool_concurrency"]}
-  ]
+    {
+      "task_id": "data-units-v2",
+      "family": "data",
+      "lineage": "synthetic-sales-a",
+      "asset": "data_units.csv",
+      "asset_sha256": "a84d9b129e0bfa6fbe7f2acac2f0a41204f1cbbecf724e9351d0f6ebb61c4b52",
+      "expected": {
+        "total_units": 10,
+        "total_revenue": 50
+      },
+      "eligible_controls": [
+        "tool_concurrency",
+        "tool_workers"
+      ],
+      "prompt": "Compute total_units and total_revenue from the supplied CSV. Return a JSON object including task_id and evidence containing the source SHA-256."
+    },
+    {
+      "task_id": "data-weighted-v2",
+      "family": "data",
+      "lineage": "synthetic-sales-b",
+      "asset": "data_weighted.csv",
+      "asset_sha256": "fe81e1951b38d0fa55c101b019d8849f62efeba2fed18fd74ff6a32887429773",
+      "expected": {
+        "total_units": 7,
+        "total_revenue": 38
+      },
+      "eligible_controls": [
+        "tool_concurrency",
+        "tool_workers"
+      ],
+      "prompt": "Compute total_units and total_revenue from the supplied CSV. Return a JSON object including task_id and evidence containing the source SHA-256."
+    },
+    {
+      "task_id": "repo-checks-a-v2",
+      "family": "repository",
+      "lineage": "fixture-repo-a",
+      "asset": "repo_a",
+      "asset_sha256": "0013f43e7fc5e72d63344beba999d9da397e9d87716e6a48090ae98b605b1792",
+      "expected": {
+        "file_count": 3,
+        "checks": [
+          "README.md",
+          "src/main.py",
+          "tests/test_main.py"
+        ]
+      },
+      "eligible_controls": [
+        "tool_concurrency"
+      ],
+      "prompt": "Inspect the supplied repository snapshot and report file_count and a sorted checks list of relative file paths. Return a JSON object including task_id and evidence containing the source SHA-256."
+    },
+    {
+      "task_id": "repo-checks-b-v2",
+      "family": "repository",
+      "lineage": "fixture-repo-b",
+      "asset": "repo_b",
+      "asset_sha256": "32e4fc5491aca77de8f650f900f7e3efb7835f4078374314be2e829034cdce69",
+      "expected": {
+        "file_count": 4,
+        "checks": [
+          "README.md",
+          "src/parse.py",
+          "src/report.py",
+          "tests/test_parse.py"
+        ]
+      },
+      "eligible_controls": [
+        "tool_concurrency"
+      ],
+      "prompt": "Inspect the supplied repository snapshot and report file_count and a sorted checks list of relative file paths. Return a JSON object including task_id and evidence containing the source SHA-256."
+    }
+  ],
+  "asset_revision_note": "Version 2 commits reviewed synthetic CSV replacements (original local files were absent from Git) and pins all asset hashes to LF checkout bytes. No prior experimental results are reused."
 }
