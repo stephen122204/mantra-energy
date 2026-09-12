@@ -16,3 +16,11 @@ The existing `core.execution.tools.real_tools.DatabaseQueryTool` uses synchronou
 SQLite connections and exposes no worker/thread control. It is suitable for a
 portable fixture path, but no worker-based intervention is eligible from that
 tool until an engine with an observable setting is selected and measured.
+
+AL3 pilot assets are in `pilot_assets/`: two synthetic data goals and two
+synthetic repository snapshots. They are CC0 fixtures created for this study;
+`manifest.json` pins canonical hashes, family/lineage identity, expected
+references, and eligible controls. `pilot_tasks.py` recomputes data totals and
+repository file manifests from the assets before comparing structured answers.
+These fixtures establish software correctness and control eligibility only;
+they do not establish representative energy work or Grace validity.
