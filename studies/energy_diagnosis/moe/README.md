@@ -49,6 +49,18 @@ a C++ compiler, libaio and NUMA development libraries. Check the backend's build
 requirements against the node image; this package does not assume those exist or
 require a student to have root. Use a suitable image/module when they are absent.
 
+The Ubuntu 24.04/CUDA 12.6 A100 build additionally needs `uuid-dev`, CUTLASS
+headers and the **NVTX C++** header `nvtx3/nvtx3.hpp`. The CUDA 12.6 NVTX package
+alone supplies C headers and is insufficient. For this configuration, use CUTLASS
+v3.9.2 (`ad7b2f5e84fcfa124cb02b91d5bd26d238c0459e`) and NVTX v3.4.0-c-cpp
+(`f71a0342a464b8580ac8573e4349086a631c3992`). Set `CUTLASS_DIR` to the CUTLASS
+checkout, add the NVTX checkout's `include` directory to `CPATH`, and put the
+matching CUDA toolkit's `bin` directory on `PATH`. Set `CUDA_HOME` to that toolkit,
+`MOE_ENABLE_SM90=0` for an A100-only build and `MAX_JOBS=8` to bound compilation.
+The local patch preserves the requested Ampere/Hopper targets for the generic
+dequantization extension instead of forcing an unsupported Blackwell target.
+This build fix does not select quantized weights or change model execution.
+
 ```sh
 python -m studies.energy_diagnosis.moe.prepare build /ALLOCATED_STORAGE/moe-infinity
 ```
