@@ -59,7 +59,9 @@ def test_rehashed_bad_artifact_cannot_pass(packet, tmp_path, defect, match):
     elif defect == "span":
         data["execution-record"]["spans"][0]["start_ns"] = raw["goal_start_ns"]
     elif defect == "drain":
-        next(e for e in data["expert-events"] if e["event"] == "preparation_drained")["monotonic_ns"] = raw["goal_end_ns"]
+        # Windows may timestamp inner end and goal end on the same clock tick.
+        # Make the deliberately invalid drain strictly later than the whole goal.
+        next(e for e in data["expert-events"] if e["event"] == "preparation_drained")["monotonic_ns"] = raw["goal_end_ns"] + 1
     elif defect == "registration":
         attempt["artifacts"] = [r for r in attempt["artifacts"] if r["role"] != "initialized-model-window"]
     elif defect == "duplicate":
