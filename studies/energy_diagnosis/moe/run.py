@@ -199,8 +199,13 @@ def run(args):
         reader.close()
     report = json.loads(paths["campaign_validation"].read_text())
     from .summary import summarize
+    from .audit_windows import audit
 
     analysis = summarize(root)
+    window_audit = audit(root)
+    (root / "window-audit.json").write_text(
+        json.dumps(window_audit, indent=2, allow_nan=False) + "\n"
+    )
     (root / "summary.json").write_text(
         json.dumps(analysis, indent=2, allow_nan=False) + "\n"
     )
@@ -209,6 +214,7 @@ def run(args):
         executed=count,
         validation=report,
         summary=analysis,
+        window_audit=window_audit,
         output=str(root),
     )
     print(json.dumps(result, indent=2))
@@ -274,6 +280,12 @@ def main(argv=None):
     ):
         raise SystemExit(3)
     if args.mode == "native":
+        if not result["window_audit"]["audit_passed"] or not all(
+            row.get("all_domains_measured") and row.get("owned_work_terminated")
+            and not row.get("simulated", True)
+            for row in result["window_audit"]["results"]
+        ):
+            raise SystemExit(5)
         for setting, row in result["summary"]["settings"].items():
             if (
                 any(f"-{name}-" in setting for name in ("fixed", "history"))

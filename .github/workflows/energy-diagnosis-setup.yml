@@ -99,7 +99,7 @@ jobs:
       - name: Install portable study dependencies
         run: python -m pip install -r requirements-study.txt
       - name: Test owned model worker, controls, tools, and ledger without GPU
-        run: python -X utf8 -m pytest -q tests/test_moe_pipeline.py
+        run: python -X utf8 -m pytest -q tests/test_moe_pipeline.py tests/test_moe_window_audit.py tests/test_moe_repair_contract.py
       - name: Compile and test native transfer lifecycle without CUDA
         if: runner.os == 'Linux'
         run: python -m pytest -q tests/test_moe_native_lifecycle.py
