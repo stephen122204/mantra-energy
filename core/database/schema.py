@@ -1715,6 +1715,9 @@ CREATE TABLE IF NOT EXISTS llm_interactions (
     bytes_sent_approx INTEGER,
     bytes_recv_approx INTEGER,
     tcp_retransmits INTEGER,
+    partial_content TEXT,
+    observed_tokens TEXT,
+    token_provenance TEXT,
     error_message TEXT,
     status TEXT,
     global_run_id TEXT,               -- cross-machine run correlation ID

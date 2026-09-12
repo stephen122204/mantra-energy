@@ -1,6 +1,7 @@
 """Regression coverage for structured adapter failures at executor boundaries."""
 
 import importlib
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -186,3 +187,19 @@ def test_existing_persistence_keeps_supported_failure_evidence():
     assert '"token_provenance": "unknown"' in row[1]
     assert interaction["partial_content"] == "partial"
     assert interaction["observed_tokens"] == {"prompt": 4}
+
+
+def test_agentic_failure_persistence_keeps_diagnostic_fields():
+    result = agentic_executor(adapter_result(failed=True))._call_llm("hello")
+    interaction = {**result["pending_interactions"][0], "run_id": 1}
+    database = SQLiteAdapter({"path": ":memory:"})
+    database.conn = sqlite3.connect(":memory:")
+    database.conn.executescript(CREATE_LLM_INTERACTIONS)
+
+    database.insert_llm_interaction(interaction)
+    row = database.conn.execute(
+        """SELECT partial_content, observed_tokens, token_provenance
+           FROM llm_interactions"""
+    ).fetchone()
+
+    assert row == ("partial", json.dumps({"prompt": 4}), "unknown")

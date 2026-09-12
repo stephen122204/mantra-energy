@@ -26,6 +26,7 @@ AUTHOR: Deepak Panigrahy
 """
 
 import hashlib
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -978,8 +979,9 @@ class SQLiteAdapter(DatabaseInterface):
                 first_token_time_ns, last_token_time_ns, request_start_ns, prefill_energy_uj, preprocess_ms, non_local_ms, local_compute_ms, postprocess_ms,
                 cpu_percent_during_wait,
                 bytes_sent_approx, bytes_recv_approx, tcp_retransmits,
+                partial_content, observed_tokens, token_provenance,
                 error_message, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 interaction_data.get("run_id"),
@@ -1013,6 +1015,9 @@ class SQLiteAdapter(DatabaseInterface):
                 interaction_data.get("bytes_sent_approx", 0),
                 interaction_data.get("bytes_recv_approx", 0),
                 interaction_data.get("tcp_retransmits", 0),
+                interaction_data.get("partial_content", ""),
+                json.dumps(interaction_data.get("observed_tokens", {})),
+                interaction_data.get("token_provenance"),
                 interaction_data.get("error_message", ""),
                 interaction_data.get("status", "success")
 
