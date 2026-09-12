@@ -1,43 +1,41 @@
 # Latest published context: alex
 
-[Immutable turn record](turns/20260912T-ed05-final-review.md)
+[Immutable turn record](turns/20260912T-ed02-replacement-pr.md)
 
-# Turn summary: Alex — 20260912T-ed05-final-review
+# Turn summary: Alex — 20260912T-ed02-replacement-pr
 
 ## Task and current understanding
 
-Finish existing ED-05 PR #27 for human review using final exact-head Grace evidence. The existing branch is `alex/ed-05-measurement-session`; current and validated head is `0c6b68a127c0fdc68d10d22c5ce50ea9cf76da17`.
+Replace ED-02 PR #24 after its validated head acquired two later Copilot SWE-agent commits. The authoritative implementation remains exact commit `462e9044b9e0c88d015cc4153479404cb8fbf81b`.
 
 ## Ideas and hypotheses
 
-Acceptance evidence must distinguish the preliminary nonexclusive `g092` smoke run from the authoritative exclusive-node `g041` run. The primary GPU correctness evidence is equality between the direct NVML cumulative delta and the sum of complete in-goal collector intervals.
+A new branch ref directly at the validated commit preserves the audited history and hardware evidence without reverting, cherry-picking, or retaining unvalidated persistence changes.
 
 ## Decisions and rationale
 
-- Audited the complete 18-file ED-05 diff against current integration and found it limited to measurement/session, GPU/RAPL, schema/migration, detection, dependency, documentation, and tests.
-- Verified neither ED-02 head `462e904` nor ED-07 head `7d17a50` is an ancestor of the ED-05 branch.
-- Retained separate package and DRAM domain reporting and did not infer a whole-machine total.
-- Documented Grace localhost proxy bypass (`NO_PROXY`, `no_proxy`, and `requests.Session(trust_env=False)`) as reproducibility context.
-- Did not commit the raw hardware artifact or change branch files.
+- Created `alex/ed-02-final` directly at `462e904`; no commit was created or rewritten.
+- Opened replacement PR #32 as Draft to avoid initiating automated review before CI.
+- Used a concise final-state description covering the protocol repair, adapter-owned failure boundary, executor coverage, persistence limitation, exact-head CI/Grace evidence, and separate legacy-adapter debt.
+- After all four new PR CI jobs passed, linked #32 from #24, closed #24 without merge, and marked #32 Ready for Stephen.
+- Did not request Copilot review. GitHub automatically posted a quota-exhausted Copilot notice after the Ready transition; it contains no review findings.
 
 ## Changes and artifacts
 
-Updated only PR #27's description and marked it Ready for Stephen. The description records the GPU/NVML and Grace RAPL repairs, focused and broader tests, preliminary nonexclusive evidence, and final exclusive validation.
+No source or repository file changed. Remote branch `alex/ed-02-final` points exactly at `462e904`. PR #32 replaces closed/unmerged PR #24. ED-05 and ED-07 were untouched.
 
-Authoritative artifact: `$SCRATCH/alems/artifacts/ed05/exclusive-19734683/ed05-exclusive-vllm-measured-run.json`.
+Grace artifacts remain under `$SCRATCH/alems/artifacts/ed02/exact-head-462e904-job-19735149/`.
 
 ## Tests and evidence
 
-- Focused local exact-head rerun: 9 passed.
-- Broader ED-05 regression set: 67 passed, 5 subtests passed.
-- Setup check, focused compilation, and diff check passed.
-- GitHub Actions run `34558496017`: `handoff-and-plan` and `windows-ledger` passed at exact head.
-- Grace node `g041`, job `19734683`, exclusive whole-node: real vLLM 0.21.0 with Llama-3.1-8B-Instruct; NVML cumulative delta and 15 contained interval sum both `311649000 µJ`; all four socket-qualified package/DRAM RAPL domains had positive deltas.
+- Existing exact-head evidence: 104 broader ED-02 tests plus 5 subtests; 51 focused Grace adapter/executor tests; all four original exact-head CI jobs passed; real Ollama streaming on Grace A100 node `g069`, job `19735149`.
+- Replacement PR CI run `34676952425`: all four jobs passed, including Ubuntu and Windows adapter/executor fixtures.
+- Remote branch and GitHub PR head both resolve to `462e9044b9e0c88d015cc4153479404cb8fbf81b`.
 
 ## Open questions and disagreements
 
-None blocking bounded ED-05 review. Portable CI does not replace the recorded Grace hardware evidence.
+None for replacement housekeeping. Historical Anthropic/Gemini/LlamaCpp returned-error normalization remains outside ED-02.
 
 ## Next actions and handoff
 
-Stephen reviews Ready PR #27 and retains merge authority. No Copilot review was requested. ED-02 and ED-07 were untouched.
+Stephen performs human review of Ready PR #32 and retains merge authority. PR #24 remains closed and unmerged.
