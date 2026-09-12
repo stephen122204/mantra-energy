@@ -47,4 +47,9 @@ INSERT OR IGNORE INTO energy_domains
 (26, 'CPU_GPU',     'SPBM cpu_gpu combined power rail, sub-rail of package boundary', 1,   1, 0, 'mW', 'cpu_gpu',         NULL),
 (27, 'VCORE',       'SPBM vcore voltage rail, sub-rail of package boundary',          1,   1, 0, 'mW', 'vcore',           NULL),
 (28, 'DC_INPUT',    'SPBM dc_input rail, outermost system measurement boundary',      NULL, 1, 0, 'mW', 'dc_input',        NULL),
-(29, 'PREREG',      'SPBM prereg power rail, sub-rail of package boundary',           1,   1, 0, 'mW', 'prereg',          NULL);
+(29, 'PREREG',      'SPBM prereg power rail, sub-rail of package boundary',           1,   1, 0, 'mW', 'prereg',          NULL),
+-- Multi-socket RAPL domains retain socket identity; no implicit cross-domain sum.
+(30, 'PACKAGE_SOCKET_0', 'Socket 0 package-wide Intel RAPL energy',                   NULL, 0, 1, 'uj', 'package-0',       NULL),
+(31, 'DRAM_SOCKET_0',    'Socket 0 DRAM Intel RAPL energy',                          30,   1, 1, 'uj', 'dram-0',          NULL),
+(32, 'PACKAGE_SOCKET_1', 'Socket 1 package-wide Intel RAPL energy',                   NULL, 0, 1, 'uj', 'package-1',       NULL),
+(33, 'DRAM_SOCKET_1',    'Socket 1 DRAM Intel RAPL energy',                          32,   1, 1, 'uj', 'dram-1',          NULL);
