@@ -415,10 +415,27 @@ class LinearExecutor:
             'request_start_ns':    phase_metrics.get('request_start_ns'),            
         }
         if error is not None:
+            observed_tokens = adapter_result.get('observed_tokens', {}) or {}
+            token_provenance = adapter_result.get('token_provenance', 'unknown')
+            partial_content = adapter_result.get('partial_content', '')
+
+            failure_diagnostics = {
+                'partial_content': partial_content,
+                'observed_tokens': observed_tokens,
+                'token_provenance': token_provenance,
+            }
+
+            interaction['error_message'] = (
+                f"{error} | adapter_diagnostics="
+                f"{json.dumps(failure_diagnostics, sort_keys=True)}"
+            )
+            interaction['prompt_tokens'] = observed_tokens.get('prompt')
+            interaction['completion_tokens'] = observed_tokens.get('completion')
+            interaction['total_tokens'] = observed_tokens.get('total')
             interaction.update({
-                'partial_content': adapter_result.get('partial_content', ''),
-                'observed_tokens': adapter_result.get('observed_tokens', {}),
-                'token_provenance': adapter_result.get('token_provenance', 'unknown'),
+                'partial_content': partial_content,
+                'observed_tokens': observed_tokens,
+                'token_provenance': token_provenance,
             })
         return interaction
 

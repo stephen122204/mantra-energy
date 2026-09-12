@@ -172,14 +172,17 @@ def test_existing_persistence_keeps_supported_failure_evidence():
 
     database.insert_llm_interaction(interaction)
     row = database.conn.execute(
-        """SELECT status, error_message, response, prompt_tokens, total_tokens,
+        """SELECT status, error_message, response, prompt_tokens, completion_tokens, total_tokens,
                   total_time_ms, local_compute_ms, bytes_recv_approx
            FROM llm_interactions"""
     ).fetchone()
 
-    assert row == (
-        "failure", "stream interrupted", "Error: stream interrupted",
-        None, None, 12.0, 10.0, 5,
-    )
+    assert row[0] == "failure"
+    assert row[2] == "Error: stream interrupted"
+    assert row[3:6] == (4, None, None)
+    assert row[6:] == (12.0, 10.0, 5)
+    assert "adapter_diagnostics=" in row[1]
+    assert '"partial_content": "partial"' in row[1]
+    assert '"token_provenance": "unknown"' in row[1]
     assert interaction["partial_content"] == "partial"
     assert interaction["observed_tokens"] == {"prompt": 4}
