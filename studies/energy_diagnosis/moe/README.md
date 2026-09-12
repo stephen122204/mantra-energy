@@ -129,7 +129,7 @@ goal end remains visible; this does not by itself prove a causal performance los
 
 The data task performs a 20,000-row join/filter/aggregation with an independent SQL
 reference. The repository task reads, repairs, compiles and runs visible checks,
-then verifies pure arithmetic code against 270 separate test cases. Its allowed
+then verifies pure arithmetic code against 90 separate test cases. Its allowed
 repair is one pure arithmetic function, not arbitrary repository development.
 Every goal starts from a hash-checked copy of its immutable input. Tools and final
 checks use the existing bounded process executor.
