@@ -164,8 +164,18 @@ class SamplesRepository:
                 mem_clock_mhz,
                 mem_used_mb,
                 temperature_c,
-                source
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                source,
+                measurement_kind,
+                monotonic_start_ns,
+                monotonic_end_ns,
+                power_start_mw,
+                power_end_mw,
+                coverage_complete,
+                unavailable_reason,
+                physical_refresh_note,
+                acquisition_start_ns,
+                acquisition_end_ns
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """
         rows = [
             (
@@ -185,6 +195,16 @@ class SamplesRepository:
                 s.mem_used_mb,
                 s.temperature_c,
                 s.source,
+                s.measurement_kind,
+                s.monotonic_start_ns,
+                s.monotonic_end_ns,
+                s.power_start_mw,
+                s.power_end_mw,
+                int(s.coverage_complete),
+                s.unavailable_reason,
+                s.physical_refresh_note,
+                s.acquisition_start_ns,
+                s.acquisition_end_ns,
             )
             for s in samples
         ]

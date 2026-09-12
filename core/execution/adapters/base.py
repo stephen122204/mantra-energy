@@ -29,6 +29,14 @@ import psutil
 logger = logging.getLogger(__name__)
 
 
+class AdapterCallError(RuntimeError):
+    """Adapter-reported failure with its structured diagnostics attached."""
+
+    def __init__(self, result: Dict[str, Any]):
+        self.result = result
+        super().__init__(result.get("error") or "adapter call failed")
+
+
 # =============================================================================
 # SHARED MIXIN
 # Provides helpers that both ABC families need — mixed in, not inherited alone.
@@ -218,6 +226,10 @@ class TextGenABC(BaseAdapterMixin, ABC):
               bytes_recv     int   — network bytes received (0 for local)
               tcp_retransmits int  — TCP retransmits (0 for local)
         """
+
+    def require_success(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate this adapter's result contract at the executor boundary."""
+        return result
 
     @abstractmethod
     def is_available(self) -> bool:

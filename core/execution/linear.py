@@ -287,6 +287,8 @@ class LinearExecutor:
         error = None
         try:
             result          = self._adapter.call(prompt, temp)
+            self._last_adapter_result = result
+            result          = self._adapter.require_success(result)
             content         = result["content"]
             tokens          = result["tokens"]
             api_latency_ms  = result["total_time_ms"]
@@ -294,13 +296,17 @@ class LinearExecutor:
             effective_kbps  = result["phase_metrics"]["app_throughput_kbps"]
             # preserve _current_llm_metrics shape — harness reads at line 165
             self._current_llm_metrics = result["phase_metrics"]
-            self._last_adapter_result = result
         except Exception as e:
-            error = str(e)
+            adapter_result = getattr(e, "result", {})
+            error = adapter_result.get("error") or str(e)
             logger.error("Adapter call failed: %s", e)
-            content, tokens, api_latency_ms = None, {}, 0
-            response_bytes, effective_kbps  = 0, 0
-            self._current_llm_metrics       = {}
+            content, tokens = None, {}
+            api_latency_ms = adapter_result.get("total_time_ms", 0)
+            response_bytes = 0
+            phase_metrics = adapter_result.get("phase_metrics", {})
+            effective_kbps = phase_metrics.get("app_throughput_kbps", 0)
+            self._current_llm_metrics = phase_metrics
+            self._last_adapter_result = adapter_result
  
         return content, tokens, api_latency_ms, prompt_bytes, response_bytes, effective_kbps, error
 
@@ -361,8 +367,10 @@ class LinearExecutor:
         """
         # Get phase metrics from the latest call
         phase_metrics = getattr(self, '_current_llm_metrics', {})
+        adapter_result = getattr(self, '_last_adapter_result', {})
+        structured_failure = error is not None and adapter_result.get('status') == 'error'
         
-        return {
+        interaction = {
             'step_index': 1,
             'workflow_type': 'linear',
             'status': status,
@@ -370,9 +378,15 @@ class LinearExecutor:
             'response': response if error is None else f"Error: {error}",
             'model_name': self.config.get('model_id'),
             'provider': self.provider,
-            'prompt_tokens': tokens.get('prompt', 0) if error is None else 0,
-            'completion_tokens': tokens.get('completion', 0) if error is None else 0,
-            'total_tokens': tokens.get('total', 0) if error is None else 0,
+            'prompt_tokens': tokens.get('prompt', 0) if error is None else (
+                None if structured_failure else 0
+            ),
+            'completion_tokens': tokens.get('completion', 0) if error is None else (
+                None if structured_failure else 0
+            ),
+            'total_tokens': tokens.get('total', 0) if error is None else (
+                None if structured_failure else 0
+            ),
             'api_latency_ms': api_latency_ms,
             'app_throughput_kbps': effective_kbps,
             'bytes_sent_approx': net_metrics['bytes_sent'],
@@ -382,6 +396,7 @@ class LinearExecutor:
             "total_bytes_recv": net_metrics['bytes_recv'],
             "total_tcp_retransmits": net_metrics['tcp_retransmits'],
             'error': error,
+            'error_message': error,
             'compute_time_ms': compute_time_ms,
             'local_compute_ms': phase_metrics.get('local_compute_ms', 0),
             # New phase metrics
@@ -399,6 +414,13 @@ class LinearExecutor:
             'last_token_time_ns':  phase_metrics.get('last_token_time_ns'),
             'request_start_ns':    phase_metrics.get('request_start_ns'),            
         }
+        if error is not None:
+            interaction.update({
+                'partial_content': adapter_result.get('partial_content', ''),
+                'observed_tokens': adapter_result.get('observed_tokens', {}),
+                'token_provenance': adapter_result.get('token_provenance', 'unknown'),
+            })
+        return interaction
 
     def _build_result(self, experiment_id: str, start_time: float, end_time: float,
                      status: str, response: str, tokens: Dict, error: Optional[str],
@@ -411,7 +433,7 @@ class LinearExecutor:
         
         This ensures consistent data structure regardless of success/failure.
         """
-        return {
+        result = {
             "experiment_id": experiment_id,
             "start_time": start_time,
             "end_time": end_time,
@@ -439,3 +461,11 @@ class LinearExecutor:
             "model": self.config.get('model_id'),
             "provider": self.provider
         }
+        if error is not None:
+            adapter_result = getattr(self, '_last_adapter_result', {})
+            result.update({
+                "partial_content": adapter_result.get("partial_content", ""),
+                "observed_tokens": adapter_result.get("observed_tokens", {}),
+                "token_provenance": adapter_result.get("token_provenance", "unknown"),
+            })
+        return result
