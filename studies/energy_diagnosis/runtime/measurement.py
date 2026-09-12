@@ -8,6 +8,7 @@ latency cannot silently enlarge the measured workload window.
 from __future__ import annotations
 
 import time
+import math
 import uuid
 import dataclasses
 import json
@@ -136,6 +137,11 @@ class MeasurementSession:
         self._state = "goal_started"
         return self.goal_start_ns
 
+    def sample_goal(self) -> None:
+        if self._state != "goal_started":
+            raise RuntimeError("goal is not active")
+        self._read_endpoint(f"goal_sample_{len(self._raw)}")
+
     def end_goal(self) -> int:
         if self._state != "goal_started":
             raise RuntimeError("goal is not active")
@@ -183,6 +189,7 @@ class MeasurementSession:
             values = {}
             error = f"read failed: {type(exc).__name__}: {exc}"
         acquired_end = self._monotonic_ns()
+        values = {k: v if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0 else None for k, v in values.items()}
         self._raw[label] = dict(values)
         self._brackets[label] = (acquired_start, acquired_end)
 
@@ -213,7 +220,17 @@ class MeasurementSession:
         for domain in self.schema.domains:
             raw_start = start.get(domain.native_key)
             raw_end = end.get(domain.native_key)
-            status, delta, reason = self._counter_delta(domain, raw_start, raw_end)
+            labels = [label for label in self._raw if label == "goal_start" or label.startswith("goal_sample_") or label == "goal_end"]
+            intervals = [self._counter_delta(domain, self._raw[a].get(domain.native_key), self._raw[b].get(domain.native_key))
+                         for a, b in zip(labels, labels[1:])]
+            invalid = next((item for item in intervals if item[1] is None), None)
+            if invalid:
+                status, delta, reason = invalid
+            else:
+                delta = sum(item[1] for item in intervals)
+                status = "wrapped" if any(item[0] == "wrapped" for item in intervals) else "ok"
+                reason = ""
+
             transitions.append(CounterTransition(
                 domain_id=domain.canonical_name,
                 raw_start=raw_start,
@@ -253,7 +270,7 @@ class MeasurementSession:
             return "missing", None, "goal endpoint reading is missing"
         if end >= start:
             return "ok", end - start, ""
-        counter_max = 1 << self.schema.counter_width_bits
+        counter_max = domain.max_energy_range_uj or (1 << self.schema.counter_width_bits)
         # A high-to-low crossing is consistent with a single wrap. Other
         # backwards jumps are conservatively treated as a reset.
         if start >= counter_max * 0.75 and end <= counter_max * 0.25:

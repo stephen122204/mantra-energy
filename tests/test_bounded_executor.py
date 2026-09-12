@@ -21,6 +21,12 @@ class TimedTool:
         self.max_active = 0
         self.lock = threading.Lock()
 
+    def __getstate__(self):
+        return {"delay": self.delay}
+
+    def __setstate__(self, state):
+        self.__init__(state["delay"])
+
     def execute(self, value, workers=1):
         with self.lock:
             self.active += 1
@@ -37,6 +43,12 @@ class WorkerProbe:
     def __init__(self):
         self.thread_names = set()
         self.lock = threading.Lock()
+
+    def __getstate__(self):
+        return {}
+
+    def __setstate__(self, state):
+        self.__init__()
 
     def execute(self, repetitions, workers=1):
         def work(_):
@@ -69,9 +81,10 @@ def test_ready_calls_are_bounded_and_dependency_starts_after_parent():
     assert result["south"].result == {"value": "south", "workers": 1}
     assert result["join"].status == "completed"
     assert executor.max_observed_concurrency <= 2
-    assert tool.max_active <= 2
+    assert executor.max_observed_concurrency == 2
     starts = {event["call_id"]: event["monotonic_ns"] for event in events if event["event"] == "start"}
-    assert starts["join"] >= max(starts["north"], starts["south"])
+    ends = {event["call_id"]: event["monotonic_ns"] for event in events if event["event"] == "end"}
+    assert starts["join"] >= max(ends["north"], ends["south"])
 
 
 def test_worker_setting_changes_real_worker_execution():

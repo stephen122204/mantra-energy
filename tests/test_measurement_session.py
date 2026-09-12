@@ -190,3 +190,14 @@ class CapabilityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_domain_specific_wrap_range_and_nonfinite_endpoint():
+    from dataclasses import replace
+    schema = replace(SCHEMA_RAPL_X86, domains=(replace(SCHEMA_RAPL_X86.domains[0], max_energy_range_uj=1000),))
+    session = MeasurementSession(Reader([reading(1), reading(950), reading(50)], schema=schema), environment=ENVIRONMENT, monotonic_ns=Clock())
+    session.start_session(); session.start_goal(); session.end_goal()
+    assert session.finish_session().measurements[0].energy_j == 100 / 1_000_000
+    session = MeasurementSession(Reader([reading(1), reading(2), reading(float('nan'))]), environment=ENVIRONMENT, monotonic_ns=Clock())
+    session.start_session(); session.start_goal(); session.end_goal()
+    assert session.finish_session().measurements[0].energy_j is None

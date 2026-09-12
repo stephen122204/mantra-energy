@@ -29,12 +29,13 @@ def test_live_trace_records_hashes_dependencies_events_and_controls():
     ], {"workers": 1})
 
     assert trace.mode == "live"
-    assert trace.trace_version == "trace-v1"
+    assert trace.trace_version == "trace-v2"
     assert len(trace.trace_hash) == 64
     assert all(call.output_hash for call in trace.calls)
     assert any(event["event"] == "ready" for event in trace.events)
     assert trace.calls[1].inputs == {"plan": {"plan": "go!"}}
-    assert calls == [("model", {"prompt": "go"}), ("tool", {"plan": {"plan": "go!"}})]
+    assert calls == [("model", {"prompt": "go"})]
+    assert trace.calls[1].output == {"length": 1}  # tool executes in an isolated process
 
 
 def test_conditional_replay_executes_runners_again_and_is_labeled():
@@ -64,6 +65,9 @@ def test_replay_records_divergent_fresh_outputs():
 
     assert replay.calls[0].output != reference.calls[0].output
     assert replay.calls[0].output_hash != reference.calls[0].output_hash
+    assert replay.divergent_call_ids == ("model-1",)
+    assert replay.reference_trace_hash == reference.trace_hash
+    assert replay.fidelity_status == "divergent"
 
 
 def test_dependencies_and_missing_runners_are_rejected():

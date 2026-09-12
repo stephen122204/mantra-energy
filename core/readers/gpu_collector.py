@@ -218,7 +218,8 @@ class NVMLBackend:
         'NVML power telemetry may refresh or average more slowly than polling'
     )
  
-    def __init__(self):
+    def __init__(self, gpu_index=0):
+        self._gpu_index = gpu_index
         self._handle = None
         self._gpu_count = 0
         self._has_energy_counter = False
@@ -236,7 +237,7 @@ class NVMLBackend:
             self._gpu_count = pynvml.nvmlDeviceGetCount()
             if self._gpu_count == 0:
                 return
-            self._handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            self._handle = pynvml.nvmlDeviceGetHandleByIndex(self._gpu_index)
             # Probe cumulative energy counter — not available on all drivers
             try:
                 pynvml.nvmlDeviceGetTotalEnergyConsumption(self._handle)
