@@ -33,3 +33,9 @@ references, and eligible controls. `pilot_tasks.py` recomputes data totals and
 repository file manifests from the assets before comparing structured answers.
 These fixtures establish software correctness and control eligibility only;
 they do not establish representative energy work or Grace validity.
+
+`trace_replay.py` records model/tool inputs, dependency links, controls,
+monotonic lifecycle events, outputs and hashes. Conditional replay invokes the
+provided model and tool runners again and labels the resulting trace explicitly;
+it is not saved-output playback. Live execution and replay divergence remain
+software evidence until tested with actual inference and tools.
