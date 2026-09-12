@@ -306,9 +306,13 @@ class NativeDevice:
         inputs = self.tokenizer.encode(prompt, return_tensors="pt").to("cuda:0")
         if inputs.shape[1] + arg["max_tokens"] > self.max_context:
             raise ValueError("prompt plus output exceeds fixed context budget")
-        with self.torch.inference_mode():
+        # Native expert workers update output tensors from separate threads.
+        # InferenceMode is thread-local and makes those cross-thread writes fail.
+        # no_grad preserves gradient-free generation with ordinary tensors.
+        with self.torch.no_grad():
             result = self.model.generate(
                 inputs,
+                attention_mask=self.torch.ones_like(inputs),
                 do_sample=False,
                 max_new_tokens=arg["max_tokens"],
                 pad_token_id=self.tokenizer.eos_token_id,
