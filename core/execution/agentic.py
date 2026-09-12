@@ -1073,6 +1073,7 @@ You can use tools like calculator or web search if needed.
  
         try:
             result              = self._adapter.call(prompt, temp)
+            result              = self._adapter.require_success(result)
             content             = result["content"]
             tokens              = result["tokens"]
             total_time_ms       = result["total_time_ms"]
@@ -1143,54 +1144,66 @@ You can use tools like calculator or web search if needed.
  
         except Exception as e:
             logger.error("Adapter call failed in agentic: %s", e)
+            adapter_result = getattr(e, "result", {})
+            error_message = adapter_result.get("error") or str(e)
+            phase_metrics = adapter_result.get("phase_metrics", {})
+            structured_failure = bool(adapter_result)
             if not hasattr(self, "pending_interactions"):
                 self.pending_interactions = []
             interaction = {
                 "step_index":           call_counter if call_counter is not None else self._call_count,
                 "workflow_type":        "agentic",
                 "prompt":               prompt,
-                "response":             f"ERROR: {e}",
+                "response":             f"ERROR: {error_message}",
                 "model_name":           self.config.get("model_id", "unknown"),
                 "provider":             self.provider,
-                "prompt_tokens":        0,
-                "completion_tokens":    0,
-                "total_tokens":         0,
-                "total_time_ms":        0,
-                "preprocess_ms":        0,
-                "non_local_ms":         0,
-                "local_compute_ms":     0,
-                "postprocess_ms":       0,
-                "app_throughput_kbps":  0,
-                "bytes_sent_approx":    0,
-                "bytes_recv_approx":    0,
-                "tcp_retransmits":      0,
-                "cpu_percent_during_wait": 0,
+                "prompt_tokens":        None if structured_failure else 0,
+                "completion_tokens":    None if structured_failure else 0,
+                "total_tokens":         None if structured_failure else 0,
+                "total_time_ms":        adapter_result.get("total_time_ms", 0),
+                "preprocess_ms":        phase_metrics.get("preprocess_ms", 0),
+                "non_local_ms":         phase_metrics.get("non_local_ms", 0),
+                "local_compute_ms":     phase_metrics.get("local_compute_ms", 0),
+                "postprocess_ms":       phase_metrics.get("postprocess_ms", 0),
+                "app_throughput_kbps":  phase_metrics.get("app_throughput_kbps", 0),
+                "bytes_sent_approx":    adapter_result.get("bytes_sent", 0),
+                "bytes_recv_approx":    adapter_result.get("bytes_recv", 0),
+                "tcp_retransmits":      adapter_result.get("tcp_retransmits", 0),
+                "cpu_percent_during_wait": phase_metrics.get("cpu_percent_during_wait", 0),
                 # Chunk 4: no streaming data on error path
-                "ttft_ms":             None,
-                "tpot_ms":             None,
-                "token_throughput":    None,
-                "streaming_enabled":   0,
-                "first_token_time_ns": None,
-                "last_token_time_ns":  None,
-                "request_start_ns":    None,
-                "error_message":        str(e),
-                "error_type":           _detect_error_type(str(e)),
+                "ttft_ms":             phase_metrics.get("ttft_ms"),
+                "tpot_ms":             phase_metrics.get("tpot_ms"),
+                "token_throughput":    phase_metrics.get("token_throughput"),
+                "streaming_enabled":   phase_metrics.get("streaming_enabled", 0),
+                "first_token_time_ns": phase_metrics.get("first_token_time_ns"),
+                "last_token_time_ns":  phase_metrics.get("last_token_time_ns"),
+                "request_start_ns":    phase_metrics.get("request_start_ns"),
+                "partial_content":      adapter_result.get("partial_content", ""),
+                "observed_tokens":      adapter_result.get("observed_tokens", {}),
+                "token_provenance":     adapter_result.get("token_provenance", "unknown"),
+                "error_message":        error_message,
+                "error_type":           _detect_error_type(error_message),
                 "status":               "failure",
             }
             self.pending_interactions.append(interaction)
             return {
-                "content":              f"Error: {e}",
+                "status":               "error",
+                "error":                error_message,
+                "content":              f"Error: {error_message}",
                 "tokens":               {},
-                "total_time_ms":        0,
-                "preprocess_ms":        0,
-                "non_local_ms":         0,
-                "local_compute_ms":     0,
-                "postprocess_ms":       0,
-                "app_throughput_kbps":  0,
-                "bytes_sent_approx":    0,
-                "bytes_recv_approx":    0,
-                "tcp_retransmits":      0,
-                "cpu_percent_during_wait": 0,
+                "token_provenance":     adapter_result.get("token_provenance", "unknown"),
+                "partial_content":      adapter_result.get("partial_content", ""),
+                "observed_tokens":      adapter_result.get("observed_tokens", {}),
+                "total_time_ms":        adapter_result.get("total_time_ms", 0),
+                "preprocess_ms":        phase_metrics.get("preprocess_ms", 0),
+                "non_local_ms":         phase_metrics.get("non_local_ms", 0),
+                "local_compute_ms":     phase_metrics.get("local_compute_ms", 0),
+                "postprocess_ms":       phase_metrics.get("postprocess_ms", 0),
+                "app_throughput_kbps":  phase_metrics.get("app_throughput_kbps", 0),
+                "bytes_sent_approx":    adapter_result.get("bytes_sent", 0),
+                "bytes_recv_approx":    adapter_result.get("bytes_recv", 0),
+                "tcp_retransmits":      adapter_result.get("tcp_retransmits", 0),
+                "cpu_percent_during_wait": phase_metrics.get("cpu_percent_during_wait", 0),
                 "pending_interactions": self.pending_interactions.copy(),
             }
 
