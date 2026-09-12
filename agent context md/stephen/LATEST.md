@@ -1,35 +1,26 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260912T2225Z-planned-admission.md)
+[Immutable turn record](turns/20260912T2333Z-initialized-model-checkpoints.md)
 
-# Separate expert planning and admission — Stephen
+# Initialized-model counter checkpoint implementation
 
 ## Task and current understanding
-
-Continue the runtime integration in PR #34 (https://github.com/stephen122204/alems-energy-diagnosis/pull/34). Fresh clone at a3b8dc49e78298e857619039b7e49505121fc285; integration inspected at d7829edb63f131c02d6659e2ae55fc51d62c1347. Current runtime commit 847b384449aa484e4e0b4f55c8b1b0dfab37a2ce; test-only head 1325cb9. No merge or history rewrite.
+PR34 now adds real counter checkpoints around initialized-model task execution while retaining complete outer goal accounting. Branch stephen/moe-runtime-validation, implementation e0155e0. PR remains draft and unmerged. This handoff covers implementation only.
 
 ## Ideas and hypotheses
-
-Expert enumeration/selection should have a separately visible interval rather than delaying transfer admission after the tool notification. Planning itself must not transfer weights, and its cost remains inside the goal.
+Counter acquisition must be serialized with periodic sampling. A teardown callback may join a sampling thread, so teardown must not hold the measurement lock. A neighboring JSON file without a ledger registration is not measurement evidence.
 
 ## Decisions and rationale
-
-Use one immutable pending plan tied to goal, request, generation, pause index and policy. Reject stale or duplicate plans and intervening model requests. Discard an unused plan at goal end. The tool child continues independently of parent-side admission.
+Use explicit immutable checkpoints, all intervening counter readings, per-domain validity, and the existing raw acquisition brackets. Split task-work drain from model release. Keep fresh-process cache semantics and the outer deadline explicit; do not claim persistent serving. Preserve the default non-MoE executor lifecycle. Bump execution protocol to planned-body-initialized-window-v1 and require a fresh output directory.
 
 ## Changes and artifacts
-
-Added plan_pause() and explicit planning/dispatch events. GoalExecutor plans before launching tools and admits on body_start. Demand retains its no-enumeration/no-empty-admission path. Reset request identity at each new goal. Protocol is planned-tool-body-admission-v1 and is included in the manifest/fingerprint, so old output directories cannot silently resume. A test-only follow-up publishes PID readiness files atomically to eliminate an observed Windows empty-file race.
+MeasurementSession and NodeMeasurement expose checkpoint and measure_between. Lifecycle exposes idempotent settle_work and rejects further generation/admission after settling. The MoE executor measures task setup, planning, inference, tools and verification before model release, registering initialized-model-window.json. Summary output reports initialized, before and after energy only from ledger-registered, hash-verified artifacts. Missing values remain unavailable; failed attempts remain in totals; unconfirmed final ownership invalidates coverage. README documents exact scope.
 
 ## Tests and evidence
-
-186 runtime tests plus five subtests and 20 MoE pipeline tests passed locally. All eight CI checks pass at 1325cb9 on Windows/Linux, including native C++ lifecycle coverage on Linux. Tests cover no transfer during planning, no repeated snapshot at admission, request/goal isolation, unused-plan cleanup, planning inside goal timing and actual tool start ordering.
-
-Two bounded native data-task executions at exact 847b384 on the assigned liqid05 A100 completed correctly, exited 0 and had six independently reconciled CPU-package/GPU-board totals. Planning/dispatch/body/transfer events were checked; GPU compute-process absence was confirmed afterward. Artifact copies are private and their archive hashes match the remote source. This is bounded qualification, not an expanded campaign or performance claim.
+190 runtime tests plus five subtests and 20 MoE pipeline tests pass locally. Setup checker and diff checks pass. Tests exercise costly load/release, task/verifier containment, energy partition, counter wraps, missing readings, concurrent samples, teardown locking, failure cleanup, zero-success accounting, and unregistered artifact rejection. GitHub checks at the new head are pending when this note is prepared. Earlier head 1325cb9 passed all eight jobs. Native runtime 847b384 was qualified with two completed data executions and independently replayed counters; e0155e0 has not run on hardware. Do not transfer old hardware evidence to the new checkpoint protocol.
 
 ## Open questions and disagreements
-
-PR #34 remains draft. Initialized-model measurement boundaries, broader output fidelity and additional workload qualification remain incomplete. Component fixture success is not final hardware/data acceptance.
+Native checkpoint synchronization, acquisition timing, failure cleanup and counter replay still need a bounded hardware qualification. Full model fidelity and task-contract qualification remain open. No persistent model/cache reuse is implemented. CPU package plus GPU board counters are not whole-node measurements.
 
 ## Next actions and handoff
-
-Add explicitly sampled initialized-model boundaries while retaining outer startup/release costs and complete failure accounting. Preserve independent verification, confirmed idle/drain state, raw counter brackets, and versioned source/configuration. Keep old qualification packets unchanged. Research plans and interpretation remain private.
+Check current PR34 CI. On the next assigned hardware session inventory the actual node, verify sensor permissions and isolation, deploy the exact tested revision and run the bounded qualification with a fresh output directory. Independently replay outer and initialized portions, verify model/tool/verifier containment and final worker termination. Preserve failed records. Do not launch or extend a hardware allocation without the assigned session and budget. Stephen retains merge authority.
