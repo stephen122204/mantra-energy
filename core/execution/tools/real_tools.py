@@ -14,17 +14,41 @@ All tools return ToolResult — never raise outside their own _safe wrappers.
 import ast
 import hashlib
 import logging
-import resource
 import sqlite3
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-import requests
-import sqlparse
-import sympy
+try:
+    import requests
+except ImportError:
+    requests = None
+try:
+    import sqlparse
+except ImportError:
+    sqlparse = None
+try:
+    import sympy
+except ImportError:
+    sympy = None
+
+try:
+    import resource
+except ImportError:  # Windows has no POSIX resource module.
+    class _ResourceFallback:
+        RUSAGE_SELF = 0
+
+        @staticmethod
+        def getrusage(_who):
+            usage = type("Usage", (), {})()
+            usage.ru_utime = time.process_time()
+            usage.ru_stime = 0.0
+            return usage
+
+    resource = _ResourceFallback()
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +210,8 @@ class DatabaseQueryTool:
         Rejects non-SELECT, dangerous statements, non-whitelisted tables.
         Uses sqlparse for AST inspection — not string matching.
         """
+        if sqlparse is None:
+            return False, "sqlparse dependency is unavailable"
         if not query or not query.strip():
             return False, "Empty query"
 
@@ -479,7 +505,7 @@ class CodeExecutorTool:
 
         try:
             proc = subprocess.run(
-                ["python3", "-c", code],
+                [sys.executable, "-c", code],
                 capture_output=True,
                 text=True,
                 timeout=self.TIMEOUT_SECONDS,
@@ -567,6 +593,13 @@ class CalculatorTool:
         before = _get_resource_snapshot()
         input_hash = _hash(expression)
 
+        if sympy is None:
+            return ToolResult(
+                success=False, result=None, tool_name="calculator",
+                duration_ns=int((time.time() - start) * 1e9),
+                input_payload_hash=input_hash,
+                error="sympy dependency is unavailable",
+            )
         try:
             # sympify is safe — does not execute arbitrary Python
             expr = sympy.sympify(expression)
