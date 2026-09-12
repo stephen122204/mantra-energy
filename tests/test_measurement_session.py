@@ -197,7 +197,12 @@ def test_domain_specific_wrap_range_and_nonfinite_endpoint():
     schema = replace(SCHEMA_RAPL_X86, domains=(replace(SCHEMA_RAPL_X86.domains[0], max_energy_range_uj=1000),))
     session = MeasurementSession(Reader([reading(1), reading(950), reading(50)], schema=schema), environment=ENVIRONMENT, monotonic_ns=Clock())
     session.start_session(); session.start_goal(); session.end_goal()
-    assert session.finish_session().measurements[0].energy_j == 100 / 1_000_000
+    artifacts = session.finish_session()
+    assert artifacts.measurements[0].energy_j == 100 / 1_000_000
+    payload = json.loads(json.dumps(artifacts.to_dict()))
+    assert payload["measurement_schema"]["domains"][0]["max_energy_range_uj"] == 1000
+    report = probe_capabilities(Reader([reading(1)], schema=schema), environment=ENVIRONMENT)
+    assert report.to_dict()["measurement_schema"]["domains"][0]["max_energy_range_uj"] == 1000
     session = MeasurementSession(Reader([reading(1), reading(2), reading(float('nan'))]), environment=ENVIRONMENT, monotonic_ns=Clock())
     session.start_session(); session.start_goal(); session.end_goal()
     assert session.finish_session().measurements[0].energy_j is None
