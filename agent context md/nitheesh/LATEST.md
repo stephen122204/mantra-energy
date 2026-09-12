@@ -1,27 +1,26 @@
 # Latest published context: nitheesh
 
-[Immutable turn record](turns/20260910T165303Z-ni2-pr25-delivery.md)
+[Immutable turn record](turns/20260910T171443Z-ni4-selector-controls.md)
 
-## Current milestone
+## Current milestone status
 
-NI1 is merged. NI2's fixture-ready scheduler/runner is in draft PR [#25](https://github.com/stephen122204/alems-energy-diagnosis/pull/25), targeting `research/energy-diagnosis` from `nitheesh/ni2-bounded-runner`. The tested implementation commit is `aa94c61`; shared contract-v0.1 is unchanged.
+- NI1 / ED-04: accepted and merged in PR #22.
+- NI2 / ED-04/09: fixture-tested in draft PR [#25](https://github.com/stephen122204/alems-energy-diagnosis/pull/25), implementation commit `aa94c61`; local and PR checks passed.
+- NI3 / ED-07/09: blocked on accepted runtime/collector/executor/tasks, pilot assets, an assigned Grace session/budget, and Stephen's pilot approval. No hardware run occurred.
+- NI4 / ED-10/11 support: fixture-tested in draft PR [#26](https://github.com/stephen122204/alems-energy-diagnosis/pull/26), implementation commit `78d055c`; local and PR checks passed.
+- NI5: conditional on validated pilot evidence and an approved frozen evaluation.
 
-The runner provides deterministic seeded order within declared blocks, global actual attempt order, requested/observed execution metadata, durable partial checkpoints, one-goal cleanup and same-clock overlap gates, known/unknown interruption handling without fabricated time, complete deterministic exports, and per-attempt analysis eligibility.
+## NI4 behavior
 
-## Evidence and limits
+The injected selector receives only eligible candidates, allowlisted profiling features, budget status, a profile query capability, and recommendation/abstention seal methods. Every query attempt retains time/energy cost, failure, and explicit unavailable-energy semantics. Undeclared feature values are withheld and recorded as a failed cost-bearing query.
 
-- Local NI2/ledger/contracts/workload fixtures: 44 passed, 5 subtests passed.
-- Python compilation and UTF-8 setup validation: passed.
-- PR `handoff-and-plan` and `windows-ledger` checks: passed.
-- Evidence is fixture-only. No model, Grace, hardware, sensor, pilot, or campaign execution occurred.
+Decisions are immutable and content-hashed. Reference outcomes cannot be loaded/exported before sealing and remain absent from selection exports afterward. Live evaluation accepts only the exact sealed recommendation; abstention has no live setting. This is a Python capability boundary, not an OS sandbox or a final scientific method.
 
-## Dependencies and next actions
+## Evidence and dependencies
 
-- Keep PR #25 draft until Stephen reviews the callback/protocol boundary; Stephen retains merge authority.
-- Aldric's final executor mapping and Stephen's frozen schedule fields remain integration dependencies.
-- A permanently unknown terminal endpoint still needs a shared representation; PR #25 preserves it as an unresolved checkpoint without inventing time.
-- NI3 remains gated by accepted producers, pilot assets, an assigned Grace session/budget, and approval.
-- NI4 dummy-selector budget/reference-isolation controls are the next independent milestone and must use a separate integration-based branch/PR.
+NI4 + ledger + contract + workload fixtures: 45 passed, 5 subtests passed. Compilation, UTF-8 setup validation, and PR #26's `handoff-and-plan`/`windows-ledger` checks passed. Evidence is fixture-only: no real selector, model, held-out evaluation, Grace job, hardware energy, pilot, or campaign ran.
 
-The existing integration checkout remains untouched. This context is on the feature branch for review because the user's branch-only restriction forbids direct context publication to integration.
+Stephen must freeze selector semantics, allowed observables, budgets, lineages, and process/storage isolation. Stephen retains merge authority. NI2 still needs eventual Aldric executor/protocol integration. NI3 remains externally blocked; NI5 remains conditional.
+
+The integration checkout remains untouched. This context is on the NI4 feature branch for review because the user's branch-only restriction forbids direct context publication to integration.
 
