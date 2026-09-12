@@ -44,10 +44,12 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
     assert first["executed"] == 8
     assert first["validation"]["valid"]
     assert all(
-        x["startup_seconds"] > 0 and x["resume_barrier_seconds"] > 0
+        x["startup_seconds"] > 0 and x["resume_barrier_seconds"] >= 0
         for x in first["summary"]["settings"].values()
     )
     assert all(x["successful"] == 2 for x in first["summary"]["settings"].values())
+    barrier_totals = Counter()
+    barrier_counts = Counter()
     for path in (output / "goals").glob("*/expert-events.json"):
         events = json.loads(path.read_text())
         policy = events[0]["policy"]["name"]
@@ -64,6 +66,19 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         # Fixture sensor counter deltas are independent of transfer success.
         measurement = json.loads(path.with_name("measurement.json").read_text())
         record = json.loads(path.with_name("record.json").read_text())
+        # Some Windows monotonic clocks resolve a short boundary to the same
+        # tick. Check ordering and independent raw arithmetic, not duration > 0.
+        finished = {
+            e["pause_id"]: e["monotonic_ns"]
+            for e in events
+            if e["event"] == "tools_finished"
+        }
+        for event in events:
+            if event["event"] == "model_resume":
+                delta = event["monotonic_ns"] - finished[event["pause_id"]]
+                assert delta >= 0
+                barrier_totals[record["setting_id"]] += delta
+                barrier_counts[record["setting_id"]] += 1
         for m in record["measurements"]:
             domain = [
                 s for s in measurement["samples"] if s["domain_id"] == m["domain_id"]
@@ -71,6 +86,11 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
             begin = next(s["value"] for s in domain if ":goal_start:" in s["sample_id"])
             end = next(s["value"] for s in domain if ":goal_end:" in s["sample_id"])
             assert m["energy_j"] == pytest.approx((end - begin) / 1e6)
+    for setting, row in first["summary"]["settings"].items():
+        assert barrier_counts[setting] == 4  # One data tool and three repair tools.
+        assert row["resume_barrier_seconds"] == pytest.approx(
+            barrier_totals[setting] / 1e9
+        )
     again = command(
         output, "--policies", "demand,history,fixed,bounded", "--max-runs", "8"
     )
