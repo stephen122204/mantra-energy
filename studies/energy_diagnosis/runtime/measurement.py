@@ -189,7 +189,9 @@ class MeasurementSession:
             values = {}
             error = f"read failed: {type(exc).__name__}: {exc}"
         acquired_end = self._monotonic_ns()
-        values = {k: v if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0 else None for k, v in values.items()}
+        invalid_values = {k: repr(v) for k, v in values.items() if v is not None and
+                          (not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) or v < 0)}
+        values = {k: None if k in invalid_values else v for k, v in values.items()}
         self._raw[label] = dict(values)
         self._brackets[label] = (acquired_start, acquired_end)
 
@@ -198,6 +200,9 @@ class MeasurementSession:
             value = values.get(domain.native_key)
             status = "ok" if value is not None and not error else "missing"
             reason = "" if status == "ok" else (error or "reader returned no value")
+            if domain.native_key in invalid_values:
+                status = "invalid"
+                reason = f"invalid raw reading: {invalid_values[domain.native_key]}"
             self._samples.append(
                 SensorSample(
                     sample_id=f"{self.session_id}:{label}:{self._sample_number}",

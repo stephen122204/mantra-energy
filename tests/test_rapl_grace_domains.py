@@ -9,6 +9,14 @@ from scripts.detect_hardware import rapl_domain_key
 from tests.test_energy_collector import MockAdapter, MockReader
 
 
+class FixtureReader(RAPLReader):
+    @staticmethod
+    def _socket_id_from_path(path):
+        # Windows cannot create ':' names. Decode only the fixture's portable
+        # path spelling, then exercise the unchanged production parser.
+        return RAPLReader._socket_id_from_path(path.replace("__colon__", ":").replace("\\", "/"))
+
+
 class TestGraceRaplDomains(unittest.TestCase):
     def test_detector_keys_repeated_dram_by_socket(self):
         self.assertEqual(rapl_domain_key("/power/intel-rapl:0", "package-0"),
@@ -18,8 +26,12 @@ class TestGraceRaplDomains(unittest.TestCase):
         self.assertEqual(rapl_domain_key("/power/intel-rapl:1:0", "dram"),
                          "dram-1")
 
+    def test_native_sysfs_path_decoding(self):
+        self.assertEqual(RAPLReader._socket_id_from_path("/sys/class/powercap/intel-rapl:1/intel-rapl:1:0/energy_uj"), 1)
+        self.assertEqual(RAPLReader._socket_id_from_path("/sys/class/powercap/intel-rapl:0/energy_uj"), 0)
+
     def _zone(self, root, zone, name, energy, maximum):
-        directory = root / zone
+        directory = root / zone.replace(":", "__colon__")
         directory.mkdir(parents=True)
         (directory / "name").write_text(name, encoding="utf-8")
         (directory / "energy_uj").write_text(str(energy), encoding="utf-8")
@@ -34,7 +46,7 @@ class TestGraceRaplDomains(unittest.TestCase):
             "package-1": self._zone(root, "intel-rapl:1", "package-1", 30, 2000),
             "dram-1": self._zone(root, "intel-rapl:1/intel-rapl:1:0", "dram", 40, 400),
         }
-        return RAPLReader({"paths": paths})
+        return FixtureReader({"paths": paths})
 
     def test_dual_socket_schema_preserves_path_name_parent_and_range(self):
         with tempfile.TemporaryDirectory() as tmp:
