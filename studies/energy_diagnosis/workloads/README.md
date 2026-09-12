@@ -25,3 +25,11 @@ executor records configured and observed workers without treating a generic
 environment variable as a control. The adapter tests use the existing
 `CodeExecutorTool` for real computation and a deterministic worker probe for
 control-effect evidence.
+
+AL3 pilot assets are in `pilot_assets/`: two synthetic data goals and two
+synthetic repository snapshots. They are CC0 fixtures created for this study;
+`manifest.json` pins canonical hashes, family/lineage identity, expected
+references, and eligible controls. `pilot_tasks.py` recomputes data totals and
+repository file manifests from the assets before comparing structured answers.
+These fixtures establish software correctness and control eligibility only;
+they do not establish representative energy work or Grace validity.
