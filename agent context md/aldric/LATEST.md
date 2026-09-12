@@ -1,37 +1,36 @@
 # Latest published context: aldric
 
-[Immutable turn record](turns/20260912T004900Z-ed08.md)
+[Immutable turn record](turns/20260912T011000Z-ed06-replay.md)
 
 ## Task and current understanding
 
-Aldric's complete role is AL1 first verifier, AL2 single-goal controls, AL3 four pilot tasks, AL4 trace/replay, AL5 Grace integration, and conditional AL6 expansion. Integration was fetched at `ad334e6`. AL1 is already merged in PR #16. AL2 was implemented separately at commit `da6e6c2` on `aldric/ed-06-executor` with 7 passing focused tests. This turn implements the next independent software milestone AL3 on `aldric/ed-08-pilot-tasks`.
+Aldric's full role covers AL1 verifier, AL2 executor/controls, AL3 four pilot tasks, AL4 trace/replay, AL5 Grace integration, and conditional AL6 expansion. This turn implements AL4 on `aldric/ed-06-trace-replay`, based on fetched integration `ad334e6`. AL2 is separately pushed at `da6e6c2`; AL3 is separately pushed at `99f9156`.
 
 ## Ideas and hypotheses
 
-A useful pilot suite needs different resource/dependency behavior rather than four variants of one template. Two synthetic CSV goals support aggregate computation and worker-eligible tool work; two synthetic repository snapshots support file inventory/check evidence and concurrency-only eligibility. Independent verification must read the immutable assets rather than trust manifest expected values or agent output.
+Replay is only useful for conditional diagnosis if it re-executes model and tool work rather than returning saved outputs. A compact trace boundary can make this testable locally: record ready/start/end, dependencies, inputs, controls and output hashes; run the same callables again in conditional mode; expose output divergence explicitly.
 
 ## Decisions and rationale
 
-Added four unique tasks under two families with four distinct lineage labels. `pilot_tasks.py` validates manifest identity, containment, canonical file/tree hashes and recomputes CSV totals or sorted repository file manifests before checking structured answers. Data tasks declare `tool_concurrency` and `tool_workers`; repository tasks declare only `tool_concurrency` because their fixed file inventory does not expose a meaningful worker setting. All assets are synthetic and CC0, with manifest hashes pinned.
+Added `trace_replay.py` with `TraceCall`, `ExecutionTrace`, `TraceRecorder` and `TraceExecutor`. The executor has visibly distinct `live` and `conditional_replay` modes, resolves dependency result references only after parent completion, invokes supplied model/tool runners in both modes, records monotonic lifecycle events, captures controls, and hashes outputs. Conditional replay retains the reference call structure as declared conditioning but does not use reference outputs as execution results.
 
 ## Changes and artifacts
 
-AL3 commit `99f9156` is pushed to `origin/aldric/ed-08-pilot-tasks`; review URL: https://github.com/stephen122204/alems-energy-diagnosis/pull/new/aldric/ed-08-pilot-tasks. Added `pilot_tasks.py`, four immutable asset groups, manifest/license, focused tests, and workload documentation. No shared schema or ED-01 interface was changed. The repository family remains deliberately small and fixture-sized; it is software acceptance evidence, not representative energy evidence.
+Commit `b59a2c6` is pushed to `origin/aldric/ed-06-trace-replay`; review URL: https://github.com/stephen122204/alems-energy-diagnosis/pull/new/aldric/ed-06-trace-replay. Added the trace/replay module, four focused tests, and workload documentation. No shared schema or ED-01 contract was changed.
 
 ## Tests and evidence
 
-- `python -m pytest -q tests/test_pilot_tasks.py`: 4 passed.
-- `python -m py_compile studies/energy_diagnosis/workloads/pilot_tasks.py tests/test_pilot_tasks.py`: passed.
+- `python -m pytest -q tests/test_trace_replay.py`: 4 passed.
+- `python -m py_compile studies/energy_diagnosis/workloads/trace_replay.py tests/test_trace_replay.py`: passed.
 - `git diff --check`: passed before commit.
-- VS Code diagnostics: no errors in the two new Python files.
-- Asset hashes were computed and pinned for both CSV files and both canonical directory trees.
+- VS Code diagnostics: no errors in both new Python files.
 
-Evidence is fixture-tested and code-reviewed locally. No model, live tool graph, Grace allocation, energy collector, or hardware session ran during AL3. AL2's focused suite remains 7 passed on its separate branch. The combined ED-03 regression remains blocked by the current ignored local `sales.csv` bytes not matching the newer task contract hash pins; this turn did not modify that asset or contract.
+Evidence is fixture-tested and code-reviewed locally. The tests prove runner invocation, mode labels, dependency mapping, controls, hashes and fresh divergence. No actual model inference, production tool run, Grace hardware, energy collection or replay energy claim was made.
 
 ## Open questions and disagreements
 
-The exact ED-01 producer/consumer types for task identity, candidate controls, events and verifier outcomes remain to be mapped; these AL3 APIs are intentionally local. Repository snapshots are synthetic stand-ins and need a realism decision before any claim about repository workload energy. AL4 replay still requires actual inference/tool execution and cannot be satisfied by saved output playback. AL5 needs Alex's runtime, an individually authorized Grace allocation/session/budget and Nitheesh's ledger integration. AL6 is conditional on Stephen's pilot/freeze decision and must not inspect held-out outcomes.
+The shared ED-01 event/goal types remain to be mapped by Stephen; this PR intentionally uses a local trace boundary. Conditional replay still needs integration with Alex's actual model interface and existing tool execution before any physical replay claim. Live mode must remain the path for newly generated outputs in evaluation. AL5 remains blocked on Alex runtime plus an individually authorized Grace allocation/session/budget and Nitheesh ledger integration. AL6 remains conditional on Stephen's pilot/freeze decision.
 
 ## Next actions and handoff
 
-Stephen reviews the AL2 and AL3 boundaries and decides the shared contract mapping. Alex advises Grace compatibility and meaningful tool controls. Nitheesh consumes the four task specs/verifiers and later validates ledger/export links. Aldric's next software action is the separate AL4 trace/replay implementation after the executor interface is reviewed; local fixture trace tests can proceed without hardware, while live replay remains blocked until a model runtime is available.
+Stephen reviews AL2/AL3/AL4 boundaries and maps them to the shared interfaces. Alex validates model/tool compatibility on Grace. Nitheesh consumes trace links and verifier outcomes in the ledger. Aldric should next participate in local end-to-end integration and then the assigned Grace smoke/pilot session when dependencies are available; no hardware result is claimed by these software PRs.
