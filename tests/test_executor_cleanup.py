@@ -20,7 +20,11 @@ from studies.energy_diagnosis.workloads.trace_replay import (
 
 class SideEffectTool:
     def execute(self, path, delay):
-        Path(path + ".started").write_text(str(os.getpid()))
+        # Observers use existence as readiness: publish complete PID bytes in
+        # one rename, never expose an empty file between open and write.
+        pending = Path(path + ".started.tmp")
+        pending.write_text(str(os.getpid()))
+        pending.replace(path + ".started")
         time.sleep(delay)
         Path(path).write_text("finished")
         return True
