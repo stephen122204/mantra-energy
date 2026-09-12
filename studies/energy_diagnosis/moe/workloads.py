@@ -19,7 +19,7 @@ from studies.energy_diagnosis.workloads.bounded_executor import (
     ToolCall,
 )
 
-VERSION = "moe-tools-v1"
+VERSION = "moe-tools-v2"
 BUGGY = "def net_cents(price, count, discount):\n    return price * count * (100 - discount) // 100\n"
 
 
@@ -252,10 +252,22 @@ class WorkloadRuntime:
 
     def context(self, task):
         tools = (
-            {"pipeline": {"args": {}}}
+            {
+                "pipeline": {
+                    "description": "Runs the complete predefined join, returned-order filter, quantity-times-price calculation, and region aggregation. Returns revenue_cents_by_region and total_cents. It accepts no arguments; do not provide SQL or a query.",
+                    "args": {},
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                    "example_call": {"id": "pipeline_1", "tool": "pipeline", "args": {}},
+                }
+            }
             if task.family == "data-pipeline"
             else {
                 "repo": {
+                    "description": "Read the workspace, replace pricing.py, or run its visible checks. Only action and (for write) content are accepted. Invoke dependent read/write/test steps in order using separate decisions or explicit depends_on call IDs.",
                     "args": {
                         "action": "read|write|test",
                         "content": "only for write; complete pricing.py source",
@@ -266,7 +278,7 @@ class WorkloadRuntime:
         return dict(
             family=task.family,
             tools=tools,
-            instruction='Return only JSON: {"tool_calls":[{"id":"unique","tool":"declared name","args":{...}}]} or {"answer":{...}}. Use the declared tools to observe and change the workspace. Do not invent tool outputs.',
+            instruction='Return only JSON: {"tool_calls":[{"id":"unique","tool":"declared name","args":{...}}]} or {"answer":{...}}. Follow the exact declared argument schema; do not add arguments. Use the declared tools to observe and change the workspace. Do not invent tool outputs.',
         )
 
     def tool(self, task, call):
