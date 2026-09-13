@@ -126,6 +126,15 @@ def prepare(trips_path, zones_path, output):
 
 
 def load_task(root, *, allow_fixture=False, engine="sqlite"):
+    if engine not in {"sqlite", "duckdb"}:
+        raise ValueError("unsupported query engine")
+    if engine == "duckdb":
+        try:
+            import duckdb
+        except ImportError as exc:
+            raise RuntimeError("install duckdb==1.5.0 in the ALEMS driver/tool interpreter before launching a model") from exc
+        if duckdb.__version__ != "1.5.0":
+            raise ValueError("query runtime requires qualified duckdb==1.5.0")
     root = Path(root).resolve()
     manifest = json.loads((root / "task-manifest.json").read_text(encoding="utf-8"))
     if (manifest["version"], manifest["task_id"], manifest["lineage"]) != (VERSION, TASK_ID, LINEAGE):
@@ -140,8 +149,6 @@ def load_task(root, *, allow_fixture=False, engine="sqlite"):
         raise ValueError("prepared query database changed")
     if engine == "duckdb" and file_hash(root / "trips.duckdb") != manifest.get("duckdb_sha256"):
         raise ValueError("prepared analytical database changed")
-    if engine not in {"sqlite", "duckdb"}:
-        raise ValueError("unsupported query engine")
     expected = manifest["expected"]
     if not valid_answer(expected):
         raise ValueError("invalid query reference")
