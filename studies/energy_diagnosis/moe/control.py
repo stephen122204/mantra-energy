@@ -172,11 +172,18 @@ class Lifecycle:
             raise RuntimeError("invalid preparation planning state")
         upcoming = f"{self.goal}:pause:{self.pause_index + 1}"
         self.emit("preparation_planning_start", upcoming_pause_id=upcoming)
+        stages = {}
         if self.policy.name == "demand":
             selected, reason = [], "demand_only"
         else:
-            selected, reason = self.policy.select(
-                self.backend.snapshot_experts(), self.history
+            snapshot_start = self.clock()
+            snapshot = self.backend.snapshot_experts()
+            snapshot_end = self.clock()
+            selected, reason = self.policy.select(snapshot, self.history)
+            selection_end = self.clock()
+            stages = dict(
+                snapshot_rpc=dict(start_ns=snapshot_start, end_ns=snapshot_end),
+                policy_select=dict(start_ns=snapshot_end, end_ns=selection_end),
             )
         self._pause_plan = _PreparationPlan(
             self.generation, self.goal, self.request_id, self.pause_index + 1,
@@ -185,6 +192,7 @@ class Lifecycle:
         self.emit(
             "preparation_planning_end", upcoming_pause_id=upcoming,
             selected_experts=len(selected), reason=reason,
+            stages=stages,
         )
 
     def start_pause(self):
