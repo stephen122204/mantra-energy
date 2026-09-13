@@ -135,9 +135,8 @@ def test_primer_difference_cannot_hide_behind_equal_target(tmp_path):
 
 
 def test_supervisor_preserves_failed_worker(tmp_path):
-    script=Path(__file__).resolve().parents[1]/'studies/energy_diagnosis/diagnostics/capture_fixed_forward.py'
     out=tmp_path/'failure'
-    r=subprocess.run([sys.executable,str(script),'--config',str(tmp_path/'missing'),
+    r=subprocess.run([sys.executable,'-m','studies.energy_diagnosis.diagnostics.capture_fixed_forward','--config',str(tmp_path/'missing'),
                       '--case',str(tmp_path/'missing-case'),'--mode','reference','--output',str(out)],timeout=30)
     assert r.returncode==2
     status=json.loads((out/'supervisor.json').read_text())

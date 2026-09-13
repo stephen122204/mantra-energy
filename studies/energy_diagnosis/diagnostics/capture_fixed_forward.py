@@ -213,7 +213,7 @@ def main():
         p.error('the bounded hardware supervisor requires POSIX')
     out=Path(args.output).resolve()
     out.mkdir(parents=True,exist_ok=False)
-    cmd=[sys.executable,str(Path(__file__).resolve()),*sys.argv[1:],'--worker']
+    cmd=[sys.executable,'-m','studies.energy_diagnosis.diagnostics.capture_fixed_forward',*sys.argv[1:],'--worker']
     start=time.monotonic_ns()
     from studies.energy_diagnosis.diagnostics.run_bounded import stop_group
     def interrupted(signum, frame):

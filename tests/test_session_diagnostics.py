@@ -24,7 +24,7 @@ def launcher(tmp_path,code,seconds=2,output='job'):
     ("print('failure');raise SystemExit(7)",'failed',7),
     ('import time;time.sleep(30)','timed_out',124)])
 def test_bounded_terminal_status_and_log(tmp_path,code,status,rc):
-    r=subprocess.run(launcher(tmp_path,code,seconds=.2),timeout=15)
+    r=subprocess.run(launcher(tmp_path,code,seconds=.2 if status=='timed_out' else 3),timeout=15)
     assert r.returncode==rc
     record=json.loads((tmp_path/'job/status.json').read_text())
     assert record['status']==status and record['returncode']==rc and record['finished_utc']
