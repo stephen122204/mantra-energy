@@ -50,10 +50,23 @@ def test_calculator_envelope_is_normalized(success):
 
 
 def test_timed_out_process_stops_before_next_goal(tmp_path):
+    import psutil
+
     path = str(tmp_path / "late")
     events = []
+    observed_worker = []
+
+    def observe(event):
+        events.append(event)
+        if event["event"] == "body_start":
+            until = time.monotonic() + 3
+            while not Path(path + ".started").exists() and time.monotonic() < until:
+                time.sleep(0.002)
+            assert Path(path + ".started").exists()
+            observed_worker.append(psutil.Process(int(Path(path + ".started").read_text())))
+
     executor = BoundedToolExecutor(
-        {"t": SideEffectTool()}, timeout_seconds=2, event_sink=events.append
+        {"t": SideEffectTool()}, timeout_seconds=2, event_sink=observe
     )
     result = executor.execute(
         [
@@ -66,10 +79,12 @@ def test_timed_out_process_stops_before_next_goal(tmp_path):
     assert result["child"].status == "skipped"
     assert any(e["event"] == "body_start" for e in events)
     assert not any(e["event"] == "body_end" for e in events)
-    import psutil
-
-    assert not psutil.pid_exists(int(Path(path + ".started").read_text()))
+    # Windows may retain a terminated PID while process handles remain open.
+    # Require the observed worker to have exited already, with no extra grace.
+    assert len(observed_worker) == 1
+    observed_worker[0].wait(timeout=0)
     assert not Path(path).exists()
+    executor.event_sink = events.append
     followup = executor.execute(
         [ToolCall("fast", "t", {"path": path + "next", "delay": 0})]
     )
