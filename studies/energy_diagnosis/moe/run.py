@@ -45,7 +45,16 @@ def run(args):
     ):
         raise ValueError("native execution requires a clean reviewed checkout")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    tasks = create_tasks(root / "assets")
+    query_assets = getattr(args, "query_assets", None)
+    if query_assets:
+        from .query_workload import load_task, QueryRuntime, VERSION as query_version
+        tasks = (load_task(query_assets, allow_fixture=simulated, engine=args.query_engine),)
+        workload_version = query_version
+        verifier_source = Path(__file__).with_name("query_workload.py")
+    else:
+        tasks = create_tasks(root / "assets")
+        workload_version = VERSION
+        verifier_source = Path(__file__).with_name("workloads.py")
     if args.task != "all":
         tasks = tuple(t for t in tasks if t.task_id == args.task)
     if not tasks:
@@ -70,12 +79,11 @@ def run(args):
             deadline=args.deadline,
             mode=args.mode,
             execution_protocol=EXECUTION_PROTOCOL,
+            query_engine=args.query_engine if query_assets else None,
         )
     )
     by_setting = {f"C00-{p.name}-{digest(asdict(p))[:12]}": p for p in policies}
-    verifier_hash = hashlib.sha256(
-        Path(__file__).with_name("workloads.py").read_bytes()
-    ).hexdigest()
+    verifier_hash = hashlib.sha256(verifier_source.read_bytes()).hexdigest()
     blocks = []
     for repeat in range(args.repeats):
         for task in tasks:
@@ -90,7 +98,7 @@ def run(args):
                     revision,
                     task.asset_sha256,
                     digest(config),
-                    VERSION,
+                    workload_version,
                     verifier_hash,
                     simulated=simulated,
                 )
@@ -113,6 +121,10 @@ def run(args):
         execution_protocol=EXECUTION_PROTOCOL,
         policies={sid: asdict(p) for sid, p in by_setting.items()},
         schedule=schedule.to_dict(),
+        query_engine=args.query_engine if query_assets else None,
+        task_catalog=[dict(task_id=t.task_id, family=t.family, lineage=t.lineage,
+                           asset_sha256=t.asset_sha256, workload_version=workload_version,
+                           verifier_sha256=verifier_hash) for t in tasks],
         measurement_scope="CPU-package and GPU-board only; includes backend startup, tools, transfers, cleanup and verification",
     )
     path = root / "moe-manifest.json"
@@ -171,7 +183,7 @@ def run(args):
                     simulated=simulated,
                     lifecycle=lifecycle,
                     initialized_model_window=True,
-                    workload_runtime=WorkloadRuntime(
+                    workload_runtime=QueryRuntime(args.fixture_case if simulated else None, args.query_engine) if query_assets else WorkloadRuntime(
                         root, args.fixture_case if simulated else None
                     ),
                 )
@@ -235,6 +247,8 @@ def main(argv=None):
     p.add_argument("--bytes-per-second", type=float)
     p.add_argument("--expected-pause-seconds", type=float)
     p.add_argument("--task", default="all")
+    p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default two tasks")
+    p.add_argument("--query-engine", choices=["duckdb", "sqlite"], default="duckdb")
     p.add_argument("--max-runs", type=int, default=4)
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--max-steps", type=int, default=5)

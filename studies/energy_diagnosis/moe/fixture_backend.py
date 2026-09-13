@@ -152,7 +152,22 @@ class FixtureDevice:
         # Return the expert to CPU to expose repeated preparation in fixtures.
         with self.lock:
             self.experts[expert] = replace(self.experts[expert], device="cpu")
-        if context.get("family") == "repository-repair":
+        if context.get("family") == "sql-query":
+            if not results:
+                decision = {"tool_calls": [dict(id="schema", tool="sql", args=dict(action="schema"))]}
+            elif len(results) == 1:
+                query = ("SELECT CAST(strftime('%H', tpep_pickup_datetime) AS INTEGER) AS hour, COUNT(*) AS trips "
+                         "FROM trips JOIN zones ON trips.PULocationID=zones.LocationID "
+                         "WHERE Borough='Manhattan' AND payment_type=1 AND trip_distance>0 AND fare_amount>0 "
+                         "AND tpep_pickup_datetime >= '2025-01-01 00:00:00' "
+                         "AND tpep_pickup_datetime < '2025-02-01 00:00:00' GROUP BY hour ORDER BY hour")
+                decision = {"tool_calls": [dict(id="query", tool="sql", args=dict(action="query", sql=query))]}
+            else:
+                counts = [0] * 24
+                for hour, count in results[-1]["result"]["rows"]:
+                    counts[hour] = count
+                decision = {"answer": dict(hour_counts=counts, total_trips=sum(counts))}
+        elif context.get("family") == "repository-repair":
             calls = [
                 dict(id="read", tool="repo", args=dict(action="read")),
                 dict(

@@ -235,6 +235,11 @@ performance. CPU package plus GPU board is not whole-node or facility energy.
 
 ## Remaining on-node acceptance
 
+An optional [queryable TLC task](QUERY_WORKLOAD.md) uses prepared public source
+records and a read-only SQL tool with an independent raw-Parquet answer check.
+It is selected explicitly via `--query-assets`; default task selection remains
+unchanged. See its setup and qualification limits before using it on a node.
+
 Verify native build/load and BF16 outputs; actual GPU/host memory fit; native
 preparation versus demand-only acknowledgments and completed transfers; correct
 routing/output under each setting; queued cancellation and in-flight drain;
