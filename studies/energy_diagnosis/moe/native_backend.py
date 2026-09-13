@@ -8,6 +8,7 @@ import time
 
 from .backend import CONTROLS
 from .control import Expert
+from .prefix import GenerationWork, RequestPrefixCache, validate_prefix_configuration
 
 BACKEND_COMMIT = "6da092fc98e7246bfa1b2f9b2a480524b8697a7e"
 MODEL_REVISION = "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe"
@@ -20,6 +21,11 @@ class NativeDevice:
         from moe_infinity import MoE
 
         self.torch = torch
+        self.request_cache_mode = config.get("request_prefix_cache", "disabled")
+        if self.request_cache_mode not in {"disabled", "exact_prefix"}:
+            raise ValueError("request_prefix_cache must be disabled or exact_prefix")
+        self.prefix_cache = RequestPrefixCache()
+        self.request_work = GenerationWork()
         if torch.cuda.device_count() != 1:
             raise ValueError(
                 "expose exactly one allocated GPU through CUDA_VISIBLE_DEVICES"
@@ -53,6 +59,8 @@ class NativeDevice:
 
         build = verify_build(Path(config["build_manifest"]))
         model_config = json.loads((path / "config.json").read_text())
+        if self.request_cache_mode == "exact_prefix":
+            validate_prefix_configuration(model_config)
         if (
             model_config.get("model_type") != "qwen3_moe"
             or model_config.get("num_experts") != 128
@@ -121,7 +129,9 @@ class NativeDevice:
                     continue
                 tensor = int(self.mapping[(int(layer_id), expert)])
                 node, size, device = self.native.alems_expert_info(tensor)
-                phase = "prefill" if mask.shape[0] > 1 else "decode"
+                phase = self.request_work.phase
+                if phase not in {"prefill", "decode"}:
+                    raise RuntimeError("expert dispatch without an observed model forward")
                 key = (int(layer_id), expert, phase)
                 observed = time.monotonic_ns()
                 if key not in self.demands and len(self.demands) >= 65536:
@@ -155,6 +165,18 @@ class NativeDevice:
 
         self.hook_ns = 0
         self.model.engine.expert_executor.dispatch_local = observed_dispatch
+
+        def observe_forward(module, args, kwargs):
+            started = time.monotonic_ns()
+            ids = kwargs.get("input_ids", args[0] if args else None)
+            if ids is None or len(ids.shape) != 2 or ids.shape[0] != 1:
+                raise RuntimeError("expected batch-one token input for generation accounting")
+            self.request_work.observe(int(ids.shape[1]))
+            self.hook_ns += time.monotonic_ns() - started
+
+        self.forward_hook = self.model.model.register_forward_pre_hook(
+            observe_forward, with_kwargs=True
+        )
         torch.cuda.synchronize()
         clock_before = time.monotonic_ns()
         native_ns = self.native.alems_clock_ns()
@@ -169,6 +191,7 @@ class NativeDevice:
             ),
             controls=CONTROLS,
             mode="native",
+            request_prefix_cache=self.request_cache_mode,
             applied_config=self.applied,
             backend_commit=BACKEND_COMMIT,
             model_revision=MODEL_REVISION,
@@ -306,21 +329,53 @@ class NativeDevice:
         inputs = self.tokenizer.encode(prompt, return_tensors="pt").to("cuda:0")
         if inputs.shape[1] + arg["max_tokens"] > self.max_context:
             raise ValueError("prompt plus output exceeds fixed context budget")
+        self.request_work.reset()
+        reused = retained = 0
+        options = {}
+        use_prefix = self.request_cache_mode == "exact_prefix"
+        if use_prefix:
+            prepared = self.prefix_cache.prepare(inputs[0].tolist())
+            reused = prepared["reused_prefix_tokens"]
+            options = dict(
+                past_key_values=prepared["past_key_values"],
+                return_dict_in_generate=True,
+                use_cache=True,
+            )
         # Native expert workers update output tensors from separate threads.
         # InferenceMode is thread-local and makes those cross-thread writes fail.
         # no_grad preserves gradient-free generation with ordinary tensors.
-        with self.torch.no_grad():
-            result = self.model.generate(
-                inputs,
-                attention_mask=self.torch.ones_like(inputs),
-                do_sample=False,
-                max_new_tokens=arg["max_tokens"],
-                pad_token_id=self.tokenizer.eos_token_id,
-            )
-        self.torch.cuda.synchronize()
-        output = result[0, inputs.shape[1] :]
+        try:
+            with self.torch.no_grad():
+                result = self.model.generate(
+                    inputs,
+                    attention_mask=self.torch.ones_like(inputs),
+                    do_sample=False,
+                    max_new_tokens=arg["max_tokens"],
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    **options,
+                )
+            self.torch.cuda.synchronize()
+            sequences = result.sequences if use_prefix else result
+            output = sequences[0, inputs.shape[1] :]
+            if self.request_work.prefill_tokens != inputs.shape[1] - reused:
+                raise RuntimeError("observed prefill work differs from declared prefix reuse")
+            if self.request_work.decode_tokens != output.shape[0] - 1:
+                raise RuntimeError("observed decode work differs from generated tokens")
+            if use_prefix:
+                retained = self.prefix_cache.finish(sequences[0].tolist(), result.past_key_values)
+        except BaseException:
+            self.prefix_cache.clear()
+            raise
         return dict(
             text=self.tokenizer.decode(output, skip_special_tokens=True),
             tokens=dict(prompt=int(inputs.shape[1]), completion=int(output.shape[0])),
             hook_ns=self.hook_ns - before,
+            prefix_cache=dict(
+                mode=self.request_cache_mode,
+                scope="within owned goal only; no cross-goal cache",
+                reused_prefix_tokens=reused,
+                new_prefill_tokens=self.request_work.prefill_tokens,
+                decode_forward_tokens=self.request_work.decode_tokens,
+                cached_tokens_for_next_request=retained,
+            ),
         )
