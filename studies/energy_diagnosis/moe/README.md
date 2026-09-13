@@ -161,6 +161,36 @@ readings; it is not external sensor calibration or model-output qualification.
 
 ## Controls and records
 
+`request_prefix_cache` in the native config is `disabled` by default. The opt-in
+`exact_prefix` mode retains a Transformers cache only within the owned goal
+process. Each request matches exact token IDs, crops to the shared cached prefix,
+and forwards the remaining prompt. At least one prompt token is forwarded even
+for an identical prompt. Failed generation, unsupported cache operations or a
+cache-length mismatch clears state and fails the request; there is no silent
+fallback. A fresh goal process cannot inherit the previous goal's cache.
+This path accepts only the pinned fixed rotary/full-attention configuration;
+scaled rotary or sliding-window configurations require separate qualification.
+
+The boot record and model-call results record the mode. Per-call `prefix_cache`
+fields distinguish reused prefix tokens, observed new prefill tokens, decode
+forward tokens, and tokens retained for the next request. First-forward events
+identify prefill even when its suffix has one token. Actual forward counts must
+agree with reuse accounting. Hook cost remains included in `hook_ns`; cache
+matching/cropping and retained memory remain within the goal's measured work.
+The config is fingerprinted, so modes require distinct campaign directories.
+
+Lightweight prefix-state tests run in CI. Optional CPU qualification exercises
+the actual bridge and a random reduced Qwen MoE with eager/SDPA attention:
+
+```sh
+python -m pytest -q tests/test_moe_prefix_transformers.py
+```
+
+It needs Torch 2.10 and Transformers 5.3 and skips when they are absent. This is
+not validation of the pinned BF16 model or native offload. Native prefix reuse,
+output fidelity, cache-memory behavior and phase accounting still require the
+assigned on-node qualification before this mode is accepted.
+
 - `demand`: no speculative expert admission.
 - `history`: rank experts actually used earlier in this goal; cap count and bytes.
 - `fixed`: same history ranking, admitting candidates within the byte budget.
