@@ -48,6 +48,10 @@ independent lineage. No raw records are distributed in this repository.
 
 Runtime defaults to DuckDB 1.5.0; `--query-engine sqlite` selects the alternate
 standard-library implementation. Neither runtime needs PyArrow. First exercise
+the selected engine in the **ALEMS driver/tool interpreter**, which may differ
+from `--backend-python` for the GPU model. DuckDB presence/version is checked
+before model startup, avoiding an expensive load followed by a missing-tool error.
+Then exercise
 the simulated model/counter path with actual database tools:
 
 ```sh

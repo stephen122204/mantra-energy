@@ -111,6 +111,18 @@ def test_source_identity_cannot_silently_change(tmp_path):
         load_task(task.asset_path, allow_fixture=True)
 
 
+def test_missing_or_unqualified_engine_fails_before_model_start(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    task = assets(tmp_path / "assets")
+    monkeypatch.setitem(sys.modules, "duckdb", None)
+    with pytest.raises(RuntimeError, match="driver/tool interpreter"):
+        load_task(task.asset_path, allow_fixture=True, engine="duckdb")
+    monkeypatch.setitem(sys.modules, "duckdb", SimpleNamespace(__version__="unqualified"))
+    with pytest.raises(ValueError, match="qualified duckdb"):
+        load_task(task.asset_path, allow_fixture=True, engine="duckdb")
+
+
 @pytest.mark.parametrize("case,passes", [("success", True), ("wrong_answer", False)])
 @pytest.mark.parametrize("engine", ["sqlite", "duckdb"])
 def test_full_query_goal_executes_tools_and_retains_verifier_result(tmp_path, case, passes, engine):
