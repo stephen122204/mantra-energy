@@ -1,5 +1,4 @@
 """Pinned MoE-Infinity bridge, imported only in the GPU worker process."""
-from dataclasses import asdict
 import hashlib
 import importlib.metadata
 import json
@@ -217,17 +216,15 @@ class NativeDevice:
     def snapshot(self, _):
         if self.native.get_inflight_prefetch_bytes():
             raise RuntimeError("snapshot requires settled transfers")
-        return [
-            asdict(
-                Expert(
-                    layer,
-                    expert,
-                    int(tensor),
-                    *self.native.alems_expert_info(int(tensor)),
-                )
-            )
-            for (layer, expert), tensor in sorted(self.mapping.items())
-        ]
+        rows = []
+        for (layer, expert), tensor in sorted(self.mapping.items()):
+            node, nbytes, device = self.native.alems_expert_info(int(tensor))
+            # The native API returns scalar IDs/bytes and a device string.
+            # Read live placement every time, without constructing then deeply
+            # copying a dataclass for each of thousands of experts.
+            rows.append(dict(layer=layer, expert=expert, tensor=int(tensor),
+                             node=node, nbytes=nbytes, device=device))
+        return rows
 
     def prepare(self, arg):
         experts = [Expert(**e) for e in arg["experts"]]

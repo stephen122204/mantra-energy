@@ -161,6 +161,16 @@ readings; it is not external sensor calibration or model-output qualification.
 
 ## Controls and records
 
+`preparation_planning_end.stages` now contains host-clock `start_ns`/`end_ns`
+brackets for `snapshot_rpc` and `policy_select`. The snapshot interval includes
+live metadata acquisition, worker serialization, IPC and host reconstruction;
+it is not a native-only timing. The demand control has an empty stage map because
+it performs neither operation. The enclosing planning interval remains available
+alongside these narrower brackets; whole-goal accounting is unchanged. Short
+stages may fall within one clock tick. Snapshot fields and order are unchanged;
+native scalar metadata is serialized directly, and residency is read afresh on
+every settled snapshot rather than cached across requests.
+
 `request_prefix_cache` in the native config is `disabled` by default. The opt-in
 `exact_prefix` mode retains a Transformers cache only within the owned goal
 process. Each request matches exact token IDs, crops to the shared cached prefix,
