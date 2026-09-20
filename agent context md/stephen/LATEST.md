@@ -1,43 +1,40 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260920-plain-language-implementation-handoff.md)
+[Immutable turn record](turns/20260920-pr-stack-integrated.md)
 
-# Current implementation handoff and named responsibilities
+# Integrated code and current team instructions
 
 ## Task and current understanding
 
-Updated the human guides and agent entry points in fresh clone from integration 838ac3a0042eb6ce1307d0cc37be8f3166155ee2. Documentation PR #37 at a1d8914211e7a429081070a05c9c34a9518e68ad provides current plain-language responsibilities and detailed implementation acceptance. No executable code or hardware changed.
+Stephen authorized review, repair and integration of all open PRs. Fresh clone /tmp/alems-pr-integration-EGOOT0 started at d71cc4c. PR34 runtime, PR35 query workload, PR36 session diagnostics and PR37 plain-language handoff are all merged into research/energy-diagnosis. The reviewed merged code commit is 33daf571c2b36656da79e47adac058e304a4a65d. No open PR remained at final inspection.
 
 ## Ideas and hypotheses
 
-Older maintained guides point to first issues and Grace-only setup. A current, explicitly prioritized handoff prevents agents from restarting completed components or mistaking historical run counts for launch instructions. This is a documentation correction, not a new runtime result.
+A concrete result-backup defect was reproduced: OpenSSH parses -o values separately, so a known-hosts path with spaces can split into multiple filenames despite correct subprocess argv handling. This was a software issue, not a hardware measurement finding.
 
 ## Decisions and rationale
 
-Alex owns measurement validity; Aldric owns equivalent useful work and independent answer checks; Nitheesh owns complete records, unattended execution and verified exports. Stephen owns model-runtime changes, standard-model agreement and shared starting-state/configuration decisions. Develop independently with fixtures; use one coordinated queue for measured hardware runs. Keep ordinary failed attempts distinct from defects that invalidate measurements or records.
+Fixed the path inside OpenSSH's option parser and retained strict host checking. Merged in dependency order using merge commits, retargeting dependent PRs to integration without rewriting shared history. Experimental code integration is distinct from model-reference/hardware acceptance. No native numerical tolerance or scientific definition changed.
 
 ## Changes and artifacts
 
-PR: https://github.com/stephen122204/alems-energy-diagnosis/pull/37
-Branch: stephen/plain-language-team-handoff
+- PR34 merged at 961777fc52cd39dc4831dd0026d399c9e4288c37.
+- PR35 merged at b06c814e99a911f2ac06ccd54cb5d0a66b1130ed.
+- PR36 includes repair 367753a199ca9a47f4697ed6b5c5c77d26572828 and merged at 1176b976bd7d9cc03c99f82c09179cba6b44f7a9.
+- PR37 includes current-state wording aa3a323 and merged at 33daf571c2b36656da79e47adac058e304a4a65d.
 
-Read these CURRENT documents now, including while the documentation PR is pending:
-- https://github.com/stephen122204/alems-energy-diagnosis/blob/stephen/plain-language-team-handoff/agent%20context%20md/CURRENT_HANDOFF.md
-- https://github.com/stephen122204/alems-energy-diagnosis/blob/stephen/plain-language-team-handoff/agent%20context%20md/BATCH_ACCEPTANCE.md
-- Your named HUMAN_START_HERE.md on that branch.
-
-Fetch the branch and read with git show if preserving an older working checkout. Do not merge or reset working code merely to read instructions. The new handoff is linked from root/startup/full-assignment and named prompt files in PR37. Historical milestone checklists remain coverage records; reuse completed work and identify missing evidence. Private research discussion, presentation content, connection details and raw results were not published.
+Read agent context md/CURRENT_HANDOFF.md, BATCH_ACCEPTANCE.md and your named HUMAN_START_HERE.md from fetched integration. The previous latest note's feature-branch links are superseded by these now-merged paths. Root instructions, startup, full assignments and named prompts point to them. Preserve local changes while fetching; do not reset working branches.
 
 ## Tests and evidence
 
-`python3 scripts/check_energy_diagnosis_setup.py`: PASS, portable links/provenance/planning-readiness checks only.
-`git diff --check`: PASS.
-Documentation-only change; no model execution, counter qualification, download, session launch or expensive rerun. No claim of new hardware acceptance. PR34/35/36 remained open at inspection; their stacked additions are not all integrated.
+On the combined executable code: 190 integrated runtime tests plus 5 subtests; 118 MoE/query/CPU numerical/session tests, including actual OpenSSH config parsing without network, small real DuckDB/PyArrow fixtures, native C++ lifecycle and optional CPU Transformers-prefix cases; 6 context-publisher tests; setup checker, shell syntax and diff checks passed. No GPU/model download or hardware session was used.
+
+PR36 repaired exact-head CI 35537484128 passed all 9 jobs. PR37 follow-up CI 35537554989 passed all 8 jobs, including Linux/Windows integration and MoE fixtures. Final merged source, tests, scripts, workflow and handoff files match the locally combined reviewed tree. Integration-push CI is separate from these completed pre-merge checks.
 
 ## Open questions and disagreements
 
-Current instance login, execution revision, paths, configuration and budget must be supplied/verified for hardware work. Standard-model numerical agreement and actual preparation in the dedicated fixed-input check remain open in the supplied handoff. Stephen owns those runtime decisions. Existing code and fixture tests can progress independently. Historical hardware evidence is version-specific and stored privately.
+Software integration does not establish model-reference agreement, current-node access, physical validity for every configuration or readiness of a full batch. Standard-model score differences remain unresolved; zero-transfer preparation remains unqualified. Current-node setup and supplied execution settings/budget still need confirmation. No unmeasured result has been promoted to accepted hardware evidence.
 
 ## Next actions and handoff
 
-Each student agent reads the documents above and reports the full owned milestone status, exact tested code, evidence, remaining dependencies and next action, then continues ready implementation. Complete the small task/check/measurement/record/export path using existing components. Do not recreate earlier work or launch an old planning matrix. Stephen reviews PR37 and retains merge authority. The feature branch is pushed; the maintained files await merge, while this narrow technical handoff makes the instructions discoverable on integration immediately.
+Students fetch integration, read current handoff and inspect completed code before extending it. Alex checks measurement records and transfer timing; Aldric tasks and independent answers; Nitheesh complete run records, recovery and exports. Stephen owns native model agreement, starting-state rules and shared configuration acceptance. Continue ready software work against fixtures; use one coordinated measured queue once the bounded session is assigned. Do not reconstruct the old stacked branches or restart first issues. Keep research discussion and raw result files outside GitHub.
