@@ -4,7 +4,7 @@ Read [CURRENT_HANDOFF.md](CURRENT_HANDOFF.md) first. This is concrete software w
 
 ## Alex: measurements that can be checked
 
-Work in existing adapters/readers and `studies/energy_diagnosis/runtime/`. Inspect pending diagnostic code before depending on it. Reuse counter qualification/audit helpers when present on the selected revision; do not create a second measurement stack.
+Work in existing adapters/readers and `studies/energy_diagnosis/runtime/`. Inspect the diagnostic code and its merge state before depending on it. Reuse counter qualification/audit helpers when present on the selected revision; do not create a second measurement stack.
 
 - Record actual node/device identities, available domains, units, read permissions, monotonic acquisition brackets and task start/end boundaries. Confirm both CPU packages where applicable. Missing energy is null with a reason; temperature/utilization is not energy.
 - Test idle, CPU-only, GPU-only and combined work on the assigned node. Independently recompute totals from raw counters; do not double-count overlapping domains. Test denied/missing reads, resets/wraps, gaps and delayed collector shutdown with fixtures. Counter consistency is not external electrical calibration.
@@ -14,7 +14,7 @@ Work in existing adapters/readers and `studies/energy_diagnosis/runtime/`. Inspe
 
 ## Aldric: tasks whose answers can be checked
 
-Work in `studies/energy_diagnosis/workloads/` and its existing tests. Reuse the executor, assets and checkers; inspect the query-task PR if needed. Do not recreate the first sales fixture as the entire assignment.
+Work in `studies/energy_diagnosis/workloads/` and its existing tests. Reuse the executor, assets and checkers; inspect the query-task code and its merge state if needed. Do not recreate the first sales fixture as the entire assignment.
 
 - Supply versioned task inputs, actual tool execution and independent expected-answer calculation. A file hash establishes which input was used, not whether the answer is correct.
 - Test correct, wrong, incomplete, malformed and non-finite outputs; a broken/unavailable checker must not become a pass. Keep useful work, tools and answer requirements equivalent under the supplied settings.
@@ -25,7 +25,7 @@ Work in `studies/energy_diagnosis/workloads/` and its existing tests. Reuse the 
 
 ## Nitheesh: a complete record and unattended batch
 
-Work in `studies/energy_diagnosis/campaign/` and existing validation/export code. Consume Alex's and Aldric's interfaces. Do not build another task executor. Reuse pending bounded-launch and copy helpers only through an explicit dependency.
+Work in `studies/energy_diagnosis/campaign/` and existing validation/export code. Consume Alex's and Aldric's interfaces. Do not build another task executor. Reuse bounded-launch and copy helpers from the tested revision; declare a dependency if they are not yet integrated.
 
 - Provide one exact command plus a small configuration that runs an approved batch. Require verified paths, execution commit, output location, ordering seed, retry rules, time budget and reservation cutoff; reject placeholders before launching work.
 - Record planned slots and every realized attempt with distinct linked IDs. Preserve independent execution, correctness and measurement statuses; failures and unavailable values must remain visible. Maintain actual order and distinguish setup from initialized execution and supplied cache settings.
