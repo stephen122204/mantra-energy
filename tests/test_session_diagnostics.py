@@ -131,3 +131,27 @@ def test_qualification_stops_at_failed_preparation(tmp_path,monkeypatch):
     assert len(calls)==4
     assert json.loads((out/'stages.json').read_text())[-1]['stage']=='preparation'
     assert not any('reference' in c for c in calls)
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='OpenSSH config parser on POSIX receiver')
+def test_copy_ssh_preserves_known_hosts_path_with_spaces(tmp_path):
+    import shlex
+    import shutil
+    if shutil.which('ssh') is None:
+        pytest.skip('OpenSSH client unavailable')
+    hosts = tmp_path / "Team Results" / "known_hosts"
+    hosts.parent.mkdir()
+    hosts.write_text('')
+    command = copy_results.ssh_arguments(str(tmp_path / 'identity key'), str(hosts))
+    # rsync passes -e through another argv parser; both routes must preserve it.
+    assert shlex.split(shlex.join(command)) == command
+    result = subprocess.run(command + ['-G', 'example.invalid'],
+                            capture_output=True, text=True, check=True, timeout=10)
+    fields = dict(line.split(' ', 1) for line in result.stdout.splitlines() if ' ' in line)
+    assert fields['userknownhostsfile'] == str(hosts)
+    assert fields['stricthostkeychecking'] in {'true', 'yes'}
+
+
+def test_copy_rejects_multiline_known_hosts_path(tmp_path):
+    with pytest.raises(ValueError, match='known-hosts'):
+        copy_results.ssh_arguments('key', str(tmp_path / 'hosts\nother'))
