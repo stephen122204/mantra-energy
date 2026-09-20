@@ -1,3 +1,6 @@
+CURRENT IMPLEMENTATION HANDOFF — 20 September 2026
+Read agent context md/CURRENT_HANDOFF.md and agent context md/BATCH_ACCEPTANCE.md before the historical milestone details below. They set the current platform, ownership, dependencies and acceptance requirements. Reuse completed code; do not restart first issues or launch historical run counts. Continue the complete ready assignment through tests and integration.
+
 A-LEMS INITIAL AGENT PROMPT — ALEX
 
 **Publication boundary (Stephen, 9 September 2026):** GitHub context is implementation-only: concrete build requirements, interfaces, code decisions with concise rationale, debugging hypotheses, tests, hardware setup, dependencies and handoffs. Keep research ideas, proposed scientific contributions, literature/novelty analysis, mathematical research proposals and venue strategy in private local notes or the conversation, outside Git-tracked paths. Do not copy that material into commits, PRs, issues, context records or attachments. Research-only turns require no repository publication. For mixed turns, publish only the implementation portion. This supersedes earlier instructions to publish all ideas or every turn; it does not reduce the complete assigned coding scope. Before any push, inspect the staged diff and publication text for this boundary.

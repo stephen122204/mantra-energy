@@ -1,3 +1,5 @@
+**Current implementation handoff:** Read [the 20 September team handoff](CURRENT_HANDOFF.md) first. It updates the active platform, named responsibilities and acceptance checks; historical first-task instructions and proposed run counts are not current launch instructions.
+
 # Complete team assignments and merge gates
 
 **Before starting or resuming:** follow the [required context-loading checklist](STARTUP_CHECKLIST.md). Read the complete current shared and named context; demonstrate all-role understanding, then continue implementation in the same session. This applies even with an old kickoff attachment or an agent that does not automatically load AGENTS.md.
