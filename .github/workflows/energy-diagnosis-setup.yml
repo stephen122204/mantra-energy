@@ -107,3 +107,17 @@ jobs:
       - name: Compile and test native transfer lifecycle without CUDA
         if: runner.os == 'Linux'
         run: python -m pytest -q tests/test_moe_native_lifecycle.py
+
+  session-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install CPU-only numerical diagnostic dependencies
+        run: |
+          python -m pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pytest transformers==5.3.0 accelerate==1.13.0
+      - name: Test fixed-prefix captures and session helpers without GPU or SSH
+        run: python -m pytest -q tests/test_fixed_forward_diagnostics.py tests/test_session_diagnostics.py
+      - name: Check bootstrap shell syntax without installing or downloading models
+        run: bash -n studies/energy_diagnosis/diagnostics/setup_a100_node.sh
