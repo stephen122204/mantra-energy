@@ -1,60 +1,25 @@
-# Nitheesh: human guide
+# Nitheesh: keeping the complete run record
 
-## Your whole assignment—not only the first PR
+Your part is making sure we can tell exactly what happened after a batch finishes, including when something fails. We should be able to start the approved batch, leave it running, then inspect its results without manually starting every task.
 
-**Your full responsibility is: resumable ledger → randomized bounded runner and data validation → integrated Grace pilot → selector budget/information boundary → approved evaluation and reproducible exports.** The first issue below is only the entry milestone. Read the [complete milestone checklist](FULL_ASSIGNMENT.md): it states every deliverable, what must be tested, who depends on it, and the final completion criteria. Later ready software milestones are already assigned; they do not require another invitation to begin. Pilot expansion and hardware runs keep their explicit gates.
+## Where to begin
 
-At the next check-in, have your agent show the status of **every milestone**, including later work and dependencies, so you can check the full scope together. Do not report the role complete based only on the first PR.
+Read [the current team handoff](../CURRENT_HANDOFF.md) for connection steps, the shared machine and who is doing what. Then give your agent [nitheesh.txt](nitheesh.txt). It must read [the detailed acceptance checklist](../BATCH_ACCEPTANCE.md) and [your complete assignment](FULL_ASSIGNMENT.md), inspect existing code and keep finished work. Older first-task instructions are historical starting points, not an instruction to start over.
 
-**Your work:** Campaign records and reproducibility. **First task:** [ED-04, issue #4](https://github.com/stephen122204/alems-energy-diagnosis/issues/4).
+Use the existing runner and record store. Connect Alex’s measurements and Aldric’s tasks/checkers. Test one success, one wrong answer, one missing reading, and one interrupted run. Check that restarting preserves old results and does not accidentally repeat completed work.
 
-Start with the [human overview](../HUMAN_START_HERE.md), read this guide, then give your agent [nitheesh.txt](nitheesh.txt) with your repository checkout. The [technical assignment](../../docs/agent-context/08-nitheesh-campaign-reproducibility.md) is supporting detail for you and required reading for the agent.
+## What you hand over
 
-## What to expect from your agent
+Give Stephen one tested launch command, its configuration, clear progress/error logs, and a verified copy of all outputs. Include the time limit and safe resume procedure. The handoff is finished when another person can run the small batch, understand every attempt and verify the saved files.
 
-Give the agent the updated prompt and let it work through the **entire assigned implementation**, tests, debugging and integration. It should not stop after a PR or ask you to assign the next listed milestone. You inspect representative behavior, help with actual access or consequential decisions, and review its full-role evidence; you should not have to keep prompting “continue” after every component. The agent should fix failures in its own work and progress on other items while a dependency or PR review is pending. Report only real blockers. Preparing the software for later evaluation is part of the work now; actual large experiments still depend on the pilot and approved resources.
+## Human and agent work
 
-## The machine this work is for
+You inspect representative saved records and confirm the backup is readable. Your agent builds and tests scheduling, recovery and exports. You do not need to watch every model call; the runner must track progress and stop at its assigned limit.
 
-**Develop on your existing laptop or desktop; deploy the real experiment to a scheduled Linux compute node in Texas A&M HPRC’s Grace cluster.** The proposed study allocation uses **one NVIDIA A100 with 40GB GPU memory**, with **16 allocated CPU cores and 64GB host RAM** as an initial resource target. The CPU/RAM allocation is our proposal, subject to scheduler policy, isolation and measured requirements. It is not a reservation. [Grace hardware](https://hprc.tamu.edu/kb/User-Guides/Grace/Hardware/)
+Develop on your own computer. Actual model/tool execution and energy readings happen on the assigned Linux node; Stephen supplies access, environment and run budget. Work can be written in parallel, but measured jobs use one shared queue. Do not start an additional model job, build or download during someone else's measurement.
 
-The GPU runs the selected local language model. CPU cores run tool computations, verification and supporting processes. A-LEMS and the measurement collector run alongside them in the same allocation. Your development computer is where you edit and inspect; laptop energy is not the target measurement. Here “local model” means inference on the experimental compute node, not an external paid API. The model/runtime choice still needs validation; a 7B-class model is the current pilot direction.
+Keep working through ready assigned software tasks while reviews are pending. Use separate PRs and record the exact tested version. A genuine access or runtime blocker affects the dependent test, not every task. Stephen decides merges and changes to shared run definitions.
 
-The three assignments build cooperating pieces of one experiment on this platform. Keep one goal and one model request active at a time initially; the proposed controlled parallelism is in independent CPU tool work. A100 allocation alone does not isolate CPU-package readings, so coordinate whole-node isolation or another validated arrangement before energy comparisons. Start with software fixtures now; Alex has reported CPU RAPL reads without sudo; individual access, session budgets, actual domain/device coverage and isolation still require session checks. No separate GPU purchase, H100 migration or multi-node training is part of your starting task. See the [technical hardware plan](../../docs/agent-context/05-hardware-and-access.md).
+## How to report
 
-## Picture what you are building
-
-Think of your part as the experiment’s run controller and record book. It reads the agreed task/configuration plan, invokes Aldric’s single-goal executor using Alex’s runtime/measurements inside the assigned Grace job, and records each attempt’s outcome and artifact locations. It must survive interruption without losing failures or accidentally presenting duplicate executions as fresh evidence.
-
-A concrete first demonstration is a tiny exported run table containing a success, a verifier failure, an interrupted attempt and a missing measurement, all traceable to their inputs and test artifacts. Later, replace those simulated calls with the real Grace execution interface and collect the bounded pilot. Your laptop can develop and inspect the ledger; actual measured workload execution belongs on the allocated compute node, with durable artifacts saved off temporary job storage. Starting another measured goal concurrently is not a way to speed up the initial study because it can mix energy attribution.
-
-## Your question and purpose
-
-You make every attempted run traceable and reproducible. First build the run ledger with simulated outcomes; later use it to coordinate the real pilot. The scientific purpose is to prevent retries, failures, interrupted work or missing measurements from disappearing and biasing the comparison.
-
-## Work you own as a human
-
-Explain how a planned run becomes an actual attempt and a recorded outcome. Inspect a success, a failure and an interrupted/resumed example yourself. Verify that missing measurements remain visibly missing and that retries remain attributable. Before real jobs, confirm the session budget, artifact storage, runtime versions and isolation with Stephen and Alex. Do not treat a generated plan as executed data.
-
-## Work your agent should execute
-
-Have the agent implement the execution ledger around synthetic fixtures, separate from the planning generator. Test restart/resume, duplicate prevention, interrupted attempts, model/verifier failures and missing energy. Record stable identities and artifact links, then implement validated export and bounded scheduling. Later integrate Alex's runtime/measurement interface and Aldric's single-goal executor, preserving randomized order and every outcome.
-
-## Hardware, dependencies and handoff
-
-Begin on your own computer; ledger fixtures need no GPU. The real pilot runs on an assigned Grace A100 session after runtime, measurements, tasks and controls are ready. Stephen supplies the shared contract and approved plan. You can develop the ledger independently now; actual integration depends on both Alex and Aldric.
-
-## First milestone versus full-role completion
-
-The first PR delivers a resumable fixture ledger, tests, and a small inspectable export showing successes, failures, interruptions and missing values. The later pilot handoff includes a complete run disposition record, validated raw/derived data, exact tested versions, measurement coverage and actual time/resource costs. Run the bounded pilot only after the integration gate and assigned budget; do not launch the full planning matrix automatically.
-
-## Start and finish each session
-
-Read your issue and the current shared context; state any unresolved contract assumption. Your agent works on a named issue branch from current integration, opens a draft PR early, tests on that branch and pushes scoped changes autonomously. Stephen reviews and decides merges. Review a representative output yourself and report a specific blocker rather than waiting silently. When another PR is pending, continue independent work in a separate issue branch.
-
-At the end, provide the PR link, tested commit, exact test results, example artifact, remaining evidence and next action. Have the agent publish its reviewable context summary with author `nitheesh` after every completed implementation turn using the [shared protocol](../README.md). Context publication is separate from code review; it does not merge implementation changes. See [dependencies and hardware](../DEPENDENCIES_AND_HARDWARE.md) for the later gates.
-
-## Timing and effort
-
-Follow the [Fall timeline](../FALL_TIMELINE.md). Start the agent after a short orientation to your objective and checks; a complete codebase read is unnecessary. Agents own most implementation, test execution and PR/context preparation. Your work centers on hardware/access, functional logic, independent output checks and debugging real failures. First reviewable components are targeted for 10 September, integrated execution for 12 September, usable pilot data for 15 September and core evaluation data for 25 September. Report a threatened milestone promptly; dates do not waive evidence requirements.
-
+Say what ran, what passed, what failed or remains untested, where the evidence is, and what comes next. Keep failed results. A slow result is not automatically a software bug. If measurements or saved files cannot be trusted, pause affected runs and send the evidence to Stephen. Continue independent work. Publish implementation notes and code only; research discussion and real result files stay in private storage.

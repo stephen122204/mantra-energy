@@ -1,3 +1,5 @@
+**Current handoff (20 September 2026):** Read [CURRENT_HANDOFF](../CURRENT_HANDOFF.md) and [BATCH_ACCEPTANCE](../BATCH_ACCEPTANCE.md) first. They supersede older first-task, platform and run-count directions. Keep this checklist for full-role coverage; reuse completed work and identify remaining evidence.
+
 # Aldric: complete assignment
 
 **This is the full role for humans and agents, not just the first issue.** Read it together with your [human guide](HUMAN_START_HERE.md), [technical specification](../../docs/agent-context/07-aldric-workloads-verifiers.md) and [team dependency/merge plan](../COMPLETE_ASSIGNMENTS.md).

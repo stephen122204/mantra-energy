@@ -1,3 +1,5 @@
+**Current implementation handoff:** Read [the 20 September team handoff](agent%20context%20md/CURRENT_HANDOFF.md) first. It updates the active platform, named responsibilities and acceptance checks; historical first-task instructions and proposed run counts are not current launch instructions.
+
 **Publication boundary:** Share only implementation requirements, interfaces, code changes, concise technical rationale, tests, hardware setup and handoffs. Keep research plans, proposed contributions, literature reviews, novelty assessments, manuscript strategy and private conversations outside Git-tracked files, commit messages, PRs and issues. This overrides earlier instructions to publish every discussion. Stephen's conversational notes are local-only; do not use the context publisher for them. After the history cleanup, use a fresh clone and recover only reviewed code changes from old checkouts; never merge or push old history. Student implementation updates remain authorized.
 
 # A-LEMS energy-diagnosis research instructions
