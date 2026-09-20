@@ -10,3 +10,8 @@ studies/energy_diagnosis/workloads/assets/expected_result.json text eol=lf
 
 # All pilot identities use canonical LF checkout bytes on Windows and Linux.
 studies/energy_diagnosis/workloads/pilot_assets/** text eol=lf
+
+# Backend fingerprints and patches use canonical bytes across checkouts.
+studies/energy_diagnosis/moe/** text eol=lf
+# Unified-diff context lines intentionally contain a single space.
+studies/energy_diagnosis/moe/patches/*.patch whitespace=-blank-at-eol

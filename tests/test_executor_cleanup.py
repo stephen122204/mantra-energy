@@ -20,10 +20,36 @@ from studies.energy_diagnosis.workloads.trace_replay import (
 
 class SideEffectTool:
     def execute(self, path, delay):
-        Path(path + ".started").write_text(str(os.getpid()))
+        # Observers use existence as readiness: publish complete PID bytes in
+        # one rename, never expose an empty file between open and write.
+        pending = Path(path + ".started.tmp")
+        pending.write_text(str(os.getpid()))
+        pending.replace(path + ".started")
         time.sleep(delay)
         Path(path).write_text("finished")
         return True
+
+
+def observe_worker_exit(pid, request):
+    """Capture identity while live; test exit without waiting for PID removal."""
+    if os.name == "nt":
+        import _winapi
+
+        handle = _winapi.OpenProcess(_winapi.SYNCHRONIZE, False, pid)
+        request.addfinalizer(lambda: _winapi.CloseHandle(handle))
+        return lambda: _winapi.WaitForSingleObject(handle, 0) == _winapi.WAIT_OBJECT_0
+    import psutil
+
+    process = psutil.Process(pid)
+
+    def exited():
+        try:
+            process.wait(timeout=0)
+        except psutil.TimeoutExpired:
+            return False
+        return True
+
+    return exited
 
 
 @pytest.mark.parametrize("success", [True, False])
@@ -45,11 +71,23 @@ def test_calculator_envelope_is_normalized(success):
     assert bool(result.error) is not success
 
 
-def test_timed_out_process_stops_before_next_goal(tmp_path):
+def test_timed_out_process_stops_before_next_goal(tmp_path, request):
     path = str(tmp_path / "late")
     events = []
+    observed_worker = []
+
+    def observe(event):
+        events.append(event)
+        if event["event"] == "body_start":
+            until = time.monotonic() + 3
+            while not Path(path + ".started").exists() and time.monotonic() < until:
+                time.sleep(0.002)
+            assert Path(path + ".started").exists()
+            observed_worker.append(observe_worker_exit(int(Path(path + ".started").read_text()), request))
+            assert not observed_worker[-1](), "probe must be alive before timeout"
+
     executor = BoundedToolExecutor(
-        {"t": SideEffectTool()}, timeout_seconds=2, event_sink=events.append
+        {"t": SideEffectTool()}, timeout_seconds=2, event_sink=observe
     )
     result = executor.execute(
         [
@@ -60,10 +98,14 @@ def test_timed_out_process_stops_before_next_goal(tmp_path):
     assert Path(path + ".started").exists(), "probe must actually enter the tool"
     assert result["slow"].status == "timed_out"
     assert result["child"].status == "skipped"
-    import psutil
-
-    assert not psutil.pid_exists(int(Path(path + ".started").read_text()))
+    assert any(e["event"] == "body_start" for e in events)
+    assert not any(e["event"] == "body_end" for e in events)
+    # Windows may retain a terminated PID while process handles remain open.
+    # Require the observed worker to have exited already, with no extra grace.
+    assert len(observed_worker) == 1
+    assert observed_worker[0](), "timed-out worker still executing after cleanup"
     assert not Path(path).exists()
+    executor.event_sink = events.append
     followup = executor.execute(
         [ToolCall("fast", "t", {"path": path + "next", "delay": 0})]
     )
@@ -132,3 +174,32 @@ def test_tool_descendants_are_reaped_after_success():
         assert process.status() == psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
         pass
+
+
+@pytest.mark.parametrize("error_type", [ValueError, OSError])
+def test_body_observer_failure_reaps_tool_and_allows_next_goal(tmp_path, error_type, request):
+    marker = str(tmp_path / "observer-failure")
+    observed_worker = []
+
+    def broken_observer(event):
+        if event["event"] == "body_start":
+            until = time.monotonic() + 3
+            while not Path(marker + ".started").exists() and time.monotonic() < until:
+                time.sleep(0.002)
+            assert Path(marker + ".started").exists()
+            observed_worker.append(observe_worker_exit(int(Path(marker + ".started").read_text()), request))
+            assert not observed_worker[-1](), "probe must be alive before observer failure"
+            raise error_type("observer failure")
+
+    executor = BoundedToolExecutor({"t": SideEffectTool()}, event_sink=broken_observer)
+    with pytest.raises(error_type, match="observer failure"):
+        executor.execute([ToolCall("t", "t", {"path": marker, "delay": 20})])
+    # Check termination of the process observed before failure. A bare PID
+    # presence check is not a portable wait/exit-status check (nor PID identity).
+    # Zero timeout requires it to have exited already when execute returned.
+    assert observed_worker[0](), "observer-failure worker still executing after cleanup"
+    assert not Path(marker).exists()
+    executor.event_sink = None
+    assert executor.execute([
+        ToolCall("next", "t", {"path": marker + "next", "delay": 0})
+    ])["next"].status == "completed"

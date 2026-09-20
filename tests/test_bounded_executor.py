@@ -2,6 +2,7 @@
 
 import threading
 import time
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -138,3 +139,56 @@ def test_timeout_is_recorded_and_pending_dependents_are_skipped():
 
     assert result["slow"].status == "timed_out"
     assert result["after"].status == "skipped"
+
+
+class BodyProbe:
+    def __getstate__(self):
+        return {}
+
+    def __setstate__(self, state):
+        self.deserialized_ns = time.monotonic_ns()
+
+    def execute(self, marker, workers=1):
+        entered = time.monotonic_ns()
+        Path(marker).write_text("finished")
+        return dict(deserialized_ns=self.deserialized_ns, entered_ns=entered,
+                    returned_ns=time.monotonic_ns())
+
+
+def test_tool_body_brackets_exclude_deserialization_and_do_not_wait_for_observer(tmp_path):
+    marker = tmp_path / "finished"
+    events = []
+
+    def observe(event):
+        events.append(event)
+        if event["event"] == "body_start":
+            # If the child waits for the observer, this cannot complete. This
+            # exercises callback overlap without padding tool execution time.
+            until = time.monotonic() + 3
+            while not marker.exists() and time.monotonic() < until:
+                time.sleep(0.002)
+            assert marker.exists(), "tool must progress independently of observer"
+
+    outcome = BoundedToolExecutor({"probe": BodyProbe()}, event_sink=observe).execute(
+        [ToolCall("probe", "probe", {"marker": str(marker)})]
+    )["probe"]
+    assert outcome.status == "completed"
+    stamps = {e["event"]: e["monotonic_ns"] for e in events}
+    assert list(stamps) == ["ready", "start", "body_start", "body_end", "end"]
+    assert stamps["start"] <= outcome.result["deserialized_ns"] <= stamps["body_start"]
+    assert stamps["body_start"] <= outcome.result["entered_ns"]
+    assert outcome.result["returned_ns"] <= stamps["body_end"] <= stamps["end"]
+    assert all(e["observed_ns"] >= e["monotonic_ns"] for e in events)
+
+
+def test_tool_body_failure_keeps_brackets_and_error():
+    def broken():
+        raise ValueError("body failed")
+
+    events = []
+    outcome = BoundedToolExecutor({"broken": broken}, event_sink=events.append).execute(
+        [ToolCall("broken", "broken", {})]
+    )["broken"]
+    assert outcome.status == "failed"
+    assert "body failed" in outcome.error
+    assert [e["event"] for e in events] == ["ready", "start", "body_start", "body_end", "end"]

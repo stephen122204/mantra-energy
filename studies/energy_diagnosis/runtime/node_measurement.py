@@ -198,6 +198,12 @@ class NodeMeasurement:
             raise RuntimeError(f"counter sampling failed: {self.sample_error}")
         return self.artifacts
 
+    def checkpoint(self, name):
+        return self.session.checkpoint(name)
+
+    def measure_between(self, start, end):
+        return self.session.measure_between(start, end)
+
 
 def environment_identity(source_revision, allocation_id, isolation, devices=()):
     try:
