@@ -206,3 +206,114 @@ def test_domain_specific_wrap_range_and_nonfinite_endpoint():
     session = MeasurementSession(Reader([reading(1), reading(2), reading(float('nan'))]), environment=ENVIRONMENT, monotonic_ns=Clock())
     session.start_session(); session.start_goal(); session.end_goal()
     assert session.finish_session().measurements[0].energy_j is None
+
+
+def test_checkpoints_separate_costs_without_losing_outer_energy():
+    # Session, goal, initialized model, task+verification done, released model.
+    session = MeasurementSession(
+        Reader([reading(v) for v in (0, 100, 1000, 1500, 3000)]),
+        environment=ENVIRONMENT, monotonic_ns=Clock(),
+    )
+    session.start_session(); session.start_goal()
+    session.checkpoint("initialized_model_start")
+    session.checkpoint("initialized_model_end")
+    inner = session.measure_between("initialized_model_start", "initialized_model_end")
+    session.end_goal(); outer = session.finish_session()
+    assert inner[0].energy_j == 500 / 1e6
+    assert outer.measurements[0].energy_j == (900 + 500 + 1500) / 1e6
+    assert session.measure_between("goal_start", "initialized_model_start")[0].energy_j == 900 / 1e6
+    assert session.measure_between("initialized_model_end", "goal_end")[0].energy_j == 1500 / 1e6
+    assert outer.goal_start_ns < inner[0].start_ns < inner[0].end_ns < outer.goal_end_ns
+    assert outer.to_dict()["checkpoints"] == {
+        "initialized_model_start": "checkpoint_initialized_model_start",
+        "initialized_model_end": "checkpoint_initialized_model_end",
+    }
+
+
+def test_checkpoint_windows_keep_intermediate_wraps_and_missing_data():
+    import pytest
+    from dataclasses import replace
+    schema = replace(SCHEMA_RAPL_X86, domains=(replace(
+        SCHEMA_RAPL_X86.domains[0], max_energy_range_uj=1000,
+    ),))
+    for middle, expected in [(50, 250 / 1e6), (None, None)]:
+        session = MeasurementSession(
+            Reader([reading(v) for v in (0, 800, 900, middle, 150, 200)], schema=schema),
+            environment=ENVIRONMENT, monotonic_ns=Clock(),
+        )
+        session.start_session(); session.start_goal(); session.checkpoint("begin")
+        session.sample_goal(); session.checkpoint("end")
+        assert session.measure_between("begin", "end")[0].energy_j == expected
+        with pytest.raises(ValueError, match="ordered"):
+            session.measure_between("end", "begin")
+        with pytest.raises(ValueError, match="immutable"):
+            session.checkpoint("begin")
+        with pytest.raises(ValueError, match="reserved"):
+            session.checkpoint("goal_start")
+        with pytest.raises(ValueError, match="captured"):
+            session.measure_between("begin", "missing")
+        session.end_goal(); artifacts = session.finish_session()
+        with pytest.raises(RuntimeError, match="active goal"):
+            session.checkpoint("late")
+        assert len(artifacts.samples) == 6
+
+
+def test_periodic_and_checkpoint_reads_are_serialized():
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    first_entered, second_entered, release = (threading.Event() for _ in range(3))
+
+    class ContendedReader(Reader):
+        def __init__(self):
+            super().__init__([])
+            self.calls = 0
+
+        def read_energy(self):
+            self.calls += 1
+            ordinal = self.calls
+            if ordinal == 3:
+                first_entered.set()
+                assert release.wait(3)
+            if ordinal == 4:
+                second_entered.set()
+            return reading(ordinal * 100)
+
+    session = MeasurementSession(ContendedReader(), environment=ENVIRONMENT)
+    session.start_session(); session.start_goal()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(session.sample_goal)
+        assert first_entered.wait(3)
+        second = pool.submit(session.checkpoint, "concurrent")
+        try:
+            assert not second_entered.wait(0.05), "reader entered concurrently"
+        finally:
+            release.set()
+        first.result(); second.result()
+    session.end_goal(); artifacts = session.finish_session()
+    package = [s for s in artifacts.samples if s.domain_id == "PACKAGE"]
+    assert all(a.acquired_end_ns <= b.acquired_start_ns for a, b in zip(package, package[1:]))
+    assert artifacts.measurements[0].energy_j == 300 / 1e6
+
+
+def test_teardown_does_not_hold_lock_needed_by_sampling_thread():
+    import threading
+    stopped = threading.Event()
+
+    def final_sample():
+        try:
+            session.sample_goal()
+        except RuntimeError:
+            stopped.set()
+
+    def teardown():
+        worker = threading.Thread(target=final_sample, daemon=True)
+        worker.start()
+        assert stopped.wait(2), "sampling shutdown blocked behind teardown lock"
+        worker.join()
+
+    session = MeasurementSession(
+        Reader([reading(v) for v in (0, 100, 200)]),
+        environment=ENVIRONMENT, teardown=teardown,
+    )
+    session.start_session(); session.start_goal(); session.end_goal()
+    assert session.finish_session().measurements[0].energy_j == 100 / 1e6

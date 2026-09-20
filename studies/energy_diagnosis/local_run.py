@@ -165,6 +165,9 @@ class GoalExecutor:
         max_steps,
         timeout_seconds,
         simulated,
+        lifecycle=None,
+        workload_runtime=None,
+        initialized_model_window=False,
     ):
         self.tasks = tasks
         self.adapter = adapter
@@ -173,6 +176,11 @@ class GoalExecutor:
         self.max_steps = max_steps
         self.timeout_seconds = timeout_seconds
         self.simulated = simulated
+        self.lifecycle = lifecycle
+        self.workload_runtime = workload_runtime
+        self.initialized_model_window = initialized_model_window
+        if initialized_model_window and lifecycle is None:
+            raise ValueError("initialized-model measurement requires an owned lifecycle")
 
     def __call__(self, request):
         plan = request.scheduled_run.planned_run
@@ -190,6 +198,14 @@ class GoalExecutor:
         status = "incomplete"
         error = "step budget exhausted"
         owned_terminated = True
+        inner_started = inner_settled = False
+        inner_window = dict(
+            protocol="initialized-model-fresh-process-v1",
+            status="unavailable", reason="initialized boundary not captured",
+            measurements=[], clock_domain=lease.clock_domain,
+            goal_execution_id=lease.execution_id,
+            scope="model initialized before task; fresh process caches; outer deadline and startup/release costs retained",
+        )
         prefix = Path("goals") / lease.execution_id
         context = dict(
             task_id=task.task_id,
@@ -199,6 +215,14 @@ class GoalExecutor:
             tool_results=tool_results,
         )
         try:
+            if self.lifecycle:
+                self.lifecycle.begin_goal(lease.attempt_id)
+            if self.initialized_model_window:
+                self.measurement.checkpoint("initialized_model_start")
+                inner_started = True
+            if self.workload_runtime:
+                self.workload_runtime.begin(task, lease)
+                context.update(self.workload_runtime.context(task))
             for step in range(self.max_steps):
                 if (
                     time.monotonic_ns() - lease.started_ns
@@ -210,6 +234,8 @@ class GoalExecutor:
                 self.adapter.model_config["request_timeout_seconds"] = max(
                     0.001, self.timeout_seconds - (started - lease.started_ns) / 1e9
                 )
+                if self.lifecycle:
+                    self.lifecycle.before_model(f"{lease.attempt_id}:model:{step}")
                 raw = self.adapter.call(prompt, 0.0)
                 ended = time.monotonic_ns()
                 tokens = raw.get("tokens") or {}
@@ -244,11 +270,15 @@ class GoalExecutor:
                         error=response.error,
                     )
                 )
+                if self.lifecycle and ok:
+                    self.lifecycle.after_model()
                 if not ok:
                     status, error = "crashed", response.error
                     # A disconnected live inference server may still own work.
                     # Checkpoint and stop the campaign until its termination is verified.
-                    owned_terminated = self.simulated
+                    owned_terminated = (
+                        self.simulated or raw.get("owned_work_terminated") is True
+                    )
                     break
                 try:
                     decision = json.loads(response.text)
@@ -270,7 +300,21 @@ class GoalExecutor:
                     )
                     break
                 graph = []
+                runtime_tools = {}
                 for c in calls:
+                    if self.workload_runtime:
+                        if not isinstance(c, dict):
+                            raise ValueError("tool call must be an object")
+                        runtime_tools[c["tool"]] = self.workload_runtime.tool(task, c)
+                        graph.append(
+                            ToolCall(
+                                str(c["id"]),
+                                c["tool"],
+                                c.get("args", {}),
+                                tuple(c.get("depends_on", ())),
+                            )
+                        )
+                        continue
                     if (
                         not isinstance(c, dict)
                         or c.get("tool") != "inspect_asset"
@@ -286,14 +330,35 @@ class GoalExecutor:
                         )
                     )
                 local_events = []
+                token = None
+
+                def record_tool_event(event):
+                    nonlocal token
+                    local_events.append(event)
+                    # Start only after a child enters tool invocation, rather
+                    # than while the parent is still launching that process.
+                    # The child never waits for this callback: receipt can lag
+                    # behind body completion on short tools, which stays visible
+                    # in body timestamps and observed_ns.
+                    if (
+                        self.lifecycle
+                        and token is None
+                        and event["event"] == "body_start"
+                    ):
+                        token = self.lifecycle.start_pause()
+
                 tool = PilotAssetTool(str(task.asset_path), task.family)
                 if (
                     self.simulated
                     and self.adapter.model_config.get("fixture_case") == "tool_timeout"
                 ):
                     tool = DelayedFixtureTool(tool)
-                outcomes = BoundedToolExecutor(
-                    {"inspect_asset": tool},
+                if self.lifecycle:
+                    # Selection is charged inside the goal window, before tool
+                    # launch. Admission itself waits for body-start notification.
+                    self.lifecycle.plan_pause()
+                tool_executor = BoundedToolExecutor(
+                    runtime_tools or {"inspect_asset": tool},
                     max_concurrent_calls=2 if plan.tool_concurrency else 1,
                     workers_per_tool=plan.tool_workers,
                     timeout_seconds=max(
@@ -301,9 +366,22 @@ class GoalExecutor:
                         self.timeout_seconds
                         - (time.monotonic_ns() - lease.started_ns) / 1e9,
                     ),
-                    event_sink=local_events.append,
-                ).execute(graph)
-                events.extend(local_events)
+                    event_sink=record_tool_event,
+                )
+                pause_error = None
+                if self.lifecycle:
+                    try:
+                        outcomes = tool_executor.execute(graph)
+                    finally:
+                        events.extend(local_events)
+                        try:
+                            if token is not None:
+                                self.lifecycle.end_pause(token)
+                        except Exception as exc:
+                            pause_error = exc
+                else:
+                    outcomes = tool_executor.execute(graph)
+                    events.extend(local_events)
                 for c in graph:
                     outcome = outcomes[c.call_id]
                     tool_results.append(asdict(outcome))
@@ -335,6 +413,8 @@ class GoalExecutor:
                             error=outcome.error or "",
                         )
                     )
+                if pause_error is not None:
+                    raise pause_error
                 if any(o.status != "completed" for o in outcomes.values()):
                     status = (
                         "timed_out"
@@ -352,21 +432,43 @@ class GoalExecutor:
 
             if isinstance(exc, BoundedExecutionError):
                 owned_terminated = False
+        if self.lifecycle:
+            try:
+                if self.initialized_model_window:
+                    self.lifecycle.settle_work()
+                    inner_settled = True
+                else:
+                    self.lifecycle.end_goal()
+            except Exception as exc:
+                status, error = "crashed", f"{error}; expert cleanup failed: {exc}"
+                if not self.initialized_model_window:
+                    owned_terminated = (
+                        owned_terminated and self.lifecycle.backend.process is None
+                    )
+                inner_window["reason"] = f"task work not confirmed idle: {exc}"
+        if self.lifecycle and not self.initialized_model_window:
+            owned_terminated = (
+                owned_terminated and self.lifecycle.backend.owned_work_terminated
+            )
         verify_start = time.monotonic_ns()
         if status == "completed":
             try:
-                result = verify_pilot(task, answer)
+                result = (
+                    self.workload_runtime.verify(task, answer)
+                    if self.workload_runtime
+                    else verify_pilot(task, answer)
+                )
                 verifier = VerifierResult(
-                    PILOT_VERIFIER_VERSION,
+                    plan.verifier_version,
                     "pass" if result["passed"] else "fail",
                     result["reason"],
                 )
             except Exception as exc:
                 verifier = VerifierResult(
-                    PILOT_VERIFIER_VERSION, "unavailable", str(exc)
+                    plan.verifier_version, "unavailable", str(exc)
                 )
         else:
-            verifier = VerifierResult(PILOT_VERIFIER_VERSION, "unavailable", error)
+            verifier = VerifierResult(plan.verifier_version, "unavailable", error)
         verify_end = time.monotonic_ns()
         spans.append(
             SpanEvent(
@@ -382,7 +484,47 @@ class GoalExecutor:
                 ),
             )
         )
+        if self.initialized_model_window:
+            try:
+                if inner_started and inner_settled and self.lifecycle.backend.idle_confirmed:
+                    self.measurement.checkpoint("initialized_model_end")
+                    inner_measurements = self.measurement.measure_between(
+                        "initialized_model_start", "initialized_model_end"
+                    )
+                    inner_valid = bool(inner_measurements) and all(
+                        m.status == "valid" for m in inner_measurements
+                    )
+                    inner_window.update(
+                        status="valid" if inner_valid else "unavailable",
+                        reason="" if inner_valid else "missing or invalid counter data",
+                        measurements=[m.to_dict() for m in inner_measurements],
+                    )
+            except Exception as exc:
+                inner_window.update(status="unavailable", reason=f"checkpoint failed: {exc}")
+            finally:
+                try:
+                    self.lifecycle.end_goal()
+                except Exception as exc:
+                    status, error = "crashed", f"{error}; expert release failed: {exc}"
+                owned_terminated = owned_terminated and self.lifecycle.backend.owned_work_terminated
+            if not owned_terminated:
+                inner_window.update(status="invalid", reason="final owned-work termination unverified")
+                inner_window["measurements"] = [
+                    dict(m, status="invalid", energy_j=None, coverage=None,
+                         reason="final owned-work termination unverified")
+                    for m in inner_window["measurements"]
+                ]
         measured = self.measurement.finish_goal()
+        if self.initialized_model_window:
+            for name, begin, end in (
+                ("before_task_window", "goal_start", "initialized_model_start"),
+                ("after_task_window", "initialized_model_end", "goal_end"),
+            ):
+                try:
+                    portion = self.measurement.measure_between(begin, end)
+                    inner_window[name] = dict(measurements=[m.to_dict() for m in portion])
+                except Exception as exc:
+                    inner_window[name] = dict(measurements=[], reason=str(exc))
         if not owned_terminated:
             measured = replace(
                 measured,
@@ -397,6 +539,9 @@ class GoalExecutor:
                     for m in measured.measurements
                 ),
             )
+            if self.initialized_model_window:
+                for name in ("before_task_window", "after_task_window"):
+                    inner_window[name] = dict(measurements=[], reason="final owned-work termination unverified")
         record = ExecutionRecord(
             lease.execution_id,
             lease.planned_run_id,
@@ -431,6 +576,20 @@ class GoalExecutor:
             artifacts.append(
                 write_artifact(self.artifact_root, prefix / name, payload, role)
             )
+        if self.lifecycle:
+            artifacts.append(
+                write_artifact(
+                    self.artifact_root,
+                    prefix / "expert-events.json",
+                    self.lifecycle.events,
+                    "expert-events",
+                )
+            )
+        if self.initialized_model_window:
+            artifacts.append(write_artifact(
+                self.artifact_root, prefix / "initialized-model-window.json",
+                inner_window, "initialized-model-window",
+            ))
         metadata = OutcomeMetadata(
             plan.setting_id,
             plan.tool_concurrency,
