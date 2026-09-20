@@ -36,6 +36,18 @@ def verify(destination,hashes):
     return mismatches
 
 
+
+def ssh_arguments(identity_file, known_hosts):
+    # OpenSSH parses -o values again, even when subprocess receives an argv list.
+    # Quote the single filename inside that option, not only at the shell layer.
+    path = str(Path(known_hosts).expanduser().resolve())
+    if any(c in path for c in ('\n', '\r', '\x00')):
+        raise ValueError('invalid known-hosts filename')
+    quoted = '"' + path.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    return ['ssh', '-i', identity_file, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15',
+            '-o', 'StrictHostKeyChecking=yes', '-o', 'UserKnownHostsFile=' + quoted]
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--host',required=True,help='verified user@host for the current lease')
@@ -60,8 +72,7 @@ def main():
     root.mkdir(parents=True,exist_ok=False)
     dest = root/'artifacts'
     dest.mkdir()
-    ssh = ['ssh','-i',a.identity_file,'-o','BatchMode=yes','-o','ConnectTimeout=15',
-           '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+a.known_hosts]
+    ssh = ssh_arguments(a.identity_file, a.known_hosts)
     def write(report):
         tmp = root/'status.tmp'
         tmp.write_text(json.dumps(report,indent=2)+'\n')
