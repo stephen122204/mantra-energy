@@ -1,33 +1,43 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260913-planning-snapshot-cost.md)
+[Immutable turn record](turns/20260920-plain-language-implementation-handoff.md)
 
-# Scalar snapshot serialization and planning-stage timing
+# Current implementation handoff and named responsibilities
 
 ## Task and current understanding
 
-Stephen resumed PR34 in fresh clone `/tmp/alems-planning-review-20260913`, source 24bf1d6, fetched integration e14d7c5. Maintained root/shared/named instructions are unchanged; the newest implementation handoff describes the dependent query workload. Runtime head is now 8eee497. A second fresh clone `/tmp/alems-combined-qualification-20260913` combines it into the query branch at efa886e. Neither PR was merged into integration; no allocation or upstream repository change occurred.
+Updated the human guides and agent entry points in fresh clone from integration 838ac3a0042eb6ce1307d0cc37be8f3166155ee2. Documentation PR #37 at a1d8914211e7a429081070a05c9c34a9518e68ad provides current plain-language responsibilities and detailed implementation acceptance. No executable code or hardware changed.
 
 ## Ideas and hypotheses
 
-The native snapshot API returns scalar IDs, byte counts and a device string. Building and recursively copying a dataclass for every expert is unnecessary for the wire format. Preserve every live metadata read, field/order and settled-transfer requirement. Separate host timing for the snapshot RPC and local selection so their costs can be inspected independently in the existing enclosing planning window.
+Older maintained guides point to first issues and Grace-only setup. A current, explicitly prioritized handoff prevents agents from restarting completed components or mistaking historical run counts for launch instructions. This is a documentation correction, not a new runtime result.
 
 ## Decisions and rationale
 
-Serialize scalar fields directly. Do not cache placement, omit experts, change sorting, alter history or change policy/budget selection. Add host-clock start/end brackets under planning-end `stages.snapshot_rpc` and `stages.policy_select`; demand has an empty map because neither operation runs. Snapshot timing includes native metadata, serialization, IPC and reconstruction, not just C++ execution. Whole-goal boundaries are unchanged. No timing speed threshold is imposed on portable tests.
+Alex owns measurement validity; Aldric owns equivalent useful work and independent answer checks; Nitheesh owns complete records, unattended execution and verified exports. Stephen owns model-runtime changes, standard-model agreement and shared starting-state/configuration decisions. Develop independently with fixtures; use one coordinated queue for measured hardware runs. Keep ordinary failed attempts distinct from defects that invalidate measurements or records.
 
 ## Changes and artifacts
 
-PR34 commit 8eee497 changes native snapshot construction and records planning substages, with README and CI/test coverage. The dependent query branch includes it at efa886e. Its only merge conflict was the shared CI test list: both planning and query cases and the separate real DuckDB step were retained. PR35's incremental diff remains the query task addition. The branch dependency update is not a PR merge. Private analysis/benchmarks are not published here.
+PR: https://github.com/stephen122204/alems-energy-diagnosis/pull/37
+Branch: stephen/plain-language-team-handoff
+
+Read these CURRENT documents now, including while the documentation PR is pending:
+- https://github.com/stephen122204/alems-energy-diagnosis/blob/stephen/plain-language-team-handoff/agent%20context%20md/CURRENT_HANDOFF.md
+- https://github.com/stephen122204/alems-energy-diagnosis/blob/stephen/plain-language-team-handoff/agent%20context%20md/BATCH_ACCEPTANCE.md
+- Your named HUMAN_START_HERE.md on that branch.
+
+Fetch the branch and read with git show if preserving an older working checkout. Do not merge or reset working code merely to read instructions. The new handoff is linked from root/startup/full-assignment and named prompt files in PR37. Historical milestone checklists remain coverage records; reuse completed work and identify missing evidence. Private research discussion, presentation content, connection details and raw results were not published.
 
 ## Tests and evidence
 
-66 local planning/pipeline/window-audit/repair/prefix cases pass on the runtime branch. New tests verify byte-for-byte JSON equivalence for 6,144 expert records, fresh changed residency, no metadata reads while unsettled, exact stage enclosure and unchanged selected experts. Demand does not invent stages and permits a coarse-clock zero tick. All eight GitHub jobs pass at 8eee497 in run 34734016071. The combined query branch passes 89 local tests with optional DuckDB/PyArrow installed; setup/diff checks pass. Its final explicitly dispatched CI run 34734603536 completed successfully at efa886e. Optional PyArrow tests remain local-only; fixture CI is not a hardware result. No native GPU execution of these changes occurred. Prior real-data tool fixtures remain at bcdc149 with simulated inference/counters; older native evidence remains at its recorded revision.
+`python3 scripts/check_energy_diagnosis_setup.py`: PASS, portable links/provenance/planning-readiness checks only.
+`git diff --check`: PASS.
+Documentation-only change; no model execution, counter qualification, download, session launch or expensive rerun. No claim of new hardware acceptance. PR34/35/36 remained open at inspection; their stacked additions are not all integrated.
 
 ## Open questions and disagreements
 
-G0 contracts/G1 component interfaces are implemented; G2 integrated fixtures remain covered. G3 physical acceptance is partial/version-specific: latest checkpoints, prefix reuse, task changes and this native snapshot path still need bounded on-node qualification. G4 has the optional query development input, not an accepted broad campaign. G5 existing control interfaces remain available without certifying a new supplied policy. G6 final frozen configurations/tasks and complete validated exports remain outstanding. Alex supports runtime/node measurements; Aldric workloads/verifiers/replay; Nitheesh ledger/campaign/export; Stephen integration and acceptance. No dated contributor note closes those hardware requirements.
+Current instance login, execution revision, paths, configuration and budget must be supplied/verified for hardware work. Standard-model numerical agreement and actual preparation in the dedicated fixed-input check remain open in the supplied handoff. Stephen owns those runtime decisions. Existing code and fixture tests can progress independently. Historical hardware evidence is version-specific and stored privately.
 
 ## Next actions and handoff
 
-Keep PR34 and PR35 draft. On the assigned node qualify established counter/output/cache behavior first, then inspect new planning-stage brackets and expert identities/bytes/residency under the same settings. The latest combined branch can exercise the optional query task after prerequisite checks. No local fixture timing certifies native speed or physical energy. Use a fresh output directory and record the exact execution commit; no reservation extension or expanded campaign is implied. Stephen retains merge authority, and research interpretation stays private.
+Each student agent reads the documents above and reports the full owned milestone status, exact tested code, evidence, remaining dependencies and next action, then continues ready implementation. Complete the small task/check/measurement/record/export path using existing components. Do not recreate earlier work or launch an old planning matrix. Stephen reviews PR37 and retains merge authority. The feature branch is pushed; the maintained files await merge, while this narrow technical handoff makes the instructions discoverable on integration immediately.
