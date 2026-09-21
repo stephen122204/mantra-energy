@@ -169,6 +169,7 @@ class NodeMeasurement:
             clock_domain=self.clock_domain,
         )
         self.stop = threading.Event()
+        self._sampling_lock = threading.Lock()
         self.thread = None
         self.artifacts = None
         self.sample_error = None
@@ -180,7 +181,11 @@ class NodeMeasurement:
         def sample():
             while not self.stop.wait(0.1):
                 try:
-                    self.session.sample_goal()
+                    with self._sampling_lock:
+                        # The wait may have completed just before finish_goal.
+                        if self.stop.is_set():
+                            break
+                        self.session.sample_goal()
                 except Exception as exc:
                     self.sample_error = str(exc)
                     break
@@ -191,8 +196,13 @@ class NodeMeasurement:
 
     def finish_goal(self):
         self.stop.set()
-        self.thread.join()
-        self.session.end_goal()
+        try:
+            with self._sampling_lock:
+                # Seal the counters before sampler teardown can add goal cost.
+                self.session.end_goal()
+        finally:
+            # Never join while holding a lock the sampler may still need.
+            self.thread.join()
         self.artifacts = self.session.finish_session()
         if self.sample_error:
             raise RuntimeError(f"counter sampling failed: {self.sample_error}")
