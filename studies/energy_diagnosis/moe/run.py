@@ -144,6 +144,7 @@ def run(args):
         source_revision=revision,
         fingerprint=fingerprint,
         execution_protocol=EXECUTION_PROTOCOL,
+        limits=dict(goal_seconds=args.deadline, max_steps=args.max_steps, max_output_tokens=args.max_tokens),
         policies={sid: asdict(p) for sid, p in by_setting.items()},
         schedule=schedule.to_dict(),
         query_engine=args.query_engine if query_assets else None,
@@ -279,7 +280,7 @@ def main(argv=None):
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--max-steps", type=int, default=5)
     p.add_argument("--max-tokens", type=int, default=512)
-    p.add_argument("--deadline", type=float, default=120)
+    p.add_argument("--deadline", type=float, default=120, help="Whole-goal seconds including model startup, up to 1800; also use a bounded batch supervisor")
     p.add_argument("--seed", type=int, default=7)
     p.add_argument(
         "--fixture-case",
@@ -302,7 +303,7 @@ def main(argv=None):
     )
     args = p.parse_args(argv)
     if (
-        not 0 < args.deadline <= 600
+        not 0 < args.deadline <= 1800
         or min(args.max_runs, args.max_steps, args.repeats, args.max_tokens) < 1
     ):
         p.error("invalid bounded run/step/time budget")
