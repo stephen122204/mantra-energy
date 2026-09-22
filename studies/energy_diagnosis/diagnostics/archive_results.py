@@ -163,8 +163,8 @@ def previous_receipt(path, host, remote):
     )
 
 
-def restore_snapshot(receipt_path, destination):
-    """Verify the complete chain, then restore its latest view to a new directory."""
+def verified_chain(receipt_path):
+    """Validate every bundle and receipt without extracting any files."""
     chain, seen = [], set()
     path = Path(receipt_path).resolve()
     identity = None
@@ -195,6 +195,12 @@ def restore_snapshot(receipt_path, destination):
         if header != receipt["manifest"]:
             raise ValueError("receipt differs from bundle")
         prior = header["files"]
+    return chain, prior
+
+
+def restore_snapshot(receipt_path, destination):
+    """Verify the complete chain, then restore its latest view to a new directory."""
+    chain, prior = verified_chain(receipt_path)
     target = Path(destination)
     target.mkdir(parents=True, exist_ok=False)
     restored = set()
@@ -335,7 +341,20 @@ def main():
         return 0
     except Exception as error:
         (out / "failure.json").write_text(
-            json.dumps(dict(status="failed", error=str(error)), indent=2) + "\n"
+            json.dumps(
+                dict(
+                    status="failed",
+                    error=str(error),
+                    error_type=type(error).__name__,
+                    retryable_transport=isinstance(error, subprocess.TimeoutExpired)
+                    or (
+                        isinstance(error, subprocess.CalledProcessError)
+                        and error.returncode == 255
+                    ),
+                ),
+                indent=2,
+            )
+            + "\n"
         )
         raise
 
