@@ -242,7 +242,12 @@ def main():
         return 0
     if not args.remote_directory or not args.remote_status:
         parser.error("snapshot requires remote directory and status")
-    root = PurePosixPath(args.remote_directory)
+    # The server uses its native filesystem; the SSH receiver targets POSIX.
+    root = (
+        Path(args.remote_directory)
+        if args.serve
+        else PurePosixPath(args.remote_directory)
+    )
     if not root.is_absolute() or len(root.parts) < 4 or ".." in root.parts:
         parser.error("explicit dedicated result directory required")
     safe_name(args.remote_status)
