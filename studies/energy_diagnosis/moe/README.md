@@ -14,10 +14,10 @@ From a clean team checkout using the study Python environment:
 python -m pip install -r requirements-study.txt
 python scripts/check_study_runtime.py
 python scripts/check_moe_pipeline.py
-python -m studies.energy_diagnosis.moe.run --mode fixture --output /tmp/moe-fixture --policies demand,history,fixed,bounded --max-runs 8
+python -m studies.energy_diagnosis.moe.run --mode fixture --output /tmp/moe-fixture --policies demand,history,fixed,bounded --max-runs 20
 ```
 
-The last command runs both substantive task families under four controls through
+The last command runs all five substantive tasks under four controls through
 real subprocess RPC, actual tool computation, independent verification, simulated
 counters and the existing ledger. Repeat with the same directory to check resume:
 there should be zero new attempts. Fixture output is not model or energy evidence.
@@ -241,7 +241,12 @@ prompts and checks source shape and behavior. The changed task is `pricing-repai
 it retains lineage
 `synthetic-pricing-v1`. Earlier task outcomes keep their original version and
 must not be retroactively regraded. Use a new campaign directory for this version.
-Every goal starts from a hash-checked copy of its immutable input. The database and
+Every goal starts from a hash-checked copy of its immutable input. Task assets are
+generated once per campaign directory; a rerun in the same directory reuses an
+identical existing asset and refuses a changed one rather than rewriting it. The
+prompt-visible tool contracts (`TOOL_CONTRACTS`) declare the exact argument set,
+an example call and any read/write/test or schema/query ordering, and the runtime
+rejects calls outside that set. The database and
 numerical tools are read-only, ETL and repository writes are limited to their named
 source file, and all final checks use the existing bounded process executor where
 subprocess work is required.
