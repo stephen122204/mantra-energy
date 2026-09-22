@@ -16,7 +16,7 @@ from typing import Any, Sequence
 from .ledger import LedgerError, RunLedger
 
 
-TERMINAL_SUPERVISOR_STATUSES = {"completed", "failed", "timed_out", "interrupted"}
+TERMINAL_SUPERVISOR_STATUSES = {"completed", "failed", "timed_out", "interrupted", "interference_detected"}
 
 
 class RecoveryRefused(RuntimeError):
