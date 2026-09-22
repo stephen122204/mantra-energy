@@ -45,7 +45,7 @@ def alive(pid):
     return bool(state) and not state.startswith('Z')
 
 
-def stop_group(child,grace=20):
+def stop_group(child,grace=20,extra_owned=()):
     """Terminate the child's group, then every descendant seen before the stop.
 
     Returns the descendant PIDs that are still alive afterwards; an empty list is
@@ -53,7 +53,7 @@ def stop_group(child,grace=20):
     and outside the group can be missed; supervisors of detached workers must
     still terminate their own work.
     """
-    owned = descendants(child.pid)
+    owned = sorted(set(descendants(child.pid)) | set(extra_owned))
     try:
         os.killpg(child.pid,signal.SIGTERM)
     except ProcessLookupError:
@@ -96,6 +96,7 @@ def main():
     p.add_argument('--cutoff-utc',required=True)
     p.add_argument('--lock',required=True)
     p.add_argument('--grace-seconds',type=float,default=20,help='SIGTERM grace before SIGKILL; model release can take seconds')
+    p.add_argument('--process-baseline', help='Reviewed Linux process snapshot; abort on unrelated new processes or background load')
     p.add_argument('command',nargs=argparse.REMAINDER)
     a = p.parse_args()
     if os.name != 'posix':
@@ -124,6 +125,8 @@ def main():
         raise InterruptedError(f'supervisor received signal {signum}')
     save()
     child = None
+    from .process_guard import ProcessGuard, InterferenceDetected
+    guard = None
     previous = {s:signal.signal(s,interrupted) for s in (signal.SIGTERM,signal.SIGINT)}
     try:
         with open(a.lock,'a') as lock, (out/'run.log').open('w') as log:
@@ -133,23 +136,43 @@ def main():
                 state.update(status='blocked_by_other_job',returncode=75)
             else:
                 try:
+                    if a.process_baseline:
+                        baseline = json.loads(Path(a.process_baseline).read_text())
+                        (out/'process-baseline.json').write_text(json.dumps(baseline, indent=2)+'\n')
+                        guard = ProcessGuard(baseline, out/'process-observations.jsonl', os.getpid())
                     child = subprocess.Popen(command,cwd=a.cwd,stdout=log,stderr=subprocess.STDOUT,
                                              stdin=subprocess.DEVNULL,start_new_session=True)
                     state.update(status='running',child_pid=child.pid)
                     save()
-                    rc = child.wait(timeout=a.seconds)
+                    if guard is None:
+                        rc = child.wait(timeout=a.seconds)
+                    else:
+                        deadline = time.monotonic() + a.seconds
+                        while child.poll() is None:
+                            guard.check()
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                raise subprocess.TimeoutExpired(command, a.seconds)
+                            try:
+                                child.wait(timeout=min(0.5, remaining))
+                            except subprocess.TimeoutExpired:
+                                pass
+                        guard.check()
+                        rc = child.returncode
                     state.update(status='completed' if rc == 0 else 'failed',returncode=rc)
                 finally:
                     if child is not None:
-                        survivors = stop_group(child,a.grace_seconds)
+                        survivors = stop_group(child,a.grace_seconds,guard.surviving_owned()) if guard else stop_group(child,a.grace_seconds)
                         state['cleanup_complete'] = not survivors
                         if survivors:
                             state['surviving_pids'] = survivors
+    except InterferenceDetected as e:
+        state.update(status='interference_detected',returncode=76,error=str(e),measurement_batch_valid=False)
     except subprocess.TimeoutExpired:
         state.update(status='timed_out',returncode=124)
     except InterruptedError as e:
         state.update(status='interrupted',returncode=130,error=str(e))
-    except (OSError,subprocess.SubprocessError) as e:
+    except (OSError,ValueError,KeyError,subprocess.SubprocessError) as e:
         state.update(status='failed',returncode=1,error=str(e))
     finally:
         for s,handler in previous.items():

@@ -122,6 +122,31 @@ This controls ordering only: it does not establish an adequate repetition count,
 consistent warm-up/cache state, thermal stability, exclusive hardware use or
 measurement validity. Those checks remain required for the supplied batch.
 
+## Guarded exclusive execution
+
+On a separately reserved Linux node, save a private process snapshot with
+`python -m studies.energy_diagnosis.diagnostics.process_guard --output BASELINE.json`.
+Review its existing users and processes before accepting it. A snapshot of a busy
+node is not authorization to keep the unrelated work. Stop or coordinate other
+jobs first; do not automatically approve the baseline during every launch.
+
+Pass `--process-baseline BASELINE.json` to `run_bounded`. It observes processes
+about twice per second, retaining PID/start-time/user/name and CPU-time snapshots,
+without collecting command lines or environments. Unapproved user-space processes,
+a different boot or existing background usage above 0.25 CPU-seconds per elapsed
+second abort the batch with exit 76 and `measurement_batch_valid: false`.
+Owned descendants and launcher ancestors are distinguished from other work;
+previously observed owned workers remain cleanup targets if reparented. Missing
+process access fails closed. Kernel threads are excluded from process admission.
+
+The threshold is an explicit detector limit, not evidence that smaller background
+activity has no effect. Sampling can miss short processes and does not provide
+access control or perfect isolation. Use a dedicated reservation, one operator,
+the shared hardware lock and the saved observations together. Do not open new SSH
+monitor sessions, install packages, build, download or copy backups during guarded
+measurements. Schedule inspection and backups between bounded batches. On any
+guard failure retain all artifacts, mark the affected batch invalid for energy
+comparisons and investigate before resuming; do not silently retry it as clean.
 ### Operating-state observations
 
 Every node measurement writes a ledger-registered, hashed `operating-state.json`.
