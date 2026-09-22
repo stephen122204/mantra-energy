@@ -108,10 +108,31 @@ class CampaignSchedule:
         )
 
     @classmethod
-    def build(cls, blocks: Iterable[ScheduleBlock], *, seed: int) -> "CampaignSchedule":
+    def build(cls, blocks: Iterable[ScheduleBlock], *, seed: int, balanced_pairs: bool = False) -> "CampaignSchedule":
         _require(isinstance(seed, int) and not isinstance(seed, bool), "seed must be an integer")
         block_list = tuple(blocks)
         _require(bool(block_list), "schedule must contain at least one block")
+        _require(type(balanced_pairs) is bool, "balanced_pairs must be boolean")
+        pair_keys = {}
+        pair_counts = {}
+        if balanced_pairs:
+            for block in block_list:
+                _require(len(block.runs) == 2, "balanced order requires two settings per block")
+                left, right = block.runs
+                _require(left.task_id == right.task_id and left.setting_id != right.setting_id,
+                         "balanced pairs require the same task and distinct settings")
+                identity = (left.task_id, tuple(sorted(r.setting_id for r in block.runs)),
+                            block.session_slot, block.preparation_sha256,
+                            left.task_asset_sha256, left.model_sha256,
+                            left.verifier_version, left.verifier_sha256, left.source_commit, left.simulated)
+                _require((left.task_asset_sha256, left.model_sha256, left.verifier_version, left.verifier_sha256, left.source_commit, left.simulated)
+                         == (right.task_asset_sha256, right.model_sha256, right.verifier_version, right.verifier_sha256, right.source_commit, right.simulated),
+                         "balanced pair inputs/model/verifier differ")
+                pair_keys[block.block_id] = identity
+                pair_counts[identity] = pair_counts.get(identity, 0) + 1
+            _require(all(n % 2 == 0 for n in pair_counts.values()),
+                     "balanced order requires an even number of pairs for each task/configuration")
+        pair_seen = {}
         seen_blocks: set[str] = set()
         seen_runs: set[str] = set()
         entries: list[ScheduledRun] = []
@@ -122,7 +143,19 @@ class CampaignSchedule:
             block_seed = int.from_bytes(
                 hashlib.sha256(f"{seed}\0{block.block_id}".encode("utf-8")).digest()[:8], "big"
             )
-            random.Random(block_seed).shuffle(runs)
+            if balanced_pairs:
+                key = pair_keys[block.block_id]
+                occurrence = pair_seen.get(key, 0)
+                pair_seen[key] = occurrence + 1
+                runs.sort(key=lambda run: run.setting_id)
+                pair_seed = int.from_bytes(hashlib.sha256(
+                    _canonical_json([seed, key, occurrence // 2]).encode("utf-8")
+                ).digest()[:8], "big")
+                random.Random(pair_seed).shuffle(runs)
+                if occurrence % 2:
+                    runs.reverse()
+            else:
+                random.Random(block_seed).shuffle(runs)
             for block_order, run in enumerate(runs, start=1):
                 _require(run.planned_run_id not in seen_runs, f"duplicate planned_run_id: {run.planned_run_id}")
                 seen_runs.add(run.planned_run_id)
