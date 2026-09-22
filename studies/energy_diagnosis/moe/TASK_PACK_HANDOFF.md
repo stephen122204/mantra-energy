@@ -4,7 +4,7 @@ Dependencies: numerical component PR41 and business component PR42. This branch
 combines both without modifying the pilot runner or PR40. `task_pack.prepare`
 accepts an explicit list of `{kind, rows, seed}` specifications and returns
 `TaskPack.tasks`, `TaskPack.catalog()` and `TaskPack.runtime(output)`.
-Numerical contributes one task per specification; business contributes three.
+Numerical and ETL each contribute one task per specification; business contributes three.
 This is an implemented Python interface, not an existing command-line flag.
 
 ## Runner integration still required
@@ -28,11 +28,11 @@ This is an implemented Python interface, not an existing command-line flag.
 
 ## Tests currently present
 
-`python -m pytest -q tests/test_task_pack.py tests/test_business_workload.py tests/test_numerical_workload.py tests/test_numerical_pipeline.py`
+`python -m pytest -q tests/test_task_pack.py tests/test_business_workload.py tests/test_numerical_workload.py tests/test_numerical_pipeline.py tests/test_etl_workload.py`
 
-30 local tests pass on the combined branch. Includes real numerical/SQL work,
+41 local tests pass on the combined branch. Includes real numerical/SQL work,
 reference comparisons, schema restrictions, invalid answers, input preservation,
 pack dispatch, and injected-model/sensor numerical executor/ledger/resume cases.
-The production CLI has not been modified. ETL expansion remains separate work.
+The production CLI has not been modified. The bounded SQL ETL component is included; production integration remains pending.
 Different sizes/seeds of generated inputs are still one lineage per generator.
 No research protocol, raw data or private discussion is part of this handoff.
