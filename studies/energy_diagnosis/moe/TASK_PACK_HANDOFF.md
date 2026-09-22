@@ -69,3 +69,15 @@ Prepared inputs use the same regression tool, verifier, manifest and record path
 ### Token budget before native execution
 
 `--max-tokens` defaults to 512 and applies to every model response. The prepared-input limit of 64 groups is a data-validation bound, not a promise that the answer fits that token budget. Before selecting a native configuration, use the pinned model tokenizer/chat template on the actual saved prompt and a correct answer. Include accumulated tool-result metadata and the optional inspect step. Check both answer length and `prompt_tokens + max_tokens <= max_context`; reserve headroom for differences in real model output. Keep the chosen setting identical across policy comparisons. Fixture workers do not enforce actual tokenizer-length limits and cannot qualify this condition. If a task requires a larger budget, pass it explicitly and record it in the manifest; do not silently remove answer fields or truncate groups.
+
+
+A read-only replay command is available in an environment with the matching Transformers version and Jinja2 installed (no PyTorch/GPU is required):
+
+```sh
+python -m studies.energy_diagnosis.moe.audit_token_budget \
+  --campaign /absolute/completed-fixture-or-native-output \
+  --tokenizer-path /absolute/pinned-local-tokenizer \
+  --max-context 4096 --max-tokens 1536
+```
+
+The numbers above are an invocation example, not universally qualified settings. The command uses only local tokenizer files and emits JSON to stdout. It returns 2 for any saved response/output-context overflow or unavailable/failed response; malformed or absent artifacts also fail. It records tokenizer file and chat-template hashes. Exit 0 means only the saved paths fit these proposed limits, including one termination token; separately check alternate tool paths and actual native generations. Keep the JSON output outside GitHub.
