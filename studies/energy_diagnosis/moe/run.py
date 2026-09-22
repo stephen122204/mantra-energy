@@ -28,6 +28,16 @@ from .workloads import create_tasks, WorkloadRuntime, VERSION
 EXECUTION_PROTOCOL = "planned-body-initialized-window-v1"
 
 
+class CampaignInterrupted(BaseException):
+    """SIGTERM/SIGINT: unwind through every cleanup block without being treated
+    as an ordinary goal failure. The claimed attempt stays `running` for the
+    guarded recovery command; owned worker and tool processes are terminated."""
+
+
+def _interrupt(signum, frame):
+    raise CampaignInterrupted(f"campaign received signal {signum}")
+
+
 def run(args):
     simulated = args.mode == "fixture"
     root = Path(args.output).resolve()
@@ -46,7 +56,16 @@ def run(args):
         raise ValueError("native execution requires a clean reviewed checkout")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     query_assets = getattr(args, "query_assets", None)
-    if query_assets:
+    pack_path = getattr(args, "task_pack", None)
+    pack = None
+    if pack_path and query_assets:
+        raise ValueError("task-pack and query-assets are mutually exclusive")
+    if pack_path:
+        from .task_pack import prepare
+        specifications = json.loads(Path(pack_path).read_text(encoding="utf-8"))
+        pack = prepare(root / "assets", specifications)
+        tasks = pack.tasks
+    elif query_assets:
         from .query_workload import load_task, QueryRuntime, VERSION as query_version
         tasks = (load_task(query_assets, allow_fixture=simulated, engine=args.query_engine),)
         workload_version = query_version
@@ -83,7 +102,13 @@ def run(args):
         )
     )
     by_setting = {f"C00-{p.name}-{digest(asdict(p))[:12]}": p for p in policies}
-    verifier_hash = hashlib.sha256(verifier_source.read_bytes()).hexdigest()
+    if pack is not None:
+        catalog = {row["task_id"]: row for row in pack.catalog()}
+    else:
+        verifier_hash = hashlib.sha256(verifier_source.read_bytes()).hexdigest()
+        catalog = {t.task_id: dict(task_id=t.task_id, family=t.family, lineage=t.lineage,
+                    asset_sha256=t.asset_sha256, workload_version=workload_version,
+                    verifier_sha256=verifier_hash) for t in tasks}
     blocks = []
     for repeat in range(args.repeats):
         for task in tasks:
@@ -98,8 +123,8 @@ def run(args):
                     revision,
                     task.asset_sha256,
                     digest(config),
-                    workload_version,
-                    verifier_hash,
+                    catalog[task.task_id]["workload_version"],
+                    catalog[task.task_id]["verifier_sha256"],
                     simulated=simulated,
                 )
                 for i, sid in enumerate(by_setting)
@@ -122,11 +147,11 @@ def run(args):
         policies={sid: asdict(p) for sid, p in by_setting.items()},
         schedule=schedule.to_dict(),
         query_engine=args.query_engine if query_assets else None,
-        task_catalog=[dict(task_id=t.task_id, family=t.family, lineage=t.lineage,
-                           asset_sha256=t.asset_sha256, workload_version=workload_version,
-                           verifier_sha256=verifier_hash) for t in tasks],
+        task_catalog=[catalog[t.task_id] for t in tasks],
         measurement_scope="CPU-package and GPU-board only; includes backend startup, tools, transfers, cleanup and verification",
     )
+    if pack is not None:
+        manifest["task_pack"] = json.loads((pack.root / "task-pack.json").read_text())
     path = root / "moe-manifest.json"
     if path.exists():
         if json.loads(path.read_text()) != manifest:
@@ -183,7 +208,7 @@ def run(args):
                     simulated=simulated,
                     lifecycle=lifecycle,
                     initialized_model_window=True,
-                    workload_runtime=QueryRuntime(args.fixture_case if simulated else None, args.query_engine) if query_assets else WorkloadRuntime(
+                    workload_runtime=pack.runtime(root) if pack is not None else QueryRuntime(args.fixture_case if simulated else None, args.query_engine) if query_assets else WorkloadRuntime(
                         root, args.fixture_case if simulated else None
                     ),
                 )
@@ -247,7 +272,8 @@ def main(argv=None):
     p.add_argument("--bytes-per-second", type=float)
     p.add_argument("--expected-pause-seconds", type=float)
     p.add_argument("--task", default="all")
-    p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default two tasks")
+    p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
+    p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
     p.add_argument("--query-engine", choices=["duckdb", "sqlite"], default="duckdb")
     p.add_argument("--max-runs", type=int, default=4)
     p.add_argument("--repeats", type=int, default=1)
@@ -284,7 +310,16 @@ def main(argv=None):
         p.error(
             "native preparation requires an explicit expert-byte budget (fixture default is only 128 bytes)"
         )
-    result = run(args)
+    import signal
+
+    for name in ("SIGTERM", "SIGINT"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), _interrupt)
+    try:
+        result = run(args)
+    except CampaignInterrupted as exc:
+        print(f"{exc}; owned work terminated, ledger exported, claimed attempt left for recovery", file=sys.stderr)
+        raise SystemExit(130)
     if not result["validation"]["valid"]:
         raise SystemExit(2)
     # A structurally valid ledger alone is not a successful native smoke test.

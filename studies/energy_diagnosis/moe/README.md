@@ -14,10 +14,10 @@ From a clean team checkout using the study Python environment:
 python -m pip install -r requirements-study.txt
 python scripts/check_study_runtime.py
 python scripts/check_moe_pipeline.py
-python -m studies.energy_diagnosis.moe.run --mode fixture --output /tmp/moe-fixture --policies demand,history,fixed,bounded --max-runs 8
+python -m studies.energy_diagnosis.moe.run --mode fixture --output /tmp/moe-fixture --policies demand,history,fixed,bounded --max-runs 20
 ```
 
-The last command runs both substantive task families under four controls through
+The last command runs all five substantive tasks under four controls through
 real subprocess RPC, actual tool computation, independent verification, simulated
 counters and the existing ledger. Repeat with the same directory to check resume:
 there should be zero new attempts. Fixture output is not model or energy evidence.
@@ -119,6 +119,30 @@ The model's top-k router remains unchanged. Queued work is cancelled at tool end
 already-issued work must drain before model resume. Timeout or backend failure
 kills and reaps the owned worker before final cost is captured. Process cleanup failure, or forced native termination before device work was confirmed idle, makes the energy interval invalid. No remote API or fixture fallback is
 used in native mode.
+
+### Interruption, recovery and resume
+
+`SIGTERM`/`SIGINT` to the campaign command unwinds through every cleanup block:
+the owned worker and any isolated tool process are terminated, the ledger is
+exported, and the command exits 130. The claimed attempt deliberately stays
+`running`; reconcile it with `studies.energy_diagnosis.campaign.recover` using
+the bounded launcher's terminal `status.json` (`cleanup_complete: true`), the
+original session/clock identity and an endpoint from that clock, after an
+independent process check. Recovery keeps the attempt as `incomplete` with
+unavailable verification/measurement. The campaign command uses the ledger's
+default retry limit (0), so the interrupted slot is not re-run automatically; a
+retry policy is a run-definition decision, not a cleanup default. Rerunning the
+identical command in the same directory then continues with the remaining
+pending slots only. The summary counts the recovered attempt as an unknown cost
+and `window-audit.json` reports it as `recovered: true` with
+`all_domains_measured: false`; the native smoke exit codes 3/5 still apply to
+such a directory because it is not a clean, fully measured batch. A different
+source revision, configuration or task definition is refused by the manifest
+check; task assets are reused only when identical.
+
+Operating commands for an unattended batch (launch, inspect, safe stop,
+recovery, resume, export and verified off-node copy) are collected in
+[OPERATIONS.md](OPERATIONS.md).
 
 ## Initialized-model measurement window
 
@@ -225,17 +249,31 @@ is separately recorded in model-call `hook_ns`. Bounded buffers report overflow 
 a failed observation, never as an empty trace. Preparation that is not used by the
 goal end remains visible; this does not by itself prove a causal performance loss.
 
-The data task performs a 20,000-row join/filter/aggregation with an independent SQL
-reference. The repository task reads, repairs, compiles and runs visible checks,
-then verifies pure arithmetic code against 90 separate test cases. Its allowed
-repair is one pure arithmetic function, not arbitrary repository development.
-Workload version `moe-tools-v3` exposes the exact permitted repair language in the
-prompt and checks the function signature, expression structure and integer result
-type. The changed task is `pricing-repair-v2`; it retains lineage
+The default workload catalog now contains five bounded tasks. The data task performs
+a 20,000-row join/filter/aggregation with an independent SQL reference. The
+repository task reads, repairs, compiles and runs visible checks, then verifies pure
+arithmetic code against 90 separate test cases. The new database task uses a
+read-only customer/orders SQLite database and recomputes paid counts and revenue by
+segment independently. The new ETL task repairs a constrained `transform_rows`
+function and checks ordered outputs on hidden cases. The numerical task reads a
+deterministic observation table and verifies an exact-fraction ordinary least-squares
+reference rounded to six decimals.
+
+The allowed repairs are bounded functions, not arbitrary repository development.
+Workload version `moe-tools-v4` exposes the exact permitted repair languages in the
+prompts and checks source shape and behavior. The changed task is `pricing-repair-v2`;
+it retains lineage
 `synthetic-pricing-v1`. Earlier task outcomes keep their original version and
 must not be retroactively regraded. Use a new campaign directory for this version.
-Every goal starts from a hash-checked copy of its immutable input. Tools and final
-checks use the existing bounded process executor.
+Every goal starts from a hash-checked copy of its immutable input. Task assets are
+generated once per campaign directory; a rerun in the same directory reuses an
+identical existing asset and refuses a changed one rather than rewriting it. The
+prompt-visible tool contracts (`TOOL_CONTRACTS`) declare the exact argument set,
+an example call and any read/write/test or schema/query ordering, and the runtime
+rejects calls outside that set. The database and
+numerical tools are read-only, ETL and repository writes are limited to their named
+source file, and all final checks use the existing bounded process executor where
+subprocess work is required.
 
 The summary exports startup time, resume-barrier time, summed transfer host brackets, Python routing-hook time, and prepared bytes not requested. The resume barrier includes cancellation/drain/reporting overhead; summed transfer brackets can overlap and must not be added to goal duration. It includes failed-attempt costs by physical domain, marks missing energy
 unknown, and leaves joules per success undefined when there are zero successes.

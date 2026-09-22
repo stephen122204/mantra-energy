@@ -1,6 +1,7 @@
 """Real tool execution and the same owned RPC/lifecycle interface as the GPU path."""
 from collections import Counter
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -39,9 +40,9 @@ def command(output, *args, expected=0):
 def test_complete_tasks_controls_and_durable_resume(tmp_path):
     output = tmp_path / "all"
     first = command(
-        output, "--policies", "demand,history,fixed,bounded", "--max-runs", "8"
+        output, "--policies", "demand,history,fixed,bounded", "--max-runs", "20"
     )
-    assert first["executed"] == 8
+    assert first["executed"] == 20
     assert first["validation"]["valid"]
     manifest = json.loads((output / "moe-manifest.json").read_text())
     assert manifest["execution_protocol"] == "planned-body-initialized-window-v1"
@@ -49,7 +50,7 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         x["startup_seconds"] > 0 and x["resume_barrier_seconds"] >= 0
         for x in first["summary"]["settings"].values()
     )
-    assert all(x["successful"] == 2 for x in first["summary"]["settings"].values())
+    assert all(x["successful"] == 5 for x in first["summary"]["settings"].values())
     barrier_totals = Counter()
     barrier_counts = Counter()
     inner_totals = Counter()
@@ -124,20 +125,20 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
             end = next(s["value"] for s in domain if ":goal_end:" in s["sample_id"])
             assert m["energy_j"] == pytest.approx((end - begin) / 1e6)
     for setting, row in first["summary"]["settings"].items():
-        assert barrier_counts[setting] == 4  # One data tool and three repair tools.
+        assert barrier_counts[setting] == 10  # One data, two database, three repair, three ETL, one numerical call.
         assert row["resume_barrier_seconds"] == pytest.approx(
             barrier_totals[setting] / 1e9
         )
-        assert row["initialized_model"]["attempts_with_valid_window"] == 2
+        assert row["initialized_model"]["attempts_with_valid_window"] == 5
         for domain, cost in row["initialized_model"]["energy"].items():
             assert cost["total_attempt_joules"] == pytest.approx(inner_totals[setting, domain])
-            assert cost["joules_per_success"] == pytest.approx(inner_totals[setting, domain] / 2)
+            assert cost["joules_per_success"] == pytest.approx(inner_totals[setting, domain] / 5)
             assert cost["before_task_window_joules"] + cost["total_attempt_joules"] + cost["after_task_window_joules"] == pytest.approx(row["energy"][domain]["total_attempt_joules"])
     again = command(
-        output, "--policies", "demand,history,fixed,bounded", "--max-runs", "8"
+        output, "--policies", "demand,history,fixed,bounded", "--max-runs", "20"
     )
     assert again["executed"] == 0
-    assert again["validation"]["counts"]["attempts"] == 8
+    assert again["validation"]["counts"]["attempts"] == 20
     # An adjacent JSON file is not evidence unless the ledger registered it.
     from studies.energy_diagnosis.moe.summary import summarize
     exports = output / "exports" / "attempts.jsonl"
@@ -430,3 +431,227 @@ def test_native_worker_cannot_fall_back_to_simulation(tmp_path):
         backend.reset_goal_state()
     assert backend.process is None
     assert not backend.reset_evidence
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX signal delivery to the campaign command")
+def test_sigterm_terminates_owned_work_and_leaves_attempt_for_recovery(tmp_path):
+    """A supervisor stop must not orphan the model worker or a running tool."""
+    import signal
+    import psutil
+
+    process = subprocess.Popen(
+        [sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+         "--output", str(tmp_path), "--fixture-case", "tool_timeout", "--policies", "fixed",
+         "--max-runs", "1", "--deadline", "30"],
+        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    parent = psutil.Process(process.pid)
+    deadline = time.monotonic() + 30
+    owned = []
+    while time.monotonic() < deadline:
+        owned = parent.children(recursive=True)
+        names = " ".join(" ".join(p.cmdline()) for p in owned if p.is_running())
+        if "moe.worker" in names and "multiprocessing" in names:
+            break
+        time.sleep(0.05)
+    assert any("moe.worker" in " ".join(p.cmdline()) for p in owned), "worker never started"
+    process.send_signal(signal.SIGTERM)
+    _, stderr = process.communicate(timeout=60)
+    assert process.returncode == 130, stderr
+    assert "left for recovery" in stderr
+    gone, alive = psutil.wait_procs(owned, timeout=10)
+    assert not [p for p in alive if p.is_running() and p.status() != psutil.STATUS_ZOMBIE], stderr
+    from studies.energy_diagnosis.campaign import RunLedger
+
+    with RunLedger(tmp_path / "ledger.sqlite", artifact_root=tmp_path) as ledger:
+        running = ledger.running_attempts()
+        assert len(running) == 1 and ledger.validate()["counts"]["running"] == 1
+    assert (tmp_path / "exports" / "attempts.jsonl").exists()
+
+
+@pytest.mark.parametrize("partial_artifact", [False, True])
+def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path, partial_artifact):
+    from studies.energy_diagnosis.campaign import RunLedger
+    from studies.energy_diagnosis.campaign.recover import reconcile
+    from studies.energy_diagnosis.moe.audit_windows import audit
+    from studies.energy_diagnosis.moe.summary import summarize
+
+    output = tmp_path / "campaign"
+    first = command(output, "--policies", "demand", "--max-runs", "1")
+    assert first["executed"] == 1
+    # Simulate an interrupted claim from a separate fixture session.
+    with RunLedger(output / "ledger.sqlite", artifact_root=output) as ledger:
+        schedule_id = json.loads((output / "state" / "schedule.json").read_text())["schedule_id"]
+        lease = ledger.claim_next(session_id="fixture-interrupted", started_ns=10 ** 12,
+                                  clock_domain="fixture:test-host:process-1-1:monotonic",
+                                  metadata={"schedule_id": schedule_id, "requested_resources": {}})
+    assert lease is not None
+    if partial_artifact:
+        import hashlib
+        from studies.energy_diagnosis.campaign import ArtifactRef
+        plan = next(json.loads(line)["plan"] for line in (output / "exports/plans.jsonl").read_text().splitlines()
+                    if json.loads(line)["plan"]["planned_run_id"] == lease.planned_run_id)
+        retained = json.loads(next((output / "goals").glob("*/record.json")).read_text())
+        retained.update(goal_execution_id=lease.execution_id, planned_run_id=lease.planned_run_id,
+                        session_id=lease.session_id, task_id=plan["task_id"], setting_id=plan["setting_id"],
+                        attempt_number=lease.attempt_number, clock_domain=lease.clock_domain,
+                        started_ns=lease.started_ns, ended_ns=lease.started_ns+1,
+                        execution_status="crashed", measurements=[], spans=[])
+        retained_path = output / "goals" / lease.execution_id / "record.json"
+        retained_path.parent.mkdir()
+        retained_path.write_text(json.dumps(retained))
+        ref = ArtifactRef(path=retained_path.relative_to(output).as_posix(), sha256=hashlib.sha256(retained_path.read_bytes()).hexdigest(), role="execution-record")
+        with RunLedger(output / "ledger.sqlite", artifact_root=output) as ledger:
+            ledger.checkpoint(lease, [ref], metadata={"owned_work_terminated": False})
+    blocked = command(output, "--policies", "demand", "--max-runs", "5")
+    assert blocked["executed"] == 0 and blocked["validation"]["counts"]["running"] == 1
+    status = tmp_path / "status.json"
+    status.write_text(json.dumps(dict(status="interrupted", returncode=130, child_pid=4321,
+                                      cleanup_complete=True, finished_utc="2026-09-22T00:00:00+00:00")))
+    result = reconcile(campaign_dir=output, session_id="fixture-interrupted",
+                       clock_domain="fixture:test-host:process-1-1:monotonic", ended_ns=10 ** 12 + 5,
+                       reason="fixture supervisor interruption", supervisor_status=status,
+                       apply=True, owned_work_terminated=True)
+    assert result["recovered_attempt_ids"] == [lease.attempt_id]
+    resumed = command(output, "--policies", "demand", "--max-runs", "5")
+    # The campaign command keeps the ledger default retry limit (0): the interrupted
+    # slot is retained as incomplete evidence and is not silently re-run.
+    assert resumed["executed"] == 3 and resumed["validation"]["valid"]
+    counts = resumed["validation"]["counts"]
+    assert counts["attempts"] == 5 and counts["running"] == 0 and counts["pending"] == 0
+    rows = [json.loads(line) for line in (output / "exports" / "attempts.jsonl").read_text().splitlines()]
+    statuses = Counter(row["attempt"]["execution_status"] for row in rows)
+    assert statuses == {"completed": 4, "incomplete": 1}
+    assert max(Counter(row["plan"]["planned_run_id"] for row in rows).values()) == 1  # never duplicated
+    summary = summarize(output)
+    (setting,) = summary["settings"].values()
+    assert setting["attempts"] == 5 and setting["successful"] == 4 and setting["invalid_energy_attempts"] == 1
+    assert setting["initialized_model"]["attempts_with_valid_window"] == 4
+    assert all(cost["total_attempt_joules"] is None for cost in setting["energy"].values())  # one unknown cost
+    report = audit(output)
+    assert report["audit_passed"] and report["attempts"] == 5
+    recovered = [r for r in report["results"] if r.get("recovered")]
+    assert len(recovered) == 1 and recovered[0]["all_domains_measured"] is False
+    assert recovered[0]["execution_status"] == "incomplete" and recovered[0]["verifier_outcome"] == "unavailable"
+    assert sum(r["all_domains_measured"] for r in report["results"]) == 4
+    dispositions = {d["planned_run_id"]: d["disposition"] for d in resumed["validation"]["dispositions"]}
+    assert dispositions[lease.planned_run_id] != "pending"
+    again = command(output, "--policies", "demand", "--max-runs", "5")
+    assert again["executed"] == 0
+    if partial_artifact:
+        retained_path.write_text(retained_path.read_text() + " ")
+        assert not audit(output)["audit_passed"]
+        with pytest.raises(ValueError, match="artifact hash mismatch"):
+            summarize(output)
+
+
+def test_killed_worker_counts_as_terminated_but_not_idle(tmp_path):
+    """A reaped worker cannot own device work; the batch must finalize the
+    attempt instead of aborting, while the forced stop stays visible."""
+    backend = ProcessBackend(
+        {"fixture_case": "model_timeout"}, python=sys.executable, mode="fixture",
+        log_path=tmp_path / "backend.log",
+    )
+    backend.reset_goal_state()
+    assert backend.owned_work_terminated is False and backend.termination_forced is False
+    with pytest.raises(RuntimeError, match="no response within"):
+        backend.generate("{}", 0.05, 10)
+    assert backend.process is None
+    assert backend.owned_work_terminated is True
+    assert backend.termination_forced is True and backend.idle_confirmed is False
+    backend.reset_goal_state()
+    assert backend.termination_forced is False  # A fresh owned process starts clean.
+    backend.end_goal()
+    assert backend.termination_forced is False  # Idle at kill time is not forced.
+
+
+def test_forced_native_termination_invalidates_energy_but_finalizes():
+    from studies.energy_diagnosis.local_run import GoalExecutor
+    from types import SimpleNamespace
+
+    def executor(simulated, forced):
+        e = GoalExecutor.__new__(GoalExecutor)
+        e.simulated = simulated
+        e.lifecycle = SimpleNamespace(backend=SimpleNamespace(termination_forced=forced))
+        return e
+
+    assert executor(False, True)._termination_invalidity(False) == "live model termination unverified"
+    assert executor(False, True)._termination_invalidity(True) == "owned worker terminated before device work was confirmed idle"
+    assert executor(False, False)._termination_invalidity(True) is None
+    assert executor(True, True)._termination_invalidity(True) is None  # Fixture devices have no idle semantics.
+
+
+def test_startup_timeout_reaps_worker_without_claiming_device_drain(tmp_path):
+    backend = ProcessBackend({}, python=sys.executable, mode="fixture",
+                             log_path=tmp_path / "startup.log", timeout=0.000001)
+    control = Lifecycle(backend, Policy("demand", 0))
+    with pytest.raises(RuntimeError, match="no response within"):
+        control.begin_goal("failed-start")
+    assert control.goal is None
+    assert backend.process is None
+    assert backend.owned_work_terminated
+    assert not backend.idle_confirmed
+    control.end_goal()
+    backend.timeout = 10
+    control.begin_goal("next-start")
+    control.end_goal()
+    assert backend.owned_work_terminated
+
+
+def test_termination_status_does_not_depend_on_device_drain(tmp_path):
+    backend = ProcessBackend({"fixture_case": "model_timeout"},
+                             python=sys.executable, mode="fixture",
+                             log_path=tmp_path / "timeout.log")
+    backend.reset_goal_state()
+    with pytest.raises(RuntimeError, match="no response within"):
+        backend.generate("{}", 0.01, 10)
+    assert backend.owned_work_terminated
+    assert not backend.idle_confirmed
+    backend.termination_confirmed = False
+    assert not backend.owned_work_terminated
+
+
+def test_startup_timeout_recorded_and_next_slot_runs(tmp_path, monkeypatch):
+    from studies.energy_diagnosis.moe import run as campaign
+    original = ProcessBackend.reset_goal_state
+    starts = []
+
+    def reset(self):
+        starts.append(1)
+        if len(starts) == 1:
+            self.timeout = 0.000001
+        return original(self)
+
+    monkeypatch.setattr(ProcessBackend, "reset_goal_state", reset)
+    campaign.main(["--mode", "fixture", "--output", str(tmp_path),
+                   "--task", "joined-orders-v1", "--policies", "demand,fixed",
+                   "--max-runs", "2", "--deadline", "30"])
+    records = [json.loads(p.read_text()) for p in (tmp_path / "goals").glob("*/record.json")]
+    assert len(records) == 2
+    failed = next(r for r in records if r["execution_status"] == "crashed")
+    assert "no response within" in failed["error"]
+    assert "no owned goal" not in failed["error"]
+    assert failed["verifier"]["outcome"] == "unavailable"
+    assert any(r["verifier"]["outcome"] == "pass" for r in records)
+    for p in (tmp_path / "goals").glob("*/record.json"):
+        if json.loads(p.read_text())["execution_status"] == "crashed":
+            assert json.loads(p.with_name("initialized-model-window.json").read_text())["status"] != "valid"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group ownership")
+def test_surviving_process_group_refuses_termination_claim(tmp_path, monkeypatch):
+    import psutil
+    from types import SimpleNamespace
+    backend = ProcessBackend({}, python=sys.executable, mode="fixture",
+                             log_path=tmp_path / "group.log")
+    backend.reset_goal_state()
+    group = backend.process.pid
+    real_getpgid = os.getpgid
+    fake_pid = 2147483646
+    monkeypatch.setattr(psutil, "process_iter", lambda *args: [
+        SimpleNamespace(pid=fake_pid, status=lambda: psutil.STATUS_RUNNING)])
+    monkeypatch.setattr(os, "getpgid", lambda pid: group if pid == fake_pid else real_getpgid(pid))
+    with pytest.raises(RuntimeError, match="process group termination unverified"):
+        backend.end_goal()
+    assert backend.process is None
+    assert not backend.owned_work_terminated

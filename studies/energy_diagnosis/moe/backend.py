@@ -31,10 +31,16 @@ class ProcessBackend:
         self.seq = 0
         self.reset_evidence = {}
         self.idle_confirmed = True
+        # True when an owned worker was killed while device work was not confirmed
+        # idle: the process is reaped (owned work terminated) but its captured
+        # energy interval is not a complete goal interval.
+        self.termination_forced = False
+        self.termination_confirmed = True
 
     @property
     def owned_work_terminated(self):
-        return self.process is None and (self.mode == "fixture" or self.idle_confirmed)
+        # Process-group termination and device drain are separate evidence.
+        return self.process is None and self.termination_confirmed
 
     def capabilities(self):
         # Real capability verification happens in reset before returning goal-start.
@@ -43,9 +49,11 @@ class ProcessBackend:
     def reset_goal_state(self):
         if self.process is not None:
             raise RuntimeError("reset requires previous process to be reaped")
+        self.termination_forced = False
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.log = self.log_path.open("ab")
         self.messages = queue.Queue(maxsize=4)
+        self.termination_confirmed = False
         self.process = subprocess.Popen(
             [self.python, "-m", "studies.energy_diagnosis.moe.worker", self.mode],
             stdin=subprocess.PIPE,
@@ -101,7 +109,13 @@ class ProcessBackend:
                 json.dumps(dict(id=self.seq, method=method, args=args)) + "\n"
             )
             self.process.stdin.flush()
-            result = self.messages.get(timeout=10 if timeout is None else timeout)
+            wait = 10 if timeout is None else timeout
+            try:
+                result = self.messages.get(timeout=wait)
+            except queue.Empty:
+                raise RuntimeError(
+                    f"backend RPC {method!r} produced no response within {wait}s"
+                ) from None
             if isinstance(result, Exception):
                 raise result
             if result.get("id") != self.seq:
@@ -152,6 +166,8 @@ class ProcessBackend:
         p = self.process
         if p is None:
             return
+        if p.poll() is None and not self.idle_confirmed:
+            self.termination_forced = True
         # Explicitly own the whole process tree. Native threads can otherwise outlive RPC failure.
         try:
             if os.name == "posix":
@@ -178,10 +194,21 @@ class ProcessBackend:
             # exit after SIGKILL. Keep a finite bound, but allow the observed
             # multi-gigabyte teardown to finish before rejecting ownership.
             p.wait(timeout=60)
+            if os.name == "posix":
+                # Reaping only the leader does not prove the process group is empty.
+                import psutil
+
+                for child in psutil.process_iter(["pid", "status"]):
+                    try:
+                        if os.getpgid(child.pid) == p.pid and child.status() != psutil.STATUS_ZOMBIE:
+                            raise RuntimeError("backend process group termination unverified")
+                    except (ProcessLookupError, psutil.NoSuchProcess):
+                        pass
             if self.reader_thread is not threading.current_thread():
                 self.reader_thread.join(timeout=2)
             if self.reader_thread.is_alive():
                 raise RuntimeError("backend output reader did not terminate")
+            self.termination_confirmed = True
         finally:
             if p.poll() is not None:
                 for handle in (p.stdin, p.stdout, self.log):
