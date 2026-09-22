@@ -32,6 +32,7 @@ def test_patched_router_preserves_framework_probabilities(tmp_path, monkeypatch,
     class Executor:
         def dispatch_local(self, layer, h, mask, weights, **kwargs):
             self.mask,self.weights=mask,weights
+            self.selected=kwargs.get("selected_experts")
             self.output=torch.zeros_like(h)
         def wait_dispatch_local(self): return self.output
     executor=Executor();model.expert_executor=executor
@@ -40,6 +41,7 @@ def test_patched_router_preserves_framework_probabilities(tmp_path, monkeypatch,
         expected=torch.zeros(tokens,8,dtype=torch.float32).scatter_(1,indices,weights)
         monkeypatch.setenv('ALEMS_QWEN_REFERENCE_MATH','1')
         model(hidden)
+        assert torch.equal(executor.selected,indices)
         assert executor.weights.dtype==torch.float32
         assert torch.equal(executor.weights,expected)
         assert torch.equal(executor.mask,expected.ne(0))

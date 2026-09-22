@@ -107,14 +107,16 @@ before final verification (the latest partial copy is retained).
 
 ## Reference arithmetic build
 
-The Qwen runner requires `reference_arithmetic: "transformers-5.3-bf16-v1"`
-in its private configuration and the matching freshly built patch. This mode
-keeps router probabilities in float32, uses the framework's separate BF16
-projection/activation rounding boundaries, and reduces weighted expert outputs
-in ascending expert order using BF16 additions. The legacy fused kernel and
-float32 accumulation are different numerical implementations. Changing this
-mode changes the execution configuration; never append its runs to an older
-manifest or relabel earlier results.
+The Qwen runner requires `reference_arithmetic: "transformers-5.3-grouped-bf16-v1"`
+and `reference_experts_implementation: "grouped_mm"` in its private
+configuration and the matching freshly built patch. This mode keeps router
+probabilities in float32, uses a combined gate/up projection with separate BF16
+activation boundaries, and restores token/top-k contribution order before the
+framework's float32 sum and final BF16 cast. This matches the implementation
+selected by the pinned full model; a standalone expert defaults differently
+unless its implementation is explicitly set. Completion order must not affect
+arithmetic. Changing this mode changes the execution configuration; never append
+its runs to an older manifest or relabel earlier results.
 
 The mode is explicitly enabled in the owned model worker. The native patch
 retains its upstream behavior when the mode is absent, but the study runner

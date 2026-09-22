@@ -7,5 +7,6 @@
   "device_memory_ratio": 0.65,
   "max_context": 4096,
   "request_prefix_cache": "disabled",
-  "reference_arithmetic": "transformers-5.3-bf16-v1"
+  "reference_arithmetic": "transformers-5.3-grouped-bf16-v1",
+  "reference_experts_implementation": "grouped_mm"
 }
