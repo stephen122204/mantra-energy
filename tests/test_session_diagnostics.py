@@ -163,7 +163,7 @@ def test_copy_rejects_multiline_known_hosts_path(tmp_path):
 def test_cleanup_failure_does_not_claim_success(tmp_path, monkeypatch):
     from studies.energy_diagnosis.diagnostics import run_bounded
     monkeypatch.setattr(sys, 'argv', ['run_bounded', *launcher(tmp_path, 'pass')[3:]])
-    def fail_cleanup(child):
+    def fail_cleanup(child, *grace):
         raise OSError('fixture cleanup failure')
     monkeypatch.setattr(run_bounded, 'stop_group', fail_cleanup)
     assert run_bounded.main() == 1
@@ -171,3 +171,38 @@ def test_cleanup_failure_does_not_claim_success(tmp_path, monkeypatch):
     assert record['status'] == 'failed'
     assert record['finished_utc']
     assert record['cleanup_complete'] is False
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='POSIX supervisor')
+def test_detached_descendants_are_terminated_before_cleanup_is_claimed(tmp_path):
+    # The child starts a worker in its own session, as the model worker and
+    # isolated tool processes do; a process-group signal alone cannot reach it.
+    code = ("import subprocess,sys,time;"
+            "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(120)'],start_new_session=True);"
+            "open(sys.argv[1] if len(sys.argv)>1 else 'worker.pid','w').write(str(p.pid));time.sleep(120)")
+    process = subprocess.Popen(launcher(tmp_path, code, seconds=60))
+    status = tmp_path / 'job/status.json'
+    pid_file = tmp_path / 'worker.pid'
+    try:
+        for _ in range(300):
+            if pid_file.exists() and pid_file.read_text().strip():
+                break
+            time.sleep(.02)
+        else:
+            raise AssertionError('detached worker never started')
+        worker = int(pid_file.read_text())
+        os.kill(worker, 0)
+        process.send_signal(signal.SIGTERM)
+        assert process.wait(timeout=60) == 130
+        record = json.loads(status.read_text())
+        assert record['status'] == 'interrupted' and record['cleanup_complete'] is True
+        assert 'surviving_pids' not in record
+        with pytest.raises(ProcessLookupError):
+            os.kill(worker, 0)
+    finally:
+        if process.poll() is None:
+            process.kill(); process.wait()
+        try:
+            os.kill(int(pid_file.read_text()), signal.SIGKILL)
+        except (OSError, ValueError):
+            pass

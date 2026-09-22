@@ -92,6 +92,16 @@ def summarize(root):
                     started_ns=attempt["started_ns"],
                     ended_ns=attempt.get("ended_ns"),
                 )
+            elif not any(a["role"] == "execution-record" for a in attempt["artifacts"]):
+                # A recovered interrupted attempt has a ledger record but no goal
+                # artifacts. Keep it as an incomplete attempt with unknown cost;
+                # anything else without artifacts is unexplained evidence loss.
+                if "recovery" not in (attempt.get("outcome_metadata") or {}):
+                    raise ValueError("attempt without execution artifacts lacks recovery evidence")
+                if record["execution_status"] != "incomplete" or any(
+                    m.get("status") == "valid" for m in record.get("measurements", [])
+                ):
+                    raise ValueError("recovered attempt claims completion or valid energy")
             else:
                 import hashlib
 
