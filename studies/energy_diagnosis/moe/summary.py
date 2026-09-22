@@ -92,6 +92,13 @@ def summarize(root):
                     started_ns=attempt["started_ns"],
                     ended_ns=attempt.get("ended_ns"),
                 )
+            elif "recovery" in (attempt.get("outcome_metadata") or {}):
+                from .audit_windows import audit_recovered
+
+                # The terminal recovery record intentionally differs from the
+                # preserved pre-recovery observation. Validate its provenance,
+                # but never count that earlier window as complete goal energy.
+                audit_recovered(row, root)
             elif not any(a["role"] == "execution-record" for a in attempt["artifacts"]):
                 # A recovered interrupted attempt has a ledger record but no goal
                 # artifacts. Keep it as an incomplete attempt with unknown cost;

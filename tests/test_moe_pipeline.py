@@ -469,7 +469,8 @@ def test_sigterm_terminates_owned_work_and_leaves_attempt_for_recovery(tmp_path)
     assert (tmp_path / "exports" / "attempts.jsonl").exists()
 
 
-def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path):
+@pytest.mark.parametrize("partial_artifact", [False, True])
+def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path, partial_artifact):
     from studies.energy_diagnosis.campaign import RunLedger
     from studies.energy_diagnosis.campaign.recover import reconcile
     from studies.energy_diagnosis.moe.audit_windows import audit
@@ -485,6 +486,23 @@ def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path):
                                   clock_domain="fixture:test-host:process-1-1:monotonic",
                                   metadata={"schedule_id": schedule_id, "requested_resources": {}})
     assert lease is not None
+    if partial_artifact:
+        import hashlib
+        from studies.energy_diagnosis.campaign import ArtifactRef
+        plan = next(json.loads(line)["plan"] for line in (output / "exports/plans.jsonl").read_text().splitlines()
+                    if json.loads(line)["plan"]["planned_run_id"] == lease.planned_run_id)
+        retained = json.loads(next((output / "goals").glob("*/record.json")).read_text())
+        retained.update(goal_execution_id=lease.execution_id, planned_run_id=lease.planned_run_id,
+                        session_id=lease.session_id, task_id=plan["task_id"], setting_id=plan["setting_id"],
+                        attempt_number=lease.attempt_number, clock_domain=lease.clock_domain,
+                        started_ns=lease.started_ns, ended_ns=lease.started_ns+1,
+                        execution_status="crashed", measurements=[], spans=[])
+        retained_path = output / "goals" / lease.execution_id / "record.json"
+        retained_path.parent.mkdir()
+        retained_path.write_text(json.dumps(retained))
+        ref = ArtifactRef(path=retained_path.relative_to(output).as_posix(), sha256=hashlib.sha256(retained_path.read_bytes()).hexdigest(), role="execution-record")
+        with RunLedger(output / "ledger.sqlite", artifact_root=output) as ledger:
+            ledger.checkpoint(lease, [ref], metadata={"owned_work_terminated": False})
     blocked = command(output, "--policies", "demand", "--max-runs", "5")
     assert blocked["executed"] == 0 and blocked["validation"]["counts"]["running"] == 1
     status = tmp_path / "status.json"
@@ -520,6 +538,11 @@ def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path):
     assert dispositions[lease.planned_run_id] != "pending"
     again = command(output, "--policies", "demand", "--max-runs", "5")
     assert again["executed"] == 0
+    if partial_artifact:
+        retained_path.write_text(retained_path.read_text() + " ")
+        assert not audit(output)["audit_passed"]
+        with pytest.raises(ValueError, match="artifact hash mismatch"):
+            summarize(output)
 
 
 def test_killed_worker_counts_as_terminated_but_not_idle(tmp_path):
