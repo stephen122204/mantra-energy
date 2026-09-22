@@ -81,3 +81,8 @@ python -m studies.energy_diagnosis.moe.audit_token_budget \
 ```
 
 The numbers above are an invocation example, not universally qualified settings. The command uses only local tokenizer files and emits JSON to stdout. It returns 2 for any saved response/output-context overflow or unavailable/failed response; malformed or absent artifacts also fail. It records tokenizer file and chat-template hashes. Exit 0 means only the saved paths fit these proposed limits, including one termination token; separately check alternate tool paths and actual native generations. Keep the JSON output outside GitHub.
+
+
+### Detailed checker output
+
+New runs include `goals/<execution-id>/verification.json`, registered as a checksummed `verification-detail` artifact. It preserves the checker result and nested diagnostics separately from the summary verdict. The execution record links to it when the checker ran. `returned`, `error`, `not_run` and `unavailable` distinguish a returned result, checker exception, skipped check and non-JSON diagnostic payload. This file is created after model execution and is never included in model prompts. Preserve it with failed runs to distinguish contract violations from wrong calculations. Older runs do not acquire this file retroactively; do not fabricate missing diagnostics or change their verdicts.

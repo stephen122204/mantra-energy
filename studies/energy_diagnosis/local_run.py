@@ -450,6 +450,7 @@ class GoalExecutor:
             owned_terminated = (
                 owned_terminated and self.lifecycle.backend.owned_work_terminated
             )
+        verification_detail = dict(status="not_run", reason=error or "execution did not complete")
         verify_start = time.monotonic_ns()
         if status == "completed":
             try:
@@ -462,10 +463,17 @@ class GoalExecutor:
                     plan.verifier_version,
                     "pass" if result["passed"] else "fail",
                     result["reason"],
+                    evidence=((prefix / "verification.json").as_posix(),),
                 )
+                try:
+                    verification_detail = dict(status="returned", result=json.loads(json.dumps(result, allow_nan=False)))
+                except (TypeError, ValueError):
+                    verification_detail = dict(status="unavailable", reason="verifier result was not JSON serializable")
             except Exception as exc:
+                verification_detail = dict(status="error", reason=str(exc))
                 verifier = VerifierResult(
-                    plan.verifier_version, "unavailable", str(exc)
+                    plan.verifier_version, "unavailable", str(exc),
+                    evidence=((prefix / "verification.json").as_posix(),),
                 )
         else:
             verifier = VerifierResult(plan.verifier_version, "unavailable", error)
@@ -571,6 +579,7 @@ class GoalExecutor:
             ("events.json", events, "tool-events"),
             ("measurement.json", measured.to_dict(), "raw-measurement"),
             ("answer.json", answer, "answer"),
+            ("verification.json", verification_detail, "verification-detail"),
             ("record.json", record.to_dict(), "execution-record"),
         ]:
             artifacts.append(
