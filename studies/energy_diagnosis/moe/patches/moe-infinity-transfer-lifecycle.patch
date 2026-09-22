@@ -24,6 +24,115 @@ index 3bf3469..505e766 100644
  }
  
  ArcherTopologyHandle::ArcherTopologyHandle() {}
+diff --git a/core/parallel/expert_dispatcher.cpp b/core/parallel/expert_dispatcher.cpp
+index 00d899d..9bd14e3 100644
+--- a/core/parallel/expert_dispatcher.cpp
++++ b/core/parallel/expert_dispatcher.cpp
+@@ -1,3 +1,5 @@
++#include <cstdlib>
++#include <c10/cuda/CUDACachingAllocator.h>
+ // Copyright (c) EfficientMoE.
+ // SPDX-License-Identifier: Apache-2.0
+ 
+@@ -1577,7 +1579,14 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
+               args.generation) {
+         return true;
+       }
+-      if (batch_size == 1) {
++      if (alems_reference_math_) {
++        auto token_indices = torch::nonzero(token_mask).squeeze(1);
++        auto weights = router_weight_.index({token_mask, expert_idx}).unsqueeze(1);
++        auto weighted_output = (output_tensor * weights).to(hidden_states_.scalar_type());
++        TORCH_CHECK(alems_reference_outputs_.emplace(
++            expert_idx, std::make_pair(token_indices, weighted_output)).second,
++            "duplicate expert output in reference arithmetic mode");
++      } else if (batch_size == 1) {
+         final_hidden_states_.add_(
+             output_tensor *
+             router_weight_.index({torch::indexing::Slice(), expert_idx}));
+@@ -1741,12 +1750,27 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
+   }
+   num_enqueued_.store(0, std::memory_order_release);
+   if (route_error) std::rethrow_exception(route_error);
++  if (alems_reference_math_) {
++    // Completion order can change with residency. Reduce in the framework's
++    // ascending expert order, rounding every contribution/addition to BF16.
++    auto stream = c10::cuda::getCurrentCUDAStream(device);
++    for (auto& item : alems_reference_outputs_) {
++      auto& indices = item.second.first;
++      auto& values = item.second.second;
++      c10::cuda::CUDACachingAllocator::recordStream(indices.storage().data_ptr(), stream);
++      c10::cuda::CUDACachingAllocator::recordStream(values.storage().data_ptr(), stream);
++      final_hidden_states_.index_add_(0, indices, values);
++    }
++    alems_reference_outputs_.clear();
++  }
+   return final_hidden_states_;
+ }
+ 
+ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+                                  const torch::Tensor& router_mask,
+                                  const torch::Tensor& router_weight) {
++  const char* reference_math = std::getenv("ALEMS_QWEN_REFERENCE_MATH");
++  alems_reference_math_ = reference_math != nullptr && std::string(reference_math) == "1";
+   current_invocation_id_ = 0;
+   TORCH_CHECK(!route_pending_.load(std::memory_order_acquire) &&
+                   pending_.load(std::memory_order_acquire) == 0,
+@@ -1761,7 +1785,8 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+   }
+   int device = at::cuda::current_device();
+   auto options =
+-      torch::TensorOptions().dtype(torch::kFloat32).device(CUDA_DEVICE(device));
++      torch::TensorOptions().dtype(alems_reference_math_ ? hidden_states.scalar_type() : torch::kFloat32).device(CUDA_DEVICE(device));
++  alems_reference_outputs_.clear();
+   hidden_states_ = hidden_states;
+   router_mask_ = router_mask;
+   router_weight_ = router_weight;  // this can be float32
+diff --git a/core/parallel/expert_dispatcher.h b/core/parallel/expert_dispatcher.h
+index 9f26cfd..59ee5c7 100644
+--- a/core/parallel/expert_dispatcher.h
++++ b/core/parallel/expert_dispatcher.h
+@@ -444,6 +444,8 @@ class ExpertDispatcher : public base::noncopyable {
+ 
+   torch::Tensor hidden_states_;
+   torch::Tensor final_hidden_states_;
++  bool alems_reference_math_ = false;
++  std::map<int64_t, std::pair<torch::Tensor, torch::Tensor>> alems_reference_outputs_;
+   torch::Tensor router_mask_;
+   torch::Tensor router_weight_;
+ 
+diff --git a/core/parallel/expert_module.cpp b/core/parallel/expert_module.cpp
+index cf57c08..dc6927c 100644
+--- a/core/parallel/expert_module.cpp
++++ b/core/parallel/expert_module.cpp
+@@ -4,6 +4,8 @@
+ // EfficientMoE Team
+ 
+ #include "expert_module.h"
++#include <cstdlib>
++#include <string>
+ #include "utils/cuda_utils.h"
+ #include "utils/logger.h"
+ #include "kernel/fused_moe_mlp.h"
+@@ -329,6 +331,18 @@ void MoEMLP::ForwardHelper(cudaStream_t stream) {
+     auto& down_proj =
+         (expert_type_ == DEEPSEEK_MOE_DENSE_ACT_DENSE) ? param_[2] : param_[1];
+ 
++    const char* reference_math = std::getenv("ALEMS_QWEN_REFERENCE_MATH");
++    if (reference_math != nullptr && std::string(reference_math) == "1" &&
++        expert_type_ == MIXTRAL_MOE_DENSE_ACT_DENSE) {
++      // Match the framework's BF16 rounding boundaries. The fused CUTLASS
++      // epilogue otherwise retains the up-projection accumulator in float32.
++      auto gate = torch::matmul(input, gate_proj.transpose(0, 1));
++      auto up = torch::matmul(input, up_proj.transpose(0, 1));
++      auto activated = torch::silu(gate) * up;
++      output.copy_(torch::matmul(activated, down_proj.transpose(0, 1)));
++      return;
++    }
++
+     auto& gate_out = buffer_[2];
+     auto& fused_out = buffer_[3];
+ 
 diff --git a/core/prefetch/archer_prefetch_handle.cpp b/core/prefetch/archer_prefetch_handle.cpp
 index f19d2a5..9392003 100644
 --- a/core/prefetch/archer_prefetch_handle.cpp
@@ -344,6 +453,27 @@ index 51c2033..c3fa5d1 100644
        .def("get_inflight_prefetch_bytes",
             &ArcherPrefetchHandle::GetInflightPrefetchBytes)
        .def("replace_cache_candidates",
+diff --git a/moe_infinity/models/qwen.py b/moe_infinity/models/qwen.py
+index ab6b133..9212c69 100644
+--- a/moe_infinity/models/qwen.py
++++ b/moe_infinity/models/qwen.py
+@@ -1,3 +1,4 @@
++import os
+ from typing import Optional, Protocol
+ 
+ import torch
+@@ -56,7 +57,10 @@ class Qwen3MoEBlock(nn.Module):
+         )
+         if self.norm_topk_prob:
+             routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
+-        routing_weights = routing_weights.to(hidden_states.dtype)
++        # Transformers 5.3 keeps normalized routing probabilities in float32.
++        # The legacy backend narrows them before weighting expert outputs.
++        if os.environ.get("ALEMS_QWEN_REFERENCE_MATH") != "1":
++            routing_weights = routing_weights.to(hidden_states.dtype)
+ 
+         router_mask = F.one_hot(selected_experts, num_classes=self.num_experts)
+         routing_weights_mask = (
 diff --git a/setup.py b/setup.py
 index ee72692..95ac633 100644
 --- a/setup.py

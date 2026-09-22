@@ -104,3 +104,29 @@ python -m studies.energy_diagnosis.diagnostics.copy_results \
 Exit 0 means every remote file was re-hashed on the node and matches the local
 copy (`copied_and_verified`); 1 means a mismatch; 2 means the cutoff arrived
 before final verification (the latest partial copy is retained).
+
+## Reference arithmetic build
+
+The Qwen runner requires `reference_arithmetic: "transformers-5.3-bf16-v1"`
+in its private configuration and the matching freshly built patch. This mode
+keeps router probabilities in float32, uses the framework's separate BF16
+projection/activation rounding boundaries, and reduces weighted expert outputs
+in ascending expert order using BF16 additions. The legacy fused kernel and
+float32 accumulation are different numerical implementations. Changing this
+mode changes the execution configuration; never append its runs to an older
+manifest or relabel earlier results.
+
+The mode is explicitly enabled in the owned model worker. The native patch
+retains its upstream behavior when the mode is absent, but the study runner
+refuses an absent/unknown declaration. Rebuild through `moe.prepare source` and
+`moe.prepare build` in a new backend directory/environment. Preserve old build
+manifests and installed files. Do not install test dependencies into an already
+fingerprinted backend environment: the runtime intentionally rejects a changed
+package freeze. Use a separate test environment or command-specific library
+paths for CPU diagnostics.
+
+A build or CPU test is not numerical qualification. Run the fixed-input demand
+repeatability, preparation and standard-reference comparisons on that exact
+build with nonzero completed preparation. Existing score tolerances remain
+unchanged. Preserve failed captures; do not widen tolerances to make a build
+pass. Native qualification is required before using the new mode in a batch.
