@@ -1,43 +1,32 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260922-qualified-native-and-guarded-runs.md)
+[Immutable turn record](turns/20260922-transfer-replay-and-verified-backups.md)
 
-# Integrated native qualification and guarded-run handoff
+# Transfer replay and verified backup integration
 
 ## Task and current understanding
-
-PR43/44/45/46/47/48 are merged. The execution checkout is integration f3499c886c13f54d2ff427c3e95251b184425fbc. There are no open PRs at this checkpoint. Older notes calling PR40 or PR45 merge-pending are superseded. This is a software/native-qualification checkpoint, not a claim that every task or unattended campaign is qualified.
-
-Alex's scope is backend/measurement readiness, Aldric's is workload contracts and independent correctness checks, Nitheesh's is durable records/recovery/export, and Stephen integrates and verifies the complete stack. Completion of one component does not certify the others.
+PR49 and PR50 are merged on integration, through 6a757096ef32750874d9d453dc2c674e3ea728c5. The node execution checkout is pinned to that commit. Alex owns backend and measurement behavior, Aldric owns workload inputs and independent verifiers, Nitheesh owns durable records and recovery, and Stephen verifies the integrated stack. A passing component is not whole-system qualification.
 
 ## Ideas and hypotheses
-
-The full pinned framework model selects grouped_mm experts, while a standalone expert can default differently. Native arithmetic must match the full model's actual implementation. OS background work and unrelated processes can contaminate valid-looking counter records, so arithmetic validity is distinct from measurement isolation.
+Repeated complete copies can exhaust the receiving disk even when individual batches are small. Incremental hash manifests should bound duplicated bytes while preserving recovery history.
 
 ## Decisions and rationale
+Back up only between terminal bounded batches. Use compressed incremental snapshots to avoid repeatedly copying unchanged raw files. Every receipt identifies the complete current manifest and its predecessor. Preserve all bundles and receipts; unchanged files may live in an earlier bundle. Never delete older snapshots because the latest archive looks complete.
 
-Keep the existing numerical tolerances. The new native mode restores grouped BF16 projection boundaries, FP32 weighting and token/top-k reduction order. Require explicit configuration and the matching rebuilt extension. Preserve old builds and failed captures. No mutation of an installed fingerprinted backend environment.
-
-Use the bounded launcher, reviewed process baseline, operating-state artifacts and balanced-pair option where their prerequisites hold. The process guard is sampled detection, not access control or perfect isolation. Operators must coordinate exclusive periods; do not log into the measurement node to build, download, copy, run another test or repeatedly poll during the protected window. Backups and inspection occur between bounded batches. Do not kill other users' jobs without identifying ownership and scope.
+Transfer replay checks host-side admission/placement brackets, actual tool-body bounds, clock uncertainty, later requests and first-dispatch residency. Logical placement bytes are not physical PCIe traffic, and a partial host bracket overlap is not proof that DMA overlapped useful computation. Unavailable observations remain explicit.
 
 ## Changes and artifacts
-
-- PR45: grouped reference arithmetic, pinned implementation declaration, native microcheck and fixed-input reference capture support.
-- PR46: seeded complementary policy order with even repetitions and immutable comparison mode.
-- PR47: hashed operating-state artifacts with acquisition timestamps, sensor provenance and explicit unavailable fields.
-- PR48: optional Linux process guard, terminal interference status, retained descendant cleanup and copy/recovery recognition. Windows fixture readiness waits for readable PID markers; termination checks remain strict.
-- Private hardware outputs, addresses, credentials, run definitions and research interpretation remain outside Git.
+- `studies/energy_diagnosis/moe/audit_transfers.py` independently checks registered trace artifacts and their hashes.
+- `studies/energy_diagnosis/diagnostics/archive_results.py` provides terminal-only snapshot export, verified SSH reception, chain validation and restoration into a new directory. Supply the explicit remote repository/interpreter plus the identity and known-hosts file. `--restore-receipt` and `--destination` restore a chain without SSH.
+- Archive export rejects symlinks, a changing tree and an active status. Reception rejects transport truncation, invalid paths, non-file or duplicate members, missing files and hash mismatch.
 
 ## Tests and evidence
-
-The integrated PR head passed all 15 CI checks. Local combined task/measurement/order/token-verifier checks passed (62 tests); reference/session/process checks passed (35, with two Linux-only tests skipped on macOS and exercised by Linux CI). Six native expert cases matched the actual grouped framework implementation exactly. The full fixed-input qualification completed successfully: repeated demand, demand/preparation with nonzero completed preparation, and standard-reference scores agreed exactly at all captured positions without changing tolerances. Capture and diagnostic bundles were copied off-node and hash-verified.
-
-This qualification covers its fixed-input cases, not arbitrary prompts, actual tool-overlap or energy efficacy. The target-node operating-state reader was exercised; unsupported CPU throttle counters remain unavailable. Earlier pilots are not clean effect evidence where concurrent setup activity was possible.
-
-## Open questions and disagreements
-
-Expanded real-model task paths, actual token margins, longer request/state qualification, target-node task durations, induced interruption/recovery, and complete output-bundle audits remain launch dependencies. Reservation budget and final run-definition freeze are separate operator checks. Sensor readings and raw-counter reconciliation are not external electrical calibration.
+17 focused archive tests pass. Existing session diagnostics pass. All 15 PR50 CI jobs pass, including native Windows recovery and CLI coverage. An initial Windows path-validation failure was fixed using native paths on the archive server, while the SSH receiver retains POSIX remote paths.
+- Real SSH snapshot, unchanged incremental snapshot, and full-chain restoration were exercised successfully against completed node artifacts. No result values are published here.
+- The grouped reference implementation passed the required fixed-input checks without changing tolerances. That remains limited numerical evidence; closed-loop tasks and unattended output acceptance are separate checks.
 
 ## Next actions and handoff
+A bounded guarded task-validation job is active. Do not start another node test, build, download or backup during its protected measurement windows. New SSH sessions may be temporarily unavailable during a window and are restored between batches, with a fallback timer. Do not bypass that arrangement by logging in another way. The receiver automatically verifies a terminal batch before proceeding.
 
-Stephen is running the guarded node preflight and then the expanded task and unattended checks. Other agents may continue local code review but must not launch work on the shared node during that sequence. Use `studies/energy_diagnosis/moe/OPERATIONS.md` for current flags and limitations. Keep failures and missing readings; stop and diagnose invalidity rather than silently replacing records or weakening checks.
+## Open questions and disagreements
+The full campaign is not declared ready by this note. Remaining acceptance includes the current task-validation outputs, clean counter/trace/ownership audits, final frozen configuration and reservation budget, and first complete campaign output verification. Preserve failed attempts and stop invalid batches; do not revise checks merely to obtain green status. Detailed research decisions and raw outputs stay private.
