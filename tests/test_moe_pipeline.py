@@ -39,9 +39,9 @@ def command(output, *args, expected=0):
 def test_complete_tasks_controls_and_durable_resume(tmp_path):
     output = tmp_path / "all"
     first = command(
-        output, "--policies", "demand,history,fixed,bounded", "--max-runs", "8"
+        output, "--policies", "demand,history,fixed,bounded", "--max-runs", "20"
     )
-    assert first["executed"] == 8
+    assert first["executed"] == 20
     assert first["validation"]["valid"]
     manifest = json.loads((output / "moe-manifest.json").read_text())
     assert manifest["execution_protocol"] == "planned-body-initialized-window-v1"
@@ -49,7 +49,7 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         x["startup_seconds"] > 0 and x["resume_barrier_seconds"] >= 0
         for x in first["summary"]["settings"].values()
     )
-    assert all(x["successful"] == 2 for x in first["summary"]["settings"].values())
+    assert all(x["successful"] == 5 for x in first["summary"]["settings"].values())
     barrier_totals = Counter()
     barrier_counts = Counter()
     inner_totals = Counter()
@@ -124,20 +124,20 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
             end = next(s["value"] for s in domain if ":goal_end:" in s["sample_id"])
             assert m["energy_j"] == pytest.approx((end - begin) / 1e6)
     for setting, row in first["summary"]["settings"].items():
-        assert barrier_counts[setting] == 4  # One data tool and three repair tools.
+        assert barrier_counts[setting] == 10  # One data, two database, three repair, three ETL, one numerical call.
         assert row["resume_barrier_seconds"] == pytest.approx(
             barrier_totals[setting] / 1e9
         )
-        assert row["initialized_model"]["attempts_with_valid_window"] == 2
+        assert row["initialized_model"]["attempts_with_valid_window"] == 5
         for domain, cost in row["initialized_model"]["energy"].items():
             assert cost["total_attempt_joules"] == pytest.approx(inner_totals[setting, domain])
-            assert cost["joules_per_success"] == pytest.approx(inner_totals[setting, domain] / 2)
+            assert cost["joules_per_success"] == pytest.approx(inner_totals[setting, domain] / 5)
             assert cost["before_task_window_joules"] + cost["total_attempt_joules"] + cost["after_task_window_joules"] == pytest.approx(row["energy"][domain]["total_attempt_joules"])
     again = command(
-        output, "--policies", "demand,history,fixed,bounded", "--max-runs", "8"
+        output, "--policies", "demand,history,fixed,bounded", "--max-runs", "20"
     )
     assert again["executed"] == 0
-    assert again["validation"]["counts"]["attempts"] == 8
+    assert again["validation"]["counts"]["attempts"] == 20
     # An adjacent JSON file is not evidence unless the ledger registered it.
     from studies.energy_diagnosis.moe.summary import summarize
     exports = output / "exports" / "attempts.jsonl"

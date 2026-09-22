@@ -225,17 +225,26 @@ is separately recorded in model-call `hook_ns`. Bounded buffers report overflow 
 a failed observation, never as an empty trace. Preparation that is not used by the
 goal end remains visible; this does not by itself prove a causal performance loss.
 
-The data task performs a 20,000-row join/filter/aggregation with an independent SQL
-reference. The repository task reads, repairs, compiles and runs visible checks,
-then verifies pure arithmetic code against 90 separate test cases. Its allowed
-repair is one pure arithmetic function, not arbitrary repository development.
-Workload version `moe-tools-v3` exposes the exact permitted repair language in the
-prompt and checks the function signature, expression structure and integer result
-type. The changed task is `pricing-repair-v2`; it retains lineage
+The default workload catalog now contains five bounded tasks. The data task performs
+a 20,000-row join/filter/aggregation with an independent SQL reference. The
+repository task reads, repairs, compiles and runs visible checks, then verifies pure
+arithmetic code against 90 separate test cases. The new database task uses a
+read-only customer/orders SQLite database and recomputes paid counts and revenue by
+segment independently. The new ETL task repairs a constrained `transform_rows`
+function and checks ordered outputs on hidden cases. The numerical task reads a
+deterministic observation table and verifies an exact-fraction ordinary least-squares
+reference rounded to six decimals.
+
+The allowed repairs are bounded functions, not arbitrary repository development.
+Workload version `moe-tools-v4` exposes the exact permitted repair languages in the
+prompts and checks source shape and behavior. The changed task is `pricing-repair-v2`;
+it retains lineage
 `synthetic-pricing-v1`. Earlier task outcomes keep their original version and
 must not be retroactively regraded. Use a new campaign directory for this version.
-Every goal starts from a hash-checked copy of its immutable input. Tools and final
-checks use the existing bounded process executor.
+Every goal starts from a hash-checked copy of its immutable input. The database and
+numerical tools are read-only, ETL and repository writes are limited to their named
+source file, and all final checks use the existing bounded process executor where
+subprocess work is required.
 
 The summary exports startup time, resume-barrier time, summed transfer host brackets, Python routing-hook time, and prepared bytes not requested. The resume barrier includes cancellation/drain/reporting overhead; summed transfer brackets can overlap and must not be added to goal duration. It includes failed-attempt costs by physical domain, marks missing energy
 unknown, and leaves joules per success undefined when there are zero successes.
