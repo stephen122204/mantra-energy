@@ -140,6 +140,10 @@ such a directory because it is not a clean, fully measured batch. A different
 source revision, configuration or task definition is refused by the manifest
 check; task assets are reused only when identical.
 
+Operating commands for an unattended batch (launch, inspect, safe stop,
+recovery, resume, export and verified off-node copy) are collected in
+[OPERATIONS.md](OPERATIONS.md).
+
 ## Initialized-model measurement window
 
 The MoE command also captures real counter checkpoints after model initialization
