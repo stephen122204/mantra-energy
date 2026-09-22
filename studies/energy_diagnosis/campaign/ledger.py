@@ -472,6 +472,32 @@ class RunLedger:
             raise
         return tuple(recovered)
 
+    def running_attempts(self, *, session_id: str | None = None) -> tuple[AttemptLease, ...]:
+        """Return immutable identities for attempts that still block the ledger.
+
+        This read-only view supports operator reconciliation without exposing the
+        ledger's SQLite connection or changing any attempt disposition.
+        """
+        if session_id is not None:
+            _non_empty(session_id, "session_id")
+        query = (
+            "SELECT a.*, p.payload_json FROM attempts a "
+            "JOIN plans p USING (planned_run_id) WHERE a.status = 'running'"
+        )
+        parameters: tuple[str, ...] = ()
+        if session_id is not None:
+            query += " AND a.session_id = ?"
+            parameters = (session_id,)
+        query += " ORDER BY a.actual_order"
+        rows = self._db.execute(query, parameters).fetchall()
+        return tuple(
+            self._lease_from_row(
+                row,
+                PlannedRun.from_dict(json.loads(row["payload_json"])).simulated,
+            )
+            for row in rows
+        )
+
     def record_unknown_interruption(self, *, session_id: str, reason: str) -> tuple[AttemptLease, ...]:
         """Checkpoint an interruption whose termination endpoint is unknown.
 
