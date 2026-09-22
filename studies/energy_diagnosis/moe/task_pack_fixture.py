@@ -27,7 +27,8 @@ class ScriptedModel:
             decision=call('regression',action='fit') if not history else {'answer':history[-1]['result']}
         else:
             kind=context['task_id'].split('-')[1]
-            if not history:decision=call('sql',action='query',sql=SQL[kind])
+            if not history:decision=call('sql',action='schema')
+            elif len(history)==1:decision=call('sql',action='query',sql=SQL[kind])
             else:
                 rows=history[-1]['result']['rows']
                 if kind=='segments':answer={'by_segment':{s:{'count':n,'cents':c} for s,n,c in rows}}
