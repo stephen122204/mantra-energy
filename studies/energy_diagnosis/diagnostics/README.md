@@ -36,8 +36,14 @@ weights, addresses, keys, raw task outputs or private discussion notes.
   stages. There are four captures, each with its own timeout. Use the bounded
   launcher for an additional overall budget.
 - `run_bounded`: POSIX job lock, durable `status.json`, `run.log`, elapsed-time
-  limit, UTC cutoff check and owned process-group cleanup. A completed status
-  means the command exited zero, not that measurements are scientifically valid.
+  limit, UTC cutoff check and owned process cleanup: the child's process group
+  first (`--grace-seconds`, default 20, before SIGKILL), then every descendant
+  recorded before the stop, including workers that started their own session.
+  `cleanup_complete` is true only when none of those processes survives;
+  otherwise `surviving_pids` is recorded and recovery refuses the status. A
+  process spawned after the pre-stop snapshot and outside the group can be
+  missed. A completed status means the command exited zero, not that
+  measurements are scientifically valid.
 - `copy_results`: periodic SSH/rsync copies into a new local directory and final
   SHA-256 verification after a recognized terminal job status. Failed experiment
   status remains visible even when copying succeeds. Requires **rsync 3+** on the
