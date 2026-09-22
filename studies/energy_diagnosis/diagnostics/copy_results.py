@@ -94,7 +94,7 @@ for f in root.rglob('*'):
    for block in iter(lambda:stream.read(1024*1024),b''): h.update(block)
   result[str(f.relative_to(root))]=h.hexdigest()
 print(json.dumps(result))'''
-    terminal = {'completed','failed','timed_out','interrupted','blocked_by_other_job'}
+    terminal = {'completed','failed','timed_out','interrupted','blocked_by_other_job','interference_detected'}
     while time.time() < cutoff.timestamp():
         try:
             state = json.loads(run(ssh+[a.host,'cat '+shlex.quote(str(remote/status))]))
