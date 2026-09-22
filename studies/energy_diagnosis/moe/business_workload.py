@@ -6,6 +6,7 @@ import sqlite3
 import tempfile
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 from .query_workload import QueryTool
+from .tool_contracts import SQL_ACTIONS, sql_contract, validate_action
 
 VERSION = 'business-query-v1'
 PROMPTS = {
@@ -88,9 +89,12 @@ class BusinessRuntime:
         self.workspace=self.root/'workspaces'/lease.execution_id
         shutil.copytree(task.asset_path,self.workspace)
     def context(self,task):
-        return dict(family=task.family,tools={'sql':{'description':'Read-only customers and transactions tables; schema or one bounded query. At most 128 rows returned; inspect truncation.','args':{'action':'schema|query','sql':'query only'}}},instruction='Return JSON {"tool_calls":[{"id":"unique","tool":"sql","args":{...}}]} or {"answer":{...}}. Use actual tool results, only declared arguments.')
+        return dict(family=task.family,tools={'sql':sql_contract('SQLite')},
+            instruction='Return only JSON {"tool_calls":[{"id":"unique","tool":"sql","args":{"action":"schema"}}]} or {"answer":{...}}. '
+            'Start by inspecting the schema; use a later query call with both action="query" and sql. '
+            'Use actual tool results and follow the goal answer schema. Do not omit action or invent column names.')
     def tool(self,task,call):
-        args=call.get('args',{})
-        if call.get('tool')!='sql' or not isinstance(args,dict) or set(args)-{'action','sql'}:raise ValueError('invalid SQL tool request')
+        if call.get('tool')!='sql':raise ValueError('invalid SQL tool request')
+        validate_action(call.get('args'),SQL_ACTIONS)
         return QueryTool(str(self.workspace/'business.sqlite'),tables=('customers','transactions'))
     def verify(self,task,answer):return verify(task,answer)
