@@ -2,23 +2,24 @@ from types import SimpleNamespace
 import pytest
 from studies.energy_diagnosis.moe.task_pack import prepare
 
-SPECS=[dict(kind='numerical',rows=128,seed=7),dict(kind='business',rows=128,seed=7)]
+SPECS=[dict(kind='numerical',rows=128,seed=7),dict(kind='business',rows=128,seed=7),dict(kind='etl',rows=128,seed=7)]
 
 def test_pack_catalog_and_dispatch(tmp_path):
     pack=prepare(tmp_path/'pack',SPECS)
-    assert len(pack.tasks)==4
-    assert len({t.task_id for t in pack.tasks})==4
-    assert len({t.lineage for t in pack.tasks})==2
+    assert len(pack.tasks)==5
+    assert len({t.task_id for t in pack.tasks})==5
+    assert len({t.lineage for t in pack.tasks})==3
     assert all(len(row['verifier_sha256'])==64 for row in pack.catalog())
     runtime=pack.runtime(tmp_path/'output')
     for i,task in enumerate(pack.tasks):
         runtime.begin(task,SimpleNamespace(execution_id=f'run{i}'))
         context=runtime.context(task)
-        name='regression' if task.family=='grouped-regression' else 'sql'
-        args={'action':'fit' if name=='regression' else 'schema'}
+        name={'grouped-regression':'regression','business-query':'sql','etl-sql-repair':'etl'}[task.family]
+        args={'action':{'regression':'fit','sql':'schema','etl':'read'}[name]}
         result=runtime.tool(task,dict(tool=name,args=args)).execute(**args)
         if name=='regression':assert runtime.verify(task,result)['passed']
-        else:assert set(result['tables'])=={'customers','transactions'}
+        elif name=='sql':assert set(result['tables'])=={'customers','transactions'}
+        else:assert set(result['schema']['tables'])=={'raw'}
     assert prepare(tmp_path/'pack',SPECS).catalog()==pack.catalog()
     with pytest.raises(ValueError):prepare(tmp_path/'pack',[dict(kind='numerical',rows=256,seed=7)])
 

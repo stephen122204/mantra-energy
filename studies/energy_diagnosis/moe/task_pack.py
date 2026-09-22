@@ -6,9 +6,9 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
-from . import numerical_workload, business_workload
+from . import numerical_workload, business_workload, etl_workload
 
-MODULES = {'numerical':numerical_workload, 'business':business_workload}
+MODULES = {'numerical':numerical_workload, 'business':business_workload, 'etl':etl_workload}
 
 
 @dataclass
@@ -32,7 +32,7 @@ class PackRuntime:
         self.modules=modules;self.output=output;self.active=None;self.task_id=None
     def begin(self,task,lease):
         module=self.modules[task.task_id]
-        cls=numerical_workload.RegressionRuntime if module is numerical_workload else business_workload.BusinessRuntime
+        cls={numerical_workload:numerical_workload.RegressionRuntime, business_workload:business_workload.BusinessRuntime, etl_workload:etl_workload.ETLRuntime}[module]
         self.active=cls(self.output);self.task_id=task.task_id
         self.active.begin(task,lease)
     def _runtime(self,task):
@@ -67,7 +67,7 @@ def prepare(root, specifications):
     for spec in specifications:
         module=MODULES[spec['kind']]
         path=root/f"{spec['kind']}-n{spec['rows']}-s{spec['seed']}"
-        if module is numerical_workload:
+        if module in (numerical_workload,etl_workload):
             created=(module.create_task(path,rows=spec['rows'],seed=spec['seed']),)
         else:created=module.create_tasks(path,rows=spec['rows'],seed=spec['seed'])
         for task in created:
