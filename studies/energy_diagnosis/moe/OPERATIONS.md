@@ -28,7 +28,11 @@ The launcher holds the GPU lock; a second launch exits 75 with
 `status: blocked_by_other_job`. `--seconds` must leave at least 60 s before the
 cutoff, and the cutoff must leave time to export and copy. The first goal in a
 fresh offload directory includes the one-time checkpoint conversion inside its
-startup window; the goal deadline (600 s) includes that startup.
+startup window; the example goal deadline (600 s) includes that startup.
+An explicit `--deadline` may be increased up to 1800 s when initialization
+requires it. Preserve the same goal limit across compared settings, record it
+in the manifest, and size the supervisor budget and reservation cutoff for
+the whole batch. This does not remove the time limit or authorize extra runs.
 
 ## Inspect
 
