@@ -15,7 +15,7 @@ def checked(tmp_path, source):
 def test_correct_integer_repair_and_versioned_public_contract(tmp_path):
     tasks = create_tasks(tmp_path / "assets")
     repair = next(t for t in tasks if t.family == "repository-repair")
-    assert repair.task_id == "pricing-repair-v2" and VERSION == "moe-tools-v3"
+    assert repair.task_id == "pricing-repair-v2" and VERSION == "moe-tools-v4"
     assert REPAIR_LANGUAGE in repair.prompt
     assert repair.lineage == "synthetic-pricing-v1"  # Same underlying task, not a new held-out lineage.
     assert checked(tmp_path, "# Allowed comment\ndef net_cents(price, count, discount):\n    return (price * count * (100 - discount) + 50) // 100\n") == {"passed": True, "checks": 90}

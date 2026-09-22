@@ -160,6 +160,45 @@ def audit_attempt(root, row):
                 source_revision=raw["environment"]["source_revision"], domains=result)
 
 
+def audit_recovered(row, root=None):
+    """An interrupted attempt recovered by the operator claims no counter evidence.
+
+    It is reported explicitly, never treated as measured, and cannot hide behind
+    an artifact: recovery metadata, incomplete status and absent valid energy are
+    all required before the attempt is accepted as consistently recorded.
+    """
+    attempt = row["attempt"]
+    metadata = attempt.get("outcome_metadata") or {}
+    record = attempt["execution_record"]
+    require(isinstance(metadata.get("recovery"), dict) and metadata["recovery"].get("reason"), "recovered attempt lacks recovery reason")
+    require(record["execution_status"] == "incomplete" and attempt["execution_status"] == "incomplete", "recovered attempt is not incomplete")
+    require(attempt["measurement_status"] != "valid" and attempt["verifier_outcome"] == "unavailable", "recovered attempt claims valid measurement or verification")
+    require(all(m.get("status") != "valid" and m.get("energy_j") is None for m in record.get("measurements", [])), "recovered attempt retains a numeric energy total")
+    require(record["ended_ns"] is not None and record["ended_ns"] >= record["started_ns"], "recovered attempt endpoint precedes its start")
+    require(metadata.get("owned_work_terminated") is True, "recovered ownership unverified")
+    if attempt["artifacts"]:
+        require(root is not None, "recovered artifact root required")
+        root = Path(root).resolve()
+        checkpoint_refs = [ref for cp in attempt.get("checkpoints", []) for ref in cp["artifacts"]]
+        for ref in attempt["artifacts"]:
+            require(ref in checkpoint_refs, "recovered artifact lacks prior checkpoint")
+            relative = Path(ref["path"])
+            path = (root / relative).resolve()
+            require(not relative.is_absolute() and path.is_relative_to(root), "recovered artifact escapes packet")
+            raw = path.read_bytes()
+            require(hashlib.sha256(raw).hexdigest() == ref["sha256"], "recovered artifact hash mismatch")
+            if ref["role"] == "execution-record":
+                prior = json.loads(raw)
+                require(relative == Path("goals") / attempt["execution_id"] / "record.json", "recovered record path mismatch")
+                for key in ("goal_execution_id", "planned_run_id", "session_id", "task_id", "setting_id", "attempt_number", "clock_domain", "started_ns", "simulated"):
+                    require(prior[key] == record[key], "recovered record identity mismatch")
+                require(prior["ended_ns"] <= record["ended_ns"], "recovery endpoint precedes retained observation")
+    return dict(execution_id=attempt["execution_id"], audit_passed=True, all_domains_measured=False, recovered=True,
+                simulated=record["simulated"], execution_status="incomplete", verifier_outcome="unavailable",
+                owned_work_terminated=metadata.get("owned_work_terminated") is True, source_revision=None, domains={},
+                note="recovered after interruption: " + metadata["recovery"]["reason"] + "; no counter evidence is claimed")
+
+
 def audit(root):
     root = Path(root).resolve()
     manifest = json.loads((root / "moe-manifest.json").read_text())
@@ -170,6 +209,9 @@ def audit(root):
         try:
             require(execution not in seen, "duplicate execution in export")
             seen.add(execution)
+            if "recovery" in (row["attempt"].get("outcome_metadata") or {}):
+                results.append(audit_recovered(row, root))
+                continue
             result = audit_attempt(root, row)
             require(manifest["execution_protocol"] == "planned-body-initialized-window-v1", "unsupported execution protocol")
             require(result["source_revision"] == manifest["source_revision"], "source revision differs from manifest")
