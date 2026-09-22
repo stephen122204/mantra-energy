@@ -166,8 +166,11 @@ def valid_answer(answer):
 class QueryTool:
     database: str
     max_seconds: float = 10.0
+    tables: tuple[str, ...] = ("trips", "zones")
 
     def execute(self, action, sql=None, workers=1):
+        if not self.tables or any(not isinstance(name, str) or not name or not name.isascii() or not (name[0].isalpha() or name[0] == "_") or not name.replace("_", "").isalnum() for name in self.tables):
+            raise ValueError("table names must be nonempty ASCII identifiers")
         if workers != 1:
             raise ValueError("this SQLite tool supports one worker")
         if action not in {"schema", "query"} or (action == "schema" and sql is not None):
@@ -183,7 +186,7 @@ class QueryTool:
             db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 65536)
             db.set_progress_handler(lambda: int((time.monotonic_ns()-started)/1e9 > self.max_seconds), 1000)
             if action == "schema":
-                payload = {"tables": {name: [dict(name=r[1], type=r[2]) for r in db.execute(f"PRAGMA table_info({name})")] for name in ("trips", "zones")}}
+                payload = {"tables": {name: [dict(name=r[1], type=r[2]) for r in db.execute(f"PRAGMA table_info({name})")] for name in self.tables}}
             else:
                 functions = {"count", "sum", "min", "max", "avg", "total", "strftime", "date", "datetime", "substr", "substring", "coalesce", "ifnull", "nullif", "lower", "upper", "trim", "length", "abs", "round", "like", "typeof"}
 
@@ -192,7 +195,7 @@ class QueryTool:
                         return sqlite3.SQLITE_OK
                     # SQLite reports a whole-table/count-only read with an
                     # empty column and no database name on some builds.
-                    if op == sqlite3.SQLITE_READ and a in {"trips", "zones"} and (database == "main" or (database is None and b == "")):
+                    if op == sqlite3.SQLITE_READ and a in self.tables and (database == "main" or (database is None and b == "")):
                         return sqlite3.SQLITE_OK
                     if op == sqlite3.SQLITE_FUNCTION and (b or "").lower() in functions:
                         return sqlite3.SQLITE_OK

@@ -1,0 +1,24 @@
+name: Business workload contracts
+on:
+  pull_request:
+    branches: ['research/energy-diagnosis']
+  push:
+    branches: ['research/energy-diagnosis']
+    paths:
+      - 'studies/energy_diagnosis/moe/business_workload.py'
+      - 'studies/energy_diagnosis/moe/query_workload.py'
+      - 'tests/test_business_workload.py'
+      - '.github/workflows/business-workload.yml'
+permissions:
+  contents: read
+jobs:
+  business-contracts:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: python -m pip install -r requirements-study.txt -r studies/energy_diagnosis/moe/requirements-query.txt
+      - run: python -X utf8 -m pytest -q tests/test_business_workload.py tests/test_moe_query_workload.py
