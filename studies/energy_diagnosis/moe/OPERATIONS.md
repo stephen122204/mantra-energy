@@ -130,3 +130,19 @@ repeatability, preparation and standard-reference comparisons on that exact
 build with nonzero completed preparation. Existing score tolerances remain
 unchanged. Preserve failed captures; do not widen tolerances to make a build
 pass. Native qualification is required before using the new mode in a batch.
+
+
+For a small lower-level GPU regression before loading the full checkpoint, run:
+
+```sh
+$W/backend-reference-env/bin/python -m studies.energy_diagnosis.diagnostics.check_native_expert_math \
+  --config $W/PRIVATE_REFERENCE_CONFIG.json --output $W/artifacts/NEW_EXPERT_CHECK
+```
+
+Run it under the same bounded launcher and hardware lock. The check verifies the
+loaded build fingerprint and uses synthetic expert weights at three token counts,
+both submission orders and a nondefault caller stream. It requires exact agreement
+with independently evaluated BF16 operations and the pinned framework's actual
+expert module. Its status and per-case diagnostics are saved in the new output
+directory; it does not establish full-model, task or energy validity. Preserve a
+failed result and still require the full fixed-input qualification above.
