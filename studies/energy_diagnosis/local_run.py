@@ -182,6 +182,24 @@ class GoalExecutor:
         if initialized_model_window and lifecycle is None:
             raise ValueError("initialized-model measurement requires an owned lifecycle")
 
+    def _termination_invalidity(self, owned_terminated):
+        """Why captured energy cannot be a complete goal interval, or None.
+
+        Unverified termination blocks finalization altogether. A worker that was
+        killed and reaped while its device work was never confirmed idle has
+        terminated (the attempt can be finalized and the batch continues), but
+        its interval is still not a complete, idle-bracketed goal.
+        """
+        if not owned_terminated:
+            return "live model termination unverified"
+        if (
+            self.lifecycle is not None
+            and not self.simulated
+            and getattr(self.lifecycle.backend, "termination_forced", False)
+        ):
+            return "owned worker terminated before device work was confirmed idle"
+        return None
+
     def __call__(self, request):
         plan = request.scheduled_run.planned_run
         task = self.tasks[plan.task_id]
@@ -507,11 +525,11 @@ class GoalExecutor:
                 except Exception as exc:
                     status, error = "crashed", f"{error}; expert release failed: {exc}"
                 owned_terminated = owned_terminated and self.lifecycle.backend.owned_work_terminated
-            if not owned_terminated:
-                inner_window.update(status="invalid", reason="final owned-work termination unverified")
+            invalid_reason = self._termination_invalidity(owned_terminated)
+            if invalid_reason:
+                inner_window.update(status="invalid", reason=invalid_reason)
                 inner_window["measurements"] = [
-                    dict(m, status="invalid", energy_j=None, coverage=None,
-                         reason="final owned-work termination unverified")
+                    dict(m, status="invalid", energy_j=None, coverage=None, reason=invalid_reason)
                     for m in inner_window["measurements"]
                 ]
         measured = self.measurement.finish_goal()
@@ -525,7 +543,8 @@ class GoalExecutor:
                     inner_window[name] = dict(measurements=[m.to_dict() for m in portion])
                 except Exception as exc:
                     inner_window[name] = dict(measurements=[], reason=str(exc))
-        if not owned_terminated:
+        invalid_reason = self._termination_invalidity(owned_terminated)
+        if invalid_reason:
             measured = replace(
                 measured,
                 measurements=tuple(
@@ -534,14 +553,14 @@ class GoalExecutor:
                         status="invalid",
                         energy_j=None,
                         coverage=None,
-                        reason="live model termination unverified; captured interval is not complete goal energy",
+                        reason=f"{invalid_reason}; captured interval is not complete goal energy",
                     )
                     for m in measured.measurements
                 ),
             )
             if self.initialized_model_window:
                 for name in ("before_task_window", "after_task_window"):
-                    inner_window[name] = dict(measurements=[], reason="final owned-work termination unverified")
+                    inner_window[name] = dict(measurements=[], reason=invalid_reason)
         record = ExecutionRecord(
             lease.execution_id,
             lease.planned_run_id,
