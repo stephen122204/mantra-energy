@@ -102,7 +102,7 @@ index 9f26cfd..59ee5c7 100644
    torch::Tensor router_weight_;
  
 diff --git a/core/parallel/expert_module.cpp b/core/parallel/expert_module.cpp
-index cf57c08..dc6927c 100644
+index cf57c08..a395558 100644
 --- a/core/parallel/expert_module.cpp
 +++ b/core/parallel/expert_module.cpp
 @@ -4,6 +4,8 @@
@@ -114,13 +114,14 @@ index cf57c08..dc6927c 100644
  #include "utils/cuda_utils.h"
  #include "utils/logger.h"
  #include "kernel/fused_moe_mlp.h"
-@@ -329,6 +331,18 @@ void MoEMLP::ForwardHelper(cudaStream_t stream) {
+@@ -329,6 +331,19 @@ void MoEMLP::ForwardHelper(cudaStream_t stream) {
      auto& down_proj =
          (expert_type_ == DEEPSEEK_MOE_DENSE_ACT_DENSE) ? param_[2] : param_[1];
  
 +    const char* reference_math = std::getenv("ALEMS_QWEN_REFERENCE_MATH");
 +    if (reference_math != nullptr && std::string(reference_math) == "1" &&
-+        expert_type_ == MIXTRAL_MOE_DENSE_ACT_DENSE) {
++        expert_type_ == DEEPSEEK_MOE_DENSE_ACT_DENSE) {
++      // Qwen uses the gate/up/down (DeepSeek-type) parameter layout.
 +      // Match the framework's BF16 rounding boundaries. The fused CUTLASS
 +      // epilogue otherwise retains the up-projection accumulator in float32.
 +      auto gate = torch::matmul(input, gate_proj.transpose(0, 1));
