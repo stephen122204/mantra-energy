@@ -160,7 +160,7 @@ def audit_attempt(root, row):
                 source_revision=raw["environment"]["source_revision"], domains=result)
 
 
-def audit_recovered(row):
+def audit_recovered(root, row):
     """An interrupted attempt recovered by the operator claims no counter evidence.
 
     It is reported explicitly, never treated as measured, and cannot hide behind
@@ -171,11 +171,19 @@ def audit_recovered(row):
     metadata = attempt.get("outcome_metadata") or {}
     record = attempt["execution_record"]
     require(isinstance(metadata.get("recovery"), dict) and metadata["recovery"].get("reason"), "recovered attempt lacks recovery reason")
+    for ref in attempt["artifacts"]:
+        # Artifacts checkpointed before the interruption stay hash-pinned evidence
+        # of the pre-recovery state; they are not audited as a completed goal.
+        relative = Path(ref["path"])
+        path = (root / relative).resolve()
+        require(not relative.is_absolute() and path.is_relative_to(root), "artifact escapes packet")
+        require(hashlib.sha256(path.read_bytes()).hexdigest() == ref["sha256"], "recovered attempt artifact hash mismatch")
     require(record["execution_status"] == "incomplete" and attempt["execution_status"] == "incomplete", "recovered attempt is not incomplete")
     require(attempt["measurement_status"] != "valid" and attempt["verifier_outcome"] == "unavailable", "recovered attempt claims valid measurement or verification")
     require(all(m.get("status") != "valid" and m.get("energy_j") is None for m in record.get("measurements", [])), "recovered attempt retains a numeric energy total")
     require(record["ended_ns"] is not None and record["ended_ns"] >= record["started_ns"], "recovered attempt endpoint precedes its start")
     return dict(execution_id=attempt["execution_id"], audit_passed=True, all_domains_measured=False, recovered=True,
+                checkpointed_artifacts=len(attempt["artifacts"]),
                 simulated=record["simulated"], execution_status="incomplete", verifier_outcome="unavailable",
                 owned_work_terminated=metadata.get("owned_work_terminated") is True, source_revision=None, domains={},
                 note="recovered after interruption: " + metadata["recovery"]["reason"] + "; no counter evidence is claimed")
@@ -191,8 +199,8 @@ def audit(root):
         try:
             require(execution not in seen, "duplicate execution in export")
             seen.add(execution)
-            if not row["attempt"]["artifacts"] and "recovery" in (row["attempt"].get("outcome_metadata") or {}):
-                results.append(audit_recovered(row))
+            if "recovery" in (row["attempt"].get("outcome_metadata") or {}):
+                results.append(audit_recovered(root, row))
                 continue
             result = audit_attempt(root, row)
             require(manifest["execution_protocol"] == "planned-body-initialized-window-v1", "unsupported execution protocol")

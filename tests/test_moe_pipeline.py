@@ -485,6 +485,18 @@ def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path):
                                   clock_domain="fixture:test-host:process-1-1:monotonic",
                                   metadata={"schedule_id": schedule_id, "requested_resources": {}})
     assert lease is not None
+    # The goal executor checkpoints artifacts before finalization; an interrupted
+    # attempt therefore usually carries a pre-recovery record.json that must not
+    # be mistaken for its completed goal record.
+    from studies.energy_diagnosis.campaign import ArtifactRef
+    import hashlib
+    goal_dir = output / "goals" / lease.execution_id
+    goal_dir.mkdir(parents=True)
+    checkpointed = goal_dir / "record.json"
+    checkpointed.write_text(json.dumps({"execution_status": "crashed", "note": "pre-recovery checkpoint"}) + "\n")
+    with RunLedger(output / "ledger.sqlite", artifact_root=output) as ledger:
+        ledger.checkpoint(lease, [ArtifactRef(f"goals/{lease.execution_id}/record.json", "execution-record",
+                                              hashlib.sha256(checkpointed.read_bytes()).hexdigest())])
     blocked = command(output, "--policies", "demand", "--max-runs", "5")
     assert blocked["executed"] == 0 and blocked["validation"]["counts"]["running"] == 1
     status = tmp_path / "status.json"
@@ -514,6 +526,7 @@ def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path):
     assert report["audit_passed"] and report["attempts"] == 5
     recovered = [r for r in report["results"] if r.get("recovered")]
     assert len(recovered) == 1 and recovered[0]["all_domains_measured"] is False
+    assert recovered[0]["checkpointed_artifacts"] == 1
     assert recovered[0]["execution_status"] == "incomplete" and recovered[0]["verifier_outcome"] == "unavailable"
     assert sum(r["all_domains_measured"] for r in report["results"]) == 4
     dispositions = {d["planned_run_id"]: d["disposition"] for d in resumed["validation"]["dispositions"]}

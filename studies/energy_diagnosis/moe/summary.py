@@ -92,16 +92,22 @@ def summarize(root):
                     started_ns=attempt["started_ns"],
                     ended_ns=attempt.get("ended_ns"),
                 )
-            elif not any(a["role"] == "execution-record" for a in attempt["artifacts"]):
-                # A recovered interrupted attempt has a ledger record but no goal
-                # artifacts. Keep it as an incomplete attempt with unknown cost;
-                # anything else without artifacts is unexplained evidence loss.
-                if "recovery" not in (attempt.get("outcome_metadata") or {}):
-                    raise ValueError("attempt without execution artifacts lacks recovery evidence")
+            elif "recovery" in (attempt.get("outcome_metadata") or {}):
+                # A recovered interrupted attempt: the ledger's recovery record is
+                # authoritative. Artifacts checkpointed before the interruption are
+                # retained evidence of the pre-recovery state and must still hash,
+                # but they are not this attempt's completed goal record.
+                import hashlib
+
+                for artifact in attempt["artifacts"]:
+                    if hashlib.sha256((root / artifact["path"]).read_bytes()).hexdigest() != artifact["sha256"]:
+                        raise ValueError("recovered attempt artifact hash mismatch")
                 if record["execution_status"] != "incomplete" or any(
                     m.get("status") == "valid" for m in record.get("measurements", [])
                 ):
                     raise ValueError("recovered attempt claims completion or valid energy")
+            elif not any(a["role"] == "execution-record" for a in attempt["artifacts"]):
+                raise ValueError("attempt without execution artifacts lacks recovery evidence")
             else:
                 import hashlib
 
