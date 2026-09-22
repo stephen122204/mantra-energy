@@ -86,6 +86,10 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
         # Fixture sensor counter deltas are independent of transfer success.
         measurement = json.loads(path.with_name("measurement.json").read_text())
         record = json.loads(path.with_name("record.json").read_text())
+        operating = json.loads(path.with_name("operating-state.json").read_text())
+        assert operating["status"] == "unavailable"  # No invented fixture hardware.
+        assert operating["simulated"] is True
+        assert operating["samples"] == []
         assert record["started_ns"] <= planning_starts[0]["monotonic_ns"]
         inner = json.loads(path.with_name("initialized-model-window.json").read_text())
         assert inner["status"] == "valid"
