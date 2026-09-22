@@ -28,6 +28,7 @@ def test_bounded_terminal_status_and_log(tmp_path,code,status,rc):
     assert r.returncode==rc
     record=json.loads((tmp_path/'job/status.json').read_text())
     assert record['status']==status and record['returncode']==rc and record['finished_utc']
+    assert record['cleanup_complete'] is True
     assert (tmp_path/'job/run.log').is_file()
     with pytest.raises(ProcessLookupError):os.kill(record['child_pid'],0)
 
@@ -60,6 +61,7 @@ def test_spawn_failure_is_recorded(tmp_path):
     assert subprocess.run(command,timeout=15).returncode==1
     record=json.loads((tmp_path/'job/status.json').read_text())
     assert record['status']=='failed' and 'error' in record
+    assert record['cleanup_complete'] is False
 
 
 def test_copy_verifier_rejects_corruption_missing_and_escape(tmp_path):
@@ -155,3 +157,17 @@ def test_copy_ssh_preserves_known_hosts_path_with_spaces(tmp_path):
 def test_copy_rejects_multiline_known_hosts_path(tmp_path):
     with pytest.raises(ValueError, match='known-hosts'):
         copy_results.ssh_arguments('key', str(tmp_path / 'hosts\nother'))
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='POSIX supervisor')
+def test_cleanup_failure_does_not_claim_success(tmp_path, monkeypatch):
+    from studies.energy_diagnosis.diagnostics import run_bounded
+    monkeypatch.setattr(sys, 'argv', ['run_bounded', *launcher(tmp_path, 'pass')[3:]])
+    def fail_cleanup(child):
+        raise OSError('fixture cleanup failure')
+    monkeypatch.setattr(run_bounded, 'stop_group', fail_cleanup)
+    assert run_bounded.main() == 1
+    record = json.loads((tmp_path / 'job/status.json').read_text())
+    assert record['status'] == 'failed'
+    assert record['finished_utc']
+    assert record['cleanup_complete'] is False

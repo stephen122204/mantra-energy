@@ -9,6 +9,7 @@ TESTS = [
     "test_data_analysis_workload.py",
     "test_study_contracts.py",
     "test_campaign_ledger.py",
+    "test_campaign_recovery.py",
     "test_campaign_runner.py",
     "test_selector_boundary.py",
     "test_openai_compat_adapter.py",
