@@ -7,6 +7,7 @@ on:
     paths:
       - 'studies/energy_diagnosis/moe/task_pack.py'
       - 'tests/test_task_pack.py'
+      - 'tests/test_task_pack_pipeline.py'
       - 'tests/test_etl_workload.py'
       - 'studies/energy_diagnosis/moe/etl_workload.py'
       - '.github/workflows/task-pack.yml'
@@ -22,4 +23,4 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - run: python -m pip install -r requirements-study.txt
-      - run: python -X utf8 -m pytest -q tests/test_task_pack.py tests/test_etl_workload.py
+      - run: python -X utf8 -m pytest -q tests/test_task_pack.py tests/test_etl_workload.py tests/test_task_pack_pipeline.py

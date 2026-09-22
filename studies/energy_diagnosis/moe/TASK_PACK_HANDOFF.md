@@ -28,11 +28,18 @@ This is an implemented Python interface, not an existing command-line flag.
 
 ## Tests currently present
 
-`python -m pytest -q tests/test_task_pack.py tests/test_business_workload.py tests/test_numerical_workload.py tests/test_numerical_pipeline.py tests/test_etl_workload.py`
+`python -m pytest -q tests/test_task_pack.py tests/test_business_workload.py tests/test_numerical_workload.py tests/test_numerical_pipeline.py tests/test_etl_workload.py tests/test_task_pack_pipeline.py`
 
-41 local tests pass on the combined branch. Includes real numerical/SQL work,
+44 local tests pass on the combined branch. Includes real numerical/SQL work,
 reference comparisons, schema restrictions, invalid answers, input preservation,
 pack dispatch, and injected-model/sensor numerical executor/ledger/resume cases.
 The production CLI has not been modified. The bounded SQL ETL component is included; production integration remains pending.
 Different sizes/seeds of generated inputs are still one lineage per generator.
 No research protocol, raw data or private discussion is part of this handoff.
+
+The all-pack pipeline test runs five tasks under each of success, wrong-answer
+and missing-telemetry model/sensor fixtures (15 original attempts plus resume).
+All records retain expected outcomes and exports remain identical after resume.
+These tests inject pack selection. They intentionally do not certify the
+production runner's per-task verifier hashes, which still require the integration
+change above, nor native model decisions or transfer behavior.
