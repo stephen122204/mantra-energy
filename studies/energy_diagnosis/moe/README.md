@@ -120,6 +120,26 @@ already-issued work must drain before model resume. Timeout or backend failure
 kills and reaps the owned worker before final cost is captured. Process cleanup failure, or forced native termination before device work was confirmed idle, makes the energy interval invalid. No remote API or fixture fallback is
 used in native mode.
 
+### Interruption, recovery and resume
+
+`SIGTERM`/`SIGINT` to the campaign command unwinds through every cleanup block:
+the owned worker and any isolated tool process are terminated, the ledger is
+exported, and the command exits 130. The claimed attempt deliberately stays
+`running`; reconcile it with `studies.energy_diagnosis.campaign.recover` using
+the bounded launcher's terminal `status.json` (`cleanup_complete: true`), the
+original session/clock identity and an endpoint from that clock, after an
+independent process check. Recovery keeps the attempt as `incomplete` with
+unavailable verification/measurement. The campaign command uses the ledger's
+default retry limit (0), so the interrupted slot is not re-run automatically; a
+retry policy is a run-definition decision, not a cleanup default. Rerunning the
+identical command in the same directory then continues with the remaining
+pending slots only. The summary counts the recovered attempt as an unknown cost
+and `window-audit.json` reports it as `recovered: true` with
+`all_domains_measured: false`; the native smoke exit codes 3/5 still apply to
+such a directory because it is not a clean, fully measured batch. A different
+source revision, configuration or task definition is refused by the manifest
+check; task assets are reused only when identical.
+
 ## Initialized-model measurement window
 
 The MoE command also captures real counter checkpoints after model initialization

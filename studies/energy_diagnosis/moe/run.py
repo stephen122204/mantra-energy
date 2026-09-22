@@ -28,6 +28,16 @@ from .workloads import create_tasks, WorkloadRuntime, VERSION
 EXECUTION_PROTOCOL = "planned-body-initialized-window-v1"
 
 
+class CampaignInterrupted(BaseException):
+    """SIGTERM/SIGINT: unwind through every cleanup block without being treated
+    as an ordinary goal failure. The claimed attempt stays `running` for the
+    guarded recovery command; owned worker and tool processes are terminated."""
+
+
+def _interrupt(signum, frame):
+    raise CampaignInterrupted(f"campaign received signal {signum}")
+
+
 def run(args):
     simulated = args.mode == "fixture"
     root = Path(args.output).resolve()
@@ -284,7 +294,16 @@ def main(argv=None):
         p.error(
             "native preparation requires an explicit expert-byte budget (fixture default is only 128 bytes)"
         )
-    result = run(args)
+    import signal
+
+    for name in ("SIGTERM", "SIGINT"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), _interrupt)
+    try:
+        result = run(args)
+    except CampaignInterrupted as exc:
+        print(f"{exc}; owned work terminated, ledger exported, claimed attempt left for recovery", file=sys.stderr)
+        raise SystemExit(130)
     if not result["validation"]["valid"]:
         raise SystemExit(2)
     # A structurally valid ledger alone is not a successful native smoke test.

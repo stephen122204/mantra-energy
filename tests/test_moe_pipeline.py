@@ -1,6 +1,7 @@
 """Real tool execution and the same owned RPC/lifecycle interface as the GPU path."""
 from collections import Counter
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -430,3 +431,92 @@ def test_native_worker_cannot_fall_back_to_simulation(tmp_path):
         backend.reset_goal_state()
     assert backend.process is None
     assert not backend.reset_evidence
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX signal delivery to the campaign command")
+def test_sigterm_terminates_owned_work_and_leaves_attempt_for_recovery(tmp_path):
+    """A supervisor stop must not orphan the model worker or a running tool."""
+    import signal
+    import psutil
+
+    process = subprocess.Popen(
+        [sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+         "--output", str(tmp_path), "--fixture-case", "tool_timeout", "--policies", "fixed",
+         "--max-runs", "1", "--deadline", "30"],
+        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    parent = psutil.Process(process.pid)
+    deadline = time.monotonic() + 30
+    owned = []
+    while time.monotonic() < deadline:
+        owned = parent.children(recursive=True)
+        names = " ".join(" ".join(p.cmdline()) for p in owned if p.is_running())
+        if "moe.worker" in names and "multiprocessing" in names:
+            break
+        time.sleep(0.05)
+    assert any("moe.worker" in " ".join(p.cmdline()) for p in owned), "worker never started"
+    process.send_signal(signal.SIGTERM)
+    _, stderr = process.communicate(timeout=60)
+    assert process.returncode == 130, stderr
+    assert "left for recovery" in stderr
+    gone, alive = psutil.wait_procs(owned, timeout=10)
+    assert not [p for p in alive if p.is_running() and p.status() != psutil.STATUS_ZOMBIE], stderr
+    from studies.energy_diagnosis.campaign import RunLedger
+
+    with RunLedger(tmp_path / "ledger.sqlite", artifact_root=tmp_path) as ledger:
+        running = ledger.running_attempts()
+        assert len(running) == 1 and ledger.validate()["counts"]["running"] == 1
+    assert (tmp_path / "exports" / "attempts.jsonl").exists()
+
+
+def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path):
+    from studies.energy_diagnosis.campaign import RunLedger
+    from studies.energy_diagnosis.campaign.recover import reconcile
+    from studies.energy_diagnosis.moe.audit_windows import audit
+    from studies.energy_diagnosis.moe.summary import summarize
+
+    output = tmp_path / "campaign"
+    first = command(output, "--policies", "demand", "--max-runs", "1")
+    assert first["executed"] == 1
+    # Simulate an interrupted claim from a separate fixture session.
+    with RunLedger(output / "ledger.sqlite", artifact_root=output) as ledger:
+        schedule_id = json.loads((output / "state" / "schedule.json").read_text())["schedule_id"]
+        lease = ledger.claim_next(session_id="fixture-interrupted", started_ns=10 ** 12,
+                                  clock_domain="fixture:test-host:process-1-1:monotonic",
+                                  metadata={"schedule_id": schedule_id, "requested_resources": {}})
+    assert lease is not None
+    blocked = command(output, "--policies", "demand", "--max-runs", "5")
+    assert blocked["executed"] == 0 and blocked["validation"]["counts"]["running"] == 1
+    status = tmp_path / "status.json"
+    status.write_text(json.dumps(dict(status="interrupted", returncode=130, child_pid=4321,
+                                      cleanup_complete=True, finished_utc="2026-09-22T00:00:00+00:00")))
+    result = reconcile(campaign_dir=output, session_id="fixture-interrupted",
+                       clock_domain="fixture:test-host:process-1-1:monotonic", ended_ns=10 ** 12 + 5,
+                       reason="fixture supervisor interruption", supervisor_status=status,
+                       apply=True, owned_work_terminated=True)
+    assert result["recovered_attempt_ids"] == [lease.attempt_id]
+    resumed = command(output, "--policies", "demand", "--max-runs", "5")
+    # The campaign command keeps the ledger default retry limit (0): the interrupted
+    # slot is retained as incomplete evidence and is not silently re-run.
+    assert resumed["executed"] == 3 and resumed["validation"]["valid"]
+    counts = resumed["validation"]["counts"]
+    assert counts["attempts"] == 5 and counts["running"] == 0 and counts["pending"] == 0
+    rows = [json.loads(line) for line in (output / "exports" / "attempts.jsonl").read_text().splitlines()]
+    statuses = Counter(row["attempt"]["execution_status"] for row in rows)
+    assert statuses == {"completed": 4, "incomplete": 1}
+    assert max(Counter(row["plan"]["planned_run_id"] for row in rows).values()) == 1  # never duplicated
+    summary = summarize(output)
+    (setting,) = summary["settings"].values()
+    assert setting["attempts"] == 5 and setting["successful"] == 4 and setting["invalid_energy_attempts"] == 1
+    assert setting["initialized_model"]["attempts_with_valid_window"] == 4
+    assert all(cost["total_attempt_joules"] is None for cost in setting["energy"].values())  # one unknown cost
+    report = audit(output)
+    assert report["audit_passed"] and report["attempts"] == 5
+    recovered = [r for r in report["results"] if r.get("recovered")]
+    assert len(recovered) == 1 and recovered[0]["all_domains_measured"] is False
+    assert recovered[0]["execution_status"] == "incomplete" and recovered[0]["verifier_outcome"] == "unavailable"
+    assert sum(r["all_domains_measured"] for r in report["results"]) == 4
+    dispositions = {d["planned_run_id"]: d["disposition"] for d in resumed["validation"]["dispositions"]}
+    assert dispositions[lease.planned_run_id] != "pending"
+    again = command(output, "--policies", "demand", "--max-runs", "5")
+    assert again["executed"] == 0
