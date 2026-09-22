@@ -28,6 +28,16 @@ from .workloads import create_tasks, WorkloadRuntime, VERSION
 EXECUTION_PROTOCOL = "planned-body-initialized-window-v1"
 
 
+class CampaignInterrupted(BaseException):
+    """SIGTERM/SIGINT: unwind through every cleanup block without being treated
+    as an ordinary goal failure. The claimed attempt stays `running` for the
+    guarded recovery command; owned worker and tool processes are terminated."""
+
+
+def _interrupt(signum, frame):
+    raise CampaignInterrupted(f"campaign received signal {signum}")
+
+
 def run(args):
     simulated = args.mode == "fixture"
     root = Path(args.output).resolve()
@@ -262,7 +272,7 @@ def main(argv=None):
     p.add_argument("--bytes-per-second", type=float)
     p.add_argument("--expected-pause-seconds", type=float)
     p.add_argument("--task", default="all")
-    p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default two tasks")
+    p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
     p.add_argument("--query-engine", choices=["duckdb", "sqlite"], default="duckdb")
     p.add_argument("--max-runs", type=int, default=4)
@@ -300,7 +310,16 @@ def main(argv=None):
         p.error(
             "native preparation requires an explicit expert-byte budget (fixture default is only 128 bytes)"
         )
-    result = run(args)
+    import signal
+
+    for name in ("SIGTERM", "SIGINT"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), _interrupt)
+    try:
+        result = run(args)
+    except CampaignInterrupted as exc:
+        print(f"{exc}; owned work terminated, ledger exported, claimed attempt left for recovery", file=sys.stderr)
+        raise SystemExit(130)
     if not result["validation"]["valid"]:
         raise SystemExit(2)
     # A structurally valid ledger alone is not a successful native smoke test.

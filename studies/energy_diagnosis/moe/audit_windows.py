@@ -160,6 +160,27 @@ def audit_attempt(root, row):
                 source_revision=raw["environment"]["source_revision"], domains=result)
 
 
+def audit_recovered(row):
+    """An interrupted attempt recovered by the operator claims no counter evidence.
+
+    It is reported explicitly, never treated as measured, and cannot hide behind
+    an artifact: recovery metadata, incomplete status and absent valid energy are
+    all required before the attempt is accepted as consistently recorded.
+    """
+    attempt = row["attempt"]
+    metadata = attempt.get("outcome_metadata") or {}
+    record = attempt["execution_record"]
+    require(isinstance(metadata.get("recovery"), dict) and metadata["recovery"].get("reason"), "recovered attempt lacks recovery reason")
+    require(record["execution_status"] == "incomplete" and attempt["execution_status"] == "incomplete", "recovered attempt is not incomplete")
+    require(attempt["measurement_status"] != "valid" and attempt["verifier_outcome"] == "unavailable", "recovered attempt claims valid measurement or verification")
+    require(all(m.get("status") != "valid" and m.get("energy_j") is None for m in record.get("measurements", [])), "recovered attempt retains a numeric energy total")
+    require(record["ended_ns"] is not None and record["ended_ns"] >= record["started_ns"], "recovered attempt endpoint precedes its start")
+    return dict(execution_id=attempt["execution_id"], audit_passed=True, all_domains_measured=False, recovered=True,
+                simulated=record["simulated"], execution_status="incomplete", verifier_outcome="unavailable",
+                owned_work_terminated=metadata.get("owned_work_terminated") is True, source_revision=None, domains={},
+                note="recovered after interruption: " + metadata["recovery"]["reason"] + "; no counter evidence is claimed")
+
+
 def audit(root):
     root = Path(root).resolve()
     manifest = json.loads((root / "moe-manifest.json").read_text())
@@ -170,6 +191,9 @@ def audit(root):
         try:
             require(execution not in seen, "duplicate execution in export")
             seen.add(execution)
+            if not row["attempt"]["artifacts"] and "recovery" in (row["attempt"].get("outcome_metadata") or {}):
+                results.append(audit_recovered(row))
+                continue
             result = audit_attempt(root, row)
             require(manifest["execution_protocol"] == "planned-body-initialized-window-v1", "unsupported execution protocol")
             require(result["source_revision"] == manifest["source_revision"], "source revision differs from manifest")
