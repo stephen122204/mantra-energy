@@ -452,7 +452,7 @@ class GoalExecutor:
                 owned_terminated = False
         if self.lifecycle:
             try:
-                if self.initialized_model_window:
+                if self.initialized_model_window and inner_started:
                     self.lifecycle.settle_work()
                     inner_settled = True
                 else:

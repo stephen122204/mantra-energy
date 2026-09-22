@@ -556,3 +556,79 @@ def test_forced_native_termination_invalidates_energy_but_finalizes():
     assert executor(False, True)._termination_invalidity(True) == "owned worker terminated before device work was confirmed idle"
     assert executor(False, False)._termination_invalidity(True) is None
     assert executor(True, True)._termination_invalidity(True) is None  # Fixture devices have no idle semantics.
+
+
+def test_startup_timeout_reaps_worker_without_claiming_device_drain(tmp_path):
+    backend = ProcessBackend({}, python=sys.executable, mode="fixture",
+                             log_path=tmp_path / "startup.log", timeout=0.000001)
+    control = Lifecycle(backend, Policy("demand", 0))
+    with pytest.raises(RuntimeError, match="no response within"):
+        control.begin_goal("failed-start")
+    assert control.goal is None
+    assert backend.process is None
+    assert backend.owned_work_terminated
+    assert not backend.idle_confirmed
+    control.end_goal()
+    backend.timeout = 10
+    control.begin_goal("next-start")
+    control.end_goal()
+    assert backend.owned_work_terminated
+
+
+def test_termination_status_does_not_depend_on_device_drain(tmp_path):
+    backend = ProcessBackend({"fixture_case": "model_timeout"},
+                             python=sys.executable, mode="fixture",
+                             log_path=tmp_path / "timeout.log")
+    backend.reset_goal_state()
+    with pytest.raises(RuntimeError, match="no response within"):
+        backend.generate("{}", 0.01, 10)
+    assert backend.owned_work_terminated
+    assert not backend.idle_confirmed
+    backend.termination_confirmed = False
+    assert not backend.owned_work_terminated
+
+
+def test_startup_timeout_recorded_and_next_slot_runs(tmp_path, monkeypatch):
+    from studies.energy_diagnosis.moe import run as campaign
+    original = ProcessBackend.reset_goal_state
+    starts = []
+
+    def reset(self):
+        starts.append(1)
+        if len(starts) == 1:
+            self.timeout = 0.000001
+        return original(self)
+
+    monkeypatch.setattr(ProcessBackend, "reset_goal_state", reset)
+    campaign.main(["--mode", "fixture", "--output", str(tmp_path),
+                   "--task", "joined-orders-v1", "--policies", "demand,fixed",
+                   "--max-runs", "2", "--deadline", "30"])
+    records = [json.loads(p.read_text()) for p in (tmp_path / "goals").glob("*/record.json")]
+    assert len(records) == 2
+    failed = next(r for r in records if r["execution_status"] == "crashed")
+    assert "no response within" in failed["error"]
+    assert "no owned goal" not in failed["error"]
+    assert failed["verifier"]["outcome"] == "unavailable"
+    assert any(r["verifier"]["outcome"] == "pass" for r in records)
+    for p in (tmp_path / "goals").glob("*/record.json"):
+        if json.loads(p.read_text())["execution_status"] == "crashed":
+            assert json.loads(p.with_name("initialized-model-window.json").read_text())["status"] != "valid"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group ownership")
+def test_surviving_process_group_refuses_termination_claim(tmp_path, monkeypatch):
+    import psutil
+    from types import SimpleNamespace
+    backend = ProcessBackend({}, python=sys.executable, mode="fixture",
+                             log_path=tmp_path / "group.log")
+    backend.reset_goal_state()
+    group = backend.process.pid
+    real_getpgid = os.getpgid
+    fake_pid = 2147483646
+    monkeypatch.setattr(psutil, "process_iter", lambda *args: [
+        SimpleNamespace(pid=fake_pid, status=lambda: psutil.STATUS_RUNNING)])
+    monkeypatch.setattr(os, "getpgid", lambda pid: group if pid == fake_pid else real_getpgid(pid))
+    with pytest.raises(RuntimeError, match="process group termination unverified"):
+        backend.end_goal()
+    assert backend.process is None
+    assert not backend.owned_work_terminated
