@@ -7,6 +7,7 @@ import sqlite3
 import tempfile
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 from .query_workload import QueryTool
+from .tool_contracts import ETL_ACTIONS, action_contract, validate_action
 
 VERSION='etl-latest-record-v1'
 BUGGY='SELECT region, COUNT(*) AS event_count, SUM(gross_cents + tax_cents) AS net_cents FROM raw GROUP BY region ORDER BY region'
@@ -81,10 +82,21 @@ class ETLRuntime:
         self.workspace=self.root/'workspaces'/lease.execution_id
         shutil.copytree(task.asset_path,self.workspace)
     def context(self,task):
-        return dict(family=task.family,tools={'etl':{'description':'Read query/schema, replace pipeline.sql, or execute the query. Dependent read/write/test calls must occur in order.','args':{'action':'read|write|test','content':'write only; complete SQL'}}},instruction='Return JSON {"tool_calls":[{"id":"unique","tool":"etl","args":{...}}]} or {"answer":{"done":true}}. Use actual tool results. No other tool arguments.')
+        return dict(family=task.family,tools={'etl':{
+            'description':'The action argument is mandatory on every call. action="read" takes no content and returns the current SQL and table schema. '
+            'action="write" requires content containing the complete replacement SQL and returns written=true. '
+            'action="test" takes no content and runs the saved query, returning columns, rows and truncated. '
+            'This is bounded read-only SQLite: one SELECT, at most 32768 SQL bytes, 10 seconds, 128 result rows and 65536 output bytes. '
+            'Joins, subqueries and aggregate functions such as MAX, SUM and COUNT are supported; ranking functions such as ROW_NUMBER are not exposed. '
+            'Read, write and test must occur in separate decisions or explicitly ordered dependencies; never run a test concurrently with its write.',
+            'args':{'action':'required: read, write or test','content':'required only for write; complete SQL'},
+            'parameters':action_contract(ETL_ACTIONS),
+            'example_call':{'id':'read_1','tool':'etl','args':{'action':'read'}}}},
+            instruction='Return only JSON {"tool_calls":[{"id":"unique","tool":"etl","args":{"action":"read"}}]} or {"answer":{"done":true}}. '
+            'Read first, then write the repair, then test the saved query. Use the observed schema and tool outputs. Include action every time; do not supply content to read/test.')
     def tool(self,task,call):
-        args=call.get('args',{})
-        if call.get('tool')!='etl' or not isinstance(args,dict) or set(args)-{'action','content'}:raise ValueError('invalid ETL tool schema')
+        if call.get('tool')!='etl':raise ValueError('invalid ETL tool schema')
+        validate_action(call.get('args'),ETL_ACTIONS)
         return ETLTool(self.workspace)
     def verify(self,task,answer):
         if not isinstance(answer,dict) or set(answer)!={'done'} or answer['done'] is not True:return dict(passed=False,reason='invalid completion answer')
