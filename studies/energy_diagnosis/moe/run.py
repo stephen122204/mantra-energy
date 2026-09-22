@@ -89,6 +89,9 @@ def run(args):
     ]
     if len({p.name for p in policies}) != len(policies):
         raise ValueError("duplicate policy")
+    comparison_order = getattr(args, "comparison_order", "random")
+    if comparison_order not in {"random", "balanced-pairs"}:
+        raise ValueError("unknown comparison order")
     fingerprint = digest(
         dict(
             config=config,
@@ -98,6 +101,7 @@ def run(args):
             deadline=args.deadline,
             mode=args.mode,
             execution_protocol=EXECUTION_PROTOCOL,
+            comparison_order=comparison_order,
             query_engine=args.query_engine if query_assets else None,
         )
     )
@@ -137,13 +141,14 @@ def run(args):
                     plans,
                 )
             )
-    schedule = CampaignSchedule.build(blocks, seed=args.seed)
+    schedule = CampaignSchedule.build(blocks, seed=args.seed, balanced_pairs=comparison_order == "balanced-pairs")
     manifest = dict(
         mode=args.mode,
         config=config,
         source_revision=revision,
         fingerprint=fingerprint,
         execution_protocol=EXECUTION_PROTOCOL,
+        comparison_order=comparison_order,
         limits=dict(goal_seconds=args.deadline, max_steps=args.max_steps, max_output_tokens=args.max_tokens),
         policies={sid: asdict(p) for sid, p in by_setting.items()},
         schedule=schedule.to_dict(),
@@ -282,6 +287,7 @@ def main(argv=None):
     p.add_argument("--max-tokens", type=int, default=512)
     p.add_argument("--deadline", type=float, default=120, help="Whole-goal seconds including model startup, up to 1800; also use a bounded batch supervisor")
     p.add_argument("--seed", type=int, default=7)
+    p.add_argument("--comparison-order", choices=["random", "balanced-pairs"], default="random", help="Balanced pairs require exactly two policies and even repetitions; same task/configuration appears first equally often")
     p.add_argument(
         "--fixture-case",
         default="success",
@@ -307,6 +313,8 @@ def main(argv=None):
         or min(args.max_runs, args.max_steps, args.repeats, args.max_tokens) < 1
     ):
         p.error("invalid bounded run/step/time budget")
+    if args.comparison_order == "balanced-pairs" and (args.repeats % 2 or len(set(args.policies.split(","))) != 2):
+        p.error("balanced pairs require two distinct policies and even repetitions")
     if args.mode == "native" and args.byte_budget == 128 and args.policies != "demand":
         p.error(
             "native preparation requires an explicit expert-byte budget (fixture default is only 128 bytes)"
