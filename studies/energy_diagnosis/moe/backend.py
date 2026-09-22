@@ -31,10 +31,16 @@ class ProcessBackend:
         self.seq = 0
         self.reset_evidence = {}
         self.idle_confirmed = True
+        # True when an owned worker was killed while device work was not confirmed
+        # idle: the process is reaped (owned work terminated) but its captured
+        # energy interval is not a complete goal interval.
+        self.termination_forced = False
 
     @property
     def owned_work_terminated(self):
-        return self.process is None and (self.mode == "fixture" or self.idle_confirmed)
+        # process is cleared only after a verified exit (wait + reader join); a
+        # dead process cannot own device work, even when idle was never confirmed.
+        return self.process is None
 
     def capabilities(self):
         # Real capability verification happens in reset before returning goal-start.
@@ -43,6 +49,7 @@ class ProcessBackend:
     def reset_goal_state(self):
         if self.process is not None:
             raise RuntimeError("reset requires previous process to be reaped")
+        self.termination_forced = False
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.log = self.log_path.open("ab")
         self.messages = queue.Queue(maxsize=4)
@@ -101,7 +108,13 @@ class ProcessBackend:
                 json.dumps(dict(id=self.seq, method=method, args=args)) + "\n"
             )
             self.process.stdin.flush()
-            result = self.messages.get(timeout=10 if timeout is None else timeout)
+            wait = 10 if timeout is None else timeout
+            try:
+                result = self.messages.get(timeout=wait)
+            except queue.Empty:
+                raise RuntimeError(
+                    f"backend RPC {method!r} produced no response within {wait}s; owned worker terminated"
+                ) from None
             if isinstance(result, Exception):
                 raise result
             if result.get("id") != self.seq:
@@ -152,6 +165,8 @@ class ProcessBackend:
         p = self.process
         if p is None:
             return
+        if p.poll() is None and not self.idle_confirmed:
+            self.termination_forced = True
         # Explicitly own the whole process tree. Native threads can otherwise outlive RPC failure.
         try:
             if os.name == "posix":
