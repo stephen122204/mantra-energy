@@ -1,40 +1,40 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260920-pr-stack-integrated.md)
+[Immutable turn record](turns/20260922-combined-task-pack-handoff.md)
 
-# Integrated code and current team instructions
+# Combined task-pack implementation handoff
 
 ## Task and current understanding
 
-Stephen authorized review, repair and integration of all open PRs. Fresh clone /tmp/alems-pr-integration-EGOOT0 started at d71cc4c. PR34 runtime, PR35 query workload, PR36 session diagnostics and PR37 plain-language handoff are all merged into research/energy-diagnosis. The reviewed merged code commit is 33daf571c2b36656da79e47adac058e304a4a65d. No open PR remained at final inspection.
-
-## Ideas and hypotheses
-
-A concrete result-backup defect was reproduced: OpenSSH parses -o values separately, so a known-hosts path with spaces can split into multiple filenames despite correct subprocess argv handling. This was a software issue, not a hardware measurement finding.
-
-## Decisions and rationale
-
-Fixed the path inside OpenSSH's option parser and retained strict host checking. Merged in dependency order using merge commits, retargeting dependent PRs to integration without rewriting shared history. Experimental code integration is distinct from model-reference/hardware acceptance. No native numerical tolerance or scientific definition changed.
+PR43 (https://github.com/stephen122204/alems-energy-diagnosis/pull/43), branch `stephen/task-pack-interface`, commit `3dcd92ccca72f894ac2571d3ab897a67a3870f55`, combines the PR40 catalog/recovery repairs at 353a6af with the PR41 numerical and PR42 database components and the additional task-pack/SQL-repair implementation. It is not yet merged into integration or deployed. Fetch this branch in a separate checkout for review; preserve current node checkouts and running jobs.
 
 ## Changes and artifacts
 
-- PR34 merged at 961777fc52cd39dc4831dd0026d399c9e4288c37.
-- PR35 merged at b06c814e99a911f2ac06ccd54cb5d0a66b1130ed.
-- PR36 includes repair 367753a199ca9a47f4697ed6b5c5c77d26572828 and merged at 1176b976bd7d9cc03c99f82c09179cba6b44f7a9.
-- PR37 includes current-state wording aa3a323 and merged at 33daf571c2b36656da79e47adac058e304a4a65d.
-
-Read agent context md/CURRENT_HANDOFF.md, BATCH_ACCEPTANCE.md and your named HUMAN_START_HERE.md from fetched integration. The previous latest note's feature-branch links are superseded by these now-merged paths. Root instructions, startup, full assignments and named prompts point to them. Preserve local changes while fetching; do not reset working branches.
+Read `studies/energy_diagnosis/moe/TASK_PACK_HANDOFF.md` for generated/prepared task specifications, input bounds, immutable assets, CLI selection and tokenizer audit. Read `studies/energy_diagnosis/moe/OPERATIONS.md` for bounded launch, inspect, stop, recovery, resume and verified copy commands. The default catalog and optional task pack are different selections. An older-catalog native run does not qualify the added task pack.
 
 ## Tests and evidence
 
-On the combined executable code: 190 integrated runtime tests plus 5 subtests; 118 MoE/query/CPU numerical/session tests, including actual OpenSSH config parsing without network, small real DuckDB/PyArrow fixtures, native C++ lifecycle and optional CPU Transformers-prefix cases; 6 context-publisher tests; setup checker, shell syntax and diff checks passed. No GPU/model download or hardware session was used.
+The actual campaign launcher dispatches each task to its matching tool/verifier and records its asset/checker identity. Added families are grouped numerical regression, three business-query intents, and bounded SQL repair checked on additional inputs. Prepared numerical assets are checksum-pinned and copied before execution. No source datasets or raw run outputs are included in Git.
 
-PR36 repaired exact-head CI 35537484128 passed all 9 jobs. PR37 follow-up CI 35537554989 passed all 8 jobs, including Linux/Windows integration and MoE fixtures. Final merged source, tests, scripts, workflow and handoff files match the locally combined reviewed tree. Integration-push CI is separate from these completed pre-merge checks.
-
-## Open questions and disagreements
-
-Software integration does not establish model-reference agreement, current-node access, physical validity for every configuration or readiness of a full batch. Standard-model score differences remain unresolved; zero-transfer preparation remains unqualified. Current-node setup and supplied execution settings/budget still need confirmation. No unmeasured result has been promoted to accepted hardware evidence.
+The combined local regression suite passed 126 tests. Tests cover runtime integration, catalog/repair contracts, actual fixture worker execution, task pack, independent component checks, prepared-input rejection, resume and token-budget boundaries. Linux/Windows CI is separate and should be checked on the exact head. Fixture evidence uses scripted responses and simulated sensors, not hardware qualification.
 
 ## Next actions and handoff
 
-Students fetch integration, read current handoff and inspect completed code before extending it. Alex checks measurement records and transfer timing; Aldric tasks and independent answers; Nitheesh complete run records, recovery and exports. Stephen owns native model agreement, starting-state rules and shared configuration acceptance. Continue ready software work against fixtures; use one coordinated measured queue once the bounded session is assigned. Do not reconstruct the old stacked branches or restart first issues. Keep research discussion and raw result files outside GitHub.
+Aldric: check selected task prompts, answer schemas, independent verifiers and meaningful failure examples. Alex: check the supplied configuration's measurement domains, raw-counter evidence, lifecycle boundaries and actual transfer/tool timing. Nitheesh: reconcile every planned slot and attempt, retain failures and verify off-node copies/restoration. Stephen: integrate reviewed interfaces, qualify model/reference agreement, provide exact configuration/session budget and approve expansion. Continue the full existing role assignments; this is a path update, not a new first-task-only assignment.
+
+The launcher defaults to 512 output tokens. Larger grouped answers can exceed it. Use `audit_token_budget` with the pinned local tokenizer and explicit proposed budgets, then check actual native responses and alternate tool paths. A fitting scripted transcript does not guarantee all model paths fit. Do not silently truncate answers, weaken correctness checks or change a frozen configuration while resuming.
+
+Before further native work, use the supplied allocation, isolation rules and bounded budget. Do not launch competing jobs or modify the checkout underneath an active batch. Keep private dataset paths, credentials, raw evidence and research discussion outside GitHub.
+
+
+## Ideas and hypotheses
+
+Recorded conversations can expose token-budget overflow before native execution. This is a software preflight check, not a model-performance prediction.
+
+## Decisions and rationale
+
+The components share one combined review branch to avoid deploying partial interfaces. Frozen task metadata and independent checker identities make resume and saved-record validation explicit.
+
+## Open questions and disagreements
+
+Actual-model execution for the new task families, reference agreement and the supplied hardware configuration remain to be qualified. Do not infer them from the local test count or older-catalog runs.
