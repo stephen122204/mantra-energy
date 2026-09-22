@@ -247,7 +247,7 @@ def main(argv=None):
     p.add_argument("--bytes-per-second", type=float)
     p.add_argument("--expected-pause-seconds", type=float)
     p.add_argument("--task", default="all")
-    p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default two tasks")
+    p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--query-engine", choices=["duckdb", "sqlite"], default="duckdb")
     p.add_argument("--max-runs", type=int, default=4)
     p.add_argument("--repeats", type=int, default=1)
