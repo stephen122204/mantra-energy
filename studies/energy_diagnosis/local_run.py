@@ -604,6 +604,11 @@ class GoalExecutor:
             artifacts.append(
                 write_artifact(self.artifact_root, prefix / name, payload, role)
             )
+        if hasattr(self.measurement, "operating_state_artifact"):
+            operating = self.measurement.operating_state_artifact()
+            operating.update(goal_execution_id=lease.execution_id, simulated=self.simulated)
+            artifacts.append(write_artifact(self.artifact_root, prefix / "operating-state.json",
+                                            operating, "operating-state"))
         if self.lifecycle:
             artifacts.append(
                 write_artifact(
