@@ -147,3 +147,19 @@ monitor sessions, install packages, build, download or copy backups during guard
 measurements. Schedule inspection and backups between bounded batches. On any
 guard failure retain all artifacts, mark the affected batch invalid for energy
 comparisons and investigate before resuming; do not silently retry it as clean.
+### Operating-state observations
+
+Every node measurement writes a ledger-registered, hashed `operating-state.json`.
+It samples exposed CPU temperature, kernel-reported CPU frequency and CPU throttle
+counters, plus NVML GPU temperature, SM/memory clocks and clock-reason masks.
+The target interval is approximately one second; acquisition start/end timestamps
+and initial/final samples are saved. Observation overhead is inside the measured
+goal, consistently for all policies. This is not independent sensor calibration.
+
+Missing, unsupported or denied fields remain explicitly unavailable, never zero.
+CPU throttle counters may not exist on AMD; temperature alone cannot establish
+absence of CPU throttling. GPU reason masks include idle and power limits as well
+as thermal conditions: interpret using the saved bit legend. A fixture run records
+unavailable operating state and is explicitly simulated. These records do not
+establish exclusive access; other users and background jobs require separate
+coordination and process monitoring.

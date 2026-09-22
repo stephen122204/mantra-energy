@@ -61,6 +61,8 @@ class NodeCounterReader:
         self.rapl = RAPLReader({"paths": selected})
         self.gpu = NVMLBackend(gpu_index=gpu_index)
         self.gpu_index = gpu_index
+        from .operating_state import OperatingStateReader
+        self.operating_state = OperatingStateReader(self.gpu)
         domains = list(self.rapl.get_measurement_schema().domains)
         if not any(d.canonical_name.startswith("PACKAGE") for d in domains):
             domains.append(
@@ -119,6 +121,12 @@ class NodeCounterReader:
                 "reason": str(exc),
             }
 
+    def read_operating_state(self):
+        return self.operating_state.sample()
+
+    def operating_state_inventory(self):
+        return self.operating_state.inventory()
+
     def close(self):
         self.gpu.shutdown()
 
@@ -173,10 +181,33 @@ class NodeMeasurement:
         self.thread = None
         self.artifacts = None
         self.sample_error = None
+        self.operating_samples = []
+        self._operating_reader = getattr(reader, "read_operating_state", None)
+        self.operating_inventory = reader.operating_state_inventory() if hasattr(reader, "operating_state_inventory") else {}
+        self._next_operating_ns = 0
+
+    def _sample_operating_state(self):
+        if not callable(self._operating_reader):
+            return
+        start = time.monotonic_ns()
+        try:
+            self.operating_samples.append(self._operating_reader())
+        except Exception as error:
+            self.operating_samples.append(dict(read_start_ns=start, read_end_ns=time.monotonic_ns(),
+                                               status="unavailable", reason=str(error), fields={}))
+        self._next_operating_ns = time.monotonic_ns() + 1_000_000_000
+
+    def operating_state_artifact(self):
+        return dict(protocol="operating-state-v1", session_id=self.session_id,
+                    clock_domain=self.clock_domain, interval_target_seconds=1,
+                    status="recorded" if self.operating_samples else "unavailable",
+                    reason="" if self.operating_samples else "reader does not expose operating state",
+                    inventory=self.operating_inventory, samples=list(self.operating_samples))
 
     def start_goal(self):
         self.session.start_session()
         start = self.session.start_goal()
+        self._sample_operating_state()
 
         def sample():
             while not self.stop.wait(0.1):
@@ -186,6 +217,8 @@ class NodeMeasurement:
                         if self.stop.is_set():
                             break
                         self.session.sample_goal()
+                        if time.monotonic_ns() >= self._next_operating_ns:
+                            self._sample_operating_state()
                 except Exception as exc:
                     self.sample_error = str(exc)
                     break
@@ -199,6 +232,7 @@ class NodeMeasurement:
         try:
             with self._sampling_lock:
                 # Seal the counters before sampler teardown can add goal cost.
+                self._sample_operating_state()
                 self.session.end_goal()
         finally:
             # Never join while holding a lock the sampler may still need.
