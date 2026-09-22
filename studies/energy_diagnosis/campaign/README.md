@@ -35,6 +35,27 @@ checkpoint and leaves the attempt running for reconciliation. It does not
 invent an endpoint or permit another goal. The ledger does not kill model/tool
 processes or discover surviving processes.
 
+For supervised campaigns, use the operator command instead of calling the API
+manually. It previews by default and refuses to apply unless the bounded
+supervisor has a terminal cleanup record and the operator attests that an
+independent process check found no owned work remaining:
+
+```bash
+python -m studies.energy_diagnosis.campaign.recover \
+  --campaign-dir "$RUNROOT/campaign" \
+  --session-id "$SESSION_ID" \
+  --clock-domain "$CLOCK_DOMAIN" \
+  --ended-ns "$ORIGINAL_CLOCK_ENDPOINT_NS" \
+  --reason "supervisor interrupted; owned work confirmed stopped" \
+  --supervisor-status "$RUNROOT/supervisor/status.json"
+```
+
+Inspect the preview, repeat the same command with
+`--apply --owned-work-terminated`, then resume through the ordinary launch
+command. Never use a post-reboot monotonic timestamp or attest termination
+without checking processes; leave the attempt unresolved when either fact is
+unknown.
+
 `export()` returns `plans`, `attempts`, `dispositions`, and `validation` paths.
 `plans.jsonl` retains full definitions for unattempted slots and pending retry
 requests; `attempts.jsonl` retains every realized attempt. The CSV is a latest
