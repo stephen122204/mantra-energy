@@ -99,3 +99,41 @@ Use original tokenizer bytes when preparing new cases. Existing case rebinding
 requires preserved source hashes and identical specified IDs; this does not
 establish arbitrary tokenizer equivalence. Runtime measurements remain CPU
 package and GPU board only where those domains are available and validated.
+
+## Terminal snapshots and serial batch coordination
+
+`archive_results` compresses only new/changed files and retains a full hash
+manifest. Supply explicit remote repository/interpreter, result directory,
+relative terminal status, host, SSH identity, known-hosts file and a new local
+destination. A subsequent snapshot can use `--previous-receipt`. Keep every
+bundle and receipt in its chain. `--restore-receipt RECEIPT --destination NEW_DIR`
+verifies the complete chain and reconstructs the latest view. Integrity failures
+are distinct from retryable SSH transport failures. No snapshot is accepted from
+a running job or a tree that changes while being archived.
+
+`batch_coordinator --spec PRIVATE_JSON --output LOCAL_DIRECTORY` runs on a POSIX
+receiving host and resumes from its saved state with the **same** specification.
+The private specification contains:
+
+- `host`, `identity_file`, `known_hosts`;
+- absolute `remote_directory`, `remote_repository`, `remote_python`;
+- UTC `cutoff_utc`, positive `retry_seconds`, `first_poll_delay_seconds`,
+  and `minimum_batch_seconds` (include startup, measurement, cleanup and backup);
+- an ordered `batches` list, each with a unique single-component `id`, launch
+  `argv`, and result-relative `status` and `log` paths.
+
+Each launch command must itself use a bounded supervisor, enforce exclusive
+measurement periods and publish its terminal status. The coordinator does not
+supply hardware isolation. For sampled process guards, arrange that new SSH
+sessions cannot start during measurement and restore access after each batch;
+otherwise polling itself introduces unrelated work. Use a bounded recovery
+mechanism for any temporary access restriction.
+
+A remote intent marker prevents duplicate dispatch when SSH loses the launch
+reply. An interrupted/ambiguous launch is retained for investigation, not
+silently repeated. Transport failures are retried within the cutoff. Completed
+results are verified off-node before another batch launches; failed remote jobs
+are backed up and stop the sequence. Integrity errors stop rather than retrying
+until something passes. A changed specification is rejected on resume. The
+receiving computer must stay awake and connected; if it is unavailable the
+current remote bounded batch can finish, but subsequent batches wait.
