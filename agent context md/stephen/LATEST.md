@@ -1,33 +1,33 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260922-integrated-native-handoff.md)
+[Immutable turn record](turns/20260922-native-reference-build.md)
 
-# Integrated task suite and current execution handoff
+# Native arithmetic qualification and execution ownership
 
 ## Task and current understanding
 
-Stephen authorized complete software integration and a verified bounded data-collection launch. PR43 is merged at 2003b78; its tested executable head is 85700fe. Component PR41 and PR42 are merged through it. PR40 is superseded by this combined integration, including its catalog and ownership repairs and independently reconciled partial-artifact recovery.
+Stephen is completing integration and bounded native qualification. PR43 and PR44 are merged; PR45 is a draft candidate, not accepted for campaign execution. Current integration includes the complete task pack and explicit longer goal deadlines.
 
 ## Ideas and hypotheses
 
-Two actual failure paths needed explicit separation: a reaped worker need not have reached a valid initialized energy endpoint, and a recovered terminal record intentionally differs from a checkpoint saved before interruption.
+The pinned backend and standard framework use different router precision, expert activation rounding and accumulation order. These can change model scores even when repeated backend runs and preparation comparisons agree. CPU probes support this diagnosis but do not prove full-model agreement.
 
 ## Decisions and rationale
 
-Require verified worker termination before another task; forced native stops invalidate energy. Preserve all checkpoint artifacts and validate hashes, identities and recovery endpoints. Never rewrite an old failed answer, use missing energy as zero, or relax an answer checker. New execution uses a separate clean checkout and fresh output directory.
+Keep the fixed-input reference tolerance unchanged. Preserve earlier failed qualification and pilot outputs. Use a separate source checkout, copied backend environment and build manifest for the compatibility candidate. Do not install packages into the original fingerprinted environment. Physical jobs, builds and bulk copies must use the shared GPU lock.
 
 ## Changes and artifacts
 
-PR43 includes all three task components, prepared inputs, full CLI integration, detailed checker artifacts and token-budget auditing. Startup failure handling and partial-artifact recovery are repaired. The new node checkout is integrated-repo-20260922 in the existing private work directory; connection details and raw artifacts remain private.
+PR44 records explicit runtime limits and permits a supplied goal deadline up to 1800 seconds without changing the default. PR45 adds an explicit Transformers 5.3 BF16 arithmetic compatibility mode and actual patched-router CPU tests. Its native build and qualification are queued separately behind the existing pilot. Exact paths and connection information are supplied privately.
 
 ## Tests and evidence
 
-All 15 Linux/Windows CI checks passed at 85700fe before merge. Earlier combined local checks passed 171 tests; the final recovery patch passed 55 focused pipeline/window/recovery tests. Offline replay reconciles all ten retained older pilot attempts; failed/incomplete outcomes remain unchanged. Both pilot snapshots were copied off-node with all file checksums matching. Backend numerical diagnostic tests require Torch and will use the existing node backend environment; the lightweight local test environment does not contain Torch.
+All 15 Linux/Windows CI checks pass for PR45 head 67473a577372a46fb9ca1e959412dd1c63742de5. Nineteen focused CPU routing/diagnostic tests pass. Native compilation and unchanged fixed-input reference qualification remain pending. No full campaign readiness claim follows from this CI result.
 
 ## Open questions and disagreements
 
-The older catalog pilot is not the expanded task pack. Current native model-reference qualification is running separately under the existing shared GPU lock. Do not launch a competing model, build, download or bulk copy during its measurements. Expanded-task native execution remains unqualified until that gate and its own run checks pass.
+The previous reference qualification failed. The expanded task-pack queue is paused and has not started. A separate operator's older-catalog pilot is running; it is preserved and must not be mistaken for qualification of the expanded pack or new arithmetic build. Do not launch another competing pilot or modify the original backend environment.
 
 ## Next actions and handoff
 
-Stephen owns the next integrated task-pack qualification and its launch/backup verification. Reuse the current model-reference qualification rather than duplicate it. Preserve the original checkout and run directories; use the separate integrated checkout. Alex's measurement interfaces, Aldric's workload/checker interfaces and Nitheesh's records/recovery interfaces are integrated; any new shared-code change must target fetched integration, not the superseded PR branches. Fetch this handoff before another deployment. Do not claim final campaign readiness or all tasks correct from green CI.
+Stephen owns the candidate native build, reference recheck, PR review/merge and subsequent expanded task-pack run. Other agents should fetch this context before hardware work and report their current job/output paths privately. Continue independent local tests. Keep all raw outputs, research plans and private conversations off GitHub. Only resume the expanded queue after its configuration, build and exact execution revision match successful qualification; verify off-node copies afterwards.
