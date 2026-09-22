@@ -53,6 +53,65 @@ def create_task(root, *, rows=8192, seed=7):
         'Return finite numbers accurate to absolute tolerance 0.000001. Do not include excluded rows.')
 
 
+def load_task(root, *, task_id, lineage, asset_sha256):
+    """Load a checksum-pinned, prepared integer regression dataset.
+
+    Source conversion belongs to the caller. This checks the normalized contract,
+    not the scientific validity or attribution of that conversion.
+    """
+    import re
+    for value in (task_id, lineage):
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", value):
+            raise ValueError('invalid prepared task identity')
+    if not isinstance(asset_sha256, str) or not re.fullmatch(r'[0-9a-f]{64}', asset_sha256):
+        raise ValueError('invalid prepared asset checksum')
+    root = Path(root)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('prepared assets must be a regular directory')
+    if {p.name for p in root.iterdir()} != {'observations.csv', 'source.json'}:
+        raise ValueError('prepared assets require exactly observations.csv and source.json')
+    if any(p.is_symlink() or not p.is_file() for p in root.iterdir()):
+        raise ValueError('prepared assets must be regular files')
+    if (root / 'observations.csv').stat().st_size > 128 * 1024 * 1024 or (root / 'source.json').stat().st_size > 65536:
+        raise ValueError('prepared assets exceed size limit')
+    if _hash(root) != asset_sha256:
+        raise ValueError('prepared asset checksum mismatch')
+    source = json.loads((root / 'source.json').read_text(encoding='utf-8'))
+    if not isinstance(source, dict) or not isinstance(source.get('source'), str) or not source['source'].strip():
+        raise ValueError('source.json requires a source description')
+    groups = {}
+    with (root / 'observations.csv').open(newline='', encoding='utf-8') as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames != ['group', 'x', 'y', 'valid']:
+            raise ValueError('invalid prepared CSV columns')
+        rows = 0
+        for row in reader:
+            rows += 1
+            if rows > 1_000_000 or None in row or any(v is None for v in row.values()):
+                raise ValueError('invalid prepared CSV row')
+            group = row['group']
+            if not group or len(group) > 128 or any(ord(c) < 32 for c in group) or row['valid'] not in {'0', '1'}:
+                raise ValueError('invalid group or valid flag')
+            for name in ('x', 'y'):
+                if not re.fullmatch(r'-?[0-9]{1,10}', row[name]) or abs(int(row[name])) > 1_000_000_000:
+                    raise ValueError('prepared coordinates must be bounded integers')
+            if row['valid'] == '1':
+                x = int(row['x'])
+                n, sx, sxx = groups.get(group, (0, 0, 0))
+                groups[group] = n + 1, sx + x, sxx + x*x
+                if len(groups) > 64:
+                    raise ValueError('too many regression groups')
+    if not groups or any(n < 2 or n*sxx == sx*sx for n,sx,sxx in groups.values()):
+        raise ValueError('each included group requires a defined regression')
+    return PilotTask(task_id, 'grouped-regression', lineage, root, {}, asset_sha256, (),
+        'For each group in observations.csv, exclude valid=0 records. Fit ordinary least '
+        'squares y=slope*x+intercept with an intercept. Return '
+        '{by_group:{group:{count:integer,slope:number,intercept:number,rmse:number}}}. '
+        'RMSE is sqrt(sum of squared residuals/count). Use the regression tool; inspect '
+        'source metadata for units. Return finite values within absolute tolerance 0.000001. '
+        'Report the stored x/y units without rescaling.')
+
+
 def _groups(root):
     groups = {}
     with (Path(root) / 'observations.csv').open(newline='', encoding='utf-8') as stream:
