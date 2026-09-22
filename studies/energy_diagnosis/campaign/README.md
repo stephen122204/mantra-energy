@@ -54,7 +54,12 @@ Inspect the preview, repeat the same command with
 `--apply --owned-work-terminated`, then resume through the ordinary launch
 command. Never use a post-reboot monotonic timestamp or attest termination
 without checking processes; leave the attempt unresolved when either fact is
-unknown.
+unknown. The operator must also match the supervisor command/output directory
+to this campaign; a terminal status alone does not establish that association.
+Recovery requires `cleanup_complete: true` from the current supervisor. Older
+records without this field are refused; do not manually add it to old evidence.
+The attempt identities are rechecked inside the ledger transaction before any
+recovery mutation.
 
 `export()` returns `plans`, `attempts`, `dispositions`, and `validation` paths.
 `plans.jsonl` retains full definitions for unattempted slots and pending retry

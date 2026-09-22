@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from .ledger import RunLedger
+from .ledger import LedgerError, RunLedger
 
 
 TERMINAL_SUPERVISOR_STATUSES = {"completed", "failed", "timed_out", "interrupted"}
@@ -38,7 +38,9 @@ def _load_supervisor_status(path: Path) -> dict[str, Any]:
         )
     if not value.get("finished_utc"):
         raise RecoveryRefused("supervisor status has no finished_utc cleanup marker")
-    if not isinstance(value.get("child_pid"), int):
+    if value.get("cleanup_complete") is not True:
+        raise RecoveryRefused("supervisor has no successful cleanup_complete evidence")
+    if type(value.get("child_pid")) is not int or value["child_pid"] <= 0:
         raise RecoveryRefused("supervisor status has no owned child_pid")
     return value
 
@@ -106,6 +108,7 @@ def reconcile(
             clock_domain=clock_domain,
             ended_ns=ended_ns,
             reason=reason,
+            expected_attempts=attempts,
         )
         if recovered != attempts:
             raise RecoveryRefused("running attempts changed during reconciliation")
@@ -145,7 +148,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             apply=args.apply,
             owned_work_terminated=args.owned_work_terminated,
         )
-    except RecoveryRefused as error:
+    except (RecoveryRefused, LedgerError) as error:
         parser.error(str(error))
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

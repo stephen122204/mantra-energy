@@ -54,6 +54,7 @@ def supervisor_status(tmp_path: Path, status: str = "interrupted") -> Path:
                 "status": status,
                 "returncode": 130,
                 "child_pid": 1234,
+                "cleanup_complete": True,
                 "finished_utc": "2026-09-22T00:00:00+00:00",
             }
         ),
@@ -144,3 +145,31 @@ def test_wrong_clock_or_missing_cleanup_marker_refuses_recovery(tmp_path: Path) 
             apply=True,
             owned_work_terminated=True,
         )
+
+
+@pytest.mark.parametrize("marker", [None, False, "true"])
+def test_missing_or_failed_cleanup_refuses_without_mutation(tmp_path, marker):
+    campaign, lease = interrupted_campaign(tmp_path)
+    status = supervisor_status(tmp_path)
+    value = json.loads(status.read_text())
+    value["cleanup_complete"] = marker
+    status.write_text(json.dumps(value))
+    with pytest.raises(RecoveryRefused, match="cleanup_complete"):
+        call(campaign, status, apply=True, confirmed=True)
+    with RunLedger(campaign / "ledger.sqlite") as ledger:
+        assert ledger.running_attempts() == (lease,)
+
+
+def test_changed_attempt_refused_atomically(tmp_path):
+    from studies.energy_diagnosis.campaign.ledger import LedgerValidationError
+    campaign, original = interrupted_campaign(tmp_path)
+    with RunLedger(campaign / "ledger.sqlite", artifact_root=campaign) as ledger:
+        ledger.recover_interrupted(session_id=SESSION, clock_domain=CLOCK,
+                                   ended_ns=150, reason="first recovery")
+        replacement = ledger.claim_next(session_id=SESSION, started_ns=160,
+                                        clock_domain=CLOCK)
+        with pytest.raises(LedgerValidationError, match="changed during"):
+            ledger.recover_interrupted(session_id=SESSION, clock_domain=CLOCK,
+                                       ended_ns=200, reason="stale preview",
+                                       expected_attempts=(original,))
+        assert ledger.running_attempts() == (replacement,)

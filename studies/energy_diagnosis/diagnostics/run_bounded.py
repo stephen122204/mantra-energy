@@ -54,7 +54,7 @@ def main():
     out = Path(a.output)
     out.mkdir(parents=True,exist_ok=False)
     state = dict(command=command,cwd=a.cwd,started_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
-                 max_seconds=a.seconds,cutoff_utc=a.cutoff_utc,status='starting',supervisor_pid=os.getpid())
+                 max_seconds=a.seconds,cutoff_utc=a.cutoff_utc,status='starting',supervisor_pid=os.getpid(),cleanup_complete=False)
     def save():
         tmp = out/'status.tmp'
         tmp.write_text(json.dumps(state,indent=2)+'\n')
@@ -81,6 +81,7 @@ def main():
                 finally:
                     if child is not None:
                         stop_group(child)
+                        state['cleanup_complete'] = True
     except subprocess.TimeoutExpired:
         state.update(status='timed_out',returncode=124)
     except InterruptedError as e:

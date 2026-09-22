@@ -410,6 +410,7 @@ class RunLedger:
 
     def recover_interrupted(
         self, *, session_id: str, clock_domain: str, ended_ns: int, reason: str,
+        expected_attempts: tuple[AttemptLease, ...] | None = None,
     ) -> tuple[AttemptLease, ...]:
         """Recover one session using a known termination endpoint in its clock.
 
@@ -429,6 +430,11 @@ class RunLedger:
                 "SELECT a.*, p.payload_json FROM attempts a JOIN plans p USING (planned_run_id) WHERE a.status = 'running' AND a.session_id = ? ORDER BY p.ordinal, a.attempt_number",
                 (session_id,),
             ).fetchall()
+            if expected_attempts is not None:
+                # Compare under the write transaction, before any mutation.
+                current = self.running_attempts()
+                _require(current == expected_attempts,
+                         "running attempts changed during reconciliation")
             for row in rows:
                 plan = PlannedRun.from_dict(json.loads(row["payload_json"]))
                 lease = self._lease_from_row(row, plan.simulated)
