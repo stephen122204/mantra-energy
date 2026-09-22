@@ -13,6 +13,8 @@ import tempfile
 
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 
+from .tool_contracts import REGRESSION_ACTIONS, action_contract
+
 VERSION = 'grouped-regression-v1'
 
 
@@ -198,9 +200,11 @@ class RegressionRuntime:
             'description': 'Inspect input metadata or compute per-group OLS fits locally. '
                            'Fit filters valid=1 and returns count, slope, intercept and RMSE. '
                            'Output size is bounded independently of input size.',
-            'args': {'action': 'inspect|fit'}}},
+            'args': {'action': 'required: inspect or fit'},
+            'parameters': action_contract(REGRESSION_ACTIONS),
+            'example_call': {'id':'fit_1','tool':'regression','args':{'action':'fit'}}}},
             instruction='Return only JSON: {"tool_calls":[{"id":"unique","tool":"regression",'
-                        '"args":{"action":"inspect or fit"}}]} or {"answer":{...}}. '
+                        '"args":{"action":"fit"}}]} or {"answer":{...}}. '
                         'Use actual tool outputs. No other arguments are permitted.')
 
     def tool(self, task, call):
