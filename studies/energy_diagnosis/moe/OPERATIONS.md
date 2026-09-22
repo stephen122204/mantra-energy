@@ -148,3 +148,19 @@ with independently evaluated BF16 operations and the pinned framework's actual
 expert module. Its status and per-case diagnostics are saved in the new output
 directory; it does not establish full-model, task or energy validity. Preserve a
 failed result and still require the full fixed-input qualification above.
+
+## Balanced repeated comparisons
+
+For a supplied two-policy repeated batch, `--comparison-order balanced-pairs`
+requires an even `--repeats` value. Within each task, session, preparation and
+input/model/verifier identity, the first of two successive repetitions gets a
+seeded random policy order and the next gets its reverse. Every setting therefore
+appears first equally often. Existing preparation blocks and task order stay in
+place; this option does not randomize unrelated hardware/setup blocks.
+
+The mode, seed and actual order are recorded in the immutable manifest and
+schedule. Resume preserves them; changing the order mode requires a new output
+directory. The default remains the existing independent within-block shuffle.
+This controls ordering only: it does not establish an adequate repetition count,
+consistent warm-up/cache state, thermal stability, exclusive hardware use or
+measurement validity. Those checks remain required for the supplied batch.
