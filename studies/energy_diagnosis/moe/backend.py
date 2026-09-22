@@ -35,12 +35,12 @@ class ProcessBackend:
         # idle: the process is reaped (owned work terminated) but its captured
         # energy interval is not a complete goal interval.
         self.termination_forced = False
+        self.termination_confirmed = True
 
     @property
     def owned_work_terminated(self):
-        # process is cleared only after a verified exit (wait + reader join); a
-        # dead process cannot own device work, even when idle was never confirmed.
-        return self.process is None
+        # Process-group termination and device drain are separate evidence.
+        return self.process is None and self.termination_confirmed
 
     def capabilities(self):
         # Real capability verification happens in reset before returning goal-start.
@@ -53,6 +53,7 @@ class ProcessBackend:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.log = self.log_path.open("ab")
         self.messages = queue.Queue(maxsize=4)
+        self.termination_confirmed = False
         self.process = subprocess.Popen(
             [self.python, "-m", "studies.energy_diagnosis.moe.worker", self.mode],
             stdin=subprocess.PIPE,
@@ -113,7 +114,7 @@ class ProcessBackend:
                 result = self.messages.get(timeout=wait)
             except queue.Empty:
                 raise RuntimeError(
-                    f"backend RPC {method!r} produced no response within {wait}s; owned worker terminated"
+                    f"backend RPC {method!r} produced no response within {wait}s"
                 ) from None
             if isinstance(result, Exception):
                 raise result
@@ -193,10 +194,21 @@ class ProcessBackend:
             # exit after SIGKILL. Keep a finite bound, but allow the observed
             # multi-gigabyte teardown to finish before rejecting ownership.
             p.wait(timeout=60)
+            if os.name == "posix":
+                # Reaping only the leader does not prove the process group is empty.
+                import psutil
+
+                for child in psutil.process_iter(["pid", "status"]):
+                    try:
+                        if os.getpgid(child.pid) == p.pid and child.status() != psutil.STATUS_ZOMBIE:
+                            raise RuntimeError("backend process group termination unverified")
+                    except (ProcessLookupError, psutil.NoSuchProcess):
+                        pass
             if self.reader_thread is not threading.current_thread():
                 self.reader_thread.join(timeout=2)
             if self.reader_thread.is_alive():
                 raise RuntimeError("backend output reader did not terminate")
+            self.termination_confirmed = True
         finally:
             if p.poll() is not None:
                 for handle in (p.stdin, p.stdout, self.log):
