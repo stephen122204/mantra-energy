@@ -401,7 +401,7 @@ def test_tool_timeout_still_drains_preparation(tmp_path):
         "--max-runs",
         "1",
         "--deadline",
-        "1",
+        "8",  # Allow spawned worker startup on Windows; injected tool sleeps 20s.
     )
     path = next((tmp_path / "goals").glob("*/record.json"))
     record = json.loads(path.read_text())
