@@ -655,3 +655,19 @@ def test_surviving_process_group_refuses_termination_claim(tmp_path, monkeypatch
         backend.end_goal()
     assert backend.process is None
     assert not backend.owned_work_terminated
+
+
+
+def test_explicit_longer_goal_budget_is_finite_and_pinned(tmp_path):
+    result = command(tmp_path / "allowed", "--task", "joined-orders-v1", "--policies", "demand",
+                     "--max-runs", "1", "--deadline", "1200")
+    assert result["executed"] == 1
+    limits = json.loads((tmp_path / "allowed/moe-manifest.json").read_text())["limits"]
+    assert limits == dict(goal_seconds=1200, max_steps=5, max_output_tokens=512)
+    for invalid in ("1801", "nan", "inf", "0"):
+        rejected = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                                   "--output", str(tmp_path / ("bad-"+invalid)), "--deadline", invalid],
+                                  cwd=ROOT, capture_output=True, text=True, timeout=30)
+        assert rejected.returncode == 2
+        assert "invalid bounded" in rejected.stderr
+        assert not (tmp_path / ("bad-"+invalid)).exists()
