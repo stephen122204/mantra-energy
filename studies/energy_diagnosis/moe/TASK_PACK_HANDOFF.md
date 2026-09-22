@@ -49,3 +49,18 @@ Budget and record this verification cost. Confirm final native goal/deadline
 behavior, nonzero transfers, counter quality and backups before a physical batch.
 Real-source task inclusion and final sizes/repetitions are separate supplied
 configuration decisions. No research protocol is distributed in this handoff.
+
+
+## Prepared numerical inputs
+
+A specification may also identify a caller-prepared local dataset:
+
+```json
+[{"kind":"numerical","assets":"/absolute/prepared-input","asset_sha256":"REPLACE_WITH_64_HEX_CHECKSUM","task_id":"prepared-regression-v1","lineage":"source-dataset-v1"}]
+```
+
+The directory must contain exactly `observations.csv` and `source.json` as regular files. CSV columns are exactly `group,x,y,valid`; coordinates are integers within ±1,000,000,000, flags are 0 or 1, and each included group must have at least two observations with varying x. Limits are one million rows, 64 included groups, 128 MiB CSV and 64 KiB metadata. Decimal source values must be converted explicitly into documented integer units before import. The loader does not infer unit conversions or missing-value rules. Metadata must include a `source` description; retain source attribution, original checksum, units and conversion rules there.
+
+The checksum uses the existing ALEMS directory hash (`studies.energy_diagnosis.workloads.pilot_tasks._hash`), which includes relative filenames and bytes; it is not a raw CSV checksum. The caller must independently check the source conversion. The launcher copies validated inputs into the campaign asset directory and rechecks the copy. Preserve the original prepared directory unchanged and at the same absolute path for resume. Changed source bytes or a changed snapshot are refused.
+
+Prepared inputs use the same regression tool, verifier, manifest and record path as generated inputs. Source IDs and row variants do not automatically imply independent tasks. Do not commit input datasets, local paths or run outputs. `tests/test_prepared_numerical.py` covers normalization rejection, immutable snapshots and an actual fixture CLI execution plus resume. Fixture results are simulated.

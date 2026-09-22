@@ -48,12 +48,22 @@ def prepare(root, specifications):
     if not isinstance(specifications,list) or not 1<=len(specifications)<=64:
         raise ValueError('provide 1..64 task specifications')
     seen=set()
-    for spec in specifications:
-        if not isinstance(spec,dict) or set(spec)!={'kind','rows','seed'}:
-            raise ValueError('task specification requires exactly kind, rows, seed')
-        if spec['kind'] not in MODULES or type(spec['rows']) is not int or not 32<=spec['rows']<=1_000_000 or type(spec['seed']) is not int or not 0<=spec['seed']<2**31:
-            raise ValueError('invalid task specification')
-        key=(spec['kind'],spec['rows'],spec['seed'])
+    external={}
+    for index,spec in enumerate(specifications):
+        if not isinstance(spec,dict):
+            raise ValueError('task specification must be an object')
+        if set(spec)=={'kind','assets','asset_sha256','task_id','lineage'} and spec['kind']=='numerical':
+            if not isinstance(spec['assets'],str) or not Path(spec['assets']).is_absolute():
+                raise ValueError('prepared asset path must be absolute')
+            external[index]=numerical_workload.load_task(spec['assets'],task_id=spec['task_id'],
+                lineage=spec['lineage'],asset_sha256=spec['asset_sha256'])
+            key=('prepared',spec['task_id'])
+        else:
+            if set(spec)!={'kind','rows','seed'}:
+                raise ValueError('task specification requires generated or prepared fields')
+            if not isinstance(spec['kind'],str) or spec['kind'] not in MODULES or type(spec['rows']) is not int or not 32<=spec['rows']<=1_000_000 or type(spec['seed']) is not int or not 0<=spec['seed']<2**31:
+                raise ValueError('invalid task specification')
+            key=(spec['kind'],spec['rows'],spec['seed'])
         if key in seen:raise ValueError('duplicate task specification')
         seen.add(key)
     root=Path(root)
@@ -64,12 +74,24 @@ def prepare(root, specifications):
         raise ValueError('task pack changed; use a new directory')
     root.mkdir(parents=True,exist_ok=True)
     tasks=[];modules={}
-    for spec in specifications:
+    for index,spec in enumerate(specifications):
         module=MODULES[spec['kind']]
-        path=root/f"{spec['kind']}-n{spec['rows']}-s{spec['seed']}"
-        if module in (numerical_workload,etl_workload):
-            created=(module.create_task(path,rows=spec['rows'],seed=spec['seed']),)
-        else:created=module.create_tasks(path,rows=spec['rows'],seed=spec['seed'])
+        if index in external:
+            import shutil
+            import tempfile
+            path=root/f"prepared-{spec['task_id']}"
+            if not path.exists():
+                with tempfile.TemporaryDirectory(dir=root) as staging:
+                    snapshot=Path(staging)/'assets'
+                    shutil.copytree(external[index].asset_path,snapshot)
+                    numerical_workload.load_task(snapshot,task_id=spec['task_id'],lineage=spec['lineage'],asset_sha256=spec['asset_sha256'])
+                    snapshot.rename(path)
+            created=(numerical_workload.load_task(path,task_id=spec['task_id'],lineage=spec['lineage'],asset_sha256=spec['asset_sha256']),)
+        else:
+            path=root/f"{spec['kind']}-n{spec['rows']}-s{spec['seed']}"
+            if module in (numerical_workload,etl_workload):
+                created=(module.create_task(path,rows=spec['rows'],seed=spec['seed']),)
+            else:created=module.create_tasks(path,rows=spec['rows'],seed=spec['seed'])
         for task in created:
             if task.task_id in modules:raise ValueError('duplicate task identity')
             tasks.append(task);modules[task.task_id]=module
