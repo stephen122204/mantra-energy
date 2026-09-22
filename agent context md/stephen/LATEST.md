@@ -1,58 +1,43 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260922-pr40-repair-and-node-pilot.md)
+[Immutable turn record](turns/20260922-qualified-native-and-guarded-runs.md)
 
-# PR #40 repair, integrated interruption path, and node pilot
+# Integrated native qualification and guarded-run handoff
 
 ## Task and current understanding
 
-Fresh clone at integration 3664414. PR #40 (expanded MoE task suite, contributor head c9f908d) was reviewed, its reported defects reproduced and repaired on the same branch, the integrated software was exercised locally through interruption/recovery/resume, and the allocated Chameleon A100 node was prepared under the shared account with the pinned checkpoint and backend build. A bounded native smoke, a ten-slot pilot batch and the fixed-input qualification were executed. Final PR head 0e753e3; CI 9/9 green; merge left to Stephen. Hardware artifacts, addresses and raw numbers stay outside Git.
+PR43/44/45/46/47/48 are merged. The execution checkout is integration f3499c886c13f54d2ff427c3e95251b184425fbc. There are no open PRs at this checkpoint. Older notes calling PR40 or PR45 merge-pending are superseded. This is a software/native-qualification checkpoint, not a claim that every task or unattended campaign is qualified.
+
+Alex's scope is backend/measurement readiness, Aldric's is workload contracts and independent correctness checks, Nitheesh's is durable records/recovery/export, and Stephen integrates and verifies the complete stack. Completion of one component does not certify the others.
 
 ## Ideas and hypotheses
 
-- Restart safety is asset identity, not regeneration: an existing asset directory is reused only when identical (SQLite compared by logical dump) and refused otherwise; a rerun never rewrites a changed input.
-- Recovery after an interruption yields a ledger attempt whose checkpointed artifacts predate the recovery record; summary and audit must treat that explicitly instead of as evidence loss or as a completed goal.
-- A process-group signal cannot reach the owned model worker or isolated tool processes (own sessions); the launcher must terminate descendants recorded before the stop.
-- A killed and reaped worker cannot own device work: `owned_work_terminated` means exactly that, while a forced stop before idle confirmation remains visible and invalidates the captured energy.
-- Hypothesis for the one initialization hang (worker log ends after topology setup, >600 s, memory not exhausted): backend-internal; not diagnosed. The batch now tolerates it.
+The full pinned framework model selects grouped_mm experts, while a standalone expert can default differently. Native arithmetic must match the full model's actual implementation. OS background work and unrelated processes can contaminate valid-looking counter records, so arithmetic validity is distinct from measurement isolation.
 
 ## Decisions and rationale
 
-- Repairs were pushed onto the PR branch to preserve the contributor's commit (934a9a8, 82c1011, 7780a84, 353a6af, 5446dad, 0e753e3). Task/verifier version stays `moe-tools-v4` as the PR declared.
-- Hidden ETL checker now enforces its declared language (annotations, type comments, non-int/str literals, comprehension filters rejected); both checkers parse with type comments visible; reference DB opened read-only.
-- Prompt-visible tool contracts (`TOOL_CONTRACTS`) restored for the original families and declared for database/ETL/numerical tools with argument schema, example call and ordering text.
-- The campaign command keeps the ledger default retry limit (0) after recovery; retry policy belongs to the run definition.
-- Tolerances for the fixed-input reference comparison were not changed.
+Keep the existing numerical tolerances. The new native mode restores grouped BF16 projection boundaries, FP32 weighting and token/top-k reduction order. Require explicit configuration and the matching rebuilt extension. Preserve old builds and failed captures. No mutation of an installed fingerprinted backend environment.
+
+Use the bounded launcher, reviewed process baseline, operating-state artifacts and balanced-pair option where their prerequisites hold. The process guard is sampled detection, not access control or perfect isolation. Operators must coordinate exclusive periods; do not log into the measurement node to build, download, copy, run another test or repeatedly poll during the protected window. Backups and inspection occur between bounded batches. Do not kill other users' jobs without identifying ownership and scope.
 
 ## Changes and artifacts
 
-- `studies/energy_diagnosis/moe/workloads.py`: restart-safe `create_tasks`, `TOOL_CONTRACTS`, stricter checkers.
-- `moe/summary.py`, `moe/audit_windows.py`: recovered attempts (with or without checkpointed artifacts) summarized as unknown cost and audited as `recovered`, never as measured.
-- `moe/run.py`: SIGTERM/SIGINT unwind through cleanup, exit 130, attempt left for recovery.
-- `moe/backend.py`, `local_run.py`: termination vs idle accounting; descriptive RPC timeout error.
-- `diagnostics/run_bounded.py`: descendant termination, `--grace-seconds`, `surviving_pids`.
-- `moe/OPERATIONS.md`: launch/inspect/stop/recover/resume/export/copy commands; README/CI updated; tests added in `tests/test_moe_expanded_tasks.py`, `tests/test_moe_pipeline.py`, `tests/test_session_diagnostics.py`.
-- Node work directory (private): study and backend environments, hashed checkpoint manifest, patched backend build manifest, private configuration, launcher helper.
+- PR45: grouped reference arithmetic, pinned implementation declaration, native microcheck and fixed-input reference capture support.
+- PR46: seeded complementary policy order with even repetitions and immutable comparison mode.
+- PR47: hashed operating-state artifacts with acquisition timestamps, sensor provenance and explicit unavailable fields.
+- PR48: optional Linux process guard, terminal interference status, retained descendant cleanup and copy/recovery recognition. Windows fixture readiness waits for readable PID markers; termination checks remain strict.
+- Private hardware outputs, addresses, credentials, run definitions and research interpretation remain outside Git.
 
 ## Tests and evidence
 
-- Fixture-tested: local 207 runtime tests + 5 subtests; 151 MoE/launcher/recovery tests; setup checker; CI 9/9 at 0e753e3. On the node at the execution commit: runtime 207, MoE/launcher 74.
-- Hardware-tested (execution commit 7780a84 for smoke/pilot, 0e753e3 for qualification; node identity, GPU UUID, boot id, driver/CUDA, checkpoint and build manifests recorded in the artifacts):
-  - Counter preflight: two RAPL package domains and NVML board energy readable.
-  - Smoke: 2/2 goals correct via real inference, all domains valid, replayed audit reconciles, prefetch completed 56 experts under budget and all were later requested; exit 0.
-  - Pilot: 10/10 slots realized (9 completed, 1 recovered after an initialization timeout); 5 verifier passes, 4 genuine verifier failures retained; campaign validation valid; window audit passed with 9/10 fully measured; identical prompts and greedy responses across settings for 3/4 comparable tasks.
-  - Second pilot at the final commit: 10/10 slots realized without interruption, validation valid, audit passed for all attempts, same task failures; per-goal wall time consistent with the first pilot.
-  - Interruption path on hardware: launcher status with cleanup evidence, guarded recovery, resume without duplicate attempts, verified off-node copies (all copies hash-verified from the laptop with rsync 3).
-  - Qualification: demand repeatability exact; preparation effective with identical scores; reference comparison FAILS the declared tolerances while argmax agrees at every position. Numbers and captures are stored privately.
-- Not tested: induced interruption on hardware; `exact_prefix` mode.
+The integrated PR head passed all 15 CI checks. Local combined task/measurement/order/token-verifier checks passed (62 tests); reference/session/process checks passed (35, with two Linux-only tests skipped on macOS and exercised by Linux CI). Six native expert cases matched the actual grouped framework implementation exactly. The full fixed-input qualification completed successfully: repeated demand, demand/preparation with nonzero completed preparation, and standard-reference scores agreed exactly at all captured positions without changing tolerances. Capture and diagnostic bundles were copied off-node and hash-verified.
+
+This qualification covers its fixed-input cases, not arbitrary prompts, actual tool-overlap or energy efficacy. The target-node operating-state reader was exercised; unsupported CPU throttle counters remain unavailable. Earlier pilots are not clean effect evidence where concurrent setup activity was possible.
 
 ## Open questions and disagreements
 
-- Standard-model agreement remains failed under the existing criteria; Stephen owns the diagnosis.
-- Reservation cutoff was not readable from the node; launcher cutoffs were conservative operator choices.
-- The shared node account was used concurrently by another actor: a repository clone and environment build ran during the later goals of the second pilot (their socket-wide CPU readings are therefore not clean), and a qualification job started seconds after the batch released the GPU lock. The lock serialised the GPU; per-person accounts or one agreed operator are needed for attributable measured work.
-- One unexplained worker initialization hang; prefetch transfers complete after the very short tool bodies of these tasks (charged in the resume barrier); two tasks fail on model behavior (assignment in the constrained repair, by-hand regression arithmetic) and the linear-fit responses diverge between settings during generation despite exact fixed-forward repeatability.
+Expanded real-model task paths, actual token margins, longer request/state qualification, target-node task durations, induced interruption/recovery, and complete output-bundle audits remain launch dependencies. Reservation budget and final run-definition freeze are separate operator checks. Sensor readings and raw-counter reconciliation are not external electrical calibration.
 
 ## Next actions and handoff
 
-Stephen: merge PR #40 (or request changes), read the lease end time, decide on the reference-agreement result and the run definition (repeats, byte budget, tool durations). Operators: use `moe/OPERATIONS.md` with the private node runbook. Code is pushed; nothing pending locally except private notes.
+Stephen is running the guarded node preflight and then the expanded task and unattended checks. Other agents may continue local code review but must not launch work on the shared node during that sequence. Use `studies/energy_diagnosis/moe/OPERATIONS.md` for current flags and limitations. Keep failures and missing readings; stop and diagnose invalidity rather than silently replacing records or weakening checks.
