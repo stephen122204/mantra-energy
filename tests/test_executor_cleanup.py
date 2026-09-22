@@ -30,6 +30,19 @@ class SideEffectTool:
         return True
 
 
+def read_ready_pid(path):
+    # Windows can expose the renamed entry before another process may open it.
+    # Wait only for marker readability; termination assertions still use zero grace.
+    until = time.monotonic() + 3
+    while True:
+        try:
+            return int(Path(path).read_text())
+        except (FileNotFoundError, PermissionError):
+            if time.monotonic() >= until:
+                raise
+            time.sleep(0.002)
+
+
 def observe_worker_exit(pid, request):
     """Capture identity while live; test exit without waiting for PID removal."""
     if os.name == "nt":
@@ -79,11 +92,8 @@ def test_timed_out_process_stops_before_next_goal(tmp_path, request):
     def observe(event):
         events.append(event)
         if event["event"] == "body_start":
-            until = time.monotonic() + 3
-            while not Path(path + ".started").exists() and time.monotonic() < until:
-                time.sleep(0.002)
-            assert Path(path + ".started").exists()
-            observed_worker.append(observe_worker_exit(int(Path(path + ".started").read_text()), request))
+            pid = read_ready_pid(path + ".started")
+            observed_worker.append(observe_worker_exit(pid, request))
             assert not observed_worker[-1](), "probe must be alive before timeout"
 
     executor = BoundedToolExecutor(
@@ -183,11 +193,8 @@ def test_body_observer_failure_reaps_tool_and_allows_next_goal(tmp_path, error_t
 
     def broken_observer(event):
         if event["event"] == "body_start":
-            until = time.monotonic() + 3
-            while not Path(marker + ".started").exists() and time.monotonic() < until:
-                time.sleep(0.002)
-            assert Path(marker + ".started").exists()
-            observed_worker.append(observe_worker_exit(int(Path(marker + ".started").read_text()), request))
+            pid = read_ready_pid(marker + ".started")
+            observed_worker.append(observe_worker_exit(pid, request))
             assert not observed_worker[-1](), "probe must be alive before observer failure"
             raise error_type("observer failure")
 
@@ -203,3 +210,14 @@ def test_body_observer_failure_reaps_tool_and_allows_next_goal(tmp_path, error_t
     assert executor.execute([
         ToolCall("next", "t", {"path": marker + "next", "delay": 0})
     ])["next"].status == "completed"
+
+
+def test_ready_pid_waits_for_read_access(monkeypatch):
+    reads = iter([PermissionError("temporarily shared"), "123"])
+    def read(self):
+        value = next(reads)
+        if isinstance(value, Exception):
+            raise value
+        return value
+    monkeypatch.setattr(Path, "read_text", read)
+    assert read_ready_pid("fixture.started") == 123
