@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from studies.energy_diagnosis.moe.workloads import (
+    BUGGY,
     ETL_BUGGY,
     TOOL_CONTRACTS,
     DatabaseTool,
@@ -36,7 +37,7 @@ def test_create_tasks_is_restart_safe_and_never_replaces_changed_inputs(tmp_path
     for path, other in (("repository/pricing.py", "database/orders.sqlite"),):
         target = tmp_path / "assets" / path
         changed = "def net_cents(price, count, discount):\n    return 0\n"
-        target.write_text(changed, encoding="utf-8")
+        target.write_text(changed, encoding="utf-8", newline="\n")
         with pytest.raises(RuntimeError, match="differs from the moe-tools-v4 definition"):
             create_tasks(tmp_path / "assets")
         # The modified input is neither restored nor rewritten behind the operator's back.
@@ -46,11 +47,8 @@ def test_create_tasks_is_restart_safe_and_never_replaces_changed_inputs(tmp_path
     db.execute("UPDATE orders SET amount_cents = amount_cents + 1 WHERE order_id = 101")
     db.commit()
     db.close()
-    (tmp_path / "assets" / "repository" / "pricing.py").write_text(
-        next(t for t in first if t.family == "repository-repair").asset_path.joinpath("pricing.py").read_text()
-        if False else "def net_cents(price, count, discount):\n    return price * count * (100 - discount) // 100\n",
-        encoding="utf-8",
-    )
+    # Restore the exact original bytes (no newline translation) so only the database differs.
+    (tmp_path / "assets" / "repository" / "pricing.py").write_text(BUGGY, encoding="utf-8", newline="\n")
     with pytest.raises(RuntimeError, match="database"):
         create_tasks(tmp_path / "assets")
 
