@@ -185,6 +185,35 @@ class FixtureDevice:
                 if len(results) < 3
                 else {"answer": {"done": True}}
             )
+        elif context.get("family") == "etl-repair":
+            calls = [
+                dict(id="read", tool="etl", args=dict(action="read")),
+                dict(id="edit", tool="etl", args=dict(action="write", content="def transform_rows(rows):\n    return [{'region': row['region'], 'net_cents': row['gross_cents'] - row['tax_cents']} for row in rows]\n")),
+                dict(id="test", tool="etl", args=dict(action="test")),
+            ]
+            decision = {"tool_calls": [calls[len(results)]]} if len(results) < 3 else {"answer": {"done": True}}
+        elif context.get("family") == "database-analysis":
+            if not results:
+                decision = {"tool_calls": [dict(id="schema", tool="database", args=dict(action="schema"))]}
+            elif len(results) == 1:
+                query = ("SELECT c.segment, COUNT(*) AS order_count, SUM(o.amount_cents) AS revenue_cents "
+                         "FROM orders o JOIN customers c ON c.customer_id=o.customer_id "
+                         "WHERE o.status='paid' GROUP BY c.segment ORDER BY c.segment")
+                decision = {"tool_calls": [dict(id="query", tool="database", args=dict(action="query", sql=query))]}
+            else:
+                by_segment = {row[0]: {"order_count": row[1], "revenue_cents": row[2]} for row in results[-1]["result"]["rows"]}
+                decision = {"answer": {"by_segment": by_segment, "total_cents": sum(item["revenue_cents"] for item in by_segment.values())}}
+        elif context.get("family") == "numerical-analysis":
+            if not results:
+                decision = {"tool_calls": [dict(id="read", tool="numerical", args=dict(action="read"))]}
+            else:
+                rows = results[-1]["result"]["rows"]
+                mean_x = sum(row[0] for row in rows) / len(rows)
+                mean_y = sum(row[1] for row in rows) / len(rows)
+                slope = sum((x - mean_x) * (y - mean_y) for x, y in rows) / sum((x - mean_x) ** 2 for x, _ in rows)
+                intercept = mean_y - slope * mean_x
+                rmse = (sum((y - (slope * x + intercept)) ** 2 for x, y in rows) / len(rows)) ** 0.5
+                decision = {"answer": {"slope": round(slope, 6), "intercept": round(intercept, 6), "rmse": round(rmse, 6)}}
         elif not results:
             decision = {"tool_calls": [dict(id="pipeline", tool="pipeline", args={})]}
         else:
