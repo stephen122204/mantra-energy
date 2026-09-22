@@ -116,7 +116,8 @@ def capture(args):
         from accelerate import cpu_offload
         model = AutoModelForCausalLM.from_pretrained(model_path, dtype=torch.bfloat16,
                     device_map='cpu',local_files_only=True,trust_remote_code=False,
-                    attn_implementation=args.attention)
+                    attn_implementation=args.attention,
+                    experts_implementation=config.get('reference_experts_implementation','grouped_mm'))
         model.eval()
         cpu_offload(model,execution_device=torch.device('cuda:0'),offload_buffers=True)
     else:
@@ -178,6 +179,7 @@ def capture(args):
                     transformers_version=importlib.metadata.version('transformers'),
                     accelerate_version=importlib.metadata.version('accelerate'),
                     attention=model.config._attn_implementation,model_training=model.training,
+                    experts_implementation=getattr(model.config,'_experts_implementation',None),
                     gpu=torch.cuda.get_device_name(0),intervention=intervention,
                     scope='Fixed forced prefixes; optional earlier request primes expert state with a fresh target KV cache. Preparation is drained at the declared boundary; no actual tool-overlap, full-task, energy or asynchronous-race claim.',
                     native_boot=None if native is None else native.boot)

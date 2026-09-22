@@ -2,6 +2,7 @@
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import time
 
@@ -19,6 +20,13 @@ class NativeDevice:
         from transformers import AutoTokenizer
         from moe_infinity import MoE
 
+        if config.get("reference_arithmetic") != "transformers-5.3-grouped-bf16-v1":
+            raise ValueError("explicit qualified reference_arithmetic is required")
+        if importlib.metadata.version("transformers") != "5.3.0":
+            raise ValueError("reference arithmetic requires Transformers 5.3.0")
+        os.environ["ALEMS_QWEN_REFERENCE_MATH"] = "1"
+        if config.get("reference_experts_implementation") != "grouped_mm":
+            raise ValueError("explicit grouped_mm reference implementation is required")
         self.torch = torch
         self.request_cache_mode = config.get("request_prefix_cache", "disabled")
         if self.request_cache_mode not in {"disabled", "exact_prefix"}:
@@ -190,6 +198,7 @@ class NativeDevice:
             ),
             controls=CONTROLS,
             mode="native",
+            reference_arithmetic=config["reference_arithmetic"],
             request_prefix_cache=self.request_cache_mode,
             applied_config=self.applied,
             backend_commit=BACKEND_COMMIT,
