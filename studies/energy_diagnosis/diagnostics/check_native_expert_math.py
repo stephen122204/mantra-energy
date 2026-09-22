@@ -44,8 +44,10 @@ def probe(output):
         dispatcher=_store.expert_dispatcher(experts,1,0,5,2)
         for expert,group in enumerate(ids):dispatcher.register_expert(0,expert,group,'')
         gpuweights=[[t.cuda() for t in group] for group in weights]
-        reference=Qwen3MoeExperts(Qwen3MoeConfig(hidden_size=hidden,
-            moe_intermediate_size=intermediate,num_experts=experts,num_experts_per_tok=4))
+        config=Qwen3MoeConfig(hidden_size=hidden,moe_intermediate_size=intermediate,
+                              num_experts=experts,num_experts_per_tok=4)
+        config._experts_implementation='grouped_mm'
+        reference=Qwen3MoeExperts(config)
         reference=reference.to(device='cuda',dtype=torch.bfloat16).eval()
         with torch.no_grad():
             for e,(gate,up,down) in enumerate(gpuweights):
@@ -58,20 +60,23 @@ def probe(output):
             topweights/=topweights.sum(-1,keepdim=True)
             mask=F.one_hot(indices,experts).any(1)
             routing=torch.zeros(count,experts,device='cuda').scatter_(1,indices,topweights)
-            expected=torch.zeros_like(x)
+            contributions=torch.zeros(count,4,hidden,device='cuda',dtype=torch.float32)
             with torch.no_grad():
                 framework=reference(x,indices,topweights)
             for e,(gate,up,down) in enumerate(gpuweights):
-                tokens=mask[:,e].nonzero().squeeze(1)
+                tokens,positions=torch.where(indices==e)
                 if not len(tokens):continue
                 h=x[tokens]
-                v=F.linear(F.silu(F.linear(h,gate))*F.linear(h,up),down)
-                expected.index_add_(0,tokens,(v.float()*routing[tokens,e,None]).to(x.dtype))
+                g,u=F.linear(h,torch.cat([gate,up])).chunk(2,dim=-1)
+                v=F.linear(F.silu(g)*u,down)
+                contributions[tokens,positions]=v.float()*topweights[tokens,positions,None]
+            expected=contributions.sum(1).to(x.dtype)
             active=mask.any(0).nonzero().flatten().tolist()
             for reverse in (False,True):
                 stream=torch.cuda.Stream();stream.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(stream):
                     dispatcher.set_inputs(x,mask,routing)
+                    dispatcher.set_reference_route_order(indices)
                     dispatcher.set_expected_queue(len(active))
                     for e in sorted(active,reverse=reverse):dispatcher.enqueue_expert(0,e,0,False)
                     dispatcher.notify_fetch_start()
@@ -95,7 +100,7 @@ def main(argv=None):
     args=parser.parse_args(argv)
     config_path=Path(args.config).resolve(strict=True)
     config=json.loads(config_path.read_text())
-    if config.get('reference_arithmetic')!='transformers-5.3-bf16-v1':
+    if config.get('reference_arithmetic')!='transformers-5.3-grouped-bf16-v1':
         raise ValueError('explicit reference arithmetic configuration required')
     from studies.energy_diagnosis.moe.prepare import verify_build
     build=verify_build(Path(config['build_manifest']))

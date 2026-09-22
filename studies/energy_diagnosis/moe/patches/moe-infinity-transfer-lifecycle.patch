@@ -25,7 +25,7 @@ index 3bf3469..505e766 100644
  
  ArcherTopologyHandle::ArcherTopologyHandle() {}
 diff --git a/core/parallel/expert_dispatcher.cpp b/core/parallel/expert_dispatcher.cpp
-index 00d899d..9bd14e3 100644
+index 00d899d..d990cb5 100644
 --- a/core/parallel/expert_dispatcher.cpp
 +++ b/core/parallel/expert_dispatcher.cpp
 @@ -1,3 +1,5 @@
@@ -34,37 +34,46 @@ index 00d899d..9bd14e3 100644
  // Copyright (c) EfficientMoE.
  // SPDX-License-Identifier: Apache-2.0
  
-@@ -1577,7 +1579,14 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
+@@ -1577,7 +1579,18 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
                args.generation) {
          return true;
        }
 -      if (batch_size == 1) {
 +      if (alems_reference_math_) {
-+        auto token_indices = torch::nonzero(token_mask).squeeze(1);
++        TORCH_CHECK(alems_reference_route_order_.defined(), "reference route order missing");
++        auto positions = torch::nonzero(alems_reference_route_order_ == expert_idx);
++        auto token_indices = positions.select(1, 0);
++        auto flat_indices = token_indices * alems_reference_route_order_.size(1) + positions.select(1, 1);
 +        auto weights = router_weight_.index({token_mask, expert_idx}).unsqueeze(1);
-+        auto weighted_output = (output_tensor * weights).to(hidden_states_.scalar_type());
++        auto weighted_output = output_tensor * weights;
++        TORCH_CHECK(flat_indices.size(0) == weighted_output.size(0), "reference route/output count mismatch");
 +        TORCH_CHECK(alems_reference_outputs_.emplace(
-+            expert_idx, std::make_pair(token_indices, weighted_output)).second,
++            expert_idx, std::make_pair(flat_indices, weighted_output)).second,
 +            "duplicate expert output in reference arithmetic mode");
 +      } else if (batch_size == 1) {
          final_hidden_states_.add_(
              output_tensor *
              router_weight_.index({torch::indexing::Slice(), expert_idx}));
-@@ -1741,12 +1750,27 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
+@@ -1741,12 +1754,32 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
    }
    num_enqueued_.store(0, std::memory_order_release);
    if (route_error) std::rethrow_exception(route_error);
 +  if (alems_reference_math_) {
-+    // Completion order can change with residency. Reduce in the framework's
-+    // ascending expert order, rounding every contribution/addition to BF16.
++    // Match grouped_mm: restore token/top-k order, then sum in float32.
++    // Never make rounding depend on expert completion or residency order.
++    TORCH_CHECK(alems_reference_route_order_.defined(), "reference route order missing");
++    const auto top_k = alems_reference_route_order_.size(1);
++    auto contributions = torch::zeros({hidden_states_.size(0) * top_k, hidden_states_.size(1)},
++                                     final_hidden_states_.options().dtype(torch::kFloat32));
 +    auto stream = c10::cuda::getCurrentCUDAStream(device);
 +    for (auto& item : alems_reference_outputs_) {
 +      auto& indices = item.second.first;
 +      auto& values = item.second.second;
 +      c10::cuda::CUDACachingAllocator::recordStream(indices.storage().data_ptr(), stream);
 +      c10::cuda::CUDACachingAllocator::recordStream(values.storage().data_ptr(), stream);
-+      final_hidden_states_.index_add_(0, indices, values);
++      contributions.index_copy_(0, indices, values);
 +    }
++    final_hidden_states_ = contributions.view({hidden_states_.size(0), top_k, hidden_states_.size(1)}).sum(1).to(hidden_states_.scalar_type());
 +    alems_reference_outputs_.clear();
 +  }
    return final_hidden_states_;
@@ -78,31 +87,59 @@ index 00d899d..9bd14e3 100644
    current_invocation_id_ = 0;
    TORCH_CHECK(!route_pending_.load(std::memory_order_acquire) &&
                    pending_.load(std::memory_order_acquire) == 0,
-@@ -1761,7 +1785,8 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+@@ -1761,7 +1794,9 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
    }
    int device = at::cuda::current_device();
    auto options =
 -      torch::TensorOptions().dtype(torch::kFloat32).device(CUDA_DEVICE(device));
 +      torch::TensorOptions().dtype(alems_reference_math_ ? hidden_states.scalar_type() : torch::kFloat32).device(CUDA_DEVICE(device));
 +  alems_reference_outputs_.clear();
++  alems_reference_route_order_ = torch::Tensor();
    hidden_states_ = hidden_states;
    router_mask_ = router_mask;
    router_weight_ = router_weight;  // this can be float32
+@@ -1773,6 +1808,17 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+   cudaEventRecord(input_ready_event_, c10::cuda::getCurrentCUDAStream());
+ }
+ 
++void ExpertDispatcher::SetReferenceRouteOrder(const torch::Tensor& selected_experts) {
++  TORCH_CHECK(alems_reference_math_ && hidden_states_.defined(), "reference inputs must be set first");
++  TORCH_CHECK(selected_experts.dim() == 2 && selected_experts.size(0) == hidden_states_.size(0) &&
++              selected_experts.size(1) > 0 && selected_experts.size(1) <= router_mask_.size(1) &&
++              selected_experts.scalar_type() == torch::kInt64 && selected_experts.device() == hidden_states_.device(),
++              "invalid reference route order");
++  alems_reference_route_order_ = selected_experts;
++  // Workers wait on this event before reading the selected order as well.
++  cudaEventRecord(input_ready_event_, c10::cuda::getCurrentCUDAStream());
++}
++
+ void ExpertDispatcher::SyncExecStreamsWithCurrent() {
+   auto current = c10::cuda::getCurrentCUDAStream();
+   for (size_t i = 0; i < exec_streams_.size(); ++i) {
 diff --git a/core/parallel/expert_dispatcher.h b/core/parallel/expert_dispatcher.h
-index 9f26cfd..59ee5c7 100644
+index 9f26cfd..c9d937d 100644
 --- a/core/parallel/expert_dispatcher.h
 +++ b/core/parallel/expert_dispatcher.h
-@@ -444,6 +444,8 @@ class ExpertDispatcher : public base::noncopyable {
+@@ -259,6 +259,7 @@ class ExpertDispatcher : public base::noncopyable {
+     }
+   }
+ 
++  void SetReferenceRouteOrder(const torch::Tensor& selected_experts);
+   void SetInputs(const torch::Tensor& hidden_states,
+                  const torch::Tensor& router_mask,
+                  const torch::Tensor& router_weight);
+@@ -444,6 +445,9 @@ class ExpertDispatcher : public base::noncopyable {
  
    torch::Tensor hidden_states_;
    torch::Tensor final_hidden_states_;
 +  bool alems_reference_math_ = false;
++  torch::Tensor alems_reference_route_order_;
 +  std::map<int64_t, std::pair<torch::Tensor, torch::Tensor>> alems_reference_outputs_;
    torch::Tensor router_mask_;
    torch::Tensor router_weight_;
  
 diff --git a/core/parallel/expert_module.cpp b/core/parallel/expert_module.cpp
-index cf57c08..a395558 100644
+index cf57c08..261c1b2 100644
 --- a/core/parallel/expert_module.cpp
 +++ b/core/parallel/expert_module.cpp
 @@ -4,6 +4,8 @@
@@ -114,19 +151,27 @@ index cf57c08..a395558 100644
  #include "utils/cuda_utils.h"
  #include "utils/logger.h"
  #include "kernel/fused_moe_mlp.h"
-@@ -329,6 +331,19 @@ void MoEMLP::ForwardHelper(cudaStream_t stream) {
+@@ -329,6 +331,27 @@ void MoEMLP::ForwardHelper(cudaStream_t stream) {
      auto& down_proj =
          (expert_type_ == DEEPSEEK_MOE_DENSE_ACT_DENSE) ? param_[2] : param_[1];
  
 +    const char* reference_math = std::getenv("ALEMS_QWEN_REFERENCE_MATH");
 +    if (reference_math != nullptr && std::string(reference_math) == "1" &&
 +        expert_type_ == DEEPSEEK_MOE_DENSE_ACT_DENSE) {
-+      // Qwen uses the gate/up/down (DeepSeek-type) parameter layout.
-+      // Match the framework's BF16 rounding boundaries. The fused CUTLASS
-+      // epilogue otherwise retains the up-projection accumulator in float32.
-+      auto gate = torch::matmul(input, gate_proj.transpose(0, 1));
-+      auto up = torch::matmul(input, up_proj.transpose(0, 1));
-+      auto activated = torch::silu(gate) * up;
++      // Qwen uses the gate/up/down parameter layout. Match grouped_mm's
++      // combined projection and separate BF16 activation rounding boundaries.
++      torch::Tensor gate_up;
++      if (gate_proj.is_contiguous() && up_proj.is_contiguous() &&
++          gate_proj.sizes() == up_proj.sizes() &&
++          static_cast<char*>(up_proj.data_ptr()) == static_cast<char*>(gate_proj.data_ptr()) + gate_proj.nbytes()) {
++        gate_up = torch::from_blob(gate_proj.data_ptr(),
++            {gate_proj.size(0) + up_proj.size(0), gate_proj.size(1)},
++            DoNothingDeleter<void>{}, gate_proj.options());
++      } else {
++        gate_up = torch::cat({gate_proj, up_proj}, 0);
++      }
++      auto projections = torch::matmul(input, gate_up.transpose(0, 1)).chunk(2, -1);
++      auto activated = torch::silu(projections[0]) * projections[1];
 +      output.copy_(torch::matmul(activated, down_proj.transpose(0, 1)));
 +      return;
 +    }
@@ -416,7 +461,7 @@ index 45bcc59..2348450 100644
  
  extern std::unique_ptr<ArcherTaskPool> kTaskPool;
 diff --git a/core/python/py_archer_prefetch.cpp b/core/python/py_archer_prefetch.cpp
-index 51c2033..c3fa5d1 100644
+index 51c2033..881187a 100644
 --- a/core/python/py_archer_prefetch.cpp
 +++ b/core/python/py_archer_prefetch.cpp
 @@ -22,7 +22,21 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -454,8 +499,38 @@ index 51c2033..c3fa5d1 100644
        .def("get_inflight_prefetch_bytes",
             &ArcherPrefetchHandle::GetInflightPrefetchBytes)
        .def("replace_cache_candidates",
+@@ -204,6 +224,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+            py::arg("remote") = false,
+            py::arg("phase") = static_cast<int>(ExpertPhase::MIXED))
+       .def("set_inputs", &ExpertDispatcher::SetInputs)
++      .def("set_reference_route_order", &ExpertDispatcher::SetReferenceRouteOrder)
+       .def("set_inputs_with_invocation",
+            &ExpertDispatcher::SetInputsWithInvocation)
+       .def("set_overlap_compute_timing_enabled",
+diff --git a/moe_infinity/distributed/expert_executor.py b/moe_infinity/distributed/expert_executor.py
+index afabc73..39818ae 100644
+--- a/moe_infinity/distributed/expert_executor.py
++++ b/moe_infinity/distributed/expert_executor.py
+@@ -407,6 +407,7 @@ class DistributedExpertExecutor:
+         router_weights,
+         router_logits=None,
+         prefetcher=None,
++        selected_experts=None,
+     ):
+         profiler = _profiler_instance()
+         routing_nvtx_ctx = _nvtx_ctx("moe_routing")
+@@ -484,6 +485,9 @@ class DistributedExpertExecutor:
+                 hidden_states, router_mask.bool(), router_weights
+             )
+ 
++        if selected_experts is not None:
++            self.expert_dispatcher.set_reference_route_order(selected_experts)
++
+         # Route-ahead pin + enqueue must precede every enqueue_expert below
+         # (A0 section 2). Inactive context: no-op, legacy flow unchanged.
+         route_ahead_handled, issued_generations = (
 diff --git a/moe_infinity/models/qwen.py b/moe_infinity/models/qwen.py
-index ab6b133..9212c69 100644
+index ab6b133..2cc86ff 100644
 --- a/moe_infinity/models/qwen.py
 +++ b/moe_infinity/models/qwen.py
 @@ -1,3 +1,4 @@
@@ -463,7 +538,15 @@ index ab6b133..9212c69 100644
  from typing import Optional, Protocol
  
  import torch
-@@ -56,7 +57,10 @@ class Qwen3MoEBlock(nn.Module):
+@@ -16,6 +17,7 @@ class _ExpertExecutor(Protocol):
+         router_weights: torch.Tensor,
+         router_logits: Optional[torch.Tensor] = None,
+         prefetcher: object = None,
++        selected_experts: Optional[torch.Tensor] = None,
+     ) -> None: ...
+ 
+     def wait_dispatch_local(self) -> torch.Tensor: ...
+@@ -56,7 +58,10 @@ class Qwen3MoEBlock(nn.Module):
          )
          if self.norm_topk_prob:
              routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
@@ -475,6 +558,14 @@ index ab6b133..9212c69 100644
  
          router_mask = F.one_hot(selected_experts, num_classes=self.num_experts)
          routing_weights_mask = (
+@@ -75,6 +80,7 @@ class Qwen3MoEBlock(nn.Module):
+             router_mask,
+             routing_weights_mask,
+             router_logits=router_logits,
++            **({"selected_experts": selected_experts} if os.environ.get("ALEMS_QWEN_REFERENCE_MATH") == "1" else {}),
+         )
+         final_hidden_states = executor.wait_dispatch_local()
+ 
 diff --git a/setup.py b/setup.py
 index ee72692..95ac633 100644
 --- a/setup.py

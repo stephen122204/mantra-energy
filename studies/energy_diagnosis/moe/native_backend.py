@@ -20,11 +20,13 @@ class NativeDevice:
         from transformers import AutoTokenizer
         from moe_infinity import MoE
 
-        if config.get("reference_arithmetic") != "transformers-5.3-bf16-v1":
+        if config.get("reference_arithmetic") != "transformers-5.3-grouped-bf16-v1":
             raise ValueError("explicit qualified reference_arithmetic is required")
         if importlib.metadata.version("transformers") != "5.3.0":
             raise ValueError("reference arithmetic requires Transformers 5.3.0")
         os.environ["ALEMS_QWEN_REFERENCE_MATH"] = "1"
+        if config.get("reference_experts_implementation") != "grouped_mm":
+            raise ValueError("explicit grouped_mm reference implementation is required")
         self.torch = torch
         self.request_cache_mode = config.get("request_prefix_cache", "disabled")
         if self.request_cache_mode not in {"disabled", "exact_prefix"}:
