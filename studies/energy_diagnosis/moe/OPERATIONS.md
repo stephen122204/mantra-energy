@@ -206,3 +206,19 @@ as thermal conditions: interpret using the saved bit legend. A fixture run recor
 unavailable operating state and is explicitly simulated. These records do not
 establish exclusive access; other users and background jobs require separate
 coordination and process monitoring.
+
+## Independent transfer-bracket audit
+
+Run `python -m studies.energy_diagnosis.moe.audit_transfers CAMPAIGN_DIRECTORY`
+on saved exports. It verifies registered trace hashes, clock-calibration brackets,
+transfer durations/bytes and attribution to later expert requests. It compares
+calibrated host brackets with actual worker tool-body timestamps, preserving
+unfinished tool bodies and distinguishing contained, outside and uncertain cases.
+
+These are logical expert placement bytes and host admission/eviction/copy
+brackets, not independent PCIe measurements or DMA durations. A partly overlapping
+bracket alone cannot demonstrate actual copy overlap. A later request and recorded
+residency do not prove the prefetched bytes survived eviction. Missing attempt
+evidence stays unavailable; `observed_records_consistent` and
+`every_attempt_checked` are separate. This audit does not supersede energy,
+correctness, ownership or isolation checks.
