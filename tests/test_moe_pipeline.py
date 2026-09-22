@@ -520,3 +520,39 @@ def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path):
     assert dispositions[lease.planned_run_id] != "pending"
     again = command(output, "--policies", "demand", "--max-runs", "5")
     assert again["executed"] == 0
+
+
+def test_killed_worker_counts_as_terminated_but_not_idle(tmp_path):
+    """A reaped worker cannot own device work; the batch must finalize the
+    attempt instead of aborting, while the forced stop stays visible."""
+    backend = ProcessBackend(
+        {"fixture_case": "model_timeout"}, python=sys.executable, mode="fixture",
+        log_path=tmp_path / "backend.log",
+    )
+    backend.reset_goal_state()
+    assert backend.owned_work_terminated is False and backend.termination_forced is False
+    with pytest.raises(RuntimeError, match="no response within"):
+        backend.generate("{}", 0.05, 10)
+    assert backend.process is None
+    assert backend.owned_work_terminated is True
+    assert backend.termination_forced is True and backend.idle_confirmed is False
+    backend.reset_goal_state()
+    assert backend.termination_forced is False  # A fresh owned process starts clean.
+    backend.end_goal()
+    assert backend.termination_forced is False  # Idle at kill time is not forced.
+
+
+def test_forced_native_termination_invalidates_energy_but_finalizes():
+    from studies.energy_diagnosis.local_run import GoalExecutor
+    from types import SimpleNamespace
+
+    def executor(simulated, forced):
+        e = GoalExecutor.__new__(GoalExecutor)
+        e.simulated = simulated
+        e.lifecycle = SimpleNamespace(backend=SimpleNamespace(termination_forced=forced))
+        return e
+
+    assert executor(False, True)._termination_invalidity(False) == "live model termination unverified"
+    assert executor(False, True)._termination_invalidity(True) == "owned worker terminated before device work was confirmed idle"
+    assert executor(False, False)._termination_invalidity(True) is None
+    assert executor(True, True)._termination_invalidity(True) is None  # Fixture devices have no idle semantics.
