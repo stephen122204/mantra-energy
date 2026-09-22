@@ -1,7 +1,7 @@
 """Injected model/sensors; real numerical tools, executor, ledger and exports.
 
 This test wires the additive adapter without changing the production runner.
-Native selection and verifier-source provenance still need integration.
+Production CLI/provenance checks are in test_task_pack_cli.py; native evidence is separate.
 """
 import json
 import pytest

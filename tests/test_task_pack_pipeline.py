@@ -1,6 +1,6 @@
 """Injected model/sensors, real tools and campaign persistence for every pack task.
 
-CLI selection and per-task verifier hashing are separate pending production work.
+Production CLI and per-task verifier hashing are checked separately in test_task_pack_cli.py.
 """
 import json
 import pytest

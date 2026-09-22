@@ -1,45 +1,51 @@
-# Additive task-pack integration handoff
+# Task-pack execution handoff
 
-Dependencies: numerical component PR41 and business component PR42. This branch
-combines both without modifying the pilot runner or PR40. `task_pack.prepare`
-accepts an explicit list of `{kind, rows, seed}` specifications and returns
-`TaskPack.tasks`, `TaskPack.catalog()` and `TaskPack.runtime(output)`.
-Numerical and ETL each contribute one task per specification; business contributes three.
-This is an implemented Python interface, not an existing command-line flag.
+Dependencies: PR41 and PR42; this combined draft includes both plus bounded SQL
+ETL repair and production CLI selection. PR40 remains separate. The work does not
+modify PR40's default workload definitions.
 
-## Runner integration still required
+## Prepare explicit specifications
 
-- Add explicit selection for a pack, mutually exclusive with query-assets.
-  Never silently replace existing tasks or run definitions.
-- Use the returned tasks and runtime through GoalExecutor. The pack dispatcher
-  supports begin/context/tool/verify. Keep the existing backend/lifecycle,
-  measurement, scheduling, exports and cleanup paths.
-- Populate each PlannedRun's verifier version/hash from that task's catalog row.
-  The existing single workloads.py hash would be wrong for these components.
-- Include the pack specification/component identities in the frozen manifest.
-  Fail on configuration changes at resume; do not regenerate old definitions.
-- Check task filtering, complete planned slot count, max-runs behavior, resume,
-  all-attempt export and task-specific verifier identity through the real CLI.
-- Extend simulated model decisions without supplying hidden references. A
-  deterministic test policy may issue SQL/fit calls and read their actual outputs.
-  It must not be presented as native model behavior.
-- Native qualification still requires actual model decisions and hardware
-  evidence on the final integrated revision. This handoff authorizes no run.
+Create a JSON file with a list of objects such as:
 
-## Tests currently present
+    [{"kind":"numerical","rows":128,"seed":7},
+     {"kind":"business","rows":128,"seed":7},
+     {"kind":"etl","rows":128,"seed":7}]
 
-`python -m pytest -q tests/test_task_pack.py tests/test_business_workload.py tests/test_numerical_workload.py tests/test_numerical_pipeline.py tests/test_etl_workload.py tests/test_task_pack_pipeline.py`
+Numerical and ETL each contribute one task; business contributes three.
+Sizes/seeds share one lineage per generator. These sample sizes are for software
+checks, not an approved physical run matrix. `--task-pack` and `--query-assets`
+are mutually exclusive. Existing default workloads remain selectable as before.
 
-44 local tests pass on the combined branch. Includes real numerical/SQL work,
-reference comparisons, schema restrictions, invalid answers, input preservation,
-pack dispatch, and injected-model/sensor numerical executor/ledger/resume cases.
-The production CLI has not been modified. The bounded SQL ETL component is included; production integration remains pending.
-Different sizes/seeds of generated inputs are still one lineage per generator.
-No research protocol, raw data or private discussion is part of this handoff.
+## Full local path
 
-The all-pack pipeline test runs five tasks under each of success, wrong-answer
-and missing-telemetry model/sensor fixtures (15 original attempts plus resume).
-All records retain expected outcomes and exports remain identical after resume.
-These tests inject pack selection. They intentionally do not certify the
-production runner's per-task verifier hashes, which still require the integration
-change above, nor native model decisions or transfer behavior.
+    python -m studies.energy_diagnosis.moe.run --mode fixture --task-pack /absolute/spec.json --output /absolute/new-output --policies demand,fixed --max-runs 10 --deadline 30
+
+This invokes the existing owned worker, tools, measurement fixture, ledger and
+exports. `--max-runs` limits attempts per invocation; rerunning with the same
+specification and configuration resumes the remaining planned attempts.
+Do not reset output directories to restart. A changed pack is refused.
+
+Each plan/catalog entry records its own actual verifier version and source hash.
+The manifest also retains pack specifications and component hashes. Real inputs,
+outputs and model configuration are not bundled here. Native selection uses the
+same task/runtime path but still requires separately reviewed model settings,
+allocation, isolation, explicit transfer budget, and a clean checkout. No native
+campaign is authorized by this example.
+
+## Evidence and limitations
+
+Component and injected-pipeline checks cover task contracts, actual SQL/numerical
+work, independent references, invalid answers, input preservation, dispatch and
+resume. test_task_pack_cli.py independently invokes the CLI/worker subprocesses
+and checks all five tasks across demand/fixed settings under success, wrong answer
+and missing telemetry. It checks exact verifier hashes, partial-batch resume,
+no duplicate completed attempts, and refusal of changed specifications.
+The fixture model executes scripted decisions; native model reasoning and
+transfer/energy validity are not established by these tests.
+
+ETL verifier queries are each bounded to ten seconds and may run three times.
+Budget and record this verification cost. Confirm final native goal/deadline
+behavior, nonzero transfers, counter quality and backups before a physical batch.
+Real-source task inclusion and final sizes/repetitions are separate supplied
+configuration decisions. No research protocol is distributed in this handoff.
