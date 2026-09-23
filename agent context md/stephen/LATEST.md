@@ -1,24 +1,24 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260923-dispatcher-wakeup.md)
+[Immutable turn record](turns/20260923-native-gil-wait.md)
 
 ## Task and current understanding
-Stephen owns native runtime correctness and integration. End-to-end validation exposed an intermittent generation stall after a successful model response and tool execution. Measurement acceptance correctly rejected the incomplete window. This differs from an ordinary task step-limit failure.
+Stephen owns native runtime acceptance. Repeated generation still stalled after the notification repair, so that build is not accepted. Captured native stacks now show the main Python thread waiting for expert completion while the execution worker waits to acquire the GIL during tensor destruction.
 
 ## Ideas and hypotheses
-Source review found dispatcher completion predicates updated and notified without synchronizing with pending_mutex_, which the waiter holds. Atomics do not prevent a missed notification between checking the predicate and sleeping. This is a concrete source defect, but no stuck-thread capture yet establishes it as the cause of the observed stall.
+The wait_expert binding retained the GIL throughout WaitHiddenStates. A worker that needs Python reference-count cleanup cannot progress while the caller holds that lock and awaits its completion. This is a captured lock dependency, not a conclusion from a successful retry.
 
 ## Decisions and rationale
-Draft PR55 synchronizes normal completion, route publication and failure notifications using the existing helper, preserving model arithmetic and notification frequency. A repeated diagnostic on the previous build completed normally; it did not capture a stalled stack. Preserve both outcomes and qualify a separate installation rather than modifying the existing one.
+Release the GIL for the native wait through pybind's call_guard; the wrapper reacquires it before converting the returned tensor. Retain the separate notification synchronization repair. Preserve failed builds and records, and requalify a new installation. No task, arithmetic, timeout or numerical-tolerance changes.
 
 ## Changes and artifacts
-PR55 head c93f48feffc96d10996a11d5720b36965351dae3. The backend patch remains in canonical git-diff form so its exact fingerprint matches prepared source. Existing qualified installations and all failed attempts remain preserved. Private build and diagnostic scripts run under a bounded supervisor with the shared GPU lock.
+Draft PR55 updated at e3c434fc0ab4ba0305fc358390ae72dfc8e13de4. Added native binding guard and tests/test_moe_native_gil_wait.py. The test uses PyTorch's bundled pybind headers and a C++ compiler; it explicitly skips when those prerequisites are absent, so native qualification runs it in the backend environment.
 
 ## Tests and evidence
-Five focused native synchronization/lifecycle tests passed, including a lock-removal negative control. CI is progressing; native separate-build qualification is running. The qualification chain includes expert arithmetic, short/long fixed-prefix comparisons and repeated generation with fixed preparation. These checks are not yet complete and do not justify merging or claiming readiness yet.
+The regression compiles a worker requiring the GIL while its Python caller waits: the guarded binding completes, and removing the guard produces the expected subprocess timeout. This test passed locally. Six portable synchronization/lifecycle checks passed. Separate native build, numerical comparisons and repeated-generation checks are running and are not yet accepted. Earlier failed qualification was backed up and independently restored.
 
 ## Open questions and disagreements
-The observed stall is intermittent. Passing one retry is not resolution. Native source/build fingerprints, unchanged numerical comparisons, generation stress and restored outputs must be verified before resuming end-to-end acceptance.
+Native qualification and repetition remain necessary despite the targeted regression. CI alone is insufficient. Do not interpret preserved diagnostic energy as experiment data or treat a successful retry as resolution.
 
 ## Next actions and handoff
-Inspect the already-running qualification job instead of starting competing work. Diagnose failures with bounded evidence collection. Merge only after review and qualification; use a new versioned execution definition for any rebuilt native runtime. Do not restart old stopped launchers or relax measurement checks.
+Follow the existing bounded qualification job, then audit its terminal output and fingerprints. Merge only after review and qualification. New accepted builds require new execution definitions and pilot acceptance; do not restart old stopped launchers.
