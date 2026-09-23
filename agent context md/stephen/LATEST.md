@@ -1,18 +1,18 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260923-node-owned-batches.md)
+[Immutable turn record](turns/20260923-eviction-reservation.md)
 
 ## Task and current understanding
-Move serial bounded execution to the allocated node while allowing the receiver to disconnect. Keep frozen measurement wrappers unchanged.
+Repair a native CPU/CUDA device mismatch without bypassing validity checks or changing model arithmetic. Existing failed outputs remain preserved.
 ## Ideas and hypotheses
-An offline receiver should delay replication, not dictate execution. Local snapshots do not replace off-node durability.
+Unmanaged cache eviction selected an idle victim without reserving it. A demand can claim the same node before eviction executes. This source defect is reproduced by a deterministic interleaving test; correlation with a particular observed runtime failure still needs hardware evidence.
 ## Decisions and rationale
-Use a node owner lock and shared measurement/checkpoint/transfer lock. Preserve existing terminal failures; ambiguous launches require review instead of duplication. Retain immutable incremental bundles and compatible restore receipts.
+Add an explicit eviction reservation competing with demand on the same atomic state. Retain reservations across cache-wait predicates and until host movement/cache bookkeeping finishes. Demand waits for eviction and checks acquisition after prefetch.
 ## Changes and artifacts
-PR57 adds node_batches, receive_node_batches, operational documentation, regression tests and CI inclusion. Measurement source is separate from orchestration source.
+Draft PR58; source69c8577. Separate native build and runtime environment queued; old installations remain intact. No math, tolerance, task or outcome-selection changes.
 ## Tests and evidence
-33 focused tests passed locally and on Linux node: offline execution, reconnect/restore, corruption, interrupted transport, exclusion lock, no duplicate restart, low storage, cutoff and failure retention. Hosted CI remains unavailable due account restriction.
+Ten focused tests and two subtests passed, including a negative control reproducing select-then-evict and existing lifecycle/GIL checks. Actual native build, fixed-prefix numerical checks and repeated task checks are pending, not passed.
 ## Open questions and disagreements
-Node-local snapshots remain vulnerable to allocation loss. No persistent object-store backup is claimed. An unrelated runtime failure remains a reason to halt measured work, never to bypass checks.
+The reservation repair is not yet certified as the cause/fix for all device mismatch reports. Investigate any remaining failure rather than forcing CPU/GPU copies or relaxing checks.
 ## Next actions and handoff
-Use the dedicated node service and receiver specification. Retire the client dispatcher at a terminal boundary before adopting existing batches. Keep measurement validity checks and hard cutoffs intact; resume only after runtime issues are resolved.
+Complete separate build; require unchanged numerical agreement and repeated valid task execution before merge/recovery. Preserve all old failures and version recovery; use node-owned scheduling, never restart the retired client dispatcher.
