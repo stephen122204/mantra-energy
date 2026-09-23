@@ -62,3 +62,14 @@ def test_patch_uses_waiter_mutex_for_all_aio_notifications():
     assert added.count("update_and_notify(io_request->mutex, io_request->cv") == 2
     assert "update_and_notify(schedule_mutex_, schedule_cv_, [&]" in added
     assert "update_and_notify(schedule_mutex_, schedule_cv_, [] {})" in added
+
+
+def test_dispatch_completion_notifications_share_waiter_mutex():
+    patch = (ROOT / "studies/energy_diagnosis/moe/patches/"
+             "moe-infinity-transfer-lifecycle.patch").read_text()
+    section = patch.split("diff --git a/core/parallel/expert_dispatcher.cpp", 1)[1].split("diff --git ", 1)[0]
+    added = "\n".join(line[1:] for line in section.splitlines()
+                      if line.startswith("+") and not line.startswith("+++"))
+    # Normal completion, route publication and failure all wake the same waiter.
+    assert added.count("update_and_notify(pending_mutex_, pending_cv_") == 3
+    assert '#include "prefetch/alems_transfer_lifecycle.h"' in added
