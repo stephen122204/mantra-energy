@@ -90,9 +90,12 @@ class BusinessRuntime:
         shutil.copytree(task.asset_path,self.workspace)
     def context(self,task):
         return dict(family=task.family,tools={'sql':sql_contract('SQLite')},
-            instruction='Return only JSON {"tool_calls":[{"id":"unique","tool":"sql","args":{"action":"schema"}}]} or {"answer":{...}}. '
-            'Start by inspecting the schema; use a later query call with both action="query" and sql. '
-            'Use actual tool results and follow the goal answer schema. Do not omit action or invent column names.')
+            instruction='Return only JSON {"tool_calls":[{"id":"unique","tool":"sql","args":{...}}]} or {"answer":{...}}. '
+            'Continue from the observations already present in tool_results; do not restart the task on each response. '
+            'If no successful schema result is present, inspect the schema with action="schema". '
+            'If table and column names are already present, use them to make a query call with action="query" and sql, rather than requesting the same schema again. '
+            'When query results support the requested answer, return it in the goal answer schema. '
+            'Use a new call id for each call. Use actual tool results; do not omit action, invent observations or guess column names.')
     def tool(self,task,call):
         if call.get('tool')!='sql':raise ValueError('invalid SQL tool request')
         validate_action(call.get('args'),SQL_ACTIONS)
