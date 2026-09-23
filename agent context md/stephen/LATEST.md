@@ -1,24 +1,18 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260923-native-gil-wait.md)
+[Immutable turn record](turns/20260923-node-owned-batches.md)
 
 ## Task and current understanding
-Stephen owns native runtime acceptance. Repeated generation still stalled after the notification repair, so that build is not accepted. Captured native stacks now show the main Python thread waiting for expert completion while the execution worker waits to acquire the GIL during tensor destruction.
-
+Move serial bounded execution to the allocated node while allowing the receiver to disconnect. Keep frozen measurement wrappers unchanged.
 ## Ideas and hypotheses
-The wait_expert binding retained the GIL throughout WaitHiddenStates. A worker that needs Python reference-count cleanup cannot progress while the caller holds that lock and awaits its completion. This is a captured lock dependency, not a conclusion from a successful retry.
-
+An offline receiver should delay replication, not dictate execution. Local snapshots do not replace off-node durability.
 ## Decisions and rationale
-Release the GIL for the native wait through pybind's call_guard; the wrapper reacquires it before converting the returned tensor. Retain the separate notification synchronization repair. Preserve failed builds and records, and requalify a new installation. No task, arithmetic, timeout or numerical-tolerance changes.
-
+Use a node owner lock and shared measurement/checkpoint/transfer lock. Preserve existing terminal failures; ambiguous launches require review instead of duplication. Retain immutable incremental bundles and compatible restore receipts.
 ## Changes and artifacts
-Draft PR55 updated at e3c434fc0ab4ba0305fc358390ae72dfc8e13de4. Added native binding guard and tests/test_moe_native_gil_wait.py. The test uses PyTorch's bundled pybind headers and a C++ compiler; it explicitly skips when those prerequisites are absent, so native qualification runs it in the backend environment.
-
+PR57 adds node_batches, receive_node_batches, operational documentation, regression tests and CI inclusion. Measurement source is separate from orchestration source.
 ## Tests and evidence
-The regression compiles a worker requiring the GIL while its Python caller waits: the guarded binding completes, and removing the guard produces the expected subprocess timeout. This test passed locally. Six portable synchronization/lifecycle checks passed. Separate native build, numerical comparisons and repeated-generation checks are running and are not yet accepted. Earlier failed qualification was backed up and independently restored.
-
+33 focused tests passed locally and on Linux node: offline execution, reconnect/restore, corruption, interrupted transport, exclusion lock, no duplicate restart, low storage, cutoff and failure retention. Hosted CI remains unavailable due account restriction.
 ## Open questions and disagreements
-Native qualification and repetition remain necessary despite the targeted regression. CI alone is insufficient. Do not interpret preserved diagnostic energy as experiment data or treat a successful retry as resolution.
-
+Node-local snapshots remain vulnerable to allocation loss. No persistent object-store backup is claimed. An unrelated runtime failure remains a reason to halt measured work, never to bypass checks.
 ## Next actions and handoff
-Follow the existing bounded qualification job, then audit its terminal output and fingerprints. Merge only after review and qualification. New accepted builds require new execution definitions and pilot acceptance; do not restart old stopped launchers.
+Use the dedicated node service and receiver specification. Retire the client dispatcher at a terminal boundary before adopting existing batches. Keep measurement validity checks and hard cutoffs intact; resume only after runtime issues are resolved.
