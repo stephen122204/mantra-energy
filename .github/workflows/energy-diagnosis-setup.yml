@@ -107,7 +107,7 @@ jobs:
         run: python -X utf8 -m pytest -q tests/test_moe_query_workload.py
       - name: Compile and test native transfer lifecycle without CUDA
         if: runner.os == 'Linux'
-        run: python -m pytest -q tests/test_moe_native_lifecycle.py tests/test_moe_aio_synchronization.py
+        run: python -m pytest -q tests/test_moe_native_lifecycle.py tests/test_moe_aio_synchronization.py tests/test_moe_eviction_reservation.py
 
   session-diagnostics:
     runs-on: ubuntu-latest

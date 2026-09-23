@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Standalone lifecycle used by the actual backend queue and portable tests.
 #pragma once
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -12,6 +13,12 @@
 #include <vector>
 
 namespace alems {
+// Reservation and demand acquisition must compete on the same atomic state.
+template <class State>
+inline bool reserve_idle(std::atomic<State>& state, State idle, State reserved) {
+  return state.compare_exchange_strong(idle, reserved, std::memory_order_acq_rel);
+}
+
 // Predicate updates must hold the same mutex used by condition_variable::wait.
 // An atomic predicate alone cannot prevent a notification before the waiter sleeps.
 template <class Update>
