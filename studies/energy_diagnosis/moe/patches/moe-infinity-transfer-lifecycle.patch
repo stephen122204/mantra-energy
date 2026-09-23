@@ -89,8 +89,20 @@ index 3bf3469..505e766 100644
  }
  
  ArcherTopologyHandle::ArcherTopologyHandle() {}
+diff --git a/core/model/model_topology.h b/core/model/model_topology.h
+index a8742dc..36103fc 100644
+--- a/core/model/model_topology.h
++++ b/core/model/model_topology.h
+@@ -36,6 +36,7 @@ enum class NodeExecState : uint8_t {
+   FETCHING = 1,
+   EXECUTING = 2,
+   RESIZE_RESERVED = 3,
++  EVICTING = 4,
+ };
+ 
+ enum class ResizeOutcome {
 diff --git a/core/parallel/expert_dispatcher.cpp b/core/parallel/expert_dispatcher.cpp
-index 00d899d..db0dd3a 100644
+index 00d899d..f55f5e9 100644
 --- a/core/parallel/expert_dispatcher.cpp
 +++ b/core/parallel/expert_dispatcher.cpp
 @@ -1,3 +1,6 @@
@@ -100,7 +112,112 @@ index 00d899d..db0dd3a 100644
  // Copyright (c) EfficientMoE.
  // SPDX-License-Identifier: Apache-2.0
  
-@@ -1577,7 +1580,18 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
+@@ -627,8 +630,15 @@ void ExpertDispatcher::Enqueue(CallArgs& args) {
+ 
+   {
+     auto expected = NodeExecState::IDLE;
+-    if (!expert_node->node->exec_state.compare_exchange_strong(
++    while (!expert_node->node->exec_state.compare_exchange_strong(
+             expected, NodeExecState::FETCHING, std::memory_order_acq_rel)) {
++      if (expected == NodeExecState::EVICTING) {
++        TORCH_CHECK(!main_thread_stop_flag_.load(std::memory_order_acquire),
++                    "dispatch stopped while awaiting eviction");
++        std::this_thread::sleep_for(std::chrono::microseconds(10));
++        expected = NodeExecState::IDLE;
++        continue;
++      }
+       if (expert_node->node->is_prefetching.load(std::memory_order_acquire)) {
+         expert_node->node->pending_dispatches.fetch_add(
+             1, std::memory_order_acq_rel);
+@@ -930,22 +940,25 @@ double ExpertDispatcher::GetCacheHitRate() const {
+ 
+ ExpertNodePtr ExpertDispatcher::FindExpertEvict(int gpu_id) {
+   uint64_t min_visit_count = INT_MAX;
+-  ExpertNodePtr evict_expert_node = nullptr;
+-
++  ExpertNodePtr victim = nullptr;
+   for (auto& key : cached_experts_[gpu_id]) {
+-    auto layer_idx = key >> 32;
+-    auto expert_idx = key & 0xFFFFFFFF;
+-    auto node = experts_[expert_idx][layer_idx]->node;
+-    if (node == nullptr) continue;
+-    if (node->device.is_cuda() && node->incache_visit_count < min_visit_count &&
+-        node->pending_dispatches.load(std::memory_order_acquire) == 0 &&
+-        node->exec_state.load(std::memory_order_acquire) ==
+-            NodeExecState::IDLE) {
+-      evict_expert_node = experts_[expert_idx][layer_idx];
++    auto candidate = experts_[key & 0xFFFFFFFF][key >> 32];
++    auto node = candidate->node;
++    if (!node || !alems::reserve_idle(node->exec_state, NodeExecState::IDLE,
++                                      NodeExecState::EVICTING)) continue;
++    // Read mutable placement only while this node is reserved. A demand
++    // cannot claim it between victim selection and the host transfer.
++    if (node->pending_dispatches.load(std::memory_order_acquire) == 0 &&
++        node->device.is_cuda() && node->incache_visit_count < min_visit_count) {
++      if (victim) victim->node->exec_state.store(NodeExecState::IDLE,
++                                                std::memory_order_release);
++      victim = candidate;
+       min_visit_count = node->incache_visit_count;
++    } else {
++      node->exec_state.store(NodeExecState::IDLE, std::memory_order_release);
+     }
+   }
+-  return evict_expert_node;
++  return victim;
+ }
+ 
+ bool ExpertDispatcher::ApplyPrecisionTarget(const ExpertNodePtr& expert_node,
+@@ -1101,17 +1114,14 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
+       failure.expert_node = expert_node;
+ 
+       if (args.wait_for_prefetch) {
+-        while (expert_node->node->exec_state.load(std::memory_order_acquire) !=
+-                   NodeExecState::IDLE &&
+-               !main_thread_stop_flag_.load(std::memory_order_acquire)) {
++        bool acquired = false;
++        while (!main_thread_stop_flag_.load(std::memory_order_acquire)) {
++          acquired = alems::reserve_idle(expert_node->node->exec_state,
++                                         NodeExecState::IDLE, NodeExecState::FETCHING);
++          if (acquired) break;
+           std::this_thread::sleep_for(std::chrono::microseconds(10));
+         }
+-        if (main_thread_stop_flag_.load(std::memory_order_acquire)) break;
+-        {
+-          auto expected = NodeExecState::IDLE;
+-          expert_node->node->exec_state.compare_exchange_strong(
+-              expected, NodeExecState::FETCHING, std::memory_order_acq_rel);
+-        }
++        if (!acquired) break;
+         expert_node->node->pending_dispatches.fetch_sub(
+             1, std::memory_order_acq_rel);
+         if (expert_node->node->device.is_cuda()) {
+@@ -1219,11 +1229,10 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
+               std::unique_lock<std::mutex> lock(cache_mutex_[gpu_id]);
+               cache_cv_[gpu_id].wait(lock, [&] {
+                 return main_thread_stop_flag_.load(std::memory_order_acquire) ||
+-                       FindExpertEvict(gpu_id) != nullptr;
++                       (evict_expert_node = FindExpertEvict(gpu_id)) != nullptr;
+               });
+             }
+             if (main_thread_stop_flag_.load(std::memory_order_acquire)) break;
+-            evict_expert_node = FindExpertEvict(gpu_id);
+           }
+           // auto num_layers = experts_[0].size();
+           // auto num_experts = experts_.size();
+@@ -1273,6 +1282,12 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
+                      " expert_idx ", expert_idx);
+ 
+           auto evict_node = evict_expert_node->node;
++          struct EvictionReservation {
++            NodePtr node;
++            ~EvictionReservation() {
++              node->exec_state.store(NodeExecState::IDLE, std::memory_order_release);
++            }
++          } reservation{evict_node};
+           evict_node->SetDevice(evict_node->default_host);
+           cache_sizes_[gpu_id] += evict_node->byte_size;
+           int64_t evict_layer_idx = evict_expert_node->layer_idx;
+@@ -1577,7 +1592,18 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
                args.generation) {
          return true;
        }
@@ -120,7 +237,7 @@ index 00d899d..db0dd3a 100644
          final_hidden_states_.add_(
              output_tensor *
              router_weight_.index({torch::indexing::Slice(), expert_idx}));
-@@ -1741,12 +1755,32 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
+@@ -1741,12 +1767,32 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
    }
    num_enqueued_.store(0, std::memory_order_release);
    if (route_error) std::rethrow_exception(route_error);
@@ -153,7 +270,7 @@ index 00d899d..db0dd3a 100644
    current_invocation_id_ = 0;
    TORCH_CHECK(!route_pending_.load(std::memory_order_acquire) &&
                    pending_.load(std::memory_order_acquire) == 0,
-@@ -1761,7 +1795,9 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+@@ -1761,7 +1807,9 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
    }
    int device = at::cuda::current_device();
    auto options =
@@ -164,7 +281,7 @@ index 00d899d..db0dd3a 100644
    hidden_states_ = hidden_states;
    router_mask_ = router_mask;
    router_weight_ = router_weight;  // this can be float32
-@@ -1773,6 +1809,17 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+@@ -1773,6 +1821,17 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
    cudaEventRecord(input_ready_event_, c10::cuda::getCurrentCUDAStream());
  }
  
@@ -182,7 +299,7 @@ index 00d899d..db0dd3a 100644
  void ExpertDispatcher::SyncExecStreamsWithCurrent() {
    auto current = c10::cuda::getCurrentCUDAStream();
    for (size_t i = 0; i < exec_streams_.size(); ++i) {
-@@ -1900,9 +1947,10 @@ void ExpertDispatcher::FailDispatch(
+@@ -1900,9 +1959,10 @@ void ExpertDispatcher::FailDispatch(
    }
    route_failures_.fetch_add(1, std::memory_order_relaxed);
    last_active_experts_count_.store(0, std::memory_order_relaxed);
@@ -196,7 +313,7 @@ index 00d899d..db0dd3a 100644
    route_callback_cv_.notify_all();
    retirement_callback_cv_.notify_all();
  }
-@@ -1912,8 +1960,11 @@ void ExpertDispatcher::CompleteOne(std::uint64_t generation) noexcept {
+@@ -1912,8 +1972,11 @@ void ExpertDispatcher::CompleteOne(std::uint64_t generation) noexcept {
    if (failed_generation_.load(std::memory_order_acquire) == generation) return;
    size_t previous = pending_.fetch_sub(1, std::memory_order_acq_rel);
    if (previous <= 1) {
@@ -210,7 +327,7 @@ index 00d899d..db0dd3a 100644
    }
  }
  
-@@ -1990,8 +2041,9 @@ void ExpertDispatcher::RouteFunc() noexcept {
+@@ -1990,8 +2053,9 @@ void ExpertDispatcher::RouteFunc() noexcept {
            std::chrono::duration_cast<std::chrono::microseconds>(
                std::chrono::steady_clock::now() - started);
        last_route_handoff_us_.store(elapsed.count(), std::memory_order_relaxed);
