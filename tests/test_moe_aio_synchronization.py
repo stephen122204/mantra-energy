@@ -73,3 +73,10 @@ def test_dispatch_completion_notifications_share_waiter_mutex():
     # Normal completion, route publication and failure all wake the same waiter.
     assert added.count("update_and_notify(pending_mutex_, pending_cv_") == 3
     assert '#include "prefetch/alems_transfer_lifecycle.h"' in added
+
+
+def test_native_wait_binding_releases_python_lock():
+    patch = (ROOT / "studies/energy_diagnosis/moe/patches/"
+             "moe-infinity-transfer-lifecycle.patch").read_text()
+    assert ('+      .def("wait_expert", &ExpertDispatcher::WaitHiddenStates,\n'
+            '+           py::call_guard<py::gil_scoped_release>())') in patch

@@ -567,7 +567,7 @@ index 45bcc59..2348450 100644
  
  extern std::unique_ptr<ArcherTaskPool> kTaskPool;
 diff --git a/core/python/py_archer_prefetch.cpp b/core/python/py_archer_prefetch.cpp
-index 51c2033..881187a 100644
+index 51c2033..86148b7 100644
 --- a/core/python/py_archer_prefetch.cpp
 +++ b/core/python/py_archer_prefetch.cpp
 @@ -22,7 +22,21 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -605,7 +605,7 @@ index 51c2033..881187a 100644
        .def("get_inflight_prefetch_bytes",
             &ArcherPrefetchHandle::GetInflightPrefetchBytes)
        .def("replace_cache_candidates",
-@@ -204,6 +224,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+@@ -204,13 +224,15 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
             py::arg("remote") = false,
             py::arg("phase") = static_cast<int>(ExpertPhase::MIXED))
        .def("set_inputs", &ExpertDispatcher::SetInputs)
@@ -613,6 +613,15 @@ index 51c2033..881187a 100644
        .def("set_inputs_with_invocation",
             &ExpertDispatcher::SetInputsWithInvocation)
        .def("set_overlap_compute_timing_enabled",
+            &ExpertDispatcher::SetOverlapComputeTimingEnabled)
+       .def("drain_compute_samples", &ExpertDispatcher::DrainComputeSamples)
+       .def("set_expected_queue", &ExpertDispatcher::SetExpectedQueue)
+-      .def("wait_expert", &ExpertDispatcher::WaitHiddenStates)
++      .def("wait_expert", &ExpertDispatcher::WaitHiddenStates,
++           py::call_guard<py::gil_scoped_release>())
+       .def("dispatch_experts", &ExpertDispatcher::DispatchExperts)
+       .def("take_last_active_experts", &ExpertDispatcher::TakeLastActiveExperts)
+       .def("get_routing_stats", &ExpertDispatcher::GetRoutingStats)
 diff --git a/moe_infinity/distributed/expert_executor.py b/moe_infinity/distributed/expert_executor.py
 index afabc73..39818ae 100644
 --- a/moe_infinity/distributed/expert_executor.py
