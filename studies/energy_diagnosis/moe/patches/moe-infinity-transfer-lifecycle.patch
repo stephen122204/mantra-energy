@@ -1,3 +1,68 @@
+diff --git a/core/aio/archer_prio_aio_handle.cpp b/core/aio/archer_prio_aio_handle.cpp
+index 269c934..050c33c 100644
+--- a/core/aio/archer_prio_aio_handle.cpp
++++ b/core/aio/archer_prio_aio_handle.cpp
+@@ -4,6 +4,7 @@
+ // EfficientMoE Team
+ 
+ #include "archer_prio_aio_handle.h"
++#include "prefetch/alems_transfer_lifecycle.h"
+ 
+ #include <cuda_runtime_api.h>
+ 
+@@ -238,7 +239,10 @@ ArcherPrioAioContext::ArcherPrioAioContext(const int block_size,
+ 
+ ArcherPrioAioContext::~ArcherPrioAioContext() {}
+ 
+-void ArcherPrioAioContext::NotifyExit() { schedule_cv_.notify_all(); }
++void ArcherPrioAioContext::NotifyExit() {
++  // The exit flag is already set. Synchronize notification with the waiter.
++  alems::update_and_notify(schedule_mutex_, schedule_cv_, [] {});
++}
+ 
+ void ArcherPrioAioContext::Schedule() {
+   std::shared_ptr<AioRequest> io_request = nullptr;
+@@ -272,8 +276,9 @@ void ArcherPrioAioContext::Schedule() {
+     }
+     thread_pool_->Wait();
+     io_request->callbacks.clear();
+-    io_request->pending_callbacks.store(0);
+-    io_request->cv.notify_one();
++    alems::update_and_notify(io_request->mutex, io_request->cv, [&] {
++      io_request->pending_callbacks.store(0);
++    });
+     return;
+   }
+ 
+@@ -299,13 +304,15 @@ void ArcherPrioAioContext::Schedule() {
+   }
+   thread_pool_->Wait();
+   io_request->callbacks.clear();
+-  io_request->pending_callbacks.store(0);
+-  io_request->cv.notify_one();
++  alems::update_and_notify(io_request->mutex, io_request->cv, [&] {
++    io_request->pending_callbacks.store(0);
++  });
+ }
+ 
+ void ArcherPrioAioContext::AcceptRequest(
+     std::shared_ptr<AioRequest>& io_request, bool high_prio) {
+-  {
++  // Match Schedule's lock order: schedule mutex, then queue mutex.
++  alems::update_and_notify(schedule_mutex_, schedule_cv_, [&] {
+     std::lock_guard<std::mutex> lock(high_prio ? io_queue_high_mutex_
+                                                : io_queue_low_mutex_);
+     if (high_prio) {
+@@ -313,8 +320,7 @@ void ArcherPrioAioContext::AcceptRequest(
+     } else {
+       io_queue_low_.push_back(io_request);
+     }
+-  }
+-  schedule_cv_.notify_one();
++  });
+ }
+ 
+ std::vector<AioCallback> ArcherPrioAioContext::PrepIocbs(
 diff --git a/core/model/model_topology.cpp b/core/model/model_topology.cpp
 index 3bf3469..505e766 100644
 --- a/core/model/model_topology.cpp

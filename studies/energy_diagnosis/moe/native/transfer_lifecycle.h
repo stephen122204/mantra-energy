@@ -2,6 +2,7 @@
 // Standalone lifecycle used by the actual backend queue and portable tests.
 #pragma once
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -11,6 +12,18 @@
 #include <vector>
 
 namespace alems {
+// Predicate updates must hold the same mutex used by condition_variable::wait.
+// An atomic predicate alone cannot prevent a notification before the waiter sleeps.
+template <class Update>
+inline void update_and_notify(std::mutex& mutex, std::condition_variable& cv,
+                              Update update) {
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    update();
+  }
+  cv.notify_all();
+}
+
 inline std::int64_t now_ns() {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::steady_clock::now().time_since_epoch()).count();
