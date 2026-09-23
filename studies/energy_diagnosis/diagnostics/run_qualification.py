@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 
-def steps(config,case,output,timeout):
+def steps(config,case,output,timeout,placement_policy="strict"):
     root = Path(output)
     prefix = 'studies.energy_diagnosis.diagnostics.'
     def capture(name,mode):
@@ -14,7 +14,7 @@ def steps(config,case,output,timeout):
                 '--case',str(case),'--output',str(root/name),'--mode',mode,'--timeout',str(timeout)]
     def compare(name,left,right):
         return [sys.executable,'-m',prefix+'compare_fixed_forward','--left',str(root/left),
-                '--right',str(root/right),'--output',str(root/(name+'.json'))]
+                '--right',str(root/right),'--output',str(root/(name+'.json')),'--placement-policy',placement_policy]
     return [
         ('demand-1',capture('demand-1','native-demand')),
         ('demand-2',capture('demand-2','native-demand')),
@@ -32,13 +32,14 @@ def main():
     p.add_argument('--case',required=True)
     p.add_argument('--output',required=True)
     p.add_argument('--timeout',type=int,default=900,help='per-capture timeout; not an overall lease budget')
+    p.add_argument('--placement-policy',choices=['strict','initial-state'],default='strict')
     a = p.parse_args()
     if not 1 <= a.timeout <= 1800:
         p.error('timeout must be 1..1800 seconds')
     root = Path(a.output).resolve()
     root.mkdir(parents=True,exist_ok=False)
     outcomes = []
-    for name,command in steps(Path(a.config).resolve(),Path(a.case).resolve(),root,a.timeout):
+    for name,command in steps(Path(a.config).resolve(),Path(a.case).resolve(),root,a.timeout,a.placement_policy):
         result = subprocess.run(command)
         outcomes.append(dict(stage=name,command=command,returncode=result.returncode))
         tmp = root/'stages.tmp'
