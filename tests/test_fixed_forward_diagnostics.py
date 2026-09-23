@@ -142,3 +142,29 @@ def test_supervisor_preserves_failed_worker(tmp_path):
     status=json.loads((out/'supervisor.json').read_text())
     assert status['owned_worker_exited'] and not status['capture_qualified']
     assert 'FileNotFoundError' in (out/'worker.log').read_text()
+
+
+def change_capture(root, mutate):
+    path=root/'capture.json'; metadata=json.loads(path.read_text());mutate(metadata)
+    path.write_text(json.dumps(metadata))
+    path=root/'supervisor.json'; supervisor=json.loads(path.read_text())
+    supervisor['capture_sha256']=digest(root/'capture.json');path.write_text(json.dumps(supervisor))
+
+
+def test_explicit_boundary_reporting_keeps_numerical_failure(tmp_path):
+    packet(tmp_path/'a','a');packet(tmp_path/'b','b',changed=True)
+    change_capture(tmp_path/'b',lambda m:m['intervention']['boundary_snapshot'][0].update(device='cuda:0'))
+    with pytest.raises(ValueError,match='expert placement'):comparison(tmp_path/'a',tmp_path/'b')
+    report=comparison(tmp_path/'a',tmp_path/'b',placement_policy='initial-state')
+    assert not report['reference_relative_tolerance_pass']
+    assert not report['matched_boundary_placement']
+    assert report['placement_comparison']['boundary_snapshot']['differing_experts']==[dict(layer=0,expert=0,left_device='cpu',right_device='cuda:0')]
+    assert report['comparison_script_sha256']
+
+
+@pytest.mark.parametrize('change',[lambda m:m['intervention']['initial_snapshot'][0].update(device='cuda:0'),
+    lambda m:m['intervention']['boundary_snapshot'][0].update(nbytes=8),
+    lambda m:m.update(config_sha256='different')])
+def test_initial_state_policy_still_rejects_unmatched_inputs(tmp_path,change):
+    packet(tmp_path/'a','a');packet(tmp_path/'b','b');change_capture(tmp_path/'b',change)
+    with pytest.raises(ValueError):comparison(tmp_path/'a',tmp_path/'b',placement_policy='initial-state')
