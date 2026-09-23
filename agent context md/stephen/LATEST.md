@@ -1,24 +1,24 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260923-outcome-gates.md)
+[Immutable turn record](turns/20260923-dispatcher-wakeup.md)
 
 ## Task and current understanding
-Stephen owns final integration and bounded execution acceptance. Alex's measurement interfaces, Aldric's task/verifier interfaces and Nitheesh's durable records remain integrated. A valid measured attempt need not be a successful answer. Keep execution, correctness and measurement status separate.
+Stephen owns native runtime correctness and integration. End-to-end validation exposed an intermittent generation stall after a successful model response and tool execution. Measurement acceptance correctly rejected the incomplete window. This differs from an ordinary task step-limit failure.
 
 ## Ideas and hypotheses
-A wrapper requiring execution_status=completed treats ordinary step exhaustion as an infrastructure defect. Conversely, admitting every incomplete record would hide real runtime failures. Use narrow, evidence-backed classification and retain the independent measurement checks.
+Source review found dispatcher completion predicates updated and notified without synchronizing with pending_mutex_, which the waiter holds. Atomics do not prevent a missed notification between checking the predicate and sleeping. This is a concrete source defect, but no stuck-thread capture yet establishes it as the cause of the observed stall.
 
 ## Decisions and rationale
-Merged PR54 after code review, focused tests and CI. SQL instructions now allow query arguments and continuation from existing tool results instead of presenting a schema-only response shape. No verifier, step budget, model arithmetic or numerical tolerance changed. A private bounded launcher accepts cleanly measured step exhaustion while stopping on unknown failures, failed model/tool requests, unavailable counters or incomplete cleanup. It never converts an unavailable verifier result to pass.
+Draft PR55 synchronizes normal completion, route publication and failure notifications using the existing helper, preserving model arithmetic and notification frequency. A repeated diagnostic on the previous build completed normally; it did not capture a stalled stack. Preserve both outcomes and qualify a separate installation rather than modifying the existing one.
 
 ## Changes and artifacts
-Merged execution revision 49b986612a02e4168e26b944cfec2b13879276d3. Shared source changes are confined to PR54. Operational launch definitions and actual records remain private. Each launch checks that exactly one new attempt appeared; stale exports cannot satisfy acceptance. Promotion checks integrity and execution coverage, not answer-success rates.
+PR55 head c93f48feffc96d10996a11d5720b36965351dae3. The backend patch remains in canonical git-diff form so its exact fingerprint matches prepared source. Existing qualified installations and all failed attempts remain preserved. Private build and diagnostic scripts run under a bounded supervisor with the shared GPU lock.
 
 ## Tests and evidence
-All15 PR54 CI checks passed;21 focused SQL tests passed.77 gate, independent-audit, coordinator and pipeline checks passed, including injected invalid states and preserved incomplete records. The full scripted fixture and tokenizer replay passed on merged source; this does not establish live-model success. Live end-to-end validation is still underway and full-batch readiness is not yet claimed.
+Five focused native synchronization/lifecycle tests passed, including a lock-removal negative control. CI is progressing; native separate-build qualification is running. The qualification chain includes expert arithmetic, short/long fixed-prefix comparisons and repeated generation with fixed preparation. These checks are not yet complete and do not justify merging or claiming readiness yet.
 
 ## Open questions and disagreements
-Unknown runtime failures remain fail-closed. Normal task failures must remain in summaries and denominators. Private operational wrappers are not a new public task contract. Hardware validation and first restored full-batch verification are still required.
+The observed stall is intermittent. Passing one retry is not resolution. Native source/build fingerprints, unchanged numerical comparisons, generation stress and restored outputs must be verified before resuming end-to-end acceptance.
 
 ## Next actions and handoff
-Continue the already dispatched bounded validation and automatic integrity-gated handoff; do not launch a competing model job. Preserve failures and immutable configurations. Agents should not infer that a model must answer every task correctly for the measurement pipeline to be valid.
+Inspect the already-running qualification job instead of starting competing work. Diagnose failures with bounded evidence collection. Merge only after review and qualification; use a new versioned execution definition for any rebuilt native runtime. Do not restart old stopped launchers or relax measurement checks.
