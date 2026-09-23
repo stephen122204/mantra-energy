@@ -119,6 +119,6 @@ jobs:
           python -m pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
           python -m pip install pytest transformers==5.3.0 accelerate==1.13.0
       - name: Test fixed-prefix captures and session helpers without GPU or SSH
-        run: python -m pytest -q tests/test_batch_coordinator.py tests/test_fixed_forward_diagnostics.py tests/test_process_guard.py tests/test_session_diagnostics.py tests/test_qwen_reference_math.py
+        run: python -m pytest -q tests/test_batch_coordinator.py tests/test_node_batches.py tests/test_fixed_forward_diagnostics.py tests/test_process_guard.py tests/test_session_diagnostics.py tests/test_qwen_reference_math.py
       - name: Check bootstrap shell syntax without installing or downloading models
         run: bash -n studies/energy_diagnosis/diagnostics/setup_a100_node.sh
