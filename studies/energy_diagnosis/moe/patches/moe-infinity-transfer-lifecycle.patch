@@ -90,16 +90,17 @@ index 3bf3469..505e766 100644
  
  ArcherTopologyHandle::ArcherTopologyHandle() {}
 diff --git a/core/parallel/expert_dispatcher.cpp b/core/parallel/expert_dispatcher.cpp
-index 00d899d..d990cb5 100644
+index 00d899d..db0dd3a 100644
 --- a/core/parallel/expert_dispatcher.cpp
 +++ b/core/parallel/expert_dispatcher.cpp
-@@ -1,3 +1,5 @@
+@@ -1,3 +1,6 @@
 +#include <cstdlib>
++#include "prefetch/alems_transfer_lifecycle.h"
 +#include <c10/cuda/CUDACachingAllocator.h>
  // Copyright (c) EfficientMoE.
  // SPDX-License-Identifier: Apache-2.0
  
-@@ -1577,7 +1579,18 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
+@@ -1577,7 +1580,18 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
                args.generation) {
          return true;
        }
@@ -119,7 +120,7 @@ index 00d899d..d990cb5 100644
          final_hidden_states_.add_(
              output_tensor *
              router_weight_.index({torch::indexing::Slice(), expert_idx}));
-@@ -1741,12 +1754,32 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
+@@ -1741,12 +1755,32 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
    }
    num_enqueued_.store(0, std::memory_order_release);
    if (route_error) std::rethrow_exception(route_error);
@@ -152,7 +153,7 @@ index 00d899d..d990cb5 100644
    current_invocation_id_ = 0;
    TORCH_CHECK(!route_pending_.load(std::memory_order_acquire) &&
                    pending_.load(std::memory_order_acquire) == 0,
-@@ -1761,7 +1794,9 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+@@ -1761,7 +1795,9 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
    }
    int device = at::cuda::current_device();
    auto options =
@@ -163,7 +164,7 @@ index 00d899d..d990cb5 100644
    hidden_states_ = hidden_states;
    router_mask_ = router_mask;
    router_weight_ = router_weight;  // this can be float32
-@@ -1773,6 +1808,17 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+@@ -1773,6 +1809,17 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
    cudaEventRecord(input_ready_event_, c10::cuda::getCurrentCUDAStream());
  }
  
@@ -181,6 +182,46 @@ index 00d899d..d990cb5 100644
  void ExpertDispatcher::SyncExecStreamsWithCurrent() {
    auto current = c10::cuda::getCurrentCUDAStream();
    for (size_t i = 0; i < exec_streams_.size(); ++i) {
+@@ -1900,9 +1947,10 @@ void ExpertDispatcher::FailDispatch(
+   }
+   route_failures_.fetch_add(1, std::memory_order_relaxed);
+   last_active_experts_count_.store(0, std::memory_order_relaxed);
+-  pending_.store(0, std::memory_order_release);
+-  route_pending_.store(false, std::memory_order_release);
+-  pending_cv_.notify_all();
++  alems::update_and_notify(pending_mutex_, pending_cv_, [&] {
++    pending_.store(0, std::memory_order_release);
++    route_pending_.store(false, std::memory_order_release);
++  });
+   route_callback_cv_.notify_all();
+   retirement_callback_cv_.notify_all();
+ }
+@@ -1912,8 +1960,11 @@ void ExpertDispatcher::CompleteOne(std::uint64_t generation) noexcept {
+   if (failed_generation_.load(std::memory_order_acquire) == generation) return;
+   size_t previous = pending_.fetch_sub(1, std::memory_order_acq_rel);
+   if (previous <= 1) {
+-    pending_.store(0, std::memory_order_release);
+-    pending_cv_.notify_all();
++    // Synchronize the final notification with the waiter even though the
++    // atomic decrement above may already have made its predicate true.
++    alems::update_and_notify(pending_mutex_, pending_cv_, [&] {
++      pending_.store(0, std::memory_order_release);
++    });
+   }
+ }
+ 
+@@ -1990,8 +2041,9 @@ void ExpertDispatcher::RouteFunc() noexcept {
+           std::chrono::duration_cast<std::chrono::microseconds>(
+               std::chrono::steady_clock::now() - started);
+       last_route_handoff_us_.store(elapsed.count(), std::memory_order_relaxed);
+-      route_pending_.store(false, std::memory_order_release);
+-      pending_cv_.notify_all();
++      alems::update_and_notify(pending_mutex_, pending_cv_, [&] {
++        route_pending_.store(false, std::memory_order_release);
++      });
+     } catch (...) {
+       FailDispatch(args.generation, std::current_exception(), routed_contexts);
+     }
 diff --git a/core/parallel/expert_dispatcher.h b/core/parallel/expert_dispatcher.h
 index 9f26cfd..c9d937d 100644
 --- a/core/parallel/expert_dispatcher.h
@@ -526,7 +567,7 @@ index 45bcc59..2348450 100644
  
  extern std::unique_ptr<ArcherTaskPool> kTaskPool;
 diff --git a/core/python/py_archer_prefetch.cpp b/core/python/py_archer_prefetch.cpp
-index 51c2033..881187a 100644
+index 51c2033..86148b7 100644
 --- a/core/python/py_archer_prefetch.cpp
 +++ b/core/python/py_archer_prefetch.cpp
 @@ -22,7 +22,21 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -564,7 +605,7 @@ index 51c2033..881187a 100644
        .def("get_inflight_prefetch_bytes",
             &ArcherPrefetchHandle::GetInflightPrefetchBytes)
        .def("replace_cache_candidates",
-@@ -204,6 +224,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+@@ -204,13 +224,15 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
             py::arg("remote") = false,
             py::arg("phase") = static_cast<int>(ExpertPhase::MIXED))
        .def("set_inputs", &ExpertDispatcher::SetInputs)
@@ -572,6 +613,15 @@ index 51c2033..881187a 100644
        .def("set_inputs_with_invocation",
             &ExpertDispatcher::SetInputsWithInvocation)
        .def("set_overlap_compute_timing_enabled",
+            &ExpertDispatcher::SetOverlapComputeTimingEnabled)
+       .def("drain_compute_samples", &ExpertDispatcher::DrainComputeSamples)
+       .def("set_expected_queue", &ExpertDispatcher::SetExpectedQueue)
+-      .def("wait_expert", &ExpertDispatcher::WaitHiddenStates)
++      .def("wait_expert", &ExpertDispatcher::WaitHiddenStates,
++           py::call_guard<py::gil_scoped_release>())
+       .def("dispatch_experts", &ExpertDispatcher::DispatchExperts)
+       .def("take_last_active_experts", &ExpertDispatcher::TakeLastActiveExperts)
+       .def("get_routing_stats", &ExpertDispatcher::GetRoutingStats)
 diff --git a/moe_infinity/distributed/expert_executor.py b/moe_infinity/distributed/expert_executor.py
 index afabc73..39818ae 100644
 --- a/moe_infinity/distributed/expert_executor.py
