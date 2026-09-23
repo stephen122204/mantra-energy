@@ -1,24 +1,24 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260923-aio-wakeup-repair.md)
+[Immutable turn record](turns/20260923-aio-validated-integration.md)
 
 ## Task and current understanding
-Stephen owns native runtime correctness and shared integration. Alex supplies measurement interfaces, Aldric task/checker interfaces, and Nitheesh durable execution/export interfaces. The current integration baseline is a9a1ff4; the fresh repair checkout is /tmp/alems-aio-repair-20260923. Existing integrated components are retained. Live runtime qualification and final end-to-end acceptance remain outstanding; fixture success alone is not readiness.
+Stephen owns runtime correctness and shared acceptance. Existing measurement, independent-task verification and durable-export components remain integrated. Completion still requires checked end-to-end output.
 
 ## Ideas and hypotheses
-Native AIO request completion changes its atomic predicate without the waiting mutex. Scheduler queue publication likewise does not synchronize with the schedule condition-variable mutex. Both permit a notification between a false predicate check and sleeping. These are source-level defects; they are not yet proven to explain every observed initialization failure.
+AIO predicate updates must share the mutex used by condition-variable waits. Atomics alone do not prevent lost notifications.
 
 ## Decisions and rationale
-Use a shared small update-and-notify helper that updates under the waiter's mutex and notifies afterward. Apply it to both request completion paths, scheduler enqueue with schedule-then-queue lock ordering, and exit notification synchronization. Preserve model arithmetic and task contracts. Keep the existing runtime unchanged and build a separate candidate for validation.
+Reviewed and merged PR53 after focused concurrency tests, all CI checks and separate-build validation. The previously qualified installation is preserved. Requalification uses unchanged numerical tolerances and model settings.
 
 ## Changes and artifacts
-Draft PR 53, stephen/aio-wakeup-repair, commit 2d8f9c1. Updated native lifecycle header, backend patch, synchronization regression, and CI test list. Private launch/configuration records and raw outputs remain outside GitHub.
+PR53 merge commit2497481292b4ad08a7be3859e0457c2374aaa648. Tested feature commit2d8f9c172d88d66c88b47a5059262a940990091d differs from merged execution only in implementation-context history; executable files match. The change affects AIO request completion, queue publication and exit notification.
 
 ## Tests and evidence
-Four local focused tests pass: native lifecycle plus synchronization tests, including a negative control that removes the predicate-update lock and must fail. Linux MoE CI passed; remaining CI and separate native build qualification are pending. The tests exercise the exact helper and verify all patched AIO call sites, but do not alone prove the whole native scheduler is race-free or validate live model execution.
+All15 CI checks passed. Four focused native tests passed locally and on Linux, including the lock-removal negative control. Separate native build and preserved old build fingerprint checks passed. Expert arithmetic and short/long fixed-prefix reference, preparation and repeatability comparisons matched exactly at20 captured positions. Twelve fresh startup checks passed with bounded cleanup. Qualification backup was hash-verified and restored. These implementation tests do not prove universal absence of races or campaign validity.
 
 ## Open questions and disagreements
-Native initialization reliability, model-reference agreement, actual transfer behavior, and full combined output checks still require the new build. Do not reuse the old build fingerprint or silently promote the candidate. No full execution-readiness claim is made.
+End-to-end task, counter, transfer, isolation and export acceptance must still be checked on the merged repaired runtime. Do not reuse old fingerprints or overwrite failed run definitions.
 
 ## Next actions and handoff
-Inspect PR CI and the separate candidate build, qualify model arithmetic without relaxed tolerances, then check repeated startup and the complete task/measurement/export path on a new version. Preserve prior failures and do not overwrite existing manifests. Continue the maintained full-role assignments; this scoped repair does not replace their remaining acceptance gates.
+Use the supplied new execution revision and versioned launch paths. Final batch promotion remains gated by complete independent checks and verified backups; the old stopped coordinator is not a resume point. Keep raw results, budgets and private execution definitions outside GitHub.
