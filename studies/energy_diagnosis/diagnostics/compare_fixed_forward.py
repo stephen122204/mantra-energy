@@ -29,7 +29,10 @@ def load_capture(path):
     return supervisor,metadata,scores
 
 
-def comparison(left,right):
+def comparison(left,right, *, placement_policy="strict"):
+    if placement_policy not in {"strict", "initial-state"}:
+        raise ValueError("unknown placement policy")
+    placement_report = {}
     a,ma,xa=load_capture(left)
     b,mb,xb=load_capture(right)
     if a['run_id']==b['run_id']:
@@ -44,7 +47,13 @@ def comparison(left,right):
         def placement(m,key):
             return sorted((r['layer'],r['expert'],r['nbytes'],r['device']) for r in m['intervention'][key])
         for key in ['initial_snapshot','boundary_snapshot']:
-            if placement(ma,key)!=placement(mb,key):
+            left_placement, right_placement = placement(ma,key), placement(mb,key)
+            if [(a,b,c) for a,b,c,_ in left_placement] != [(a,b,c) for a,b,c,_ in right_placement]:
+                raise ValueError(f'native {key} expert identities or sizes differ')
+            differences = [dict(layer=l[0],expert=l[1],left_device=l[3],right_device=r[3])
+                           for l,r in zip(left_placement,right_placement) if l!=r]
+            placement_report[key] = dict(matched=not differences, differing_experts=differences)
+            if differences and (placement_policy == 'strict' or key == 'initial_snapshot'):
                 raise ValueError(f'native {key} expert placement differs')
         for key in ['expert_cache_limit_bytes','expert_count','applied_config']:
             if ma['native_boot'][key]!=mb['native_boot'][key]:
@@ -65,6 +74,12 @@ def comparison(left,right):
             if pa[key]!=pb[key]:raise ValueError(f'primer {key} mismatch')
         report['primer_comparison']=compare(pa['logits'],pb['logits'])
         report['both_stages_reference_relative_tolerance_pass']=report['reference_relative_tolerance_pass'] and report['primer_comparison']['reference_relative_tolerance_pass']
+    report['placement_policy'] = placement_policy
+    report['placement_comparison'] = placement_report
+    report['matched_boundary_placement'] = placement_report.get('boundary_snapshot', {}).get('matched')
+    report['comparison_script_sha256'] = digest(Path(__file__))
+    report['placement_scope'] = ('Numerical comparison only. Initial placement is required equal; derived boundary placement differences are reported. '
+                                 'A differing boundary is not a state-matched timing or energy comparison.')
     report['dtype_saved']=str(xa['logits'].dtype)
     report['captured_prefix_lengths']=xa['cache_lengths']
     def annotate(source):
@@ -87,8 +102,10 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--left',required=True);p.add_argument('--right',required=True)
     p.add_argument('--output',required=True)
+    p.add_argument('--placement-policy',choices=['strict','initial-state'],default='strict',
+                   help='strict requires equal boundary placement; initial-state reports derived variation while retaining identical initial placement and numerical tolerances')
     args=p.parse_args()
-    result=comparison(args.left,args.right)
+    result=comparison(args.left,args.right,placement_policy=args.placement_policy)
     with Path(args.output).open('x') as f:
         json.dump(result,f,indent=2);f.write('\n')
     raise SystemExit(0 if result.get('both_stages_reference_relative_tolerance_pass',result['reference_relative_tolerance_pass']) else 3)
