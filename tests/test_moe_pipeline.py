@@ -718,3 +718,33 @@ def test_cpu_power_state_groups_cpus_by_governor_and_idle_states(tmp_path):
     assert deep["idle"][2] == dict(name="C2", exit_latency_us="30", disabled="1")
     assert cpu_power_state(None, root=tmp_path) is None
     assert cpu_power_state([0], root=tmp_path / "missing") is None
+
+
+def test_keep_awake_is_owned_recorded_and_stopped(tmp_path):
+    if not hasattr(os, "sched_getaffinity"):
+        rejected = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                                   "--output", str(tmp_path / "unsupported"), "--keep-awake-cpus", "0"],
+                                  cwd=ROOT, capture_output=True, text=True, timeout=30)
+        assert rejected.returncode == 2 and "Linux" in rejected.stderr
+        return
+    import psutil
+    cpus = sorted(os.sched_getaffinity(0))
+    if len(cpus) < 2:
+        pytest.skip("needs two CPUs")
+    overlap = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                              "--output", str(tmp_path / "overlap"), "--cpu-affinity", str(cpus[0]),
+                              "--keep-awake-cpus", str(cpus[0])], cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert overlap.returncode == 2 and "must not overlap" in overlap.stderr
+    before = {p.pid for p in psutil.process_iter()}
+    command(tmp_path / "kept", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+            "--cpu-affinity", str(cpus[0]), "--keep-awake-cpus", str(cpus[1]))
+    manifest = json.loads((tmp_path / "kept/moe-manifest.json").read_text())
+    assert manifest["keep_awake"] == dict(cpus=[cpus[1]], method="owned python busy loop per CPU")
+    assert sorted(c for group in (manifest["cpu_power"] or []) for c in group["cpus"]) in ([cpus[0], cpus[1]], []) \
+        or manifest["cpu_power"] is None
+    leftover = [p for p in psutil.process_iter(["cmdline"]) if p.pid not in before
+                and "sched_setaffinity" in " ".join(p.info["cmdline"] or [])]
+    assert not leftover
+    # Resuming the same campaign directory must see an identical manifest.
+    command(tmp_path / "kept", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+            "--cpu-affinity", str(cpus[0]), "--keep-awake-cpus", str(cpus[1]))
