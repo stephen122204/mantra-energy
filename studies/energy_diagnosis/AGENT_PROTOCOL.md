@@ -41,7 +41,10 @@ Each attempt writes `agent-trace.json` with one outcome:
 All outcomes are attempts with their measured energy.
 
 Per-turn records in the trace include the finish reason, token counts, the
-sampling seed, the parse result and repeated identical calls.
+sampling seed, the per-call output allowance, the parse result and repeated identical calls.
+Each model request is capped by the smaller of its per-turn limit and remaining
+whole-goal output budget. A final answer cannot bypass that cap; inconsistent
+backend token counts are infrastructure failures.
 
 ## Decoding
 
@@ -55,9 +58,10 @@ of a pair use the same seed at the same turn.
 
 `--deadline` is one absolute limit from goal start. It bounds model calls,
 every tool call in a turn (dependent calls share it rather than each receiving
-a fresh allowance), and verification: a result that finishes after the
-deadline is recorded as `deadline_exceeded`, with the verifier output kept in
-`verification.json`. Cleanup is bounded separately. The deadline rules also
+a fresh allowance), and verification. Verification runs in an owned, bounded subprocess; a stuck
+verifier is terminated at the remaining deadline. Late results cannot pass, and
+`verification.json` records the timeout when no verdict is available. Process
+startup is included in verification time. Cleanup is bounded separately. The deadline rules also
 apply to `legacy-json-v1`.
 
 ## legacy-json-v1

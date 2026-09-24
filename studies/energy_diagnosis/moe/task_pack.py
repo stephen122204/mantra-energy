@@ -41,6 +41,10 @@ class PackRuntime:
     def context(self,task):return self._runtime(task).context(task)
     def tool(self,task,call):return self._runtime(task).tool(task,call)
     def verify(self,task,answer):return self._runtime(task).verify(task,answer)
+    def verification_callable(self,task):
+        # Capture the active implementation, not the module dispatcher, for an
+        # isolated verifier process (including injected diagnostic verifiers).
+        return self._runtime(task).verify
 
 
 def prepare(root, specifications):

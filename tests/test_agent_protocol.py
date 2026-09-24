@@ -143,7 +143,7 @@ def test_verification_after_deadline_is_not_a_pass(tmp_path, monkeypatch):
     original = business_workload.BusinessRuntime.verify
 
     def slow(self, task, answer):
-        time.sleep(9)
+        time.sleep(60)
         return original(self, task, answer)
 
     monkeypatch.setattr(business_workload.BusinessRuntime, "verify", slow)
@@ -166,3 +166,46 @@ def test_legacy_protocol_remains_available(tmp_path):
                    "--max-runs", "1", "--deadline", "60", "--agent-protocol", "legacy-json-v1"])
     calls = json.loads(next((output / "goals").glob("*/model-calls.json")).read_text())
     assert "prompt" in calls[0] and not list((output / "goals").glob("*/agent-trace.json"))
+
+
+def test_exponent_overflow_is_malformed():
+    decision = parse_response('<tool_call>{"name":"sql","arguments":{"action":"query","x":1e999}}</tool_call>')
+    assert decision.kind == 'malformed' and 'non-finite' in decision.reason
+
+
+def test_verifier_process_is_terminated_at_deadline():
+    from studies.energy_diagnosis.local_run import _VerificationTool
+    def stuck(task, answer):
+        time.sleep(60)
+        return {'passed': True, 'reason': 'too late'}
+    start = time.monotonic()
+    runner = BoundedToolExecutor({'verify': _VerificationTool(stuck, None, None)},
+                                timeout_seconds=1, deadline_ns=time.monotonic_ns()+1_000_000_000)
+    outcome = runner.execute([ToolCall('verify', 'verify', {})])['verify']
+    assert outcome.status == 'timed_out'
+    assert time.monotonic()-start < 7
+
+
+@pytest.mark.parametrize('overrun', [False, True])
+def test_final_answer_cannot_bypass_total_output_limit(tmp_path, monkeypatch, overrun):
+    from studies.energy_diagnosis.moe.backend import BackendAdapter
+    limits = []
+    def chat(self, request, sampling, meta):
+        limit = self.model_config['max_tokens']; limits.append(limit)
+        return {'status':'ok', 'content':call(SUBMIT, {'answer':{}}),
+                'finish_reason':'stop' if overrun else 'length',
+                'tokens':{'prompt':10, 'completion':limit+1 if overrun else limit},
+                'token_provenance':'estimated'}
+    monkeypatch.setattr(BackendAdapter, 'chat', chat)
+    traces, records = _pack_run(tmp_path, 'success', '--max-total-output-tokens', '3')
+    assert limits == [3]
+    assert traces[0]['outcome'] == ('infrastructure_failure' if overrun else 'output_budget_exhausted')
+    assert records[0]['verifier']['outcome'] != 'pass'
+
+
+@pytest.mark.parametrize("temperature", ["inf", "nan"])
+def test_cli_rejects_nonfinite_sampling_temperature(tmp_path, temperature):
+    from studies.energy_diagnosis.moe.run import main
+    with pytest.raises(SystemExit) as exc:
+        main(["--mode", "fixture", "--output", str(tmp_path), "--decoding", "sampled", "--temperature", temperature])
+    assert exc.value.code == 2

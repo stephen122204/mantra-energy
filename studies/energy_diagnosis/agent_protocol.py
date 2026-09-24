@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import math
 import re
 
 PROTOCOL_VERSION = "chat-tools-v1"
@@ -57,7 +58,13 @@ def strict_loads(text):
     def constant(name):
         raise ValueError(f"non-finite JSON number {name}")
 
-    return json.loads(text, object_pairs_hook=pairs, parse_constant=constant)
+    def finite_float(text):
+        value = float(text)
+        if not math.isfinite(value):
+            raise ValueError("non-finite JSON number")
+        return value
+
+    return json.loads(text, object_pairs_hook=pairs, parse_constant=constant, parse_float=finite_float)
 
 
 def visible(value):

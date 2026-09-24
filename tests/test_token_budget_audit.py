@@ -78,3 +78,19 @@ def test_chat_requests_replay_and_classified_budget_outcomes(tmp_path):
     # An unrecorded truncation is still an error.
     _chat_call(tmp_path, 'stop', 'x' * 50)
     assert not audit(tmp_path, ChatTokenizer(), max_context=prompt + 50, max_tokens=50)['all_saved_calls_fit']
+
+
+def test_chat_audit_uses_recorded_remaining_output_allowance(tmp_path):
+    prompt = _chat_call(tmp_path, 'stop', 'ok')
+    path = tmp_path / 'goals' / 'g' / 'model-calls.json'
+    calls = json.loads(path.read_text())
+    calls[0]['max_tokens'] = 3
+    path.write_text(json.dumps(calls))
+    result = audit(tmp_path, ChatTokenizer(), max_context=prompt + 3, max_tokens=40)
+    assert result['all_saved_calls_fit']
+    assert result['records'][0]['output_budget'] == 3
+    assert result['records'][0]['context_remaining'] == 0
+    calls[0]['max_tokens'] = 51
+    path.write_text(json.dumps(calls))
+    with pytest.raises(ValueError, match='per-call token budget'):
+        audit(tmp_path, ChatTokenizer(), max_context=prompt + 50, max_tokens=50)
