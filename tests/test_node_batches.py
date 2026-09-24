@@ -73,3 +73,52 @@ class NodeBatchesTest(unittest.TestCase):
         with self.assertRaises((tarfile.ReadError,EOFError)):ingest(damaged,self.base/'receiver2','example',str(self.root))
         state=ingest(wire,self.base/'receiver2','example',str(self.root))
         self.assertEqual(state['after'],'batch-1')
+
+
+class MaintenanceWindowTest(unittest.TestCase):
+    def spec(self, **m):
+        return dict(minimum_batch_seconds=600, maintenance=dict(anchor_utc='2026-01-01T00:00:00Z', period_seconds=3600, window_seconds=600, **m))
+
+    def test_schedule_and_dispatch_rule(self):
+        from studies.energy_diagnosis.diagnostics.batch_coordinator import maintenance_windows, dispatch_wait
+        import datetime as dt
+        t0 = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc).timestamp()
+        s = self.spec()
+        self.assertEqual(maintenance_windows(s, t0 + 100), (True, t0, t0 + 600))
+        self.assertEqual(maintenance_windows(s, t0 + 700), (False, t0 + 3600, t0 + 4200))
+        self.assertEqual(dispatch_wait(s, t0 + 100), 500)            # inside a window: wait for its end
+        self.assertEqual(dispatch_wait(s, t0 + 700), 0)              # 700+600+60 < 3600: may start
+        self.assertEqual(dispatch_wait(s, t0 + 3000), 4200 - 3000)   # would reach the next window
+        self.assertEqual(dispatch_wait(dict(minimum_batch_seconds=600), t0), 0)
+
+    def test_validation(self):
+        from studies.energy_diagnosis.diagnostics.batch_coordinator import validate
+        base = dict(host='h', remote_directory='/a/b/c/d', remote_repository='/r', remote_python='/p', cutoff_utc='2099-01-01T00:00:00Z',
+                    retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=600,
+                    batches=[dict(id='b0', argv=['x'], status='b0/s.json', log='l0')])
+        validate(dict(base, maintenance=self.spec()['maintenance']))
+        for bad in (dict(period_seconds=3600, window_seconds=200), dict(period_seconds=1200, window_seconds=600)):
+            with self.assertRaises(ValueError):
+                validate(dict(base, maintenance=dict(anchor_utc='2026-01-01T00:00:00Z', **bad)))
+
+    def test_node_never_dispatches_into_a_window(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'results'; root.mkdir()
+        import datetime as dt
+        t0 = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc).timestamp()
+        clock = [t0 + 3000]  # 600 s batch + margin would overlap the window at t0+3600
+        starts = []
+        def sleep(seconds): clock[0] += seconds
+        status = 'b0/status.json'
+        code = "import pathlib,json; p=pathlib.Path(" + repr(str(root / status)) + ");p.parent.mkdir();p.write_text(json.dumps(dict(status='completed',returncode=0,cleanup_complete=True)))"
+        spec = dict(host='h', remote_directory=str(root), remote_repository=str(base), remote_python=sys.executable,
+                    cutoff_utc='2099-01-01T00:00:00Z', retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=600,
+                    maintenance=self.spec()['maintenance'],
+                    batches=[dict(id='b0', argv=[sys.executable, '-c', code], status=status, log='l0')])
+        import subprocess as sp
+        real = sp.run
+        def recording(*a, **k):
+            starts.append(clock[0]); return real(*a, **k)
+        with patch('studies.energy_diagnosis.diagnostics.node_batches.subprocess.run', recording):
+            run(spec, base / 'control', gap=0, free_bytes=0, clock=lambda: clock[0], sleep=sleep)
+        self.assertEqual(starts, [t0 + 4200])

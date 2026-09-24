@@ -112,7 +112,53 @@ def validate(spec):
             raise ValueError("invalid launch argv")
     if not names or len(set(names)) != len(names):
         raise ValueError("empty or duplicate batches")
+    if "maintenance" in spec:
+        m = spec["maintenance"]
+        if set(m) != {"anchor_utc", "period_seconds", "window_seconds"}:
+            raise ValueError("maintenance needs anchor_utc, period_seconds, window_seconds")
+        anchor = dt.datetime.fromisoformat(m["anchor_utc"].replace("Z", "+00:00"))
+        if anchor.utcoffset() != dt.timedelta(0):
+            raise ValueError("UTC maintenance anchor required")
+        if not (type(m["window_seconds"]) is int and type(m["period_seconds"]) is int
+                and 300 <= m["window_seconds"] < m["period_seconds"] <= 86400):
+            raise ValueError("maintenance window must be 300 s or more and shorter than its period")
+        if spec["minimum_batch_seconds"] + WINDOW_MARGIN_SECONDS > m["period_seconds"] - m["window_seconds"]:
+            raise ValueError("a batch cannot fit between maintenance windows")
     return cutoff.timestamp()
+
+
+# Batches never overlap a maintenance window; logins, status checks and backup transfers
+# happen only inside windows, so no new session can appear during measurement.
+WINDOW_MARGIN_SECONDS = 60
+
+
+def maintenance_windows(spec, now):
+    """(inside, current_or_next_start, its_end) for the spec's maintenance schedule, or None."""
+    if "maintenance" not in spec:
+        return None
+    m = spec["maintenance"]
+    anchor = dt.datetime.fromisoformat(m["anchor_utc"].replace("Z", "+00:00")).timestamp()
+    period, length = m["period_seconds"], m["window_seconds"]
+    k = (now - anchor) // period
+    start = anchor + k * period
+    if start <= now < start + length:
+        return True, start, start + length
+    if now < anchor:
+        start = anchor
+    elif now >= start + length:
+        start += period
+    return False, start, start + length
+
+
+def dispatch_wait(spec, now):
+    """Seconds to wait before a batch may start so that it cannot reach into a window."""
+    schedule = maintenance_windows(spec, now)
+    if schedule is None:
+        return 0
+    inside, start, end = schedule
+    if inside or now + spec["minimum_batch_seconds"] + WINDOW_MARGIN_SECONDS > start:
+        return end - now
+    return 0
 
 
 class Coordinator:

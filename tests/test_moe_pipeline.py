@@ -760,3 +760,24 @@ def test_tool_cpus_are_recorded_and_must_not_overlap(tmp_path):
                                   "--output", str(tmp_path / "overlap"), "--cpu-affinity", str(cpu), "--tool-cpus", str(cpu)],
                                  cwd=ROOT, capture_output=True, text=True, timeout=30)
         assert overlap.returncode == 2 and "must not overlap" in overlap.stderr
+
+
+def test_campaign_exit_keeps_model_failures_as_data_but_stops_on_crash(tmp_path, monkeypatch):
+    # A wrong/unfinished answer is campaign data: exit 0 with the failure recorded.
+    result = command(tmp_path / "failing", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+                     "--fixture-case", "no_action", "--campaign-exit")
+    row = next(iter(result["summary"]["settings"].values()))
+    assert row["attempts"] == 1 and row["successful"] == 0
+    # An infrastructure crash stops the campaign for review (exit 3).
+    from studies.energy_diagnosis.moe import run as campaign
+    original = ProcessBackend.reset_goal_state
+
+    def reset(self):
+        self.timeout = 0.000001
+        return original(self)
+
+    monkeypatch.setattr(ProcessBackend, "reset_goal_state", reset)
+    with pytest.raises(SystemExit) as stopped:
+        campaign.main(["--mode", "fixture", "--output", str(tmp_path / "crash"), "--task", "joined-orders-v1",
+                       "--policies", "demand", "--max-runs", "1", "--deadline", "30", "--campaign-exit"])
+    assert stopped.value.code == 3
