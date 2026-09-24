@@ -464,10 +464,13 @@ class GoalExecutor:
         )
         try:
             if self.lifecycle:
-                self.lifecycle.begin_goal(lease.attempt_id)
+                self.lifecycle.begin_goal(lease.attempt_id, task_id=plan.task_id)
             if self.initialized_model_window:
                 self.measurement.checkpoint("initialized_model_start")
                 inner_started = True
+            if self.lifecycle:
+                # static prepares its profile here, inside the measured task window.
+                self.lifecycle.prepare_ahead()
             if self.workload_runtime:
                 self.workload_runtime.begin(task, lease)
                 context.update(self.workload_runtime.context(task))

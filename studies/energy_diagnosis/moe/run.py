@@ -79,12 +79,21 @@ def run(args):
         tasks = tuple(t for t in tasks if t.task_id == args.task)
     if not tasks:
         raise ValueError("unknown task")
+    from .expert_profile import load as load_policy_data
+    policy_data = {}
+    for item in getattr(args, "policy_data", None) or []:
+        name, _, path = item.partition("=")
+        if name not in {"static", "future"} or not path or name in policy_data:
+            raise ValueError("--policy-data takes static=PATH or future=PATH once each")
+        policy_data[name] = load_policy_data(path)
     policies = [
         Policy(
             name,
-            0 if name == "demand" else args.byte_budget,
+            0 if name in {"demand", "builtin"} else args.byte_budget,
             bytes_per_second=args.bytes_per_second,
             expected_pause_seconds=args.expected_pause_seconds,
+            seed=getattr(args, "random_seed", 0) if name == "random" else 0,
+            data_sha256=policy_data[name][1] if name in policy_data else None,
         )
         for name in args.policies.split(",")
     ]
@@ -195,8 +204,10 @@ def run(args):
             started = measurement.start_goal()
 
             def execute(request):
+                policy = by_setting[request.scheduled_run.planned_run.setting_id]
                 backend = ProcessBackend(
-                    config,
+                    # Only the builtin arm enables the backend's own prefetcher.
+                    dict(config, builtin_prefetch=True) if policy.name == "builtin" else config,
                     python=args.backend_python or sys.executable,
                     mode=args.mode,
                     log_path=root
@@ -206,7 +217,8 @@ def run(args):
                     deadline_ns=request.lease.started_ns + int(args.deadline * 1e9),
                 )
                 lifecycle = Lifecycle(
-                    backend, by_setting[request.scheduled_run.planned_run.setting_id]
+                    backend, policy,
+                    data=policy_data[policy.name][0] if policy.name in policy_data else None,
                 )
                 executor = GoalExecutor(
                     {t.task_id: t for t in tasks},
@@ -293,6 +305,9 @@ def main(argv=None):
     p.add_argument("--byte-budget", type=int, default=128)
     p.add_argument("--bytes-per-second", type=float)
     p.add_argument("--expected-pause-seconds", type=float)
+    p.add_argument("--policy-data", action="append", metavar="NAME=PATH",
+                   help="static=profile.json or future=trace.json from moe/expert_profile.py; hashed into the setting")
+    p.add_argument("--random-seed", type=int, default=0, help="Seed for the random matched-budget policy")
     p.add_argument("--task", default="all")
     p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
