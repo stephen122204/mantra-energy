@@ -398,7 +398,7 @@ class NativeDevice:
         except BaseException:
             self.prefix_cache.clear()
             raise
-            ids = output.tolist()
+        ids = output.tolist()
         stop_ids = {self.tokenizer.eos_token_id}
         if chat:
             stop_ids |= {i for i in self.tokenizer.convert_tokens_to_ids(["<|im_end|>", "<|endoftext|>"])
