@@ -1,24 +1,31 @@
 # Latest published context: stephen
 
-[Immutable turn record](turns/20260924-redesign-integration-and-interruption-checkpoints.md)
+[Immutable turn record](turns/20260924-pr61-native-validation-and-audits.md)
 
 ## Task and current understanding
-Integrate PR59 verifier repairs and PR60 chat/tool harness changes. This record concerns implementation and validation only. The old execution configuration is not a current launch instruction.
+
+Technical review of PR61 on branch stephen/prefetch-controls. Fresh clone used; current code head 8b44d4a. Alex owns runtime/measurement integration, Aldric task correctness, Nitheesh record/export consistency, and Stephen this shared native-backend review. Research discussion and raw run outputs remain private.
 
 ## Ideas and hypotheses
-A goal deadline must also constrain backend control requests and verification. Saving all turn evidence only at task completion loses diagnostic detail when a process is interrupted.
+
+Implementation risks inspected: tool-pause numbering can differ from model-call numbering; an enabled setting need not activate a backend mechanism; dispatch residency cannot certify survival of a particular prepared copy. Host token availability requires explicit timing rather than inference from aggregate dispatch counts.
 
 ## Decisions and rationale
-Cap each model request by its remaining total output allowance. Run verification in an owned bounded process. Apply the absolute deadline to backend requests while allowing separately bounded transfer cleanup. Preserve partial turns without calling them completed attempts.
+
+Missing future task/pause entries fail. Native builtin execution is rejected pending activation qualification, while other arms explicitly disable that backend setting. Static preparation is single-use per goal. Timing is installed consistently for every native arm, and its CPU-delivery synchronization overhead is included and documented.
 
 ## Changes and artifacts
-Reviewed implementation head 822c0ff includes native multi-turn chat, strict parsing, semantic tool history, classified budget outcomes, per-call token audits, deadline repairs, and immutable per-turn ledger checkpoints. PR59 and PR60 integrate these changes. Alex identified the original ETL shortcut and whole-goal deadline concerns. Real output records and connection details remain private.
+
+PR61 adds corrected future-trace-v2 generation, stronger transfer/usefulness validation, guarded single-goal audit_pilot, and first/subsequent host token-availability timing. Existing future-trace-v1 inputs must be regenerated. See studies/energy_diagnosis/moe/PREFETCH_ARMS.md for CLI and measurement limits. No native extension or model weights were changed.
 
 ## Tests and evidence
-429 local tests and 5 subtests pass on the final implementation. This includes paired request equality, verifier timeout termination, per-request output caps, control-request deadlines, post-timeout transfer draining and retained turn evidence after interruption. Three node-environment tests and 2 subtests passed earlier on 0a007e8 for the unchanged native generation implementation. GitHub CI jobs currently do not execute because of the account payment/spending-limit block; no current Windows CI pass is claimed.
+
+At 8b44d4a, 120 selected control/harness/protocol/prefix/acceptance tests passed locally and on LIQID05. Two actual reduced-Qwen Transformers cache checks passed in the node's backend environment. Portable setup checker passed. Earlier timing return-path and fake-streamer errors were fixed, not suppressed. GitHub Actions did not execute jobs due account billing/spending limits; this is not Windows CI qualification.
 
 ## Open questions and disagreements
-The live native smoke was interrupted by the process guard after a new external session arrived. Owned-worker cleanup completed, but the run is invalid and provides no completed live task verdict. The final implementation still needs an uninterrupted native smoke. Software merge is not campaign qualification.
+
+All three guarded native smoke stages on 8b44d4a passed on LIQID05 across business-query and ETL-repair paths. Counter/transfer/prefix/token-timing audits also passed independently after the verified off-node copy. Matched stages had identical requests and outputs. Do not expose test-only PYTHONPATH package overlays to native runtime: pip-freeze identity correctly rejects the altered effective environment even though the installed backend was unchanged. Keep the runtime fingerprint check intact. A separate unauthenticated SSH connection triggered the process guard on one development attempt; retain invalid attempts and do not disable the guard to obtain a pass.
 
 ## Next actions and handoff
-Coordinate a quiet node window, deploy the exact merged implementation to a clean separate checkout, and run a bounded development check with explicit limits. Inspect preserved turn requests/results, answer verification, independent counter/transfer/token audits, cleanup and off-node copies before larger execution. Use the new turns/ artifacts to diagnose incomplete runs. Never overwrite or pool old interrupted attempts. Alex retains measurement ownership, Aldric task/checker ownership, Nitheesh ledger/export ownership, and Stephen integration and node-run coordination.
+
+PR61 is ready for code review, not merged. A smoke pass is not full-campaign qualification. Preserve independent counter checks, required domains, strict deadlines, cleanup, and off-node backup verification. Do not start another SSH connection or separate agent workload during a guarded measurement stage.
