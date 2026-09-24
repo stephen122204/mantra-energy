@@ -279,6 +279,7 @@ def run(args):
         measurement_scope="CPU-package and GPU-board only; includes backend startup, tools, transfers, cleanup and verification",
         cpu_affinity=getattr(args, "applied_cpu_affinity", None),
         keep_awake=getattr(args, "keep_awake_record", None),
+        tool_cpus=getattr(args, "tool_cpus", None),
         cpu_power=cpu_power_state(sorted(set((getattr(args, "applied_cpu_affinity", None) or {}).get("cpus") or [])
                                          | set((getattr(args, "keep_awake_record", None) or {}).get("cpus") or [])) or None),
     )
@@ -432,6 +433,9 @@ def main(argv=None):
     p.add_argument("--keep-awake-cpus", type=parse_cpu_list, metavar="CPULIST",
                    help="Declared keep-awake condition: an owned busy process pinned to each listed CPU for the whole run "
                         "(its power is inside the CPU-package domain); must not overlap --cpu-affinity")
+    p.add_argument("--tool-cpus", type=parse_cpu_list, metavar="CPULIST",
+                   help="CPU set for workload test/tool subprocesses that honour ALEMS_TOOL_CPUS (repository repair); "
+                        "must not overlap --cpu-affinity or --keep-awake-cpus; recorded in the manifest")
     p.add_argument("--task", default="all")
     p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
@@ -506,6 +510,11 @@ def main(argv=None):
             signal.signal(getattr(signal, name), _interrupt)
     if args.keep_awake_cpus and set(args.keep_awake_cpus) & set((args.applied_cpu_affinity or {}).get("cpus") or []):
         p.error("keep-awake CPUs must not overlap the campaign CPU affinity")
+    if args.tool_cpus:
+        if set(args.tool_cpus) & (set((args.applied_cpu_affinity or {}).get("cpus") or []) if args.cpu_affinity else set()) \
+                or set(args.tool_cpus) & set(args.keep_awake_cpus or []):
+            p.error("tool CPUs must not overlap the campaign CPU affinity or keep-awake CPUs")
+        os.environ["ALEMS_TOOL_CPUS"] = ",".join(map(str, args.tool_cpus))
     if args.keep_awake_cpus and not hasattr(os, "sched_setaffinity"):
         p.error("keep-awake CPUs require Linux affinity support")
     try:

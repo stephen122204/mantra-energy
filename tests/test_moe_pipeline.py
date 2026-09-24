@@ -748,3 +748,15 @@ def test_keep_awake_is_owned_recorded_and_stopped(tmp_path):
     # Resuming the same campaign directory must see an identical manifest.
     command(tmp_path / "kept", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
             "--cpu-affinity", str(cpus[0]), "--keep-awake-cpus", str(cpus[1]))
+
+
+def test_tool_cpus_are_recorded_and_must_not_overlap(tmp_path):
+    command(tmp_path / "tools", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+            "--tool-cpus", "3,5")
+    assert json.loads((tmp_path / "tools/moe-manifest.json").read_text())["tool_cpus"] == [3, 5]
+    if hasattr(os, "sched_getaffinity"):
+        cpu = min(os.sched_getaffinity(0))
+        overlap = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                                  "--output", str(tmp_path / "overlap"), "--cpu-affinity", str(cpu), "--tool-cpus", str(cpu)],
+                                 cwd=ROOT, capture_output=True, text=True, timeout=30)
+        assert overlap.returncode == 2 and "must not overlap" in overlap.stderr
