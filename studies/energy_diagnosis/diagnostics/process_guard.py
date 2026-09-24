@@ -146,10 +146,13 @@ class ProcessGuard:
             for row in current["processes"]
             if row["pid"] in descendants and row["pid"] != self.root
         )
+        # A process once observed below the root stays owned after reparenting:
+        # when a supervisor exits before its worker is reaped, the worker moves
+        # under init but is still this job's work (and is cleaned up as owned).
         foreign = [
             row
             for row in current["processes"]
-            if row["pid"] not in descendants | ancestors
+            if row["pid"] not in descendants | ancestors and identity(row) not in self.owned
         ]
         # Pre-auth sshd handlers are exempt from the process check only; their
         # CPU still counts against the background budget below.
