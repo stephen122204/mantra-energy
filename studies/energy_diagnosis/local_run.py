@@ -49,6 +49,7 @@ from studies.energy_diagnosis.runtime.node_measurement import (
     environment_identity,
 )
 from studies.energy_diagnosis.workloads.bounded_executor import (
+    BoundedExecutionError,
     BoundedToolExecutor,
     ToolCall,
 )
@@ -61,6 +62,15 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
 from studies.energy_diagnosis.workloads.pilot_tools import PilotAssetTool
 
 SETTINGS = {"C00": (False, 1), "C01": (False, 4), "C10": (True, 1), "C11": (True, 4)}
+
+
+class _VerificationTool:
+    """Run the checker in an owned process so its deadline is enforceable."""
+    def __init__(self, callback, task, answer):
+        self.callback, self.task, self.answer = callback, task, answer
+
+    def execute(self, workers=1):
+        return self.callback(self.task, self.answer)
 
 
 def digest(value):
@@ -242,6 +252,7 @@ class GoalExecutor:
                         output_tokens_total=self.max_output_tokens, goal_seconds=self.timeout_seconds),
         )
         response, calls_used, output_used, seen = None, 0, 0, set()
+        per_turn_tokens = self.adapter.model_config["max_tokens"]
 
         def stop(kind, detail, execution="incomplete"):
             trace["terminal"] = kind
@@ -251,6 +262,10 @@ class GoalExecutor:
             now = time.monotonic_ns()
             if now >= deadline_ns:
                 return stop("deadline_exceeded", "goal deadline reached between turns", "timed_out")
+            remaining_output = None if self.max_output_tokens is None else self.max_output_tokens - output_used
+            if remaining_output is not None and remaining_output <= 0:
+                return stop("output_budget_exhausted", f"{output_used} output tokens used")
+            call_budget = per_turn_tokens if remaining_output is None else min(per_turn_tokens, remaining_output)
             request = conversation.request()
             sampling = (dict(self.sampling, seed=turn_seed(self.sampling["seed"], pair_key, step))
                         if self.sampling["mode"] == "sampled" else dict(mode="greedy"))
@@ -258,7 +273,11 @@ class GoalExecutor:
             if self.lifecycle:
                 self.lifecycle.before_model(f"{lease.attempt_id}:model:{step}")
             started = time.monotonic_ns()
-            raw = self.adapter.chat(request, sampling, meta)
+            self.adapter.model_config["max_tokens"] = call_budget
+            try:
+                raw = self.adapter.chat(request, sampling, meta)
+            finally:
+                self.adapter.model_config["max_tokens"] = per_turn_tokens
             ended = time.monotonic_ns()
             tokens = raw.get("tokens") or {}
             ok = raw.get("status", "ok") == "ok"
@@ -275,7 +294,8 @@ class GoalExecutor:
                 token_provenance=raw.get("token_provenance", "unknown"),
                 error="" if ok else raw.get("error", "model failed"),
             )
-            model_calls.append(dict(response=response.to_dict(), adapter=raw, request=request, sampling=sampling))
+            model_calls.append(dict(response=response.to_dict(), adapter=raw, request=request, sampling=sampling,
+                                    max_tokens=call_budget))
             spans.append(SpanEvent(
                 response.request_id, lease.attempt_id, "model", started, started, ended,
                 "completed" if ok else "failed",
@@ -289,15 +309,20 @@ class GoalExecutor:
                 kind = "deadline_exceeded" if time.monotonic_ns() >= deadline_ns else "infrastructure_failure"
                 status, error, _, _, _ = stop(kind, response.error, "timed_out" if kind == "deadline_exceeded" else "crashed")
                 return status, error, None, response, owned
-            output_used += tokens.get("completion") or 0
+            count = tokens.get("completion")
+            if type(count) is not int or count < 0 or count > call_budget:
+                return stop("infrastructure_failure", "missing or out-of-budget completion token count", "crashed")
+            output_used += count
             finish = raw.get("finish_reason")
             turn = dict(step=step, finish_reason=finish, prompt_tokens=tokens.get("prompt"),
-                        completion_tokens=tokens.get("completion"), sampling_seed=sampling.get("seed"))
+                        completion_tokens=tokens.get("completion"), sampling_seed=sampling.get("seed"),
+                        output_budget=call_budget)
             trace["turns"].append(turn)
             if finish == "context_exhausted":
                 return stop("context_exhausted", f"{tokens.get('prompt')} prompt tokens plus the output allowance exceed the context")
             if finish == "length":
-                return stop("output_truncated", f"response reached {self.adapter.model_config['max_tokens']} output tokens")
+                kind = "output_budget_exhausted" if remaining_output is not None and output_used >= self.max_output_tokens else "output_truncated"
+                return stop(kind, f"response reached {call_budget} output tokens")
             decision = parse_response(raw.get("content"))
             turn.update(kind=decision.kind, reason=decision.reason)
             if decision.kind == "answer":
@@ -641,10 +666,6 @@ class GoalExecutor:
         except Exception as exc:
             status, error = "crashed", f"{type(exc).__name__}: {exc}"
             # Unexpected failures need conservative ownership handling.
-            from studies.energy_diagnosis.workloads.bounded_executor import (
-                BoundedExecutionError,
-            )
-
             if isinstance(exc, BoundedExecutionError):
                 owned_terminated = False
         if self.lifecycle:
@@ -671,11 +692,20 @@ class GoalExecutor:
             status, error = "timed_out", "goal deadline reached before verification"
         if status == "completed":
             try:
-                result = (
-                    self.workload_runtime.verify(task, answer)
-                    if self.workload_runtime
-                    else verify_pilot(task, answer)
+                runtime = self.workload_runtime
+                callback = (runtime.verification_callable(task) if hasattr(runtime, "verification_callable")
+                            else runtime.verify if runtime is not None else verify_pilot)
+                verification_executor = BoundedToolExecutor(
+                    {"verify": _VerificationTool(callback, task, answer)},
+                    timeout_seconds=max(0.001, (deadline_ns-time.monotonic_ns())/1e9),
+                    deadline_ns=deadline_ns,
                 )
+                checked = verification_executor.execute([ToolCall("verify", "verify", {})])["verify"]
+                if checked.status == "timed_out":
+                    raise TimeoutError("goal deadline reached during verification")
+                if checked.status != "completed":
+                    raise RuntimeError(checked.error or "verifier process failed")
+                result = checked.result
                 verifier = VerifierResult(
                     plan.verifier_version,
                     "pass" if result["passed"] else "fail",
@@ -687,6 +717,10 @@ class GoalExecutor:
                 except (TypeError, ValueError):
                     verification_detail = dict(status="unavailable", reason="verifier result was not JSON serializable")
             except Exception as exc:
+                if isinstance(exc, TimeoutError):
+                    status, error = "timed_out", str(exc)
+                if isinstance(exc, BoundedExecutionError):
+                    owned_terminated = False
                 verification_detail = dict(status="error", reason=str(exc))
                 verifier = VerifierResult(
                     plan.verifier_version, "unavailable", str(exc),

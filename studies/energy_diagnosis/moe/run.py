@@ -3,6 +3,7 @@ from dataclasses import asdict
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -341,7 +342,7 @@ def main(argv=None):
     ):
         p.error("invalid bounded run/step/time budget")
     if args.decoding == "sampled" and not (
-        args.temperature > 0 and 0 < args.top_p <= 1 and args.top_k >= 1 and 0 <= args.min_p < 1
+        math.isfinite(args.temperature) and args.temperature > 0 and 0 < args.top_p <= 1 and args.top_k >= 1 and 0 <= args.min_p < 1
     ):
         p.error("invalid sampling parameters")
     if any(v is not None and v < 1 for v in (args.max_tool_calls, args.max_total_output_tokens)):

@@ -49,10 +49,13 @@ def audit(campaign, tokenizer, *, max_context, max_tokens):
             response = adapter.get('content')
             checked = adapter.get('status') == 'ok' and isinstance(response, str) and bool(response)
             response_tokens = len(tokenizer.encode(response, add_special_tokens=False)) if checked else None
+            call_limit = call.get('max_tokens', max_tokens) if chat else max_tokens
+            if type(call_limit) is not int or not 1 <= call_limit <= max_tokens:
+                raise ValueError(f'invalid recorded per-call token budget: {path}:{step}')
             reasons = []
             finish = adapter.get('finish_reason') if chat else None
             budget_outcome = None
-            over_context = prompt_tokens + max_tokens > max_context
+            over_context = prompt_tokens + call_limit > max_context
             if chat and finish == 'context_exhausted':
                 # The harness recorded a context_exhausted outcome and generated
                 # nothing; only an inconsistent replay is an error.
@@ -63,21 +66,21 @@ def audit(campaign, tokenizer, *, max_context, max_tokens):
                 budget_outcome = 'output_truncated'
                 if over_context:
                     reasons.append('prompt_plus_output_exceeds_context')
-                if not checked or response_tokens < max_tokens:
+                if not checked or response_tokens < call_limit:
                     reasons.append('truncation_recorded_below_output_budget')
             else:
                 if over_context:
                     reasons.append('prompt_plus_output_exceeds_context')
                 if not checked:
                     reasons.append('response_unavailable_or_failed')
-                elif response_tokens + 1 > max_tokens:
+                elif response_tokens + 1 > call_limit:
                     reasons.append('saved_response_plus_end_token_exceeds_output')
             row = dict(artifact=path.relative_to(root).as_posix(),
                        artifact_sha256=hashlib.sha256(payload).hexdigest(), step=step,
                        prompt_tokens=prompt_tokens, response_tokens=response_tokens,
-                       output_budget=max_tokens, context_budget=max_context,
-                       context_remaining=max_context-prompt_tokens-max_tokens,
-                       response_margin=None if response_tokens is None else max_tokens-response_tokens-1,
+                       output_budget=call_limit, context_budget=max_context,
+                       context_remaining=max_context-prompt_tokens-call_limit,
+                       response_margin=None if response_tokens is None else call_limit-response_tokens-1,
                        budget_outcome=budget_outcome, reasons=reasons)
             records.append(row)
             if reasons:
