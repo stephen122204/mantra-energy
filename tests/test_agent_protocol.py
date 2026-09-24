@@ -268,3 +268,29 @@ def test_expired_backend_deadline_does_not_dispatch(tmp_path, monkeypatch):
     with pytest.raises(TimeoutError, match='deadline'):
         backend._rpc('snapshot')
     assert terminated == [True] and stream.getvalue() == ''
+
+
+def test_completed_turns_survive_interruption_before_final_result(tmp_path, monkeypatch):
+    from studies.energy_diagnosis.moe.backend import BackendAdapter
+    original = BackendAdapter.chat
+    calls = []
+    def interrupt_second(self, *args):
+        calls.append(1)
+        if len(calls) == 2:
+            raise campaign.CampaignInterrupted("injected between-turn interruption")
+        return original(self, *args)
+    monkeypatch.setattr(BackendAdapter, 'chat', interrupt_second)
+    with pytest.raises(SystemExit) as exc:
+        _pack_run(tmp_path, 'success')
+    assert exc.value.code == 130
+    root = tmp_path/'run'
+    model = next((root/'goals').glob('*/turns/000-model.json'))
+    partial = json.loads(model.read_text())
+    assert partial['partial'] is True and partial['payload']['adapter']['status'] == 'ok'
+    tool = json.loads(model.with_name('000-tools.json').read_text())
+    assert tool['payload']['outcomes'][0]['status'] == 'completed'
+    assert not model.parent.parent.joinpath('record.json').exists()
+    rows = [json.loads(s) for s in (root/'exports/attempts.jsonl').read_text().splitlines()]
+    assert len(rows) == 1 and rows[0]['attempt']['status'] == 'running'
+    roles = {a['role'] for a in rows[0]['attempt']['artifacts']}
+    assert {'agent-turn-model', 'agent-turn-tools'} <= roles

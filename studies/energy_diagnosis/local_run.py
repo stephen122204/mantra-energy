@@ -233,7 +233,7 @@ class GoalExecutor:
             return "owned worker terminated before device work was confirmed idle"
         return None
 
-    def _chat(self, task, lease, plan, context, model_calls, tool_results, spans, events, trace):
+    def _chat(self, task, lease, plan, context, model_calls, tool_results, spans, events, trace, artifacts, checkpoint):
         """chat-tools-v1 turn loop -> (status, error, answer, response, owned_terminated).
 
         Tool errors and unusable responses are returned to the model as
@@ -253,6 +253,16 @@ class GoalExecutor:
         )
         response, calls_used, output_used, seen = None, 0, 0, set()
         per_turn_tokens = self.adapter.model_config["max_tokens"]
+
+        def save_turn(step, phase, payload):
+            # Immutable partial evidence survives interruption before finalization.
+            ref = write_artifact(self.artifact_root,
+                Path("goals") / lease.execution_id / "turns" / f"{step:03d}-{phase}.json",
+                dict(protocol=self.protocol, partial=True, step=step, phase=phase, payload=payload),
+                f"agent-turn-{phase}")
+            artifacts.append(ref)
+            if checkpoint:
+                checkpoint([ref], metadata=dict(stage=phase, step=step, partial=True))
 
         def stop(kind, detail, execution="incomplete"):
             trace["terminal"] = kind
@@ -296,6 +306,7 @@ class GoalExecutor:
             )
             model_calls.append(dict(response=response.to_dict(), adapter=raw, request=request, sampling=sampling,
                                     max_tokens=call_budget))
+            save_turn(step, "model", model_calls[-1])
             spans.append(SpanEvent(
                 response.request_id, lease.attempt_id, "model", started, started, ended,
                 "completed" if ok else "failed",
@@ -360,6 +371,8 @@ class GoalExecutor:
                         conversation.tool_result(cid, name, "ok", outcome.result)
                     else:
                         conversation.tool_result(cid, name, "error", outcome.error or outcome.status)
+                save_turn(step, "tools", dict(outcomes=[asdict(o) for o in outcomes.values()],
+                                               rejected=rejected, next_request=conversation.request()))
                 if timed_out:
                     return stop("deadline_exceeded", "tool execution reached the goal deadline", "timed_out")
             if self.max_output_tokens is not None and output_used >= self.max_output_tokens:
@@ -460,7 +473,7 @@ class GoalExecutor:
                 context.update(self.workload_runtime.context(task))
             if self.protocol == CHAT_PROTOCOL:
                 status, error, answer, response, owned_terminated = self._chat(
-                    task, lease, plan, context, model_calls, tool_results, spans, events, trace
+                    task, lease, plan, context, model_calls, tool_results, spans, events, trace, artifacts, request.checkpoint
                 )
             for step in range(self.max_steps if self.protocol != CHAT_PROTOCOL else 0):
                 if (
