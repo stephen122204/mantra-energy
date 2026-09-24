@@ -47,3 +47,19 @@ transfers, invalid byte counts and unknown residency are rejected.
 the same prepared copy survived, that a demand copy was avoided, or that latency
 or energy decreased. Intervening eviction/reload requires a placement-event join.
 Transfer timing relative to tool bodies is `audit_transfers.py`.
+
+## Guarded development acceptance
+
+Run `python -m studies.energy_diagnosis.moe.audit_pilot STAGE --prefix-mode
+exact_prefix --required-domain DOMAIN --output REPORT.json` after the bounded
+stage finishes. Repeat `--required-domain` for the session's required counters.
+Optionally pass `--reference MODEL_CALLS.json` for a conditional comparison.
+The report checks a single real, correct completed goal, guard records, cleanup,
+independent counter/transfer audits, observed token work and exercised prefix
+reuse. Missing or inconsistent records return exit 2. Write the report outside
+the immutable campaign directory.
+
+This is a smoke acceptance gate, not an energy-benefit gate. Inspect the
+included phase-specific dispatch counts and transfer brackets separately;
+successful execution does not establish useful overlap. A failed task in a
+later evaluation remains an outcome, not permission to discard its cost.
