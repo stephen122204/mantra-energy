@@ -67,7 +67,7 @@ class Policy:
             # run of the same task (trace from build_future_trace).
             nxt = ((data or {}).get("tasks", {}).get(task_id) or {}).get(str(pause_index))
             if nxt is None:
-                return [], "future_trace_missing"
+                raise ValueError("future trace missing for task/pause; diagnostic is unavailable")
             tokens = {(layer, expert): n for layer, expert, n in nxt}
             candidates = [e for e in snapshot if e.key in tokens and not e.device.startswith("cuda")]
             candidates.sort(key=lambda e: (-tokens[e.key], e.layer, e.expert))
@@ -134,6 +134,7 @@ class Lifecycle:
         self.data = data
         self.task_id = None
         self._preparing_ahead = False
+        self._ahead_prepared = False
         self.events, self.history = [], Counter()
         self.goal = self.pause = None
         self.generation = 0
@@ -178,6 +179,7 @@ class Lifecycle:
         self.generation += 1
         self.events, self.history, self.pending = [], Counter(), {}
         self.pause_index = 0
+        self._ahead_prepared = False
         self._pause_plan = None
         self.work_settled = False
         self.emit(
@@ -300,8 +302,9 @@ class Lifecycle:
         """
         if self.policy.name not in AHEAD_POLICIES:
             return
-        if self.goal is None or self.pause is not None or self._pause_plan is not None or self.request_id or self.work_settled:
+        if self.goal is None or self.pause is not None or self._pause_plan is not None or self.request_id or self.work_settled or self._ahead_prepared:
             raise RuntimeError("ahead preparation only between goal start and the first model call")
+        self._ahead_prepared = True
         self.emit("ahead_preparation_start")
         snapshot = self.backend.snapshot_experts()
         selected, reason = self.policy.select_ahead(snapshot, self.data)

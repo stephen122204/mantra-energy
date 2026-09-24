@@ -12,7 +12,7 @@ size, prompt bytes and byte budget unless stated.
 | `random` | each tool pause | the `fixed` candidate pool and budget in seeded random order (`--random-seed`) |
 | `static` | once, after model initialization and before the first model call | a development profile's ranked experts, up to the byte budget; nothing at pauses |
 | `future` | each tool pause | **diagnostic, not deployable**: experts the next model call used in a reference run of the same task |
-| `builtin` | during generation (backend) | MoE-Infinity's own activation-aware prefetcher (`prefetch=True` for this arm's backend only); nothing at pauses |
+| `builtin` | fixture only; native execution currently rejected | Activation has not been qualified in the pinned backend; a configuration flag alone is insufficient |
 
 `static` and `future` need data built from recorded development runs and
 passed with `--policy-data static=PATH` / `--policy-data future=PATH`. The file
@@ -22,8 +22,11 @@ hash is part of the setting identity:
     python -m studies.energy_diagnosis.moe.expert_profile future  --campaign DEV --output trace.json
 
 Build profiles from development goals only. The future trace assumes the
-evaluated goal follows the reference goal's path; paired requests are checked
-to be identical, but a diverging path makes the trace stale.
+evaluated goal follows the reference goal's path. Compare recorded requests
+and outputs separately; the launcher does not certify path equivalence. The
+builder maps actual tool pauses to the following model call, including model
+turns that recover from malformed responses without executing a tool. Missing
+task/pause entries fail instead of silently acting as demand-only.
 
 ## Usefulness
 
@@ -38,7 +41,9 @@ classifies every completed preparation exactly once:
 It reports bytes per class, the phase (prefill or decode) of first use, bytes
 by preparation source (`ahead` or pause), incomplete transfers by native
 outcome, and dispatches to non-resident experts per phase. The audit fails if
-any completed transfer has no class or two. With the backend prefetcher off,
-`used_resident` means the prepared copy survived until used; under `builtin`
-the inference does not hold, and that arm prepares nothing itself.
+any completed transfer has no class or two. Empty/incomplete goals, duplicate
+transfers, invalid byte counts and unknown residency are rejected.
+`used_resident` records residency at first dispatch; it does **not** prove that
+the same prepared copy survived, that a demand copy was avoided, or that latency
+or energy decreased. Intervening eviction/reload requires a placement-event join.
 Transfer timing relative to tool bodies is `audit_transfers.py`.

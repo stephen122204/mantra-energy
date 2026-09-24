@@ -7,10 +7,9 @@ Every completed preparation ends in exactly one class:
   unused_at_goal_end never requested before the goal settled
 Preparations that did not complete are counted by native outcome.
 
-With the backend's own prefetcher disabled, the only way an expert becomes
-resident after preparation and before its first dispatch is this preparation,
-so used_resident means the prepared copy survived until used. Under the builtin
-arm this inference does not hold; that arm prepares nothing at pauses.
+These are observed residency classes, not copy-provenance or saved-work claims.
+An expert may be evicted and placed again before dispatch. Without joining
+all intervening placement events, residency does not prove copy survival.
 
 Timing (whether a transfer finished inside a tool body) is audit_transfers.py.
 Demand misses count dispatches to non-resident experts: an upper-level proxy
@@ -29,12 +28,22 @@ def _identity(row):
 
 
 def goal(events):
+    if not events or not any(e.get("event") == "goal_end" for e in events):
+        raise ValueError("complete goal events required for terminal usefulness accounting")
     completed, other = {}, Counter()
     other_bytes = Counter()
     for e in events:
         if e["event"] == "expert_transfer":
             row = e["transfer"]
+            if type(row["bytes"]) is not int or row["bytes"] < 0:
+                raise ValueError("invalid transfer bytes")
+            if type(row["transferred_bytes"]) is not int or not 0 <= row["transferred_bytes"] <= row["bytes"]:
+                raise ValueError("invalid transferred bytes")
             if row["outcome"] == "completed":
+                if _identity(row) in completed:
+                    raise ValueError("duplicate completed transfer")
+                if row["transferred_bytes"] != row["bytes"]:
+                    raise ValueError("completed transfer byte count does not reconcile")
                 completed[_identity(row)] = row
             else:
                 other[row["outcome"]] += 1
@@ -43,6 +52,8 @@ def goal(events):
     for e in events:
         kind = None
         if e["event"] == "prepared_expert_requested":
+            if type(e.get("resident_on_first_dispatch")) is not bool:
+                raise ValueError("missing or invalid first-dispatch residency")
             kind = "used_resident" if e["resident_on_first_dispatch"] else "evicted_before_use"
             if kind == "used_resident":
                 phase[e.get("first_use_phase") or "unknown"] += 1
@@ -71,6 +82,8 @@ def goal(events):
             o = e["observation"]
             dispatches = o.get("dispatches", 1)
             resident = o.get("resident_dispatches", dispatches if o.get("resident_at_dispatch") else 0)
+            if type(dispatches) is not int or type(resident) is not int or not 0 <= resident <= dispatches:
+                raise ValueError("invalid dispatch/residency counts")
             phase_name = o.get("phase") or "unknown"
             misses[f"{phase_name}_dispatches"] += dispatches
             misses[f"{phase_name}_nonresident_dispatches"] += dispatches - resident
@@ -83,6 +96,7 @@ def goal(events):
         not_completed=dict(other),
         not_completed_bytes=dict(other_bytes),
         demand=dict(misses),
+        attribution="first-dispatch residency only; copy survival and avoided demand bytes are not established",
     )
 
 

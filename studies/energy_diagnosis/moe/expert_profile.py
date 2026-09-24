@@ -17,6 +17,10 @@ def _goals(campaign, policy):
         events = json.loads(path.read_text())
         if events and events[0].get("policy", {}).get("name") == policy:
             record = json.loads(path.with_name("record.json").read_text())
+            if (record.get("execution_status") != "completed"
+                    or record.get("verifier", {}).get("outcome") != "pass"
+                    or not any(e.get("event") == "goal_end" for e in events)):
+                raise ValueError("profile sources must be completed, verified goals")
             yield record, events
 
 
@@ -41,23 +45,31 @@ def build_future_trace(campaign, policy="demand"):
         task = record["task_id"]
         if task in tasks:
             continue  # first reference goal per task
-        calls, current = [], None
+        # Model turns and tool pauses are different clocks: a malformed reply
+        # can consume a model turn without launching a tool. Associate each
+        # actual pause with the next completed model call, not calls[pause].
+        following, waiting, active, current = {}, [], [], None
+        pause_index = 0
         for e in events:
-            if e["event"] == "model_start":
+            if e["event"] == "tool_pause_start":
+                pause_index += 1
+                waiting.append(pause_index)
+            elif e["event"] == "model_start":
+                active, waiting = waiting, []
                 current = Counter()
             elif e["event"] == "expert_demand" and current is not None:
                 o = e["observation"]
                 current[(o["layer"], o["expert"])] += o.get("tokens", 1)
             elif e["event"] == "model_end" and current is not None:
-                calls.append(current)
+                for pause in active:
+                    following[str(pause)] = [[layer, expert, n] for (layer, expert), n in sorted(current.items())]
+                active = []
                 current = None
-        # Pause k is followed by model call k (0-based call 0 precedes pause 1).
-        tasks[task] = {str(k): [[layer, expert, n] for (layer, expert), n in sorted(calls[k].items())]
-                       for k in range(1, len(calls))}
+        tasks[task] = following
         sources[task] = record["goal_execution_id"]
     if not tasks:
         raise ValueError("no goals for the requested policy")
-    return dict(kind="future-trace-v1", diagnostic=True, source_policy=policy, source_goals=sources, tasks=tasks)
+    return dict(kind="future-trace-v2", diagnostic=True, source_policy=policy, source_goals=sources, tasks=tasks)
 
 
 def dump(data, path):

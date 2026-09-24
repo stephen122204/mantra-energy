@@ -29,6 +29,14 @@ from .workloads import create_tasks, WorkloadRuntime, VERSION
 EXECUTION_PROTOCOL = "planned-body-initialized-window-v1"
 
 
+def policy_backend_config(config, policy, *, simulated=False):
+    # The pinned backend has not demonstrated native builtin-prefetch activity.
+    # Do not silently run a demand-only implementation under a builtin label.
+    if policy.name == "builtin" and not simulated:
+        raise ValueError("builtin prefetch is not qualified on the pinned native backend")
+    return dict(config, builtin_prefetch=policy.name == "builtin")
+
+
 class CampaignInterrupted(BaseException):
     """SIGTERM/SIGINT: unwind through every cleanup block without being treated
     as an ordinary goal failure. The claimed attempt stays `running` for the
@@ -86,6 +94,9 @@ def run(args):
         if name not in {"static", "future"} or not path or name in policy_data:
             raise ValueError("--policy-data takes static=PATH or future=PATH once each")
         policy_data[name] = load_policy_data(path)
+        expected_kind = "static-profile-v1" if name == "static" else "future-trace-v2"
+        if policy_data[name][0].get("kind") != expected_kind:
+            raise ValueError(f"{name} requires {expected_kind}; rebuild policy data from recorded goals")
     policies = [
         Policy(
             name,
@@ -99,6 +110,7 @@ def run(args):
     ]
     if len({p.name for p in policies}) != len(policies):
         raise ValueError("duplicate policy")
+    backend_configs = {p.name: policy_backend_config(config, p, simulated=simulated) for p in policies}
     comparison_order = getattr(args, "comparison_order", "random")
     if comparison_order not in {"random", "balanced-pairs"}:
         raise ValueError("unknown comparison order")
@@ -207,7 +219,7 @@ def run(args):
                 policy = by_setting[request.scheduled_run.planned_run.setting_id]
                 backend = ProcessBackend(
                     # Only the builtin arm enables the backend's own prefetcher.
-                    dict(config, builtin_prefetch=True) if policy.name == "builtin" else config,
+                    backend_configs[policy.name],
                     python=args.backend_python or sys.executable,
                     mode=args.mode,
                     log_path=root
