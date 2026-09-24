@@ -79,6 +79,41 @@ def apply_cpu_affinity(cpus):
     return dict(pinned=bool(cpus), cpus=sorted(os.sched_getaffinity(0)))
 
 
+KEEP_AWAKE_LOOP = "import os,sys\nos.sched_setaffinity(0, {int(sys.argv[1])})\nwhile True:\n    pass\n"
+
+
+class KeepAwake:
+    """Declared keep-awake condition: one owned busy process per listed CPU.
+
+    Without root, this is the explicit way to hold cores out of deep idle; it runs for the whole
+    campaign process (every goal window sees the same condition) and its power is inside the
+    measured CPU-package domain, so its cost is never free. Recorded in the manifest."""
+
+    def __init__(self, cpus, python=sys.executable):
+        self.cpus, self.python, self.processes = list(cpus or []), python, []
+
+    def __enter__(self):
+        for cpu in self.cpus:
+            self.processes.append(subprocess.Popen([self.python, "-c", KEEP_AWAKE_LOOP, str(cpu)],
+                                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL))
+        return self
+
+    def record(self):
+        # No PIDs: the manifest must be identical when a campaign is resumed.
+        return dict(cpus=self.cpus, method="owned python busy loop per CPU") if self.cpus else None
+
+    def __exit__(self, *exc):
+        for process in self.processes:
+            process.terminate()
+        for process in self.processes:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        return False
+
+
 def cpu_power_state(cpus, root=Path("/sys/devices/system/cpu")):
     """Read-only record of the frequency governor and idle states of the run's CPUs.
 
@@ -243,7 +278,9 @@ def run(args):
         task_catalog=[catalog[t.task_id] for t in tasks],
         measurement_scope="CPU-package and GPU-board only; includes backend startup, tools, transfers, cleanup and verification",
         cpu_affinity=getattr(args, "applied_cpu_affinity", None),
-        cpu_power=cpu_power_state((getattr(args, "applied_cpu_affinity", None) or {}).get("cpus")),
+        keep_awake=getattr(args, "keep_awake_record", None),
+        cpu_power=cpu_power_state(sorted(set((getattr(args, "applied_cpu_affinity", None) or {}).get("cpus") or [])
+                                         | set((getattr(args, "keep_awake_record", None) or {}).get("cpus") or [])) or None),
     )
     if config.get("diagnostic"):
         # Profiling/observation switches perturb execution: never campaign evidence.
@@ -392,6 +429,9 @@ def main(argv=None):
                    help="after: diagnostic control admitting the pause batch only once the tool returns")
     p.add_argument("--cpu-affinity", type=parse_cpu_list, metavar="CPULIST",
                    help="Pin the campaign process tree (worker, sampler, tools), e.g. 64-71; recorded in the manifest")
+    p.add_argument("--keep-awake-cpus", type=parse_cpu_list, metavar="CPULIST",
+                   help="Declared keep-awake condition: an owned busy process pinned to each listed CPU for the whole run "
+                        "(its power is inside the CPU-package domain); must not overlap --cpu-affinity")
     p.add_argument("--task", default="all")
     p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
@@ -464,8 +504,14 @@ def main(argv=None):
     for name in ("SIGTERM", "SIGINT"):
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), _interrupt)
+    if args.keep_awake_cpus and set(args.keep_awake_cpus) & set((args.applied_cpu_affinity or {}).get("cpus") or []):
+        p.error("keep-awake CPUs must not overlap the campaign CPU affinity")
+    if args.keep_awake_cpus and not hasattr(os, "sched_setaffinity"):
+        p.error("keep-awake CPUs require Linux affinity support")
     try:
-        result = run(args)
+        with KeepAwake(args.keep_awake_cpus) as keeper:
+            args.keep_awake_record = keeper.record()
+            result = run(args)
     except CampaignInterrupted as exc:
         print(f"{exc}; owned work terminated, ledger exported, claimed attempt left for recovery", file=sys.stderr)
         raise SystemExit(130)
