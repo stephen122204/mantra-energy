@@ -138,7 +138,18 @@ class FixtureDevice:
             raise RuntimeError("injected model failure")
         if self.case == "model_timeout":
             time.sleep(60)
-        context = json.loads(arg["prompt"])
+        chat = "messages" in arg
+        if chat:
+            from studies.energy_diagnosis.agent_protocol import legacy_context
+            context = legacy_context(arg, arg.get("meta") or {})
+            if self.case == "truncated_output":
+                return dict(text='<tool_call>\n{"name": "sql", "argum', finish_reason="length",
+                            tokens=dict(prompt=len(json.dumps(arg["messages"])), completion=arg["max_tokens"]), hook_ns=0)
+            if self.case == "no_action":
+                return dict(text="I have checked the data.", finish_reason="stop",
+                            tokens=dict(prompt=len(json.dumps(arg["messages"])), completion=6), hook_ns=0)
+        else:
+            context = json.loads(arg["prompt"])
         results = context.get("tool_results", [])
         expert = 1 if self.case == "wrong_prediction" and results else 0
         self.demand_rows.append(
@@ -154,7 +165,7 @@ class FixtureDevice:
             self.experts[expert] = replace(self.experts[expert], device="cpu")
         if context.get("family") in {"business-query", "grouped-regression", "etl-sql-repair"}:
             from .task_pack_fixture import ScriptedModel
-            decision = json.loads(ScriptedModel(self.case).call(arg["prompt"], 0)["content"])
+            decision = json.loads(ScriptedModel(self.case).call(json.dumps(context), 0)["content"])
         elif context.get("family") == "sql-query":
             if not results:
                 decision = {"tool_calls": [dict(id="schema", tool="sql", args=dict(action="schema"))]}
@@ -224,6 +235,10 @@ class FixtureDevice:
             decision = {"answer": value}
         if self.case == "wrong_answer" and "answer" in decision:
             decision = {"answer": {"wrong": True}}
+        if chat:
+            from studies.energy_diagnosis.agent_protocol import to_native_text
+            return dict(text=to_native_text(decision), finish_reason="stop",
+                        tokens=dict(prompt=len(json.dumps(arg["messages"])), completion=10), hook_ns=0)
         return dict(
             text=json.dumps(decision),
             tokens=dict(prompt=len(arg["prompt"]), completion=10),

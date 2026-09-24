@@ -82,7 +82,7 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
             assert len([e for e in events if e["event"] == "preparation_skipped"]) == len(pauses)
         assert events[-1]["event"] == "goal_end"
         calls = json.loads(path.with_name("model-calls.json").read_text())
-        assert "expected" not in json.loads(calls[0]["prompt"])
+        assert "expected" not in json.dumps(calls[0]["request"])
         # Fixture sensor counter deltas are independent of transfer success.
         measurement = json.loads(path.with_name("measurement.json").read_text())
         record = json.loads(path.with_name("record.json").read_text())

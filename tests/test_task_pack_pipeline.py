@@ -3,6 +3,7 @@
 Production CLI and per-task verifier hashing are checked separately in test_task_pack_cli.py.
 """
 import json
+from studies.energy_diagnosis.agent_protocol import ScriptedChatAdapter
 import pytest
 from studies.energy_diagnosis.moe import run as campaign
 from studies.energy_diagnosis.moe.task_pack import prepare
@@ -52,7 +53,7 @@ def test_all_pack_tasks_through_existing_executor_and_resume(tmp_path,monkeypatc
         return holder['pack'].tasks
     monkeypatch.setattr(campaign,'create_tasks',tasks)
     monkeypatch.setattr(campaign,'WorkloadRuntime',lambda root,fixture_case=None:holder['pack'].runtime(root))
-    monkeypatch.setattr(campaign,'BackendAdapter',lambda backend,max_tokens:ScriptedModel(case))
+    monkeypatch.setattr(campaign,'BackendAdapter',lambda backend,max_tokens:ScriptedChatAdapter(ScriptedModel(case)))
     output=tmp_path/'run'
     args=['--mode','fixture','--output',str(output),'--policies','demand','--max-runs','5','--deadline','30','--fixture-case',case]
     campaign.main(args)

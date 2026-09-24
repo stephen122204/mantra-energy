@@ -6,6 +6,7 @@ Production CLI/provenance checks are in test_task_pack_cli.py; native evidence i
 import json
 import pytest
 from studies.energy_diagnosis.moe import run as campaign
+from studies.energy_diagnosis.agent_protocol import ScriptedChatAdapter
 from studies.energy_diagnosis.moe.numerical_workload import create_task, RegressionRuntime
 
 
@@ -31,7 +32,7 @@ class ModelFixture:
 def test_full_local_numerical_run_and_resume(tmp_path, monkeypatch, case):
     monkeypatch.setattr(campaign,'create_tasks',lambda root:(create_task(root/'numerical',rows=8192),))
     monkeypatch.setattr(campaign,'WorkloadRuntime',lambda root, fixture_case=None:RegressionRuntime(root))
-    monkeypatch.setattr(campaign,'BackendAdapter',lambda backend, max_tokens:ModelFixture(case=='wrong_answer'))
+    monkeypatch.setattr(campaign,'BackendAdapter',lambda backend, max_tokens:ScriptedChatAdapter(ModelFixture(case=='wrong_answer')))
     output=tmp_path/'run'
     args=['--mode','fixture','--output',str(output),'--policies','demand',
           '--max-runs','1','--deadline','30','--fixture-case',case]
