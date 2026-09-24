@@ -180,6 +180,9 @@ def run(args):
         task_catalog=[catalog[t.task_id] for t in tasks],
         measurement_scope="CPU-package and GPU-board only; includes backend startup, tools, transfers, cleanup and verification",
     )
+    if config.get("diagnostic"):
+        # Profiling/observation switches perturb execution: never campaign evidence.
+        manifest["diagnostic"] = config["diagnostic"]
     if pack is not None:
         manifest["task_pack"] = json.loads((pack.root / "task-pack.json").read_text())
     path = root / "moe-manifest.json"

@@ -65,6 +65,8 @@ def audit(stage, *, prefix_mode, reference=None, required_domains=(), require_ti
         checks["transfer_audit"] = t["observed_records_consistent"] and t["every_attempt_checked"]
         goals = sorted((root / "goals").glob("*/record.json"))
         checks["exactly_one_goal"] = len(goals) == 1 and w["attempts"] == 1
+        manifest = root / "moe-manifest.json"
+        checks["not_diagnostic"] = not (manifest.exists() and json.loads(manifest.read_text()).get("diagnostic"))
         if len(goals) != 1:
             raise ValueError("one goal is required for a development stage")
         g = goals[0].parent
