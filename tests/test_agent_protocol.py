@@ -233,3 +233,38 @@ def test_paired_arms_receive_identical_model_requests(tmp_path):
     assert len(by_pair) == 8 and all(set(arms) == {"demand", "fixed"} for arms in by_pair.values())
     for arms in by_pair.values():
         assert arms["demand"] == arms["fixed"]
+
+
+@pytest.mark.parametrize("method", ["init", "generate", "snapshot", "demands", "prepare"])
+def test_backend_rpc_cannot_receive_fresh_goal_allowance(tmp_path, monkeypatch, method):
+    import io
+    from types import SimpleNamespace
+    from studies.energy_diagnosis.moe.backend import ProcessBackend
+    backend = ProcessBackend({}, python="unused", mode="fixture", log_path=tmp_path/'backend.log',
+                             timeout=60, deadline_ns=1_500_000_000)
+    backend.process = SimpleNamespace(stdin=io.StringIO())
+    observed = []
+    class Responses:
+        def get(self, timeout):
+            observed.append(timeout)
+            return dict(id=backend.seq, ok=True, result={})
+    backend.messages = Responses()
+    monkeypatch.setattr('studies.energy_diagnosis.moe.backend.time.monotonic_ns', lambda: 1_000_000_000)
+    assert backend._rpc(method, timeout=60) == {}
+    assert observed == [0.5]
+    with backend.cleanup_scope(2):
+        assert backend.rpc_deadline_ns == 5_000_000_000
+    assert backend.rpc_deadline_ns == 1_500_000_000
+
+
+def test_expired_backend_deadline_does_not_dispatch(tmp_path, monkeypatch):
+    import io
+    from types import SimpleNamespace
+    from studies.energy_diagnosis.moe.backend import ProcessBackend
+    backend = ProcessBackend({}, python="unused", mode="fixture", log_path=tmp_path/'backend.log',deadline_ns=1)
+    stream = io.StringIO(); backend.process = SimpleNamespace(stdin=stream)
+    terminated = []
+    monkeypatch.setattr(backend, 'end_goal', lambda: terminated.append(True))
+    with pytest.raises(TimeoutError, match='deadline'):
+        backend._rpc('snapshot')
+    assert terminated == [True] and stream.getvalue() == ''
