@@ -145,6 +145,8 @@ def test_static_prepares_profile_once_before_first_call_and_never_at_pauses():
     control.prepare_ahead()
     admitted = next(e for e in control.events if e["event"] == "ahead_preparation_admitted")
     assert [s["expert"] for s in admitted["selected"]] == [5, 3]
+    with pytest.raises(RuntimeError, match="ahead preparation"):
+        control.prepare_ahead()
     model(control, backend, 0, [demand(5, True, "prefill")])
     pause(control)
     assert not any(e["event"] == "preparation_admitted" for e in control.events)
@@ -162,7 +164,8 @@ def test_future_diagnostic_uses_next_call_trace_only():
     policy = Policy("future", 1 * MB, data_sha256="x")
     chosen, reason = policy.select(snapshot, Counter(), pause_index=1, task_id="t", data=trace)
     assert [e.key for e in chosen] == [(0, 2)] and reason == "future_trace_diagnostic"
-    assert policy.select(snapshot, Counter(), pause_index=2, task_id="t", data=trace)[0] == []
+    with pytest.raises(ValueError, match="future trace missing"):
+        policy.select(snapshot, Counter(), pause_index=2, task_id="t", data=trace)
     with pytest.raises(ValueError):
         Policy("future", MB)  # no data
     with pytest.raises(ValueError):
@@ -204,3 +207,59 @@ def test_all_arms_run_through_campaign_and_profiles_build(tmp_path):
     manifest = json.loads((out / "moe-manifest.json").read_text())
     shas = {p["name"]: p["data_sha256"] for p in manifest["policies"].values()}
     assert shas["static"] == profile_sha and shas["future"] == trace_sha and shas["fixed"] is None
+
+
+def test_future_trace_maps_real_pauses_after_recovery_turns(tmp_path):
+    root = tmp_path / "goals" / "g"
+    root.mkdir(parents=True)
+    # Model call 1 retries a malformed call 0 without executing a tool. Pause 1
+    # precedes model call 2, which needs expert 2, not expert 1.
+    events = [dict(event="goal_start", policy=dict(name="demand"))]
+    for i in range(3):
+        if i == 2:
+            events.append(dict(event="tool_pause_start"))
+        events += [dict(event="model_start"), dict(event="expert_demand", observation=demand(i, False)), dict(event="model_end")]
+    events.append(dict(event="goal_end"))
+    (root / "expert-events.json").write_text(json.dumps(events))
+    (root / "record.json").write_text(json.dumps(dict(task_id="t", goal_execution_id="g", execution_status="completed", verifier=dict(outcome="pass"))))
+    trace = build_future_trace(tmp_path)
+    assert trace["kind"] == "future-trace-v2"
+    assert trace["tasks"] == {"t": {"1": [[0, 2, 3]]}}
+
+
+def test_native_builtin_rejected_and_other_arms_force_it_off():
+    with pytest.raises(ValueError, match="not qualified"):
+        campaign.policy_backend_config({}, Policy("builtin"))
+    for name in ("demand", "fixed", "random"):
+        assert campaign.policy_backend_config(dict(builtin_prefetch=True), Policy(name))["builtin_prefetch"] is False
+    assert campaign.policy_backend_config({}, Policy("builtin"), simulated=True)["builtin_prefetch"] is True
+
+
+@pytest.mark.parametrize("mutation, message", [
+    ("duplicate", "duplicate completed"), ("bytes", "byte count"),
+    ("residency", "first-dispatch residency"), ("dispatches", "dispatch/residency"),
+    ("incomplete", "complete goal"),
+])
+def test_usefulness_rejects_corrupt_or_incomplete_evidence(mutation, message):
+    from copy import deepcopy
+    backend = Scripted([expert(0)])
+    control = Lifecycle(backend, Policy("fixed", MB))
+    control.begin_goal("g")
+    model(control, backend, 0, [demand(0, False)])
+    pause(control)
+    model(control, backend, 1, [demand(0, True)])
+    control.end_goal()
+    events = deepcopy(control.events)
+    transfer = next(e for e in events if e["event"] == "expert_transfer")
+    if mutation == "duplicate":
+        events.append(deepcopy(transfer))
+    elif mutation == "bytes":
+        transfer["transfer"]["transferred_bytes"] -= 1
+    elif mutation == "residency":
+        next(e for e in events if e["event"] == "prepared_expert_requested")["resident_on_first_dispatch"] = None
+    elif mutation == "dispatches":
+        next(e for e in events if e["event"] == "expert_demand")["observation"]["resident_dispatches"] = 100
+    elif mutation == "incomplete":
+        events = [e for e in events if e["event"] != "goal_end"]
+    with pytest.raises(ValueError, match=message):
+        usefulness(events)
