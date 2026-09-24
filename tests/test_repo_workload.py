@@ -115,3 +115,15 @@ def test_sandbox_blocks_network_in_test_processes(tmp_path):
         "        socket.create_connection(('1.1.1.1', 80), timeout=2)\n")
     result = rw.run_pytest(PYTHON, tmp_path / "root", ["test_net.py"], str(tmp_path / "sandbox"))
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_tool_output_is_normalized_for_paired_arms(tmp_path):
+    import subprocess
+    root = tmp_path / "exec-1234"
+    root.mkdir()
+    raw = subprocess.CompletedProcess([], 1, f"FAILED {root}/networkx/x.py::test_a - assert 0\n1 failed, 3 passed in 0.14s\n", "")
+    got = rw._summarize(raw, root)
+    assert got["summary"] == "1 failed, 3 passed" and got["failed"] == ["./networkx/x.py::test_a"]
+    assert str(root) not in got["output"] and "0.14s" not in got["output"]
+    slow = subprocess.CompletedProcess([], 0, "5443 passed, 61 skipped in 61.20s (0:01:01)\n", "")
+    assert rw._summarize(slow, root)["summary"] == "5443 passed, 61 skipped"
