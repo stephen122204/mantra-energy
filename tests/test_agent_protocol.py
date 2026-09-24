@@ -209,3 +209,27 @@ def test_cli_rejects_nonfinite_sampling_temperature(tmp_path, temperature):
     with pytest.raises(SystemExit) as exc:
         main(["--mode", "fixture", "--output", str(tmp_path), "--decoding", "sampled", "--temperature", temperature])
     assert exc.value.code == 2
+
+
+def test_paired_arms_receive_identical_model_requests(tmp_path):
+    """Demand and fixed runs of one task must see byte-identical requests every turn.
+
+    V6 prompts diverged between arms through tool timing values. Here the
+    fixture model is deterministic, so any difference would come from the
+    harness or the policy leaking into model-visible state.
+    """
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps([dict(kind="business", rows=128, seed=7), dict(kind="etl", rows=128, seed=7)]))
+    output = tmp_path / "run"
+    campaign.main(["--mode", "fixture", "--output", str(output), "--task-pack", str(spec),
+                   "--policies", "demand,fixed", "--comparison-order", "balanced-pairs", "--repeats", "2",
+                   "--max-runs", "16", "--deadline", "60"])
+    by_pair = {}
+    for path in (output / "goals").glob("*/record.json"):
+        record = json.loads(path.read_text())
+        calls = json.loads(path.with_name("model-calls.json").read_text())
+        pair = record["planned_run_id"][: -len(record["setting_id"]) - 1]
+        by_pair.setdefault(pair, {})[record["setting_id"].split("-")[1]] = [json.dumps(c["request"], sort_keys=True) for c in calls]
+    assert len(by_pair) == 8 and all(set(arms) == {"demand", "fixed"} for arms in by_pair.values())
+    for arms in by_pair.values():
+        assert arms["demand"] == arms["fixed"]
