@@ -203,6 +203,7 @@ def run(args):
                     / "backend-logs"
                     / (request.lease.execution_id + ".log"),
                     timeout=args.deadline,
+                    deadline_ns=request.lease.started_ns + int(args.deadline * 1e9),
                 )
                 lifecycle = Lifecycle(
                     backend, by_setting[request.scheduled_run.planned_run.setting_id]

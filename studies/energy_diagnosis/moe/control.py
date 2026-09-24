@@ -1,6 +1,7 @@
 """The same tool-pause lifecycle is used by native and deterministic test devices."""
 from __future__ import annotations
 
+from contextlib import nullcontext
 from collections import Counter
 from dataclasses import asdict, dataclass
 import math
@@ -244,10 +245,12 @@ class Lifecycle:
         if token != (self.generation, self.pause) or self.pause is None:
             raise RuntimeError("stale pause callback")
         self.emit("tools_finished")
-        cancelled = self.backend.cancel_pending_preparation(self.generation)
-        # Cancellation is queued-only. Already-issued work must finish before resume.
-        self.backend.drain_owned_work(timeout_seconds)
-        self._collect_transfers()
+        cleanup = self.backend.cleanup_scope(timeout_seconds) if hasattr(self.backend, "cleanup_scope") else nullcontext()
+        with cleanup:
+            cancelled = self.backend.cancel_pending_preparation(self.generation)
+            # Cancellation is queued-only. Issued work must settle before resume.
+            self.backend.drain_owned_work(timeout_seconds)
+            self._collect_transfers()
         self.emit("model_resume", cancelled_bytes=cancelled)
         self.pause = None
 
@@ -284,9 +287,11 @@ class Lifecycle:
         if self._pause_plan is not None:
             self.emit("preparation_plan_discarded", reason="no_tool_body_admission")
             self._pause_plan = None
-        self.backend.cancel_pending_preparation(self.generation)
-        self.backend.drain_owned_work(timeout_seconds)
-        self._collect_transfers()
+        cleanup = self.backend.cleanup_scope(timeout_seconds) if hasattr(self.backend, "cleanup_scope") else nullcontext()
+        with cleanup:
+            self.backend.cancel_pending_preparation(self.generation)
+            self.backend.drain_owned_work(timeout_seconds)
+            self._collect_transfers()
         for key, row in self.pending.items():
             self.emit(
                 "prepared_not_used_by_goal_end", expert=list(key), prepared=row

@@ -57,7 +57,7 @@ of a pair use the same seed at the same turn.
 ## Deadline
 
 `--deadline` is one absolute limit from goal start. It bounds model calls,
-every tool call in a turn (dependent calls share it rather than each receiving
+backend control requests, every tool call in a turn (dependent calls share it rather than each receiving
 a fresh allowance), and verification. Verification runs in an owned, bounded subprocess; a stuck
 verifier is terminated at the remaining deadline. Late results cannot pass, and
 `verification.json` records the timeout when no verdict is available. Process

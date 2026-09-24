@@ -664,7 +664,8 @@ class GoalExecutor:
                     error = "tool execution did not complete"
                     break
         except Exception as exc:
-            status, error = "crashed", f"{type(exc).__name__}: {exc}"
+            status = "timed_out" if time.monotonic_ns() >= deadline_ns else "crashed"
+            error = f"{type(exc).__name__}: {exc}"
             # Unexpected failures need conservative ownership handling.
             if isinstance(exc, BoundedExecutionError):
                 owned_terminated = False
