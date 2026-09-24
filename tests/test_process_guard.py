@@ -176,3 +176,38 @@ def test_supervisor_records_guard_failure_and_cleans_owned_child(tmp_path, monke
     )
     assert status["cleanup_complete"] is True
     assert not run_bounded.alive(status["child_pid"])
+
+
+def urow(pid, parent, uid, name):
+    return dict(row(pid, parent, name=name), uid=uid)
+
+
+def test_preauth_sshd_from_scanners_is_exempt_but_logins_and_cpu_are_not(tmp_path, monkeypatch):
+    import studies.energy_diagnosis.diagnostics.process_guard as guard_module
+    monkeypatch.setattr(guard_module, "_privsep_uids", lambda: {0, 105})
+    listener = urow(50, 1, 0, "sshd")
+    baseline = snap([row(1, 0, name="systemd"), listener, row(100)])
+    scanner = [urow(300, 50, 0, "sshd"), urow(301, 300, 105, "sshd")]
+    login = [urow(400, 50, 0, "sshd"), urow(401, 400, 1000, "sshd"), urow(402, 401, 1000, "bash")]
+    readings = iter([
+        baseline,
+        snap(baseline["processes"] + scanner, 2),
+        snap(baseline["processes"] + login, 3),
+    ])
+    guard = ProcessGuard(baseline, tmp_path / "log", 100, reader=lambda: next(readings))
+    guard.check()  # unauthenticated connection handlers: not interference
+    with pytest.raises(InterferenceDetected, match="external process"):
+        guard.check()  # an authenticated session below sshd still stops the run
+    # A pre-auth handler outside a baseline listener is not exempt.
+    rogue = snap(baseline["processes"] + [urow(500, 1, 0, "sshd")], 2)
+    readings = iter([baseline, rogue])
+    guard = ProcessGuard(baseline, tmp_path / "rogue", 100, reader=lambda: next(readings))
+    with pytest.raises(InterferenceDetected, match="external process"):
+        guard.check()
+    # Exempt handlers still count against the background CPU budget.
+    busy = [urow(300, 50, 0, "sshd"), urow(301, 300, 105, "sshd")]
+    readings = iter([snap(baseline["processes"] + busy, 1),
+                     snap(baseline["processes"] + [urow(300, 50, 0, "sshd"), dict(urow(301, 300, 105, "sshd"), cpu_ticks=90)], 2)])
+    guard = ProcessGuard(baseline, tmp_path / "cpu", 100, reader=lambda: next(readings))
+    with pytest.raises(InterferenceDetected, match="CPU budget"):
+        guard.check()
