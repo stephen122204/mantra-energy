@@ -43,10 +43,16 @@ class Policy:
     seed: int = 0
     # sha256 of the static profile or future trace passed to Lifecycle(data=).
     data_sha256: str | None = None
+    # during: admit when the tool body starts (overlap). after: diagnostic
+    # control that admits the same batch once the tool returns and waits for
+    # it before the model resumes, charging all preparation to the task.
+    timing: str = "during"
 
     def __post_init__(self):
         if self.name not in POLICY_NAMES:
             raise ValueError("unknown expert policy")
+        if self.timing not in {"during", "after"} or (self.timing == "after" and self.name not in PAUSE_POLICIES):
+            raise ValueError("timing is during, or after for pause policies only")
         if (self.name in {"static", "future"}) != (self.data_sha256 is not None):
             raise ValueError("static and future policies, and only they, require data")
         if type(self.byte_budget) is not int or not 0 <= self.byte_budget < 2**63:
@@ -135,6 +141,7 @@ class Lifecycle:
         self.task_id = None
         self._preparing_ahead = False
         self._ahead_prepared = False
+        self._deferred = None
         self.events, self.history = [], Counter()
         self.goal = self.pause = None
         self.generation = 0
@@ -180,6 +187,7 @@ class Lifecycle:
         self.events, self.history, self.pending = [], Counter(), {}
         self.pause_index = 0
         self._ahead_prepared = False
+        self._deferred = None
         self._pause_plan = None
         self.work_settled = False
         self.emit(
@@ -270,6 +278,14 @@ class Lifecycle:
             self.emit("preparation_skipped", reason=plan.reason)
             return self.generation, self.pause
         selected, reason = plan.experts, plan.reason
+        if self.policy.timing == "after":
+            self._deferred = (selected, reason)
+            self.emit("preparation_deferred", selected_experts=len(selected), reason=reason)
+            return self.generation, self.pause
+        self._admit(selected, reason)
+        return self.generation, self.pause
+
+    def _admit(self, selected, reason, event="preparation_admitted"):
         self.emit("preparation_dispatch_start")
         ack = self.backend.prepare_experts(
             selected, self.generation, self.policy.byte_budget
@@ -288,12 +304,11 @@ class Lifecycle:
         ):
             raise RuntimeError("backend byte acknowledgment does not reconcile")
         self.emit(
-            "preparation_admitted",
+            event,
             selected=[asdict(e) for e in selected],
             ack=ack,
             reason=reason,
         )
-        return self.generation, self.pause
 
     def prepare_ahead(self, timeout_seconds=60):
         """static: prepare the profile's experts once, before the first model call.
@@ -328,9 +343,14 @@ class Lifecycle:
         if token != (self.generation, self.pause) or self.pause is None:
             raise RuntimeError("stale pause callback")
         self.emit("tools_finished")
+        deferred, self._deferred = self._deferred, None
+        if deferred is not None:
+            # after-timing control: nothing overlaps the tool; the whole batch
+            # is admitted and completed before the model resumes.
+            self._admit(*deferred, event="deferred_preparation_admitted")
         cleanup = self.backend.cleanup_scope(timeout_seconds) if hasattr(self.backend, "cleanup_scope") else nullcontext()
         with cleanup:
-            cancelled = self.backend.cancel_pending_preparation(self.generation)
+            cancelled = 0 if deferred is not None else self.backend.cancel_pending_preparation(self.generation)
             # Cancellation is queued-only. Issued work must settle before resume.
             self.backend.drain_owned_work(timeout_seconds)
             self._collect_transfers()

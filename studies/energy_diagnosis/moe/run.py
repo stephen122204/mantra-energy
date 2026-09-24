@@ -23,7 +23,7 @@ from studies.energy_diagnosis.runtime.node_measurement import (
     environment_identity,
 )
 from .backend import ProcessBackend, BackendAdapter
-from .control import Lifecycle, Policy
+from .control import PAUSE_POLICIES, Lifecycle, Policy
 from .workloads import create_tasks, WorkloadRuntime, VERSION
 
 EXECUTION_PROTOCOL = "planned-body-initialized-window-v1"
@@ -104,6 +104,7 @@ def run(args):
             bytes_per_second=args.bytes_per_second,
             expected_pause_seconds=args.expected_pause_seconds,
             seed=getattr(args, "random_seed", 0) if name == "random" else 0,
+            timing=getattr(args, "preparation_timing", "during") if name in PAUSE_POLICIES else "during",
             data_sha256=policy_data[name][1] if name in policy_data else None,
         )
         for name in args.policies.split(",")
@@ -323,6 +324,8 @@ def main(argv=None):
     p.add_argument("--policy-data", action="append", metavar="NAME=PATH",
                    help="static=profile.json or future=trace.json from moe/expert_profile.py; hashed into the setting")
     p.add_argument("--random-seed", type=int, default=0, help="Seed for the random matched-budget policy")
+    p.add_argument("--preparation-timing", choices=["during", "after"], default="during",
+                   help="after: diagnostic control admitting the pause batch only once the tool returns")
     p.add_argument("--task", default="all")
     p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
