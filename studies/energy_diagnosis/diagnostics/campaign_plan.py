@@ -15,7 +15,10 @@ from pathlib import Path
 import random
 
 REQUIRED = {"campaign_id", "node", "cutoff_utc", "maintenance", "host_condition", "warm", "required_domains",
-            "base_args", "families", "arms", "repetitions", "seed", "batch_seconds", "estimated_batch_seconds"}
+            "base_args", "families", "arms", "repetitions", "seed", "batch_seconds", "estimated_batch_seconds", "expected"}
+EXPECTED = {"repository_revision", "build_manifest", "build_manifest_sha256", "backend_python", "weights_manifest",
+            "weights_manifest_sha256", "tool_python", "tool_python_freeze_sha256", "networkx_source", "networkx_commit",
+            "cpu_power", "min_free_gib", "lease_end_utc"}
 NODE = {"host", "remote_repository", "remote_python", "remote_directory", "node_output", "lock",
         "identity_file", "known_hosts"}
 HOST = {"cpu_affinity", "keep_awake_cpus", "tool_cpus", "supervisor_cpus", "idle_cpus"}
@@ -23,7 +26,8 @@ HOST = {"cpu_affinity", "keep_awake_cpus", "tool_cpus", "supervisor_cpus", "idle
 
 def load(path):
     plan = json.loads(Path(path).read_text())
-    if set(plan) != REQUIRED or set(plan["node"]) != NODE or set(plan["host_condition"]) != HOST:
+    if set(plan) != REQUIRED or set(plan["node"]) != NODE or set(plan["host_condition"]) != HOST \
+            or set(plan["expected"]) != EXPECTED:
         raise ValueError("plan fields differ from the frozen plan schema")
     if type(plan["repetitions"]) is not int or not 1 <= plan["repetitions"] <= 100:
         raise ValueError("repetitions must be 1..100")

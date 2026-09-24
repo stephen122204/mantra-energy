@@ -28,7 +28,12 @@ def plan(tmp_path, **changes):
                                                                     dict(short="deg", task_pack="/w/r.json", task="repo-y")])),
         arms=dict(A=["--policies", "demand"], B=["--policies", "fixed", "--byte-budget", "1"],
                   C=["--policies", "fixed", "--byte-budget", "1", "--preparation-timing", "after"]),
-        repetitions=2, seed=7, batch_seconds=2000, estimated_batch_seconds=420)
+        repetitions=2, seed=7, batch_seconds=2000, estimated_batch_seconds=420,
+        expected=dict(repository_revision="0" * 40, build_manifest="/w/b.json", build_manifest_sha256="1" * 64,
+                      backend_python="/w/be/bin/python", weights_manifest="/w/model/alems-weights.json",
+                      weights_manifest_sha256="2" * 64, tool_python="/w/tool/bin/python", tool_python_freeze_sha256="3" * 64,
+                      networkx_source="/w/nx", networkx_commit="4" * 40, cpu_power=[], min_free_gib=50,
+                      lease_end_utc="2099-01-01T00:00:00Z"))
     p.update(changes)
     path = tmp_path / "plan.json"
     path.write_text(json.dumps(p))
