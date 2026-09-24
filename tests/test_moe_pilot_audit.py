@@ -37,6 +37,19 @@ def test_pair_comparison_detects_prompt_or_output_changes():
     assert not compare_calls(a, b)["same_outputs"]
 
 
+def test_token_timing_requires_complete_reconciled_availability_windows():
+    x = calls()
+    assert not call_checks(x, "exact_prefix", True)["token_timing"]
+    for call in x:
+        call["adapter"]["backend"]["generation_timing"] = dict(
+            version="host-token-availability-v1", started_ns=10, first_token_ready_ns=20,
+            last_token_ready_ns=50, stream_end_ns=60, generated_tokens=4,
+            time_to_first_token_ns=10, subsequent_tokens_ns=30)
+    assert all(call_checks(x, "exact_prefix", True).values())
+    x[0]["adapter"]["backend"]["generation_timing"]["last_token_ready_ns"] = 5
+    assert not call_checks(x, "exact_prefix", True)["token_timing"]
+
+
 def test_missing_or_interrupted_stage_cannot_pass(tmp_path):
     assert not audit(tmp_path, prefix_mode="exact_prefix")["smoke_passed"]
     (tmp_path / "job").mkdir()

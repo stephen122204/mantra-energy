@@ -12,7 +12,7 @@ from .audit_transfers import audit_campaign as transfers
 from .audit_windows import audit as windows
 
 
-def call_checks(calls, prefix_mode):
+def call_checks(calls, prefix_mode, require_timing=False):
     if not calls:
         return dict(model_calls_present=False)
     checks = dict(model_calls_present=True, token_accounting=True, prefix_mode=True)
@@ -27,6 +27,16 @@ def call_checks(calls, prefix_mode):
         checks["token_accounting"] &= valid and (fields[0] + fields[1] == values[3] and fields[2] == values[4] - 1)
         if valid:
             reused += fields[1]
+        if require_timing:
+            timing = backend.get("generation_timing", {})
+            stamps = [timing.get(k) for k in ("started_ns", "first_token_ready_ns", "last_token_ready_ns", "stream_end_ns")]
+            valid_timing = (all(type(v) is int and v >= 0 for v in stamps)
+                and stamps == sorted(stamps)
+                and timing.get("version") == "host-token-availability-v1"
+                and timing.get("generated_tokens") == t.get("completion")
+                and timing.get("time_to_first_token_ns") == stamps[1] - stamps[0]
+                and timing.get("subsequent_tokens_ns") == stamps[2] - stamps[1])
+            checks["token_timing"] = checks.get("token_timing", True) and valid_timing
     if prefix_mode == "exact_prefix":
         checks["prefix_reuse_exercised"] = len(calls) > 1 and reused > 0
     return checks
@@ -37,7 +47,7 @@ def compare_calls(calls, reference):
                 same_outputs=[x["adapter"]["content"] for x in calls] == [x["adapter"]["content"] for x in reference])
 
 
-def audit(stage, *, prefix_mode, reference=None, required_domains=()):
+def audit(stage, *, prefix_mode, reference=None, required_domains=(), require_timing=False):
     stage = Path(stage).resolve()
     root = stage / "campaign"
     checks, details, errors = {}, {}, []
@@ -65,7 +75,12 @@ def audit(stage, *, prefix_mode, reference=None, required_domains=()):
         domains = {x["domain_id"] for x in inner["measurements"] if x["status"] == "valid"}
         checks["required_domains"] = set(required_domains) <= domains
         calls = json.loads((g / "model-calls.json").read_text())
-        checks.update(call_checks(calls, prefix_mode))
+        checks.update(call_checks(calls, prefix_mode, require_timing))
+        if require_timing and checks.get("token_timing"):
+            spans = [s for s in record["spans"] if s["kind"] == "model"]
+            stamps = [x["adapter"]["backend"]["generation_timing"] for x in calls]
+            checks["timing_inside_model_spans"] = len(spans) == len(stamps) and all(
+                s["start_ns"] <= t["started_ns"] <= t["stream_end_ns"] <= s["end_ns"] for s, t in zip(spans, stamps))
         if reference is not None:
             ref = json.loads(Path(reference).read_text())
             checks.update(compare_calls(calls, ref))
@@ -84,9 +99,10 @@ def main(argv=None):
     p.add_argument("--prefix-mode", choices=["disabled", "exact_prefix"], required=True)
     p.add_argument("--reference", help="Saved reference model-calls.json for conditional comparison")
     p.add_argument("--required-domain", action="append", default=[])
+    p.add_argument("--require-token-timing", action="store_true")
     p.add_argument("--output", required=True)
     a = p.parse_args(argv)
-    result = audit(a.stage, prefix_mode=a.prefix_mode, reference=a.reference, required_domains=a.required_domain)
+    result = audit(a.stage, prefix_mode=a.prefix_mode, reference=a.reference, required_domains=a.required_domain, require_timing=a.require_token_timing)
     Path(a.output).write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
     print(json.dumps({k: v for k, v in result.items() if k != "details"}))
     return 0 if result["smoke_passed"] else 2

@@ -63,3 +63,13 @@ This is a smoke acceptance gate, not an energy-benefit gate. Inspect the
 included phase-specific dispatch counts and transfer brackets separately;
 successful execution does not establish useful overlap. A failed task in a
 later evaluation remains an outcome, not permission to discard its cost.
+
+Native calls now include `generation_timing`: elapsed time to the first token
+available on the host, and the first-to-last-token interval (including stop
+tokens). These start at generation entry, exclude prompt rendering/tokenization,
+and are not CUDA kernel durations or phase-specific energy. The Transformers
+streamer performs CPU delivery consistently in all policies; its added
+synchronization overhead must be assessed, not assumed free. Pass
+`--require-token-timing` to the audit to require reconciled intervals inside
+the recorded model spans. Older call records without these fields cannot
+establish first-token or subsequent-token timing.

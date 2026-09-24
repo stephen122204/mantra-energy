@@ -9,6 +9,7 @@ import time
 from .backend import CONTROLS
 from .control import Expert
 from .prefix import GenerationWork, RequestPrefixCache, validate_prefix_configuration
+from .token_timing import TokenTiming
 
 BACKEND_COMMIT = "6da092fc98e7246bfa1b2f9b2a480524b8697a7e"
 MODEL_REVISION = "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe"
@@ -373,6 +374,7 @@ class NativeDevice:
         # Native expert workers update output tensors from separate threads.
         # InferenceMode is thread-local and makes those cross-thread writes fail.
         # no_grad preserves gradient-free generation with ordinary tensors.
+        timing = TokenTiming()
         try:
             with self.torch.no_grad():
                 result = self.model.generate(
@@ -381,6 +383,7 @@ class NativeDevice:
                     max_new_tokens=arg["max_tokens"],
                     **decode,
                     pad_token_id=self.tokenizer.eos_token_id,
+                    streamer=timing,
                     **options,
                 )
             self.torch.cuda.synchronize()
@@ -395,7 +398,7 @@ class NativeDevice:
         except BaseException:
             self.prefix_cache.clear()
             raise
-        ids = output.tolist()
+            ids = output.tolist()
         stop_ids = {self.tokenizer.eos_token_id}
         if chat:
             stop_ids |= {i for i in self.tokenizer.convert_tokens_to_ids(["<|im_end|>", "<|endoftext|>"])
@@ -410,6 +413,7 @@ class NativeDevice:
             text=text,
             finish_reason="stop" if stopped or len(ids) < arg["max_tokens"] else "length",
             tokens=dict(prompt=int(inputs.shape[1]), completion=int(output.shape[0])),
+            generation_timing=timing.result(len(ids)),
             hook_ns=self.hook_ns - before,
             prefix_cache=dict(
                 mode=self.request_cache_mode,
