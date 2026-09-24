@@ -675,3 +675,46 @@ def test_explicit_longer_goal_budget_is_finite_and_pinned(tmp_path):
         assert rejected.returncode == 2
         assert "invalid bounded" in rejected.stderr
         assert not (tmp_path / ("bad-"+invalid)).exists()
+
+
+def test_cpu_affinity_is_parsed_applied_and_recorded(tmp_path):
+    from studies.energy_diagnosis.moe.run import parse_cpu_list
+    assert parse_cpu_list("64-67,70,66") == [64, 65, 66, 67, 70]
+    for invalid in ("", "5-3", "-1", "a"):
+        with pytest.raises(ValueError):
+            parse_cpu_list(invalid)
+    if not hasattr(os, "sched_getaffinity"):
+        rejected = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                                   "--output", str(tmp_path / "unsupported"), "--cpu-affinity", "0"],
+                                  cwd=ROOT, capture_output=True, text=True, timeout=30)
+        assert rejected.returncode == 2 and "not supported" in rejected.stderr
+        return
+    cpu = min(os.sched_getaffinity(0))
+    command(tmp_path / "pinned", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+            "--cpu-affinity", str(cpu))
+    manifest = json.loads((tmp_path / "pinned/moe-manifest.json").read_text())
+    assert manifest["cpu_affinity"] == dict(pinned=True, cpus=[cpu])
+    command(tmp_path / "unpinned", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1")
+    manifest = json.loads((tmp_path / "unpinned/moe-manifest.json").read_text())
+    assert manifest["cpu_affinity"]["pinned"] is False
+
+
+def test_cpu_power_state_groups_cpus_by_governor_and_idle_states(tmp_path):
+    from studies.energy_diagnosis.moe.run import cpu_power_state
+    for cpu, disabled in ((0, "0"), (1, "0"), (2, "1")):
+        base = tmp_path / f"cpu{cpu}"
+        (base / "cpufreq").mkdir(parents=True)
+        (base / "cpufreq/scaling_governor").write_text("schedutil\n")
+        for i, (name, latency) in enumerate((("POLL", "0"), ("C1", "1"), ("C2", "30"))):
+            state = base / f"cpuidle/state{i}"
+            state.mkdir(parents=True)
+            (state / "name").write_text(name + "\n")
+            (state / "latency").write_text(latency + "\n")
+            (state / "disable").write_text((disabled if name == "C2" else "0") + "\n")
+    groups = cpu_power_state([0, 1, 2], root=tmp_path)
+    assert sorted(g["cpus"] for g in groups) == [[0, 1], [2]]
+    deep = next(g for g in groups if g["cpus"] == [2])
+    assert deep["governor"] == "schedutil" and deep["min_khz"] is None
+    assert deep["idle"][2] == dict(name="C2", exit_latency_us="30", disabled="1")
+    assert cpu_power_state(None, root=tmp_path) is None
+    assert cpu_power_state([0], root=tmp_path / "missing") is None

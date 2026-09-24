@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -45,6 +46,67 @@ class CampaignInterrupted(BaseException):
 
 def _interrupt(signum, frame):
     raise CampaignInterrupted(f"campaign received signal {signum}")
+
+
+def parse_cpu_list(text):
+    """Linux cpu-list syntax ("64-71,80") -> sorted unique CPU ids."""
+    cpus = set()
+    for part in text.split(","):
+        lo, _, hi = part.strip().partition("-")
+        lo, hi = int(lo), int(hi or lo)
+        if lo < 0 or hi < lo:
+            raise ValueError(f"invalid CPU range: {part!r}")
+        cpus.update(range(lo, hi + 1))
+    if not cpus:
+        raise ValueError("empty CPU list")
+    return sorted(cpus)
+
+
+def apply_cpu_affinity(cpus):
+    """Pin this process before any worker/sampler starts so every child inherits it.
+
+    Placement alone does not fix the launch-bound decode rate (see cpu_power_state); it makes the
+    CPUs whose power state is recorded, and any keep-awake or idle-state setting, well defined.
+    MoE-Infinity still hard-pins two scheduler threads to fixed CPUs regardless of this mask."""
+    if not hasattr(os, "sched_getaffinity"):
+        if cpus:
+            raise ValueError("CPU affinity is not supported on this platform")
+        return None
+    if cpus:
+        os.sched_setaffinity(0, cpus)
+        if sorted(os.sched_getaffinity(0)) != list(cpus):
+            raise RuntimeError("requested CPU affinity was not applied")
+    return dict(pinned=bool(cpus), cpus=sorted(os.sched_getaffinity(0)))
+
+
+def cpu_power_state(cpus, root=Path("/sys/devices/system/cpu")):
+    """Read-only record of the frequency governor and idle states of the run's CPUs.
+
+    The native worker is host launch-bound (~10k thread handoffs per token); when its cores enter
+    deep idle states between handoffs, decode slowed ~2x on both development nodes. This setting
+    therefore changes the measured quantity and must be recorded with every run."""
+    if not cpus or not root.is_dir():
+        return None
+
+    def read(path):
+        try:
+            return path.read_text().strip()
+        except OSError:
+            return None
+
+    states = {}
+    for cpu in cpus:
+        base = root / f"cpu{cpu}"
+        idle = []
+        for state in sorted((base / "cpuidle").glob("state*"), key=lambda p: int(p.name[5:])):
+            idle.append(dict(name=read(state / "name"), exit_latency_us=read(state / "latency"),
+                             disabled=read(state / "disable")))
+        key = json.dumps(dict(governor=read(base / "cpufreq/scaling_governor"),
+                              min_khz=read(base / "cpufreq/scaling_min_freq"),
+                              max_khz=read(base / "cpufreq/scaling_max_freq"),
+                              idle=idle), sort_keys=True)
+        states.setdefault(key, []).append(cpu)
+    return [dict(json.loads(key), cpus=group) for key, group in states.items()]
 
 
 def run(args):
@@ -180,6 +242,8 @@ def run(args):
         query_engine=args.query_engine if query_assets else None,
         task_catalog=[catalog[t.task_id] for t in tasks],
         measurement_scope="CPU-package and GPU-board only; includes backend startup, tools, transfers, cleanup and verification",
+        cpu_affinity=getattr(args, "applied_cpu_affinity", None),
+        cpu_power=cpu_power_state((getattr(args, "applied_cpu_affinity", None) or {}).get("cpus")),
     )
     if config.get("diagnostic"):
         # Profiling/observation switches perturb execution: never campaign evidence.
@@ -326,6 +390,8 @@ def main(argv=None):
     p.add_argument("--random-seed", type=int, default=0, help="Seed for the random matched-budget policy")
     p.add_argument("--preparation-timing", choices=["during", "after"], default="during",
                    help="after: diagnostic control admitting the pause batch only once the tool returns")
+    p.add_argument("--cpu-affinity", type=parse_cpu_list, metavar="CPULIST",
+                   help="Pin the campaign process tree (worker, sampler, tools), e.g. 64-71; recorded in the manifest")
     p.add_argument("--task", default="all")
     p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
@@ -389,6 +455,10 @@ def main(argv=None):
         p.error(
             "native preparation requires an explicit expert-byte budget (fixture default is only 128 bytes)"
         )
+    try:
+        args.applied_cpu_affinity = apply_cpu_affinity(args.cpu_affinity)
+    except (ValueError, OSError) as exc:
+        p.error(str(exc))
     import signal
 
     for name in ("SIGTERM", "SIGINT"):
