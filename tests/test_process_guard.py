@@ -243,3 +243,22 @@ def test_supervisor_cpu_placement_is_applied_and_recorded(tmp_path):
     assert status["supervisor_cpus"] == [cpu] and status["status"] == "completed"
     # Without its own affinity request the child inherits the supervisor placement.
     assert (tmp_path / "job/run.log").read_text().strip() == str([cpu])
+
+
+def test_supervisor_captures_its_own_baseline_for_unattended_batches(tmp_path):
+    import datetime as dt
+    if sys.platform != "linux":
+        pytest.skip("Linux guard integration")
+    root = Path(__file__).resolve().parents[1]
+    base = [sys.executable, "-m", "studies.energy_diagnosis.diagnostics.run_bounded", "--cwd", str(tmp_path),
+            "--seconds", "20", "--cutoff-utc", (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=5)).isoformat(),
+            "--lock", str(tmp_path / "lock")]
+    ok = subprocess.run(base + ["--output", str(tmp_path / "job"), "--capture-process-baseline", "--",
+                                sys.executable, "-c", "print('ok')"], cwd=root, capture_output=True, text=True, timeout=60)
+    assert ok.returncode == 0, ok.stderr
+    assert json.loads((tmp_path / "job/status.json").read_text())["status"] == "completed"
+    assert json.loads((tmp_path / "job/process-baseline.json").read_text())["processes"]
+    both = subprocess.run(base + ["--output", str(tmp_path / "both"), "--capture-process-baseline",
+                                  "--process-baseline", str(tmp_path / "job/process-baseline.json"), "--", "true"],
+                          cwd=root, capture_output=True, text=True, timeout=60)
+    assert both.returncode == 2

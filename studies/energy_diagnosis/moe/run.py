@@ -436,6 +436,8 @@ def main(argv=None):
     p.add_argument("--tool-cpus", type=parse_cpu_list, metavar="CPULIST",
                    help="CPU set for workload test/tool subprocesses that honour ALEMS_TOOL_CPUS (repository repair); "
                         "must not overlap --cpu-affinity or --keep-awake-cpus; recorded in the manifest")
+    p.add_argument("--campaign-exit", action="store_true",
+                   help="Exit 0 when measurement is valid even if goals fail (campaign data); exit 3 only for invalid energy or crashed attempts")
     p.add_argument("--task", default="all")
     p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
@@ -526,10 +528,18 @@ def main(argv=None):
         raise SystemExit(130)
     if not result["validation"]["valid"]:
         raise SystemExit(2)
+    rows = result["summary"]["settings"].values()
+    if args.campaign_exit:
+        # Campaign data: model outcomes (wrong answer, budget/context/deadline exhaustion) are
+        # results, not errors. Stop only for invalid energy or an infrastructure crash.
+        crashed = [p for row in rows for p in row["records"]
+                   if json.loads((Path(args.output) / p).read_text())["execution_status"] == "crashed"]
+        if any(row["invalid_energy_attempts"] for row in rows) or crashed:
+            raise SystemExit(3)
     # A structurally valid ledger alone is not a successful native smoke test.
-    if args.mode == "native" and any(
+    elif args.mode == "native" and any(
         row["successful"] < row["attempts"] or row["invalid_energy_attempts"]
-        for row in result["summary"]["settings"].values()
+        for row in rows
     ):
         raise SystemExit(3)
     if args.mode == "native":
@@ -541,7 +551,8 @@ def main(argv=None):
             raise SystemExit(5)
         for setting, row in result["summary"]["settings"].items():
             if (
-                any(f"-{name}-" in setting for name in ("fixed", "history"))
+                not args.campaign_exit  # campaign: incomplete preparation is a measured outcome
+                and any(f"-{name}-" in setting for name in ("fixed", "history"))
                 and not row["completed_preparation_bytes"]
             ):
                 print(

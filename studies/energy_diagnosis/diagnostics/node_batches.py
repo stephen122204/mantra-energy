@@ -17,7 +17,7 @@ import sys
 import time
 
 from .archive_results import export_bundle, verify_bundle, safe_name
-from .batch_coordinator import validate, write
+from .batch_coordinator import validate, write, dispatch_wait
 
 
 def read(path):
@@ -44,7 +44,7 @@ def checkpoint(root, spool, batch, previous):
     return header
 
 
-def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
+def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=time.sleep):
     cutoff = validate(spec)
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     root = Path(spec['remote_directory'])
@@ -71,6 +71,14 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
             write(out/'state.json', state)
         try:
             for batch in spec['batches']:
+                jobpath = root / batch['status']
+                if batch['id'] not in state['completed'] and not jobpath.exists():
+                    # Outside the io lock: transfers may run during the maintenance window.
+                    wait = dispatch_wait(spec, clock())
+                    while wait > 0:
+                        save('maintenance_window', batch=batch['id'], resume_utc=dt.datetime.fromtimestamp(clock()+wait, dt.timezone.utc).isoformat())
+                        sleep(min(wait, 60))
+                        wait = dispatch_wait(spec, clock())
                 with (out/'io.lock').open('a') as gate:
                     fcntl.flock(gate, fcntl.LOCK_EX)
                     jobpath = root / batch['status']
@@ -78,7 +86,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
                         if not successful(read(jobpath)):
                             raise ValueError('previously completed status changed')
                         continue
-                    if time.time() >= cutoff:
+                    if clock() >= cutoff:
                         raise TimeoutError('node cutoff reached')
                     if shutil.disk_usage(out).free < free_bytes:
                         raise RuntimeError('low disk: stop before further work')
@@ -86,7 +94,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
                     if not jobpath.exists():
                         if intent.exists():
                             raise RuntimeError('ambiguous prior dispatch; operator review required')
-                        if time.time()+spec['minimum_batch_seconds'] >= cutoff:
+                        if clock()+spec['minimum_batch_seconds'] >= cutoff:
                             raise TimeoutError('insufficient next-batch time budget')
                         intent.parent.mkdir(parents=True, exist_ok=True)
                         with intent.open('x') as stream:
@@ -113,7 +121,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
                     if not successful(job):
                         raise RuntimeError('invalid batch retained; no further dispatch')
                     state['completed'].append(batch['id']);save('between_batches')
-                time.sleep(gap)
+                sleep(gap)
             save('completed')
         except BaseException as error:
             save('stopped',error=str(error));raise

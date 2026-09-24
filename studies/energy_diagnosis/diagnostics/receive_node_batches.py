@@ -10,7 +10,7 @@ import tempfile
 import time
 
 from .archive_results import verify_bundle, verified_chain, safe_name
-from .batch_coordinator import write
+from .batch_coordinator import write, maintenance_windows
 from .copy_results import ssh_arguments
 
 
@@ -65,6 +65,15 @@ def main():
     with (out/'receiver.lock').open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         while True:
+            schedule=maintenance_windows(spec,time.time())
+            if schedule is not None:
+                inside,start,end=schedule
+                # Connect only inside a window with enough time left to finish the transfer.
+                if not inside or end-time.time()<240:
+                    nxt=start if not inside else start+spec['maintenance']['period_seconds']
+                    write(out/'transport-state.json',dict(status='waiting_for_maintenance_window',next_window_start=nxt))
+                    if a.once:return
+                    time.sleep(max(5,min(nxt-time.time(),600)));continue
             state=json.loads((out/'receiver.json').read_text()) if (out/'receiver.json').exists() else {}
             cmd=['timeout','180',spec['remote_python'],'-m','studies.energy_diagnosis.diagnostics.node_batches','--serve','--output',spec['node_output'],'--after',state.get('after','')]
             ssh=ssh_arguments(spec['identity_file'],spec['known_hosts'])+[spec['host'],'env '+shlex.quote('PYTHONPATH='+spec['remote_repository'])+' '+shlex.join(cmd)]
