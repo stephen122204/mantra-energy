@@ -48,6 +48,52 @@ def snapshot(proc=Path("/proc")):
     )
 
 
+SSHD_NAMES = frozenset({"sshd", "sshd-session", "sshd-auth"})
+
+
+def _privsep_uids():
+    import pwd
+    uids = {0}
+    for name in ("sshd", "sshd-auth"):
+        try:
+            uids.add(pwd.getpwnam(name).pw_uid)
+        except KeyError:
+            pass
+    return uids
+
+
+def preauth_sshd(rows, allowed, privsep_uids):
+    """Unauthenticated connection handlers under a baseline sshd listener.
+
+    Internet scanners on a public IP spawn these continuously. They run only
+    as root or the sshd privilege-separation user; an authenticated login
+    adds a user-owned process below them and is then no longer exempt.
+    """
+    by_pid = {row["pid"]: row for row in rows}
+    children = {}
+    for row in rows:
+        children.setdefault(row["ppid"], []).append(row)
+    exempt = set()
+    for row in rows:
+        if row["name"] not in SSHD_NAMES or row["uid"] not in privsep_uids or identity(row) in allowed:
+            continue
+        parent = by_pid.get(row["ppid"])
+        while parent is not None and parent["name"] in SSHD_NAMES and identity(parent) not in allowed:
+            parent = by_pid.get(parent["ppid"])
+        if parent is None or parent["name"] not in SSHD_NAMES or identity(parent) not in allowed:
+            continue
+        stack, user_below = list(children.get(row["pid"], [])), False
+        while stack:
+            child = stack.pop()
+            if child["name"] not in SSHD_NAMES or child["uid"] not in privsep_uids:
+                user_below = True
+                break
+            stack.extend(children.get(child["pid"], []))
+        if not user_below:
+            exempt.add(identity(row))
+    return exempt
+
+
 def identity(row):
     return row["pid"], row["start_ticks"], row["uid"], row["name"]
 
@@ -80,6 +126,7 @@ class ProcessGuard:
         self.allowed = {identity(row) for row in baseline["processes"]}
         self.root, self.reader, self.log = root, reader, log
         self.limit = max_background_cpu
+        self.privsep_uids = _privsep_uids()
         self.previous = None
         self.owned = set()
         self.check()
@@ -104,7 +151,10 @@ class ProcessGuard:
             for row in current["processes"]
             if row["pid"] not in descendants | ancestors
         ]
-        unexpected = [row for row in foreign if identity(row) not in self.allowed]
+        # Pre-auth sshd handlers are exempt from the process check only; their
+        # CPU still counts against the background budget below.
+        exempt = preauth_sshd(current["processes"], self.allowed, self.privsep_uids)
+        unexpected = [row for row in foreign if identity(row) not in self.allowed and identity(row) not in exempt]
         reasons = []
         if current["boot_id"] != self.baseline["boot_id"]:
             reasons.append("baseline belongs to another boot")
