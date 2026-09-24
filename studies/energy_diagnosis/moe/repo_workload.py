@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -332,7 +333,19 @@ def run_pytest(python, root, targets, sandbox, timeout=TEST_SECONDS):
                           timeout=timeout, preexec_fn=_limits, start_new_session=False)
 
 
-def _summarize(result):
+_DURATION = re.compile(r" in \d+(?:\.\d+)?s(?: \(\d+:\d\d:\d\d\))?")
+
+
+def _normalize(text, root):
+    """Model-visible tool output must be identical across paired arms: strip wall-clock
+    durations and the per-attempt workspace path."""
+    text = text.replace(str(Path(root).resolve()), ".").replace(str(root), ".")
+    return _DURATION.sub("", text)
+
+
+def _summarize(result, root):
+    result = subprocess.CompletedProcess(result.args, result.returncode,
+                                         _normalize(result.stdout, root), _normalize(result.stderr, root))
     lines = result.stdout.splitlines()
     summary = next((l for l in reversed(lines) if l.strip()), result.stderr.strip()[-300:])
     failed = [l.split()[1] for l in lines if l.startswith("FAILED ")][:20]
@@ -394,7 +407,7 @@ class RepoTool:
                 result = run_pytest(self.python, ws, [target], self.sandbox)
             except subprocess.TimeoutExpired:
                 return dict(exit_code=None, summary=f"test run exceeded {TEST_SECONDS} seconds", failed=[], output="")
-            return _summarize(result)
+            return _summarize(result, ws)
         raise ValueError("declared actions are list, read, search, replace, test")
 
 
@@ -499,7 +512,7 @@ def verify_workspace(assets, workspace, python):
             result = run_pytest(python, tree, [spec["module"], heldout.name], str(Path(assets) / "sandbox"))
         except subprocess.TimeoutExpired:
             return dict(passed=False, reason="verification tests exceeded their time limit", changed_files=[str(c) for c in changed])
-        summary = _summarize(result)
+        summary = _summarize(result, tree)
     return dict(passed=result.returncode == 0,
                 reason="original module (incl. withheld tests) and independent held-out checks passed" if result.returncode == 0
                 else "verification tests failed", changed_files=[str(c) for c in changed],
