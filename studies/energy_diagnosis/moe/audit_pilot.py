@@ -50,6 +50,7 @@ def audit(stage, *, prefix_mode, reference=None, required_domains=()):
         checks["guard_observations_present"] = observations.is_file() and observations.stat().st_size > 0
         w, t, u = windows(root), transfers(root), usefulness(root)
         details.update(windows=w, transfers=t, usefulness=u)
+        checks["supported_native_policy"] = bool(u["goals"]) and all(x["policy"] != "builtin" for x in u["goals"])
         checks["counter_audit"] = w["audit_passed"] and all(x.get("all_domains_measured") for x in w["results"])
         checks["transfer_audit"] = t["observed_records_consistent"] and t["every_attempt_checked"]
         goals = sorted((root / "goals").glob("*/record.json"))
