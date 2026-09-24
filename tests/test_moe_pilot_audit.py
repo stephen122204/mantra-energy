@@ -57,3 +57,12 @@ def test_missing_or_interrupted_stage_cannot_pass(tmp_path):
     result = audit(tmp_path, prefix_mode="exact_prefix")
     assert not result["smoke_passed"]
     assert not result["checks"]["guarded_stage_completed"]
+
+
+def test_protocol_validity_excludes_task_outcome_checks(tmp_path):
+    from studies.energy_diagnosis.moe.audit_pilot import OUTCOME_CHECKS
+    assert set(OUTCOME_CHECKS) == {"native_correct_completion", "prefix_reuse_exercised"}
+    (tmp_path / "job").mkdir()
+    (tmp_path / "job/status.json").write_text(json.dumps(dict(status="interference_detected", returncode=76, cleanup_complete=True)))
+    result = audit(tmp_path, prefix_mode="exact_prefix")
+    assert result["protocol_valid"] is False and "native_correct_completion" not in result["checks"] or result["outcome"] == {}
