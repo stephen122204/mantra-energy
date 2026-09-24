@@ -24,7 +24,13 @@ Implemented in `agent_protocol.py` and `GoalExecutor._chat` (`local_run.py`).
 - Calls in one turn run in order unless the setting enables tool concurrency.
   The model cannot declare dependencies.
 
-Each attempt writes `agent-trace.json` with one outcome:
+Each completed model response and tool phase is saved immediately under
+`goals/<execution>/turns/` and checkpointed in the ledger. These immutable
+partial records survive process interruption; they do not constitute a final
+answer, completed measurement, or successful attempt. Logging overhead is part
+of the measured execution window and uses the same path for both settings.
+
+Each finalized attempt writes `agent-trace.json` with one outcome:
 
 | outcome | execution_status | meaning |
 |---|---|---|
