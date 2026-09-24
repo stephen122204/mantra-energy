@@ -57,6 +57,9 @@ def test_paths_are_confined_and_tests_are_read_only(tmp_path):
     assert tool.execute("replace", path="networkx/algorithms/dag.py", old="return 1", new="return 2") == \
         {"replaced": "networkx/algorithms/dag.py"}
     assert tool.execute("search", pattern="return 2")["matches"] == ["networkx/algorithms/dag.py:2: return 2"]
+    assert tool.execute("search", pattern=r"ret\w+ [0-9]$")["total"] == 1
+    with pytest.raises(ValueError, match="regular expression"):
+        tool.execute("search", pattern="(unclosed")
 
 
 def test_withhold_removes_named_tests_with_decorators():

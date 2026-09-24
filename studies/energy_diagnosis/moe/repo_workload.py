@@ -23,7 +23,7 @@ import tempfile
 
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 
-VERSION = "repo-repair-networkx-v2"  # v2 adds four cases; v1 case content unchanged
+VERSION = "repo-repair-networkx-v3"  # v3: regex search, explicit submit_answer wording; v2 added four cases
 SOURCE_COMMIT = "2acf1590f82757c01a57b81b8c5dfb79e60aa416"  # networkx-3.4.2
 PACKAGE = "networkx"
 READ_LINES = 150
@@ -398,11 +398,11 @@ def create_task(root, *, case, source, python):
     if meta["case"] != case or meta["version"] != VERSION or meta["tool_python"]["python"] != python:
         raise ValueError("existing repository task differs from the requested case")
     return PilotTask(
-        f"repo-{case}-v2", "repository-repair", f"networkx-{SOURCE_COMMIT[:12]}", root, {}, _hash(root), (),
+        f"repo-{case}-v3", "repository-repair", f"networkx-{SOURCE_COMMIT[:12]}", root, {}, _hash(root), (),
         f"A user reports: {spec['symptom']}. The repository is networkx 3.4.2 with its test suite. "
         "Find and fix the defect in the library source (do not edit tests), using the repo tool to list, read, "
         "search, replace and run pytest targets. Before finishing, run the complete networkx/algorithms test suite "
-        "to check for regressions. Return {done:true} when the repair is complete.",
+        "to check for regressions. Finish by calling submit_answer with answer {done:true}.",
     )
 
 
@@ -493,11 +493,15 @@ class RepoTool:
         if action == "search":
             pattern = args["pattern"]
             if not isinstance(pattern, str) or not pattern or len(pattern) > 200:
-                raise ValueError("search takes a nonempty literal pattern up to 200 characters")
+                raise ValueError("search takes a nonempty regular expression up to 200 characters")
+            try:
+                compiled = re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid regular expression: {exc}")
             matches, total = [], 0
             for path in sorted((ws / PACKAGE).rglob("*.py")):
                 for number, line in enumerate(path.read_text().splitlines(), 1):
-                    if pattern in line:
+                    if compiled.search(line[:1000]):
                         total += 1
                         if len(matches) < SEARCH_MATCHES:
                             matches.append(f"{path.relative_to(ws)}:{number}: {line.strip()[:160]}")
@@ -571,7 +575,7 @@ class RepoRuntime:
         return dict(family=task.family, tools={"repo": {
             "description": "Repository tool for networkx 3.4.2. The action argument is mandatory. "
             'action="list" {path}: directory entries. action="read" {path,start}: up to 150 numbered lines from start. '
-            'action="search" {pattern}: literal substring search over networkx/*.py (40 matches shown). '
+            'action="search" {pattern}: Python regular-expression search, line by line, over networkx/*.py (40 matches shown). '
             'action="replace" {path,old,new}: replace text that occurs exactly once in a non-test library file. '
             'action="test" {target}: run pytest on a file, directory or node id, e.g. networkx/algorithms/tests/test_dag.py '
             "or networkx/algorithms (the complete algorithms suite takes about a minute). Paths are relative to the repository root.",
@@ -580,7 +584,8 @@ class RepoRuntime:
             "parameters": contract(),
             "example_call": {"id": "test_1", "tool": "repo", "args": {"action": "test", "target": "networkx/algorithms/tests/test_dag.py"}}}},
             instruction="Reproduce the failure with a focused test, read the relevant source, make a minimal fix with replace, "
-            "rerun the focused test, then run the complete networkx/algorithms suite before returning {\"done\": true}.")
+            "rerun the focused test, then run the complete networkx/algorithms suite. When it passes, call the submit_answer "
+            "tool with answer {\"done\": true}; do not write the answer as text.")
 
     def tool(self, task, call):
         if call.get("tool") != "repo":
