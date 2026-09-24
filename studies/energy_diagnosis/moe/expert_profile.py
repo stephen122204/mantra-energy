@@ -1,0 +1,87 @@
+"""Build policy data from recorded development runs (read-only on the campaign).
+
+profile: experts ranked by routed tokens across the selected goals, for the
+  static policy. Use development goals only; never evaluation goals.
+future:  per task and pause index, the experts the following model call used,
+  for the future diagnostic. Built from one reference goal per task.
+"""
+import argparse
+from collections import Counter
+import hashlib
+import json
+from pathlib import Path
+
+
+def _goals(campaign, policy):
+    for path in sorted(Path(campaign).glob("goals/*/expert-events.json")):
+        events = json.loads(path.read_text())
+        if events and events[0].get("policy", {}).get("name") == policy:
+            record = json.loads(path.with_name("record.json").read_text())
+            yield record, events
+
+
+def build_profile(campaign, policy="demand"):
+    tokens, goals = Counter(), []
+    for record, events in _goals(campaign, policy):
+        goals.append(record["goal_execution_id"])
+        for e in events:
+            if e["event"] == "expert_demand":
+                o = e["observation"]
+                tokens[(o["layer"], o["expert"])] += o.get("tokens", 1)
+    if not goals:
+        raise ValueError("no goals for the requested policy")
+    ranked = sorted(tokens.items(), key=lambda kv: (-kv[1], kv[0]))
+    return dict(kind="static-profile-v1", source_policy=policy, source_goals=goals,
+                experts=[[layer, expert, n] for (layer, expert), n in ranked])
+
+
+def build_future_trace(campaign, policy="demand"):
+    tasks, sources = {}, {}
+    for record, events in _goals(campaign, policy):
+        task = record["task_id"]
+        if task in tasks:
+            continue  # first reference goal per task
+        calls, current = [], None
+        for e in events:
+            if e["event"] == "model_start":
+                current = Counter()
+            elif e["event"] == "expert_demand" and current is not None:
+                o = e["observation"]
+                current[(o["layer"], o["expert"])] += o.get("tokens", 1)
+            elif e["event"] == "model_end" and current is not None:
+                calls.append(current)
+                current = None
+        # Pause k is followed by model call k (0-based call 0 precedes pause 1).
+        tasks[task] = {str(k): [[layer, expert, n] for (layer, expert), n in sorted(calls[k].items())]
+                       for k in range(1, len(calls))}
+        sources[task] = record["goal_execution_id"]
+    if not tasks:
+        raise ValueError("no goals for the requested policy")
+    return dict(kind="future-trace-v1", diagnostic=True, source_policy=policy, source_goals=sources, tasks=tasks)
+
+
+def dump(data, path):
+    text = json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n"
+    Path(path).write_text(text)
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def load(path):
+    """Return (data, sha256 of the exact file bytes)."""
+    raw = Path(path).read_bytes()
+    return json.loads(raw), hashlib.sha256(raw).hexdigest()
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("kind", choices=["profile", "future"])
+    parser.add_argument("--campaign", required=True)
+    parser.add_argument("--policy", default="demand", help="Source arm whose goals are read")
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args(argv)
+    data = (build_profile if args.kind == "profile" else build_future_trace)(args.campaign, args.policy)
+    print(dump(data, args.output))
+
+
+if __name__ == "__main__":
+    main()
