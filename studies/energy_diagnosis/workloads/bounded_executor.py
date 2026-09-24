@@ -146,6 +146,7 @@ class BoundedToolExecutor:
         workers_per_tool: int = 1,
         timeout_seconds: float = 10.0,
         event_sink: Callable[[dict[str, Any]], None] | None = None,
+        deadline_ns: int | None = None,
     ):
         if type(max_concurrent_calls) is not int or max_concurrent_calls not in (1, 2):
             raise GraphInputError("max_concurrent_calls must be 1 or 2")
@@ -162,6 +163,9 @@ class BoundedToolExecutor:
         self.workers_per_tool = workers_per_tool
         self.timeout_seconds = timeout_seconds
         self.event_sink = event_sink
+        # Absolute time.monotonic_ns() goal deadline shared by every call in the
+        # graph; timeout_seconds alone restarts for each dependent call.
+        self.deadline_ns = deadline_ns
         self.max_observed_concurrency = 0
         self._execute_lock = threading.Lock()
 
@@ -195,6 +199,20 @@ class BoundedToolExecutor:
                         self._emit("end", call, completed[call_id])
                         continue
                     if len(running) >= self.max_concurrent_calls:
+                        continue
+                    if (
+                        self.deadline_ns is not None
+                        and time.monotonic_ns() >= self.deadline_ns
+                    ):
+                        pending.remove(call_id)
+                        completed[call_id] = ToolOutcome(
+                            call_id,
+                            call.tool,
+                            "timed_out",
+                            error="goal deadline reached before admission",
+                            workers_configured=self.workers_per_tool,
+                        )
+                        self._emit("end", call, completed[call_id])
                         continue
                     pending.remove(call_id)
                     self._emit("ready", call)
@@ -253,15 +271,21 @@ class BoundedToolExecutor:
                             break
                         else:
                             raise BoundedExecutionError("unknown tool worker event")
-                    if (
-                        outcome is None
-                        and time.monotonic() - admitted >= self.timeout_seconds
+                    past_deadline = (
+                        self.deadline_ns is not None
+                        and time.monotonic_ns() >= self.deadline_ns
+                    )
+                    if outcome is None and (
+                        past_deadline
+                        or time.monotonic() - admitted >= self.timeout_seconds
                     ):
                         outcome = ToolOutcome(
                             call_id,
                             by_id[call_id].tool,
                             "timed_out",
-                            error=f"timeout after {self.timeout_seconds}s",
+                            error="goal deadline reached"
+                            if past_deadline
+                            else f"timeout after {self.timeout_seconds}s",
                             workers_configured=self.workers_per_tool,
                         )
                     if outcome is None and not process.is_alive():

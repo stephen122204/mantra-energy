@@ -20,6 +20,14 @@ from urllib.parse import urlparse
 import uuid
 
 from core.execution.adapters.openai_compat import OpenAICompatAdapter
+from studies.energy_diagnosis.agent_protocol import (
+    PROTOCOL_VERSION as CHAT_PROTOCOL,
+    Conversation,
+    function_tools,
+    outcome_class,
+    parse_response,
+    turn_seed,
+)
 from studies.energy_diagnosis.campaign import ArtifactRef, PlannedRun, RunLedger
 from studies.energy_diagnosis.campaign.runner import (
     BoundedCampaignRunner,
@@ -41,6 +49,7 @@ from studies.energy_diagnosis.runtime.node_measurement import (
     environment_identity,
 )
 from studies.energy_diagnosis.workloads.bounded_executor import (
+    BoundedExecutionError,
     BoundedToolExecutor,
     ToolCall,
 )
@@ -53,6 +62,15 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
 from studies.energy_diagnosis.workloads.pilot_tools import PilotAssetTool
 
 SETTINGS = {"C00": (False, 1), "C01": (False, 4), "C10": (True, 1), "C11": (True, 4)}
+
+
+class _VerificationTool:
+    """Run the checker in an owned process so its deadline is enforceable."""
+    def __init__(self, callback, task, answer):
+        self.callback, self.task, self.answer = callback, task, answer
+
+    def execute(self, workers=1):
+        return self.callback(self.task, self.answer)
 
 
 def digest(value):
@@ -168,6 +186,10 @@ class GoalExecutor:
         lifecycle=None,
         workload_runtime=None,
         initialized_model_window=False,
+        protocol="legacy-json-v1",
+        sampling=None,
+        max_tool_calls=None,
+        max_output_tokens=None,
     ):
         self.tasks = tasks
         self.adapter = adapter
@@ -181,6 +203,17 @@ class GoalExecutor:
         self.initialized_model_window = initialized_model_window
         if initialized_model_window and lifecycle is None:
             raise ValueError("initialized-model measurement requires an owned lifecycle")
+        if protocol not in {"legacy-json-v1", CHAT_PROTOCOL}:
+            raise ValueError("unknown agent protocol")
+        if protocol == CHAT_PROTOCOL and workload_runtime is None:
+            raise ValueError("the chat protocol requires a workload runtime")
+        # legacy-json-v1 reproduces V6: one user message per step holding a
+        # static instruction and tool results. chat-tools-v1 is the native
+        # multi-turn protocol (agent_protocol.py).
+        self.protocol = protocol
+        self.sampling = sampling or dict(mode="greedy")
+        self.max_tool_calls = max_tool_calls
+        self.max_output_tokens = max_output_tokens
 
     def _termination_invalidity(self, owned_terminated):
         """Why captured energy cannot be a complete goal interval, or None.
@@ -199,6 +232,201 @@ class GoalExecutor:
         ):
             return "owned worker terminated before device work was confirmed idle"
         return None
+
+    def _chat(self, task, lease, plan, context, model_calls, tool_results, spans, events, trace, artifacts, checkpoint):
+        """chat-tools-v1 turn loop -> (status, error, answer, response, owned_terminated).
+
+        Tool errors and unusable responses are returned to the model as
+        observations and cost a turn; only budget, deadline and infrastructure
+        limits end the attempt. The reason is recorded in trace["terminal"].
+        """
+        deadline_ns = lease.started_ns + int(self.timeout_seconds * 1e9)
+        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps)
+        meta = dict(task_id=task.task_id, family=task.family, asset_sha256=task.asset_sha256)
+        suffix = "-" + plan.setting_id
+        pair_key = plan.planned_run_id[: -len(suffix)] if plan.planned_run_id.endswith(suffix) else plan.planned_run_id
+        trace.update(
+            sampling=self.sampling,
+            limits=dict(turns=self.max_steps, tool_calls=self.max_tool_calls,
+                        output_tokens_per_turn=self.adapter.model_config["max_tokens"],
+                        output_tokens_total=self.max_output_tokens, goal_seconds=self.timeout_seconds),
+        )
+        response, calls_used, output_used, seen = None, 0, 0, set()
+        per_turn_tokens = self.adapter.model_config["max_tokens"]
+
+        def save_turn(step, phase, payload):
+            # Immutable partial evidence survives interruption before finalization.
+            ref = write_artifact(self.artifact_root,
+                Path("goals") / lease.execution_id / "turns" / f"{step:03d}-{phase}.json",
+                dict(protocol=self.protocol, partial=True, step=step, phase=phase, payload=payload),
+                f"agent-turn-{phase}")
+            artifacts.append(ref)
+            if checkpoint:
+                checkpoint([ref], metadata=dict(stage=phase, step=step, partial=True))
+
+        def stop(kind, detail, execution="incomplete"):
+            trace["terminal"] = kind
+            return execution, f"{kind}: {detail}", None, response, True
+
+        for step in range(self.max_steps):
+            now = time.monotonic_ns()
+            if now >= deadline_ns:
+                return stop("deadline_exceeded", "goal deadline reached between turns", "timed_out")
+            remaining_output = None if self.max_output_tokens is None else self.max_output_tokens - output_used
+            if remaining_output is not None and remaining_output <= 0:
+                return stop("output_budget_exhausted", f"{output_used} output tokens used")
+            call_budget = per_turn_tokens if remaining_output is None else min(per_turn_tokens, remaining_output)
+            request = conversation.request()
+            sampling = (dict(self.sampling, seed=turn_seed(self.sampling["seed"], pair_key, step))
+                        if self.sampling["mode"] == "sampled" else dict(mode="greedy"))
+            self.adapter.model_config["request_timeout_seconds"] = max(0.001, (deadline_ns - now) / 1e9)
+            if self.lifecycle:
+                self.lifecycle.before_model(f"{lease.attempt_id}:model:{step}")
+            started = time.monotonic_ns()
+            self.adapter.model_config["max_tokens"] = call_budget
+            try:
+                raw = self.adapter.chat(request, sampling, meta)
+            finally:
+                self.adapter.model_config["max_tokens"] = per_turn_tokens
+            ended = time.monotonic_ns()
+            tokens = raw.get("tokens") or {}
+            ok = raw.get("status", "ok") == "ok"
+            response = ModelResponse(
+                f"{lease.attempt_id}:model:{step}",
+                "completed" if ok else "error",
+                plan.model_sha256,
+                started,
+                ended,
+                lease.clock_domain,
+                text=raw.get("content") if ok else raw.get("partial_content"),
+                prompt_tokens=tokens.get("prompt"),
+                completion_tokens=tokens.get("completion"),
+                token_provenance=raw.get("token_provenance", "unknown"),
+                error="" if ok else raw.get("error", "model failed"),
+            )
+            model_calls.append(dict(response=response.to_dict(), adapter=raw, request=request, sampling=sampling,
+                                    max_tokens=call_budget))
+            save_turn(step, "model", model_calls[-1])
+            spans.append(SpanEvent(
+                response.request_id, lease.attempt_id, "model", started, started, ended,
+                "completed" if ok else "failed",
+                input_sha256=digest(request), output_sha256=digest(raw), error=response.error,
+            ))
+            if self.lifecycle and ok:
+                self.lifecycle.after_model()
+            if not ok:
+                # A disconnected live inference server may still own work.
+                owned = self.simulated or raw.get("owned_work_terminated") is True
+                kind = "deadline_exceeded" if time.monotonic_ns() >= deadline_ns else "infrastructure_failure"
+                status, error, _, _, _ = stop(kind, response.error, "timed_out" if kind == "deadline_exceeded" else "crashed")
+                return status, error, None, response, owned
+            count = tokens.get("completion")
+            if type(count) is not int or count < 0 or count > call_budget:
+                return stop("infrastructure_failure", "missing or out-of-budget completion token count", "crashed")
+            output_used += count
+            finish = raw.get("finish_reason")
+            turn = dict(step=step, finish_reason=finish, prompt_tokens=tokens.get("prompt"),
+                        completion_tokens=tokens.get("completion"), sampling_seed=sampling.get("seed"),
+                        output_budget=call_budget)
+            trace["turns"].append(turn)
+            if finish == "context_exhausted":
+                return stop("context_exhausted", f"{tokens.get('prompt')} prompt tokens plus the output allowance exceed the context")
+            if finish == "length":
+                kind = "output_budget_exhausted" if remaining_output is not None and output_used >= self.max_output_tokens else "output_truncated"
+                return stop(kind, f"response reached {call_budget} output tokens")
+            decision = parse_response(raw.get("content"))
+            turn.update(kind=decision.kind, reason=decision.reason)
+            if decision.kind == "answer":
+                conversation.record_turn(decision)
+                return "completed", "", decision.answer, response, True
+            if decision.kind != "tool_calls":
+                conversation.record_turn(decision)
+                conversation.feedback(decision.reason)
+            else:
+                if self.max_tool_calls is not None and calls_used + len(decision.calls) > self.max_tool_calls:
+                    return stop("tool_call_budget_exhausted", f"{calls_used} of {self.max_tool_calls} calls used")
+                calls_used += len(decision.calls)
+                ids = [f"t{step:02d}c{i}" for i in range(len(decision.calls))]
+                conversation.record_turn(decision, ids)
+                graph, runtime_tools, rejected = [], {}, {}
+                for cid, (name, arguments) in zip(ids, decision.calls):
+                    key = digest([name, arguments])
+                    turn["repeated_calls"] = turn.get("repeated_calls", 0) + (key in seen)
+                    seen.add(key)
+                    try:
+                        runtime_tools[name] = self.workload_runtime.tool(task, dict(id=cid, tool=name, args=arguments))
+                        graph.append(ToolCall(cid, name, arguments))
+                    except (ValueError, KeyError, TypeError) as exc:
+                        rejected[cid] = f"invalid call: {exc}"
+                outcomes = self._execute_graph(graph, runtime_tools, plan, lease, step, spans, events, deadline_ns) if graph else {}
+                timed_out = False
+                for cid, (name, _) in zip(ids, decision.calls):
+                    if cid in rejected:
+                        conversation.tool_result(cid, name, "error", rejected[cid])
+                        continue
+                    outcome = outcomes[cid]
+                    tool_results.append(asdict(outcome))
+                    timed_out |= outcome.status == "timed_out"
+                    if outcome.status == "completed":
+                        conversation.tool_result(cid, name, "ok", outcome.result)
+                    else:
+                        conversation.tool_result(cid, name, "error", outcome.error or outcome.status)
+                save_turn(step, "tools", dict(outcomes=[asdict(o) for o in outcomes.values()],
+                                               rejected=rejected, next_request=conversation.request()))
+                if timed_out:
+                    return stop("deadline_exceeded", "tool execution reached the goal deadline", "timed_out")
+            if self.max_output_tokens is not None and output_used >= self.max_output_tokens:
+                return stop("output_budget_exhausted", f"{output_used} output tokens used")
+        return stop("turn_budget_exhausted", f"{self.max_steps} turns without an answer")
+
+    def _execute_graph(self, graph, runtime_tools, plan, lease, step, spans, events, deadline_ns):
+        """Run one turn's calls inside a lifecycle tool pause; record spans and events."""
+        local_events = []
+        token = None
+
+        def record_tool_event(event):
+            nonlocal token
+            local_events.append(event)
+            # Start the pause only once a child is inside the tool body.
+            if self.lifecycle and token is None and event["event"] == "body_start":
+                token = self.lifecycle.start_pause()
+
+        if self.lifecycle:
+            self.lifecycle.plan_pause()
+        executor = BoundedToolExecutor(
+            runtime_tools,
+            max_concurrent_calls=2 if plan.tool_concurrency else 1,
+            workers_per_tool=plan.tool_workers,
+            timeout_seconds=max(0.001, (deadline_ns - time.monotonic_ns()) / 1e9),
+            event_sink=record_tool_event,
+            deadline_ns=deadline_ns,
+        )
+        pause_error = None
+        try:
+            outcomes = executor.execute(graph)
+        finally:
+            events.extend(local_events)
+            if self.lifecycle:
+                try:
+                    if token is not None:
+                        self.lifecycle.end_pause(token)
+                except Exception as exc:
+                    pause_error = exc
+        for c in graph:
+            outcome = outcomes[c.call_id]
+            matching = [e for e in local_events if e["call_id"] == c.call_id]
+            ready = next((e["monotonic_ns"] for e in matching if e["event"] == "ready"), matching[-1]["monotonic_ns"])
+            begin = next((e["monotonic_ns"] for e in matching if e["event"] == "start"), ready)
+            end = next(e["monotonic_ns"] for e in matching if e["event"] == "end")
+            spans.append(SpanEvent(
+                f"{lease.attempt_id}:tool:{step}:{c.call_id}", lease.attempt_id, "tool", ready, begin, end,
+                outcome.status, workers_configured=plan.tool_workers,
+                workers_observed=outcome.workers_observed or None,
+                input_sha256=digest(c.args), output_sha256=digest(outcome.result), error=outcome.error or "",
+            ))
+        if pause_error is not None:
+            raise pause_error
+        return outcomes
 
     def __call__(self, request):
         plan = request.scheduled_run.planned_run
@@ -225,6 +453,8 @@ class GoalExecutor:
             scope="model initialized before task; fresh process caches; outer deadline and startup/release costs retained",
         )
         prefix = Path("goals") / lease.execution_id
+        deadline_ns = lease.started_ns + int(self.timeout_seconds * 1e9)
+        trace = dict(protocol=self.protocol, terminal=None, turns=[])
         context = dict(
             task_id=task.task_id,
             asset_sha256=task.asset_sha256,
@@ -241,7 +471,11 @@ class GoalExecutor:
             if self.workload_runtime:
                 self.workload_runtime.begin(task, lease)
                 context.update(self.workload_runtime.context(task))
-            for step in range(self.max_steps):
+            if self.protocol == CHAT_PROTOCOL:
+                status, error, answer, response, owned_terminated = self._chat(
+                    task, lease, plan, context, model_calls, tool_results, spans, events, trace, artifacts, request.checkpoint
+                )
+            for step in range(self.max_steps if self.protocol != CHAT_PROTOCOL else 0):
                 if (
                     time.monotonic_ns() - lease.started_ns
                 ) / 1e9 >= self.timeout_seconds:
@@ -385,6 +619,7 @@ class GoalExecutor:
                         - (time.monotonic_ns() - lease.started_ns) / 1e9,
                     ),
                     event_sink=record_tool_event,
+                    deadline_ns=deadline_ns,
                 )
                 pause_error = None
                 if self.lifecycle:
@@ -442,12 +677,9 @@ class GoalExecutor:
                     error = "tool execution did not complete"
                     break
         except Exception as exc:
-            status, error = "crashed", f"{type(exc).__name__}: {exc}"
+            status = "timed_out" if time.monotonic_ns() >= deadline_ns else "crashed"
+            error = f"{type(exc).__name__}: {exc}"
             # Unexpected failures need conservative ownership handling.
-            from studies.energy_diagnosis.workloads.bounded_executor import (
-                BoundedExecutionError,
-            )
-
             if isinstance(exc, BoundedExecutionError):
                 owned_terminated = False
         if self.lifecycle:
@@ -470,13 +702,24 @@ class GoalExecutor:
             )
         verification_detail = dict(status="not_run", reason=error or "execution did not complete")
         verify_start = time.monotonic_ns()
+        if status == "completed" and verify_start >= deadline_ns:
+            status, error = "timed_out", "goal deadline reached before verification"
         if status == "completed":
             try:
-                result = (
-                    self.workload_runtime.verify(task, answer)
-                    if self.workload_runtime
-                    else verify_pilot(task, answer)
+                runtime = self.workload_runtime
+                callback = (runtime.verification_callable(task) if hasattr(runtime, "verification_callable")
+                            else runtime.verify if runtime is not None else verify_pilot)
+                verification_executor = BoundedToolExecutor(
+                    {"verify": _VerificationTool(callback, task, answer)},
+                    timeout_seconds=max(0.001, (deadline_ns-time.monotonic_ns())/1e9),
+                    deadline_ns=deadline_ns,
                 )
+                checked = verification_executor.execute([ToolCall("verify", "verify", {})])["verify"]
+                if checked.status == "timed_out":
+                    raise TimeoutError("goal deadline reached during verification")
+                if checked.status != "completed":
+                    raise RuntimeError(checked.error or "verifier process failed")
+                result = checked.result
                 verifier = VerifierResult(
                     plan.verifier_version,
                     "pass" if result["passed"] else "fail",
@@ -488,6 +731,10 @@ class GoalExecutor:
                 except (TypeError, ValueError):
                     verification_detail = dict(status="unavailable", reason="verifier result was not JSON serializable")
             except Exception as exc:
+                if isinstance(exc, TimeoutError):
+                    status, error = "timed_out", str(exc)
+                if isinstance(exc, BoundedExecutionError):
+                    owned_terminated = False
                 verification_detail = dict(status="error", reason=str(exc))
                 verifier = VerifierResult(
                     plan.verifier_version, "unavailable", str(exc),
@@ -496,6 +743,14 @@ class GoalExecutor:
         else:
             verifier = VerifierResult(plan.verifier_version, "unavailable", error)
         verify_end = time.monotonic_ns()
+        if status == "completed" and verify_end > deadline_ns:
+            # The verifier result stays in verification.json for audit; a
+            # result produced after the deadline is not a pass.
+            status, error = "timed_out", "verification finished after goal deadline"
+            verifier = VerifierResult(
+                plan.verifier_version, "unavailable", error,
+                evidence=((prefix / "verification.json").as_posix(),),
+            )
         spans.append(
             SpanEvent(
                 f"{lease.attempt_id}:verify",
@@ -600,7 +855,8 @@ class GoalExecutor:
             ("answer.json", answer, "answer"),
             ("verification.json", verification_detail, "verification-detail"),
             ("record.json", record.to_dict(), "execution-record"),
-        ]:
+        ] + ([("agent-trace.json", dict(trace, outcome=outcome_class(status, verifier.outcome, trace["terminal"])),
+               "agent-trace")] if self.protocol == CHAT_PROTOCOL else []):
             artifacts.append(
                 write_artifact(self.artifact_root, prefix / name, payload, role)
             )

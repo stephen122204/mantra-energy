@@ -327,14 +327,34 @@ class NativeDevice:
 
     def generate(self, arg):
         before = self.hook_ns
-        prompt = self.tokenizer.apply_chat_template(
-            [dict(role="user", content=arg["prompt"])],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+        chat = "messages" in arg
+        if chat:
+            # chat-tools-v1: the model's own template renders history and tools.
+            prompt = self.tokenizer.apply_chat_template(
+                arg["messages"], tools=arg["tools"], tokenize=False, add_generation_prompt=True,
+            )
+        else:
+            prompt = self.tokenizer.apply_chat_template(
+                [dict(role="user", content=arg["prompt"])],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
         inputs = self.tokenizer.encode(prompt, return_tensors="pt").to("cuda:0")
         if inputs.shape[1] + arg["max_tokens"] > self.max_context:
+            if chat:
+                # A budget outcome, not a backend failure: nothing was generated.
+                return dict(text="", finish_reason="context_exhausted", hook_ns=0,
+                            tokens=dict(prompt=int(inputs.shape[1]), completion=0))
             raise ValueError("prompt plus output exceeds fixed context budget")
+        sampling = arg.get("sampling") or dict(mode="greedy")
+        if sampling["mode"] == "greedy":
+            decode = dict(do_sample=False)
+        elif sampling["mode"] == "sampled":
+            self.torch.manual_seed(sampling["seed"])
+            decode = dict(do_sample=True, temperature=sampling["temperature"], top_p=sampling["top_p"],
+                          top_k=sampling["top_k"], min_p=sampling["min_p"])
+        else:
+            raise ValueError("unknown decoding mode")
         self.request_work.reset()
         reused = retained = 0
         options = {}
@@ -355,8 +375,8 @@ class NativeDevice:
                 result = self.model.generate(
                     inputs,
                     attention_mask=self.torch.ones_like(inputs),
-                    do_sample=False,
                     max_new_tokens=arg["max_tokens"],
+                    **decode,
                     pad_token_id=self.tokenizer.eos_token_id,
                     **options,
                 )
@@ -372,8 +392,20 @@ class NativeDevice:
         except BaseException:
             self.prefix_cache.clear()
             raise
+        ids = output.tolist()
+        stop_ids = {self.tokenizer.eos_token_id}
+        if chat:
+            stop_ids |= {i for i in self.tokenizer.convert_tokens_to_ids(["<|im_end|>", "<|endoftext|>"])
+                         if isinstance(i, int) and i != self.tokenizer.unk_token_id}
+        stopped = bool(ids) and ids[-1] in stop_ids
+        if chat:
+            # Keep tool-call markup; drop only the terminating token.
+            text = self.tokenizer.decode(ids[:-1] if stopped else ids, skip_special_tokens=False)
+        else:
+            text = self.tokenizer.decode(output, skip_special_tokens=True)
         return dict(
-            text=self.tokenizer.decode(output, skip_special_tokens=True),
+            text=text,
+            finish_reason="stop" if stopped or len(ids) < arg["max_tokens"] else "length",
             tokens=dict(prompt=int(inputs.shape[1]), completion=int(output.shape[0])),
             hook_ns=self.hook_ns - before,
             prefix_cache=dict(
