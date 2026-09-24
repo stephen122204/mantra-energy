@@ -9,6 +9,7 @@ import time
 from .backend import CONTROLS
 from .control import Expert
 from .prefix import GenerationWork, RequestPrefixCache, validate_prefix_configuration
+from .token_timing import TokenTiming
 
 BACKEND_COMMIT = "6da092fc98e7246bfa1b2f9b2a480524b8697a7e"
 MODEL_REVISION = "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe"
@@ -86,7 +87,8 @@ class NativeDevice:
             offload_path=config["offload_path"],
             device_memory_ratio=ratio,
             use_native_engine=False,
-            prefetch=False,
+            # builtin arm only: MoE-Infinity's own activation-aware prefetcher.
+            prefetch=bool(config.get("builtin_prefetch", False)),
             speculative_prefetch=False,
             speculative_prefetch_overlap=False,
             enable_attention_offload=False,
@@ -110,7 +112,9 @@ class NativeDevice:
             if getattr(actual, key) != value:
                 raise RuntimeError(f"backend changed requested {key}")
         executor = self.model.engine.expert_executor
-        if executor.prefetcher is not None or executor.precision_policy is not None:
+        if executor.precision_policy is not None or (
+            executor.prefetcher is not None and not self.applied["prefetch"]
+        ):
             raise RuntimeError("uncontrolled prefetch or precision policy is active")
         self.mapping = dict(self.model.engine.expert_tensor_map)
         if not self.mapping:
@@ -370,6 +374,7 @@ class NativeDevice:
         # Native expert workers update output tensors from separate threads.
         # InferenceMode is thread-local and makes those cross-thread writes fail.
         # no_grad preserves gradient-free generation with ordinary tensors.
+        timing = TokenTiming()
         try:
             with self.torch.no_grad():
                 result = self.model.generate(
@@ -378,6 +383,7 @@ class NativeDevice:
                     max_new_tokens=arg["max_tokens"],
                     **decode,
                     pad_token_id=self.tokenizer.eos_token_id,
+                    streamer=timing,
                     **options,
                 )
             self.torch.cuda.synchronize()
@@ -407,6 +413,7 @@ class NativeDevice:
             text=text,
             finish_reason="stop" if stopped or len(ids) < arg["max_tokens"] else "length",
             tokens=dict(prompt=int(inputs.shape[1]), completion=int(output.shape[0])),
+            generation_timing=timing.result(len(ids)),
             hook_ns=self.hook_ns - before,
             prefix_cache=dict(
                 mode=self.request_cache_mode,

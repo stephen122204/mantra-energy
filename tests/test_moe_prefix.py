@@ -133,10 +133,14 @@ def test_native_bridge_accounts_reuse_and_discards_failed_cache():
 
     def generate(inputs, **kwargs):
         seen.append(kwargs)
+        kwargs["streamer"].put(inputs)
         past = kwargs.get("past_key_values")
         device.request_work.observe(inputs.shape[1] - (past.get_seq_length() if past else 0))
         device.request_work.observe(1)
         sequences = Matrix(inputs.data + [80, 81])
+        for token in [80, 81]:
+            kwargs["streamer"].put(Vector([token]))
+        kwargs["streamer"].end()
         return SimpleNamespace(sequences=sequences, past_key_values=Cache(len(sequences.data)-1)) if kwargs.get("return_dict_in_generate") else sequences
 
     device.model = SimpleNamespace(generate=generate)
@@ -146,6 +150,7 @@ def test_native_bridge_accounts_reuse_and_discards_failed_cache():
     assert second["prefix_cache"]["reused_prefix_tokens"] == 2
     assert second["prefix_cache"]["new_prefill_tokens"] == 1
     assert second["tokens"] == {"prompt": 3, "completion": 2}
+    assert second["generation_timing"]["generated_tokens"] == 2
     assert seen[-1]["use_cache"] is True and seen[-1]["do_sample"] is False
 
     def failed(inputs, **kwargs):
