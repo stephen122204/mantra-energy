@@ -23,7 +23,7 @@ import tempfile
 
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 
-VERSION = "repo-repair-networkx-v1"
+VERSION = "repo-repair-networkx-v2"  # v2 adds two cases; v1 case content unchanged
 SOURCE_COMMIT = "2acf1590f82757c01a57b81b8c5dfb79e60aa416"  # networkx-3.4.2
 PACKAGE = "networkx"
 READ_LINES = 150
@@ -80,6 +80,24 @@ CASES = {
         module="networkx/algorithms/components/tests/test_connected.py",
         withheld=("TestConnected::test_node_connected_components", "TestConnected::test_connected_mutability"),
         symptom="connected component functions return incomplete components",
+    ),
+    "dijkstra-tentative-distance": dict(
+        file="networkx/algorithms/shortest_paths/weighted.py",
+        old="            elif u not in seen or vu_dist < seen[u]:\n                seen[u] = vu_dist",
+        new="            elif u not in seen:\n                seen[u] = vu_dist",
+        module="networkx/algorithms/shortest_paths/tests/test_weighted.py",
+        withheld=("TestWeightedPath::test_all_pairs_dijkstra", "TestJohnsonAlgorithm::test_graphs",
+                  "TestWeightedPath::test_weight_function"),
+        symptom="Dijkstra shortest-path lengths are sometimes too long",
+    ),
+    "topological-generations-multiedge": dict(
+        file="networkx/algorithms/dag.py",
+        old="                    indegree_map[child] -= len(G[node][child]) if multigraph else 1",
+        new="                    indegree_map[child] -= 1",
+        module="networkx/algorithms/tests/test_dag.py",
+        withheld=("TestDagLongestPathLength::test_multigraph_unweighted",
+                  "TestDagLongestPath::test_multigraph_weighted_default_weight"),
+        symptom="topological_generations and DAG longest-path functions fail on multigraphs with parallel edges",
     ),
 }
 
@@ -204,6 +222,59 @@ def test_components_match_union_find():
 ''',
 }
 
+HELD_OUT["dijkstra-tentative-distance"] = '''
+import random
+import networkx as nx
+
+def bellman_ford(G, source):
+    dist = {source: 0}
+    for _ in range(len(G)):
+        changed = False
+        for u, v, d in G.edges(data=True):
+            w = d.get("weight", 1)
+            pairs = ((u, v),) if G.is_directed() else ((u, v), (v, u))
+            for a, b in pairs:
+                if a in dist and dist[a] + w < dist.get(b, float("inf")):
+                    dist[b] = dist[a] + w
+                    changed = True
+        if not changed:
+            break
+    return dist
+
+def test_dijkstra_matches_bellman_ford():
+    rng = random.Random(13)
+    for _ in range(30):
+        G = nx.gnp_random_graph(rng.randrange(2, 25), 0.3, seed=rng.randrange(10**6), directed=rng.random() < 0.5)
+        for u, v in G.edges():
+            G[u][v]["weight"] = rng.randrange(1, 20)
+        source = rng.choice(list(G))
+        assert nx.single_source_dijkstra_path_length(G, source) == bellman_ford(G, source)
+'''
+
+HELD_OUT["topological-generations-multiedge"] = '''
+import random
+import networkx as nx
+
+def test_generations_match_longest_predecessor_depth():
+    rng = random.Random(17)
+    for _ in range(30):
+        n = rng.randrange(1, 15)
+        G = nx.MultiDiGraph()
+        G.add_nodes_from(range(n))
+        for u in range(n):
+            for v in range(u + 1, n):
+                for _ in range(rng.choice([0, 0, 1, 2, 3])):
+                    G.add_edge(u, v)
+        depth = {}
+        for v in range(n):
+            preds = list(G.predecessors(v))
+            depth[v] = 1 + max(depth[p] for p in preds) if preds else 0
+        expected = {}
+        for v, d in depth.items():
+            expected.setdefault(d, set()).add(v)
+        assert {i: set(g) for i, g in enumerate(nx.topological_generations(G))} == expected
+'''
+
 SANDBOX = '''import socket
 
 def _blocked(*args, **kwargs):
@@ -282,7 +353,7 @@ def create_task(root, *, case, source, python):
     if meta["case"] != case or meta["version"] != VERSION or meta["tool_python"]["python"] != python:
         raise ValueError("existing repository task differs from the requested case")
     return PilotTask(
-        f"repo-{case}-v1", "repository-repair", f"networkx-{SOURCE_COMMIT[:12]}", root, {}, _hash(root), (),
+        f"repo-{case}-v2", "repository-repair", f"networkx-{SOURCE_COMMIT[:12]}", root, {}, _hash(root), (),
         f"A user reports: {spec['symptom']}. The repository is networkx 3.4.2 with its test suite. "
         "Find and fix the defect in the library source (do not edit tests), using the repo tool to list, read, "
         "search, replace and run pytest targets. Before finishing, run the complete networkx/algorithms test suite "
