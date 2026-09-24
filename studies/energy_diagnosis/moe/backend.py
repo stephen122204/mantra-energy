@@ -157,10 +157,11 @@ class ProcessBackend:
     def drain_demands(self):
         return self._rpc("demands")
 
-    def generate(self, prompt, timeout, max_tokens):
-        return self._rpc(
-            "generate", dict(prompt=prompt, max_tokens=max_tokens), timeout=timeout
-        )
+    def generate(self, prompt, timeout, max_tokens, chat=None):
+        # chat: dict(messages, tools, sampling, meta) for the chat-tools protocol;
+        # prompt is then None. meta is fixture-only and never rendered.
+        args = dict(max_tokens=max_tokens, **chat) if chat else dict(prompt=prompt, max_tokens=max_tokens)
+        return self._rpc("generate", args, timeout=timeout)
 
     def end_goal(self):
         p = self.process
@@ -241,11 +242,37 @@ class BackendAdapter:
                 backend=result,
             )
         except Exception as exc:
-            return dict(
-                status="error",
-                error=str(exc),
-                tokens={},
-                token_provenance="unknown",
-                elapsed_ns=time.monotonic_ns() - started,
-                owned_work_terminated=self.backend.owned_work_terminated,
+            return self._error(exc, started)
+
+    def chat(self, request, sampling, meta):
+        """One chat-tools turn. finish_reason is stop, length or context_exhausted."""
+        started = time.monotonic_ns()
+        try:
+            result = self.backend.generate(
+                None,
+                self.model_config["request_timeout_seconds"],
+                self.model_config["max_tokens"],
+                chat=dict(request, sampling=sampling, meta=meta),
             )
+            return dict(
+                status="ok",
+                content=result["text"],
+                finish_reason=result["finish_reason"],
+                tokens=result["tokens"],
+                token_provenance="tokenizer"
+                if self.backend.mode == "native"
+                else "estimated",
+                backend=result,
+            )
+        except Exception as exc:
+            return self._error(exc, started)
+
+    def _error(self, exc, started):
+        return dict(
+            status="error",
+            error=str(exc),
+            tokens={},
+            token_provenance="unknown",
+            elapsed_ns=time.monotonic_ns() - started,
+            owned_work_terminated=self.backend.owned_work_terminated,
+        )

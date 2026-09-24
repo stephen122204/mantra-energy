@@ -22,6 +22,6 @@ def test_checker_detail_is_durable_private_artifact(tmp_path,monkeypatch,case):
     if case=='returned':assert detail['result']['diagnostics']==diagnostics
     else:assert detail['status']==('error' if case=='exception' else 'unavailable')
     calls=json.loads(record_path.with_name('model-calls.json').read_text())
-    assert all('independent hidden checks' not in c['prompt'] for c in calls)
+    assert all('independent hidden checks' not in json.dumps(c['request']) for c in calls)
     attempt=json.loads((root/'exports/attempts.jsonl').read_text().splitlines()[0])
     assert any(a['role']=='verification-detail' for a in attempt['attempt']['artifacts'])

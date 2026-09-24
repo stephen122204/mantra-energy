@@ -49,3 +49,32 @@ def test_no_artifacts_and_invalid_budgets_fail(tmp_path):
 def test_malformed_artifact_fails(tmp_path):
     path=saved(tmp_path);path.write_text('[{}]')
     with pytest.raises(ValueError,match='missing prompt'):audit(tmp_path,Tokenizer(),max_context=100,max_tokens=50)
+
+
+class ChatTokenizer(Tokenizer):
+    def apply_chat_template(self, messages, *, tools=None, tokenize, add_generation_prompt):
+        assert tokenize is False and add_generation_prompt is True
+        return json.dumps([messages, tools])
+
+
+def _chat_call(tmp_path, finish, content):
+    path = tmp_path / 'goals' / 'g' / 'model-calls.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    request = dict(messages=[dict(role='user', content='go')], tools=[])
+    path.write_text(json.dumps([dict(request=request, adapter=dict(status='ok', content=content, finish_reason=finish))]))
+    return len(ChatTokenizer().encode(json.dumps([request['messages'], []])))
+
+
+def test_chat_requests_replay_and_classified_budget_outcomes(tmp_path):
+    prompt = _chat_call(tmp_path, 'stop', 'ok')
+    assert audit(tmp_path, ChatTokenizer(), max_context=prompt + 50, max_tokens=50)['all_saved_calls_fit']
+    # A truncation the harness recorded is an outcome, not an audit error.
+    _chat_call(tmp_path, 'length', 'x' * 50)
+    result = audit(tmp_path, ChatTokenizer(), max_context=prompt + 50, max_tokens=50)
+    assert result['all_saved_calls_fit'] and result['records'][0]['budget_outcome'] == 'output_truncated'
+    _chat_call(tmp_path, 'context_exhausted', '')
+    result = audit(tmp_path, ChatTokenizer(), max_context=prompt + 10, max_tokens=50)
+    assert result['all_saved_calls_fit'] and result['records'][0]['budget_outcome'] == 'context_exhausted'
+    # An unrecorded truncation is still an error.
+    _chat_call(tmp_path, 'stop', 'x' * 50)
+    assert not audit(tmp_path, ChatTokenizer(), max_context=prompt + 50, max_tokens=50)['all_saved_calls_fit']

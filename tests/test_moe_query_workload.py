@@ -144,7 +144,7 @@ def test_full_query_goal_executes_tools_and_retains_verifier_result(tmp_path, ca
         assert len(rows) == 2 and all(row["status"] == "completed" for row in rows)
         assert rows[1]["result"]["rows"] == [[1, 2], [23, 1]]
         calls = json.loads(path.with_name("model-calls.json").read_text())
-        assert len(calls) == 3 and "expected" not in json.loads(calls[0]["prompt"])
+        assert len(calls) == 3 and "expected" not in json.dumps(calls[0]["request"])
     attempts = [json.loads(s)["attempt"] for s in (output / "exports" / "attempts.jsonl").read_text().splitlines()]
     assert len(attempts) == 2
     assert all(a["verifier_outcome"] == ("pass" if passes else "fail") for a in attempts)
