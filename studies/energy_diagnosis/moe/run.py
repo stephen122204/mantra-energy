@@ -99,6 +99,7 @@ def run(args):
             max_steps=args.max_steps,
             max_tokens=args.max_tokens,
             deadline=args.deadline,
+            agent=_agent_settings(args),
             mode=args.mode,
             execution_protocol=EXECUTION_PROTOCOL,
             comparison_order=comparison_order,
@@ -150,6 +151,7 @@ def run(args):
         execution_protocol=EXECUTION_PROTOCOL,
         comparison_order=comparison_order,
         limits=dict(goal_seconds=args.deadline, max_steps=args.max_steps, max_output_tokens=args.max_tokens),
+        agent=_agent_settings(args),
         policies={sid: asdict(p) for sid, p in by_setting.items()},
         schedule=schedule.to_dict(),
         query_engine=args.query_engine if query_assets else None,
@@ -213,6 +215,10 @@ def run(args):
                     timeout_seconds=args.deadline,
                     simulated=simulated,
                     lifecycle=lifecycle,
+                    protocol=args.agent_protocol,
+                    sampling=_agent_settings(args)["sampling"],
+                    max_tool_calls=args.max_tool_calls,
+                    max_output_tokens=args.max_total_output_tokens,
                     initialized_model_window=True,
                     workload_runtime=pack.runtime(root) if pack is not None else QueryRuntime(args.fixture_case if simulated else None, args.query_engine) if query_assets else WorkloadRuntime(
                         root, args.fixture_case if simulated else None
@@ -264,6 +270,14 @@ def run(args):
     return result
 
 
+def _agent_settings(args):
+    sampling = (dict(mode="sampled", temperature=args.temperature, top_p=args.top_p, top_k=args.top_k,
+                     min_p=args.min_p, seed=args.sampling_seed)
+                if args.decoding == "sampled" else dict(mode="greedy"))
+    return dict(protocol=args.agent_protocol, sampling=sampling, max_turns=args.max_steps,
+                max_tool_calls=args.max_tool_calls, max_total_output_tokens=args.max_total_output_tokens,
+                max_output_tokens_per_turn=args.max_tokens)
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--mode", choices=["fixture", "native"], required=True)
@@ -283,7 +297,18 @@ def main(argv=None):
     p.add_argument("--query-engine", choices=["duckdb", "sqlite"], default="duckdb")
     p.add_argument("--max-runs", type=int, default=4)
     p.add_argument("--repeats", type=int, default=1)
-    p.add_argument("--max-steps", type=int, default=5)
+    p.add_argument("--max-steps", "--max-turns", dest="max_steps", type=int, default=5,
+                   help="Model responses per goal, including the answer")
+    p.add_argument("--agent-protocol", choices=["chat-tools-v1", "legacy-json-v1"], default="chat-tools-v1",
+                   help="chat-tools-v1: native multi-turn chat and tool calls; legacy-json-v1 reproduces V6")
+    p.add_argument("--decoding", choices=["greedy", "sampled"], default="greedy")
+    p.add_argument("--temperature", type=float, default=0.7, help="Sampled decoding only (model card value)")
+    p.add_argument("--top-p", type=float, default=0.8)
+    p.add_argument("--top-k", type=int, default=20)
+    p.add_argument("--min-p", type=float, default=0.0)
+    p.add_argument("--sampling-seed", type=int, default=0, help="Base seed; each turn's seed is shared by both arms of a pair")
+    p.add_argument("--max-tool-calls", type=int, help="Total tool calls per goal (default: unlimited within turns)")
+    p.add_argument("--max-total-output-tokens", type=int, help="Total generated tokens per goal (default: unlimited within turns)")
     p.add_argument("--max-tokens", type=int, default=512)
     p.add_argument("--deadline", type=float, default=120, help="Whole-goal seconds including model startup, up to 1800; also use a bounded batch supervisor")
     p.add_argument("--seed", type=int, default=7)
@@ -305,6 +330,8 @@ def main(argv=None):
             "missing_telemetry",
             "tool_failure",
             "tool_timeout",
+            "truncated_output",
+            "no_action",
         ],
     )
     args = p.parse_args(argv)
@@ -313,6 +340,14 @@ def main(argv=None):
         or min(args.max_runs, args.max_steps, args.repeats, args.max_tokens) < 1
     ):
         p.error("invalid bounded run/step/time budget")
+    if args.decoding == "sampled" and not (
+        args.temperature > 0 and 0 < args.top_p <= 1 and args.top_k >= 1 and 0 <= args.min_p < 1
+    ):
+        p.error("invalid sampling parameters")
+    if any(v is not None and v < 1 for v in (args.max_tool_calls, args.max_total_output_tokens)):
+        p.error("tool-call and output-token budgets must be positive")
+    if args.agent_protocol == "legacy-json-v1" and (args.decoding != "greedy" or args.max_tool_calls or args.max_total_output_tokens):
+        p.error("legacy-json-v1 reproduces V6 and supports only greedy decoding and turn/output-per-call limits")
     if args.comparison_order == "balanced-pairs" and (args.repeats % 2 or len(set(args.policies.split(","))) != 2):
         p.error("balanced pairs require two distinct policies and even repetitions")
     if args.mode == "native" and args.byte_budget == 128 and args.policies != "demand":
