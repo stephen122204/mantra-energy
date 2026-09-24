@@ -68,18 +68,24 @@ def test_background_cpu_and_boot_change_stop(tmp_path):
 
 
 def test_previously_owned_reparented_worker_is_retained_for_cleanup(tmp_path):
+    # Teardown race: the supervisor exits before its worker is reaped, so the worker
+    # is reparented to init. It is still owned work, not an external process.
     baseline = snap([row(1, 0, name="systemd")])
     readings = iter(
         [
-            snap([row(100), row(101, 100), row(102, 101)]),
-            snap([row(102, 1)], 2),
-            snap([row(102, 1)], 3),
+            snap([row(1, 0, name="systemd"), row(100), row(101, 100), row(102, 101)]),
+            snap([row(1, 0, name="systemd"), row(102, 1, cpu=500)], 2),
+            snap([row(1, 0, name="systemd"), row(102, 1, cpu=500)], 3),
+            snap([row(1, 0, name="systemd"), row(102, 1, cpu=500), row(300, 102)], 4),
         ]
     )
     guard = ProcessGuard(baseline, tmp_path / "log", 100, reader=lambda: next(readings))
-    with pytest.raises(InterferenceDetected):
-        guard.check()
+    record = guard.check()
+    assert record["reasons"] == [] and record["unexpected"] == []
     assert guard.surviving_owned() == [102]
+    # Anything the orphan starts after leaving the owned tree was never observed as owned.
+    with pytest.raises(InterferenceDetected, match="external process"):
+        guard.check()
 
 
 def test_linux_stat_parsing_handles_parentheses_and_skips_kernel_threads(tmp_path):
@@ -211,3 +217,29 @@ def test_preauth_sshd_from_scanners_is_exempt_but_logins_and_cpu_are_not(tmp_pat
     guard = ProcessGuard(baseline, tmp_path / "cpu", 100, reader=lambda: next(readings))
     with pytest.raises(InterferenceDetected, match="CPU budget"):
         guard.check()
+
+
+def test_supervisor_cpu_placement_is_applied_and_recorded(tmp_path):
+    import datetime as dt
+    import os
+    from studies.energy_diagnosis.diagnostics.run_bounded import cpu_list
+    assert cpu_list("8-10,3,9") == [3, 8, 9, 10]
+    for invalid in ("", "4-2", "x"):
+        with pytest.raises(ValueError):
+            cpu_list(invalid)
+    if sys.platform != "linux":
+        pytest.skip("Linux affinity")
+    cpu = min(os.sched_getaffinity(0))
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "-m", "studies.energy_diagnosis.diagnostics.run_bounded",
+         "--output", str(tmp_path / "job"), "--cwd", str(tmp_path), "--seconds", "20",
+         "--cutoff-utc", (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=5)).isoformat(),
+         "--lock", str(tmp_path / "lock"), "--supervisor-cpus", str(cpu), "--",
+         sys.executable, "-c", "import os; print(sorted(os.sched_getaffinity(0)))"],
+        cwd=root, capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    status = json.loads((tmp_path / "job/status.json").read_text())
+    assert status["supervisor_cpus"] == [cpu] and status["status"] == "completed"
+    # Without its own affinity request the child inherits the supervisor placement.
+    assert (tmp_path / "job/run.log").read_text().strip() == str([cpu])
