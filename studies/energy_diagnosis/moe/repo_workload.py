@@ -23,7 +23,7 @@ import tempfile
 
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 
-VERSION = "repo-repair-networkx-v2"  # v2 adds two cases; v1 case content unchanged
+VERSION = "repo-repair-networkx-v2"  # v2 adds four cases; v1 case content unchanged
 SOURCE_COMMIT = "2acf1590f82757c01a57b81b8c5dfb79e60aa416"  # networkx-3.4.2
 PACKAGE = "networkx"
 READ_LINES = 150
@@ -98,6 +98,22 @@ CASES = {
         withheld=("TestDagLongestPathLength::test_multigraph_unweighted",
                   "TestDagLongestPath::test_multigraph_weighted_default_weight"),
         symptom="topological_generations and DAG longest-path functions fail on multigraphs with parallel edges",
+    ),
+    "edge-boundary-symmetric": dict(
+        file="networkx/algorithms/boundary.py",
+        old="        return (e for e in edges if (e[0] in nset1) ^ (e[1] in nset1))",
+        new="        return (e for e in edges if (e[0] in nset1) or (e[1] in nset1))",
+        module="networkx/algorithms/tests/test_boundary.py",
+        withheld=("TestEdgeBoundary::test_multigraph", "TestEdgeBoundary::test_multidigraph"),
+        symptom="edge_boundary returns edges that lie entirely inside the node set",
+    ),
+    "overall-reciprocity-overlap": dict(
+        file="networkx/algorithms/reciprocity.py",
+        old="    n_overlap_edge = (n_all_edge - G.to_undirected().number_of_edges()) * 2",
+        new="    n_overlap_edge = n_all_edge - G.to_undirected().number_of_edges()",
+        module="networkx/algorithms/tests/test_reciprocity.py",
+        withheld=(),
+        symptom="overall reciprocity of a directed graph is too small",
     ),
 }
 
@@ -273,6 +289,35 @@ def test_generations_match_longest_predecessor_depth():
         for v, d in depth.items():
             expected.setdefault(d, set()).add(v)
         assert {i: set(g) for i, g in enumerate(nx.topological_generations(G))} == expected
+'''
+
+HELD_OUT["edge-boundary-symmetric"] = '''
+import random
+import networkx as nx
+
+def test_boundary_matches_bruteforce():
+    rng = random.Random(19)
+    for _ in range(30):
+        directed = rng.random() < 0.5
+        G = nx.gnp_random_graph(rng.randrange(2, 20), 0.3, seed=rng.randrange(10**6), directed=directed)
+        S = set(rng.sample(list(G), rng.randrange(1, len(G) + 1)))
+        expected = {(u, v) for u in S for v in (G.successors(u) if directed else G[u]) if v not in S}
+        got = set(nx.edge_boundary(G, S))
+        assert got == expected
+'''
+
+HELD_OUT["overall-reciprocity-overlap"] = '''
+import random
+import networkx as nx
+
+def test_overall_reciprocity_matches_counting():
+    rng = random.Random(23)
+    for _ in range(30):
+        G = nx.gnp_random_graph(rng.randrange(2, 25), rng.uniform(0.1, 0.6), seed=rng.randrange(10**6), directed=True)
+        if G.number_of_edges() == 0:
+            continue
+        reciprocated = sum(1 for u, v in G.edges() if G.has_edge(v, u))
+        assert abs(nx.overall_reciprocity(G) - reciprocated / G.number_of_edges()) < 1e-12
 '''
 
 SANDBOX = '''import socket
