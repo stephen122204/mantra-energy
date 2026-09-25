@@ -26,9 +26,13 @@ HOST = {"cpu_affinity", "keep_awake_cpus", "tool_cpus", "supervisor_cpus", "idle
 
 def load(path):
     plan = json.loads(Path(path).read_text())
-    if set(plan) != REQUIRED or set(plan["node"]) != NODE or set(plan["host_condition"]) != HOST \
+    if set(plan) - {"blocks"} != REQUIRED or set(plan["node"]) != NODE or set(plan["host_condition"]) != HOST \
             or set(plan["expected"]) != EXPECTED:
         raise ValueError("plan fields differ from the frozen plan schema")
+    blocks = plan.get("blocks", [0, plan["repetitions"]])
+    if not (isinstance(blocks, list) and len(blocks) == 2 and all(type(b) is int for b in blocks)
+            and 0 <= blocks[0] < blocks[1] <= plan["repetitions"]):
+        raise ValueError("blocks must be [first, stop) within the repetitions")
     if type(plan["repetitions"]) is not int or not 1 <= plan["repetitions"] <= 100:
         raise ValueError("repetitions must be 1..100")
     if not plan["arms"] or not plan["families"]:
@@ -48,11 +52,14 @@ def batches(plan):
     py = node["remote_python"]
     out = []
     rng = random.Random(plan["seed"])
-    for rep in range(plan["repetitions"]):
+    first, stop = plan.get("blocks", [0, plan["repetitions"]])
+    for rep in range(stop):
         for family, spec in sorted(plan["families"].items()):
             for task in spec["tasks"]:
                 arms = sorted(plan["arms"])
-                rng.shuffle(arms)
+                rng.shuffle(arms)  # drawn for every block so a stage keeps the full plan's orders
+                if rep < first:
+                    continue
                 for arm in arms:
                     ident = f"r{rep:02d}-{family}-{task['short']}-{arm}"
                     run = [py, "-m", "studies.energy_diagnosis.moe.run", *plan["base_args"], *spec["args"],

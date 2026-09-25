@@ -149,3 +149,14 @@ def test_recover_refuses_terminal_batch(tmp_path):
     _interrupted_batch(tmp_path, p, status="completed")
     ok, reasons = recover(p, "r00-S-etl-A", gpu_apps=[])
     assert not ok and "terminal" in reasons[0]
+
+
+def test_stage_two_blocks_match_the_full_plan_and_do_not_collide(tmp_path):
+    full = cp.node_spec(cp.load(plan(tmp_path, repetitions=4)))
+    stage1 = cp.node_spec(cp.load(plan(tmp_path, repetitions=4, blocks=[0, 2])))
+    stage2 = cp.node_spec(cp.load(plan(tmp_path, repetitions=4, blocks=[2, 4])))
+    ids = lambda s: [b["id"] for b in s["batches"]]
+    assert ids(stage1) + ids(stage2) == ids(full)
+    assert not set(ids(stage1)) & set(ids(stage2))
+    with pytest.raises(ValueError):
+        cp.load(plan(tmp_path, repetitions=4, blocks=[3, 6]))
