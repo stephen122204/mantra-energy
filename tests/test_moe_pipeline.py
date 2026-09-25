@@ -793,7 +793,9 @@ def test_every_resume_reconciles_dispatcher_cache_accounting(tmp_path):
         # The drain that precedes each resume reports its reconciliation.
         assert "cache_reconciled" in kinds[max(0, i - 50):i]
     rec = next(e for e in events if e["event"] == "cache_reconciled")
-    assert set(rec) >= {"stale_removed", "adopted", "budget_before", "budget_after"}
+    assert set(rec) >= {"stale_removed", "adopted", "budget_before", "budget_after", "when"}
+    whens = [e["when"] for e in events if e["event"] == "cache_reconciled"]
+    assert whens[0] == "goal_start" and whens[-1] == "goal_end" and "resume" in whens
 
 
 def test_compact_artifact_keeps_content_and_hashes_written_bytes(tmp_path):

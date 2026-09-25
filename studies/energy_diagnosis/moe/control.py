@@ -197,6 +197,9 @@ class Lifecycle:
             reset=self.backend.reset_evidence,
             startup_window=dict(start_ns=startup_start, end_ns=startup_end),
         )
+        # Every arm starts each goal from dispatcher accounting reconciled with placement, so the
+        # first model call does not run under the constructor's provisional budget.
+        self._record_reconciliation(self.backend.drain_owned_work(10), when="goal_start")
 
     def before_model(self, request_id):
         if self.goal is None or self.pause is not None or self._pause_plan is not None or self.work_settled:
@@ -357,10 +360,10 @@ class Lifecycle:
         self.emit("model_resume", cancelled_bytes=cancelled)
         self.pause = None
 
-    def _record_reconciliation(self, drained):
+    def _record_reconciliation(self, drained, when="resume"):
         rec = (drained or {}).get("cache_reconciliation") if isinstance(drained, dict) else None
         if rec is not None:
-            self.emit("cache_reconciled", **rec)
+            self.emit("cache_reconciled", when=when, **rec)
 
     def _collect_transfers(self):
         records, dropped = self.backend.drain_transfers()
@@ -399,7 +402,7 @@ class Lifecycle:
         cleanup = self.backend.cleanup_scope(timeout_seconds) if hasattr(self.backend, "cleanup_scope") else nullcontext()
         with cleanup:
             self.backend.cancel_pending_preparation(self.generation)
-            self.backend.drain_owned_work(timeout_seconds)
+            self._record_reconciliation(self.backend.drain_owned_work(timeout_seconds), when="goal_end")
             self._collect_transfers()
         for key, row in self.pending.items():
             self.emit(

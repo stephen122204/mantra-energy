@@ -67,6 +67,11 @@ def main(argv=None):
         p.error("give the moe.run argv without --output, and a one-component batch id")
     out = Path(a.root) / a.id
     out.mkdir(parents=True, exist_ok=False)  # an existing batch is never silently repeated
+    import fcntl
+    # Held for the batch's whole life and inherited by the supervisor (pass_fds): recovery can
+    # only classify this batch once no process of it holds the lock.
+    active = open(out / "active.lock", "w")
+    fcntl.flock(active, fcntl.LOCK_EX | fcntl.LOCK_NB)
     record = dict(id=a.id, started_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), command=command)
     record["meminfo_before_warm"] = meminfo()
     record["warm"] = warm(a.warm)
@@ -78,7 +83,7 @@ def main(argv=None):
                *command, "--output", str(out / "campaign")]
     record["run_bounded_argv"] = bounded
     (out / "batch.json").write_text(json.dumps(record, indent=2) + "\n")
-    rc = subprocess.run(bounded, stdin=subprocess.DEVNULL).returncode
+    rc = subprocess.run(bounded, stdin=subprocess.DEVNULL, pass_fds=(active.fileno(),)).returncode
     (out / "idle-after.json").write_text(json.dumps(idle_snapshot(a.idle_cpus)))
     from studies.energy_diagnosis.moe.audit_pilot import audit
     result = audit(out, prefix_mode="exact_prefix", required_domains=a.required_domain, require_timing=True)

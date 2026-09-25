@@ -9,6 +9,8 @@ def batch(root, ident, energy, success=True, valid=True, requests=("r1", "r2"), 
     goal = root / ident / "campaign/goals/exec-x"
     goal.mkdir(parents=True)
     (root / ident / "acceptance.json").write_text(json.dumps(dict(protocol_valid=valid)))
+    (root / ident / "job").mkdir()
+    (root / ident / "job/status.json").write_text(json.dumps(dict(status="completed")))
     per = energy / 3
     (goal / "record.json").write_text(json.dumps(dict(
         verifier=dict(outcome="pass" if success else "fail"), execution_status="completed",
@@ -69,3 +71,22 @@ def test_t_interval_and_precision_gate():
     ok = ca.precision_gate(dict(contrasts={"B1-A:total_j": dict(
         per_task_fixed_work=[dict(task="x", half_width=0.8)], family_fixed_work={"L": dict(half_width=0.3)})}))
     assert not ok["extend"]
+
+
+def test_stages_combine_and_recovered_batches_are_never_valid(tmp_path):
+    s1 = spec([("r0-S-e-A", 0, "S", "e", "A"), ("r0-S-e-B1", 0, "S", "e", "B1")])
+    s2 = spec([("r1-S-e-A", 1, "S", "e", "A"), ("r1-S-e-B1", 1, "S", "e", "B1")])
+    batch(tmp_path / "one", "r0-S-e-A", 100.0); batch(tmp_path / "one", "r0-S-e-B1", 101.0)
+    batch(tmp_path / "two", "r1-S-e-A", 100.0); batch(tmp_path / "two", "r1-S-e-B1", 103.0)
+    (tmp_path / "two/r1-S-e-B1/recovery.json").write_text("{}")
+    out = ca.analyze(None, stages=[(s1, tmp_path / "one"), (s2, tmp_path / "two")])
+    assert out["attempts_planned"] == 4 and out["invalid_attempts"] == ["r1-S-e-B1"]
+    s = out["contrasts"]["B1-A:total_j"]["per_task_fixed_work"][0]
+    assert s["n"] == 1 and s["absolute"]["mean"] == 1.0
+    cell = next(c for c in out["cells"] if c["arm"] == "A")
+    assert cell["outcomes"] == [dict(verifier="pass", execution="completed", count=2)]
+    fam = out["contrasts"]["B1-A:total_j"]["family_fixed_work"]["S"]
+    assert fam["tasks"] == 0 and fam["dropped_tasks"] == ["e"]
+    import pytest
+    with pytest.raises(ValueError):
+        ca.analyze(None, stages=[(s1, tmp_path / "one"), (s1, tmp_path / "one")])

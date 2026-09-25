@@ -161,11 +161,21 @@ def recover(plan, batch_id, proc=Path("/proc"), gpu_apps=None):
         line = _cmdline(pid) if pid else None
         if line is not None and str(batch) in line:
             reasons.append(f"{key} {pid} is still running")
+    id_arg = f"--id {batch_id} "
     for entry in proc.iterdir():
         if entry.name.isdigit():
             line = _cmdline(entry.name)
-            if line and str(batch) in line and int(entry.name) != os.getpid():
+            if line and int(entry.name) != os.getpid() and (str(batch) in line or id_arg in line + " "):
                 reasons.append(f"process {entry.name} still references the batch")
+    import fcntl
+    lock_path = batch / "active.lock"
+    if lock_path.exists():
+        with open(lock_path, "a") as active:
+            try:
+                fcntl.flock(active, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(active, fcntl.LOCK_UN)
+            except BlockingIOError:
+                reasons.append("the batch's active lock is still held by one of its processes")
     if gpu_apps is None:
         smi = run(["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"])
         gpu_apps = [x.strip() for x in smi.stdout.splitlines() if x.strip()] if smi.returncode == 0 else ["nvidia-smi failed"]
@@ -182,10 +192,12 @@ def recover(plan, batch_id, proc=Path("/proc"), gpu_apps=None):
         return False, reasons
     files = [dict(path=str(p.relative_to(batch)), bytes=p.stat().st_size, sha256=sha(p))
              for p in sorted(batch.rglob("*")) if p.is_file()]
+    status_bytes = status_path.read_bytes() if status_path.exists() else b"missing"
     record = dict(status="interrupted", batch=batch_id, job_status_seen=status.get("status"),
+                  status_sha256=hashlib.sha256(status_bytes).hexdigest(),
                   classified_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
                   checks=["supervisor/child pids not running", "no process references the batch",
-                          "no GPU compute process", "GPU lock free"],
+                          "batch active lock free", "no GPU compute process", "GPU lock free"],
                   partial_artifacts=files)
     with (batch / "recovery.json").open("x") as stream:
         json.dump(record, stream, indent=2)
