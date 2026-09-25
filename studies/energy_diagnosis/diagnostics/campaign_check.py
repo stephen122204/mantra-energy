@@ -34,6 +34,13 @@ def cpus(text):
 
 
 def preflight(plan):
+    try:
+        return _preflight(plan)
+    except Exception as exc:  # any unexpected condition is a failed preflight, never a crash
+        return dict(passed=False, checks={"preflight_completed": False}, info={"error": f"{type(exc).__name__}: {exc}"})
+
+
+def _preflight(plan):
     exp, node, host = plan["expected"], plan["node"], plan["host_condition"]
     checks, info = {}, {}
     repo = Path(node["remote_repository"])
@@ -73,7 +80,10 @@ def preflight(plan):
     timer = run(["systemctl", "show", "cache-vendordata.timer", "--property=ActiveState"]).stdout.strip()
     info["vendor_timer"] = timer
     checks["vendor_cache_timer_inactive"] = timer in ("ActiveState=inactive", "")
-    free = shutil.disk_usage(node["remote_directory"] if Path(node["remote_directory"]).exists() else Path(node["remote_directory"]).parent).free
+    target = Path(node["remote_directory"])
+    while not target.exists():
+        target = target.parent  # measure the filesystem that will hold the results
+    free = shutil.disk_usage(target).free
     checks["disk_free"] = free >= exp["min_free_gib"] * 2**30
     info["disk_free_gib"] = round(free / 2**30, 1)
     import fcntl
