@@ -69,6 +69,19 @@ python -m studies.energy_diagnosis.diagnostics.archive_results --restore-receipt
 Expected: exit 0, and `RESTORE_DIR/<batch>/job/status.json` exists for every batch.
 4. Copy `LOCAL_BACKUP_DIR` to the second storage location named in the plan and record its checksum.
 
+## Stage 2 (only if the frozen precision gate says so)
+
+The plan fixes a two-stage collection. After stage 1 is `completed` and backed up, run the frozen
+analysis on the laptop copy (it reads only verified snapshots restored from the backup):
+```
+python -m studies.energy_diagnosis.diagnostics.campaign_analysis --stage STAGE1_SPEC.json RESTORED_STAGE1_DATA --output stage1-analysis.json
+```
+`stage2_precision_gate.extend` decides: `false` = the campaign is finished; `true` = run stage 2 with
+the stage-2 plan (same design, blocks 5-9, its own results and control directories): preflight, then
+launch with the stage-2 NODE_SPEC exactly as above. The gate uses only interval widths, never the
+direction or size of an effect; do not run stage 2 for any other reason. Analyse both stages together
+with two `--stage` arguments.
+
 ## Recovery
 
 | Symptom (`campaign_check status`) | Meaning | Action |
