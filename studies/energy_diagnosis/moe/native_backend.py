@@ -103,6 +103,9 @@ class NativeDevice:
         )
         self.model = MoE(str(path), self.applied)
         self.native = self.model.engine.archer_engine
+        self.dispatcher = getattr(self.model.engine, "expert_dispatcher", None)
+        if not hasattr(self.dispatcher, "reconcile_cache_with_placement"):
+            raise RuntimeError("required dispatcher cache reconciliation is not loaded; no fallback")
         if (
             not hasattr(self.native, "alems_transfer_api_version")
             or self.native.alems_transfer_api_version() != 1
@@ -277,7 +280,12 @@ class NativeDevice:
                 raise TimeoutError("native transfers did not drain")
             time.sleep(0.001)
         self.torch.cuda.synchronize()
-        return {"inflight_bytes": 0}
+        # Prefetch placement/eviction (task pool) bypasses the dispatcher's own cache list and
+        # budget; with nothing in flight, rebuild that accounting from physical placement so a
+        # later demand miss can always find an evictable resident (see patch).
+        stale, adopted, before, after = self.dispatcher.reconcile_cache_with_placement(0)
+        return {"inflight_bytes": 0, "cache_reconciliation": dict(
+            stale_removed=stale, adopted=adopted, budget_before=before, budget_after=after)}
 
     def transfers(self, _):
         records = []

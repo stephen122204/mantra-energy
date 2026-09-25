@@ -102,7 +102,7 @@ index a8742dc..36103fc 100644
  
  enum class ResizeOutcome {
 diff --git a/core/parallel/expert_dispatcher.cpp b/core/parallel/expert_dispatcher.cpp
-index 00d899d..f55f5e9 100644
+index 00d899d..c0d5713 100644
 --- a/core/parallel/expert_dispatcher.cpp
 +++ b/core/parallel/expert_dispatcher.cpp
 @@ -1,3 +1,6 @@
@@ -129,7 +129,50 @@ index 00d899d..f55f5e9 100644
        if (expert_node->node->is_prefetching.load(std::memory_order_acquire)) {
          expert_node->node->pending_dispatches.fetch_add(
              1, std::memory_order_acq_rel);
-@@ -930,22 +940,25 @@ double ExpertDispatcher::GetCacheHitRate() const {
+@@ -751,6 +761,42 @@ void ExpertDispatcher::ClearExpertCacheCounts() {
+   cache_access_count_.store(0, std::memory_order_relaxed);
+ }
+ 
++std::vector<std::int64_t> ExpertDispatcher::ReconcileCacheWithPlacement(
++    int gpu_id) {
++  TORCH_CHECK(gpu_id >= 0 && gpu_id < static_cast<int>(cached_experts_.size()),
++              "invalid gpu id for cache reconciliation");
++  std::lock_guard<std::mutex> lock(cache_mutex_[gpu_id]);
++  const std::int64_t before = cache_sizes_[gpu_id];
++  std::unordered_set<uint64_t> resident;
++  std::int64_t resident_bytes = 0;
++  for (std::size_t e = 0; e < experts_.size(); ++e) {
++    for (std::size_t l = 0; l < experts_[e].size(); ++l) {
++      auto& expert_node = experts_[e][l];
++      if (!expert_node || !expert_node->node) continue;
++      auto& node = expert_node->node;
++      if (node->device.is_cuda() && node->device.index() == gpu_id) {
++        resident.insert((static_cast<uint64_t>(l) << 32) + e);
++        resident_bytes += node->byte_size;
++      }
++    }
++  }
++  std::int64_t stale = 0, adopted = 0;
++  auto& listed = cached_experts_[gpu_id];
++  for (auto it = listed.begin(); it != listed.end();) {
++    if (resident.count(*it) == 0) { it = listed.erase(it); ++stale; }
++    else { ++it; }
++  }
++  for (auto key : resident) {
++    if (listed.insert(key).second) ++adopted;
++  }
++  const std::int64_t limit = kTopologyHandle
++      ? kTopologyHandle->GetSparseCacheLimit(torch::Device(torch::kCUDA, gpu_id))
++      : before;
++  cache_sizes_[gpu_id] = limit - resident_bytes;
++  cache_cv_[gpu_id].notify_all();
++  return {stale, adopted, before, cache_sizes_[gpu_id]};
++}
++
+ std::int64_t ExpertDispatcher::GetCacheOccupancyBytes() {
+   std::int64_t total = 0;
+   for (auto& gpu_cache : cached_experts_) {
+@@ -930,22 +976,25 @@ double ExpertDispatcher::GetCacheHitRate() const {
  
  ExpertNodePtr ExpertDispatcher::FindExpertEvict(int gpu_id) {
    uint64_t min_visit_count = INT_MAX;
@@ -167,7 +210,7 @@ index 00d899d..f55f5e9 100644
  }
  
  bool ExpertDispatcher::ApplyPrecisionTarget(const ExpertNodePtr& expert_node,
-@@ -1101,17 +1114,14 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
+@@ -1101,17 +1150,14 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
        failure.expert_node = expert_node;
  
        if (args.wait_for_prefetch) {
@@ -191,7 +234,7 @@ index 00d899d..f55f5e9 100644
          expert_node->node->pending_dispatches.fetch_sub(
              1, std::memory_order_acq_rel);
          if (expert_node->node->device.is_cuda()) {
-@@ -1219,11 +1229,10 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
+@@ -1219,11 +1265,10 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
                std::unique_lock<std::mutex> lock(cache_mutex_[gpu_id]);
                cache_cv_[gpu_id].wait(lock, [&] {
                  return main_thread_stop_flag_.load(std::memory_order_acquire) ||
@@ -204,7 +247,7 @@ index 00d899d..f55f5e9 100644
            }
            // auto num_layers = experts_[0].size();
            // auto num_experts = experts_.size();
-@@ -1273,6 +1282,12 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
+@@ -1273,6 +1318,12 @@ void ExpertDispatcher::GPUFetchFunc(int gpu_id) {
                       " expert_idx ", expert_idx);
  
            auto evict_node = evict_expert_node->node;
@@ -217,7 +260,7 @@ index 00d899d..f55f5e9 100644
            evict_node->SetDevice(evict_node->default_host);
            cache_sizes_[gpu_id] += evict_node->byte_size;
            int64_t evict_layer_idx = evict_expert_node->layer_idx;
-@@ -1577,7 +1592,18 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
+@@ -1577,7 +1628,18 @@ bool ExpertDispatcher::OutputFunc(ExecArgs args, torch::Tensor output,
                args.generation) {
          return true;
        }
@@ -237,7 +280,7 @@ index 00d899d..f55f5e9 100644
          final_hidden_states_.add_(
              output_tensor *
              router_weight_.index({torch::indexing::Slice(), expert_idx}));
-@@ -1741,12 +1767,32 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
+@@ -1741,12 +1803,32 @@ torch::Tensor ExpertDispatcher::WaitHiddenStates() {
    }
    num_enqueued_.store(0, std::memory_order_release);
    if (route_error) std::rethrow_exception(route_error);
@@ -270,7 +313,7 @@ index 00d899d..f55f5e9 100644
    current_invocation_id_ = 0;
    TORCH_CHECK(!route_pending_.load(std::memory_order_acquire) &&
                    pending_.load(std::memory_order_acquire) == 0,
-@@ -1761,7 +1807,9 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+@@ -1761,7 +1843,9 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
    }
    int device = at::cuda::current_device();
    auto options =
@@ -281,7 +324,7 @@ index 00d899d..f55f5e9 100644
    hidden_states_ = hidden_states;
    router_mask_ = router_mask;
    router_weight_ = router_weight;  // this can be float32
-@@ -1773,6 +1821,17 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
+@@ -1773,6 +1857,17 @@ void ExpertDispatcher::SetInputs(const torch::Tensor& hidden_states,
    cudaEventRecord(input_ready_event_, c10::cuda::getCurrentCUDAStream());
  }
  
@@ -299,7 +342,7 @@ index 00d899d..f55f5e9 100644
  void ExpertDispatcher::SyncExecStreamsWithCurrent() {
    auto current = c10::cuda::getCurrentCUDAStream();
    for (size_t i = 0; i < exec_streams_.size(); ++i) {
-@@ -1900,9 +1959,10 @@ void ExpertDispatcher::FailDispatch(
+@@ -1900,9 +1995,10 @@ void ExpertDispatcher::FailDispatch(
    }
    route_failures_.fetch_add(1, std::memory_order_relaxed);
    last_active_experts_count_.store(0, std::memory_order_relaxed);
@@ -313,7 +356,7 @@ index 00d899d..f55f5e9 100644
    route_callback_cv_.notify_all();
    retirement_callback_cv_.notify_all();
  }
-@@ -1912,8 +1972,11 @@ void ExpertDispatcher::CompleteOne(std::uint64_t generation) noexcept {
+@@ -1912,8 +2008,11 @@ void ExpertDispatcher::CompleteOne(std::uint64_t generation) noexcept {
    if (failed_generation_.load(std::memory_order_acquire) == generation) return;
    size_t previous = pending_.fetch_sub(1, std::memory_order_acq_rel);
    if (previous <= 1) {
@@ -327,7 +370,7 @@ index 00d899d..f55f5e9 100644
    }
  }
  
-@@ -1990,8 +2053,9 @@ void ExpertDispatcher::RouteFunc() noexcept {
+@@ -1990,8 +2089,9 @@ void ExpertDispatcher::RouteFunc() noexcept {
            std::chrono::duration_cast<std::chrono::microseconds>(
                std::chrono::steady_clock::now() - started);
        last_route_handoff_us_.store(elapsed.count(), std::memory_order_relaxed);
@@ -340,7 +383,7 @@ index 00d899d..f55f5e9 100644
        FailDispatch(args.generation, std::current_exception(), routed_contexts);
      }
 diff --git a/core/parallel/expert_dispatcher.h b/core/parallel/expert_dispatcher.h
-index 9f26cfd..c9d937d 100644
+index 9f26cfd..1b02055 100644
 --- a/core/parallel/expert_dispatcher.h
 +++ b/core/parallel/expert_dispatcher.h
 @@ -259,6 +259,7 @@ class ExpertDispatcher : public base::noncopyable {
@@ -351,7 +394,19 @@ index 9f26cfd..c9d937d 100644
    void SetInputs(const torch::Tensor& hidden_states,
                   const torch::Tensor& router_mask,
                   const torch::Tensor& router_weight);
-@@ -444,6 +445,9 @@ class ExpertDispatcher : public base::noncopyable {
+@@ -281,6 +282,11 @@ class ExpertDispatcher : public base::noncopyable {
+   // Read-only observability accessors; neither alters routing/dispatch.
+   std::int64_t GetCacheOccupancyBytes();
+   std::int64_t GetCacheOccupancyBytes(int device_id);
++  // ALEMS: rebuild this GPU's dispatcher cache accounting from physical placement.
++  // Prefetch (task pool) placement/eviction bypasses cached_experts_/cache_sizes_; call
++  // only when no fetch or prefetch is in flight (after drain). Returns
++  // {stale_removed, adopted, budget_before, budget_after}.
++  std::vector<std::int64_t> ReconcileCacheWithPlacement(int gpu_id);
+   double GetCacheHitRate() const;
+ 
+   ResizeToken BeginMemoryResize(int device_id, int timeout_ms);
+@@ -444,6 +450,9 @@ class ExpertDispatcher : public base::noncopyable {
  
    torch::Tensor hidden_states_;
    torch::Tensor final_hidden_states_;
@@ -684,7 +739,7 @@ index 45bcc59..2348450 100644
  
  extern std::unique_ptr<ArcherTaskPool> kTaskPool;
 diff --git a/core/python/py_archer_prefetch.cpp b/core/python/py_archer_prefetch.cpp
-index 51c2033..86148b7 100644
+index 51c2033..4efc055 100644
 --- a/core/python/py_archer_prefetch.cpp
 +++ b/core/python/py_archer_prefetch.cpp
 @@ -22,7 +22,21 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -739,6 +794,15 @@ index 51c2033..86148b7 100644
        .def("dispatch_experts", &ExpertDispatcher::DispatchExperts)
        .def("take_last_active_experts", &ExpertDispatcher::TakeLastActiveExperts)
        .def("get_routing_stats", &ExpertDispatcher::GetRoutingStats)
+@@ -218,6 +240,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+            &ExpertDispatcher::SetDispatchFaultForTest)
+       .def("_fail_dispatch_for_test", &ExpertDispatcher::FailDispatchForTest)
+       .def("notify_fetch_start", &ExpertDispatcher::NotifyFetchStart)
++      .def("reconcile_cache_with_placement",
++           &ExpertDispatcher::ReconcileCacheWithPlacement)
+       .def("clear_expert_cache_counts",
+            &ExpertDispatcher::ClearExpertCacheCounts)
+       .def("get_cache_occupancy_bytes",
 diff --git a/moe_infinity/distributed/expert_executor.py b/moe_infinity/distributed/expert_executor.py
 index afabc73..39818ae 100644
 --- a/moe_infinity/distributed/expert_executor.py

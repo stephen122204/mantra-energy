@@ -331,7 +331,7 @@ class Lifecycle:
         if ack["accepted_bytes"] != sum(selected_nodes[n].nbytes for n in accepted):
             raise RuntimeError("backend byte acknowledgment does not reconcile")
         self.emit("ahead_preparation_admitted", selected=[asdict(e) for e in selected], ack=ack, reason=reason)
-        self.backend.drain_owned_work(timeout_seconds)
+        self._record_reconciliation(self.backend.drain_owned_work(timeout_seconds))
         self._preparing_ahead = True
         try:
             self._collect_transfers()
@@ -352,10 +352,15 @@ class Lifecycle:
         with cleanup:
             cancelled = 0 if deferred is not None else self.backend.cancel_pending_preparation(self.generation)
             # Cancellation is queued-only. Issued work must settle before resume.
-            self.backend.drain_owned_work(timeout_seconds)
+            self._record_reconciliation(self.backend.drain_owned_work(timeout_seconds))
             self._collect_transfers()
         self.emit("model_resume", cancelled_bytes=cancelled)
         self.pause = None
+
+    def _record_reconciliation(self, drained):
+        rec = (drained or {}).get("cache_reconciliation") if isinstance(drained, dict) else None
+        if rec is not None:
+            self.emit("cache_reconciled", **rec)
 
     def _collect_transfers(self):
         records, dropped = self.backend.drain_transfers()

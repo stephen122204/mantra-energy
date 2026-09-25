@@ -781,3 +781,16 @@ def test_campaign_exit_keeps_model_failures_as_data_but_stops_on_crash(tmp_path,
         campaign.main(["--mode", "fixture", "--output", str(tmp_path / "crash"), "--task", "joined-orders-v1",
                        "--policies", "demand", "--max-runs", "1", "--deadline", "30", "--campaign-exit"])
     assert stopped.value.code == 3
+
+
+def test_every_resume_reconciles_dispatcher_cache_accounting(tmp_path):
+    command(tmp_path / "rec", "--task", "joined-orders-v1", "--policies", "fixed", "--max-runs", "1")
+    events = json.loads(next((tmp_path / "rec/goals").glob("*/expert-events.json")).read_text())
+    kinds = [e["event"] for e in events]
+    resumes = [i for i, k in enumerate(kinds) if k == "model_resume"]
+    assert resumes, "fixture goal must include a tool pause"
+    for i in resumes:
+        # The drain that precedes each resume reports its reconciliation.
+        assert "cache_reconciled" in kinds[max(0, i - 50):i]
+    rec = next(e for e in events if e["event"] == "cache_reconciled")
+    assert set(rec) >= {"stale_removed", "adopted", "budget_before", "budget_after"}
