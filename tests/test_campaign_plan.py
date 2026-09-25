@@ -104,3 +104,48 @@ def test_preflight_reports_missing_checkout_instead_of_crashing(tmp_path):
     p["node"]["remote_repository"] = str(tmp_path / "missing-checkout")
     result = preflight(p)
     assert result["passed"] is False and result["checks"] == {"repository_present": False}
+
+
+def _interrupted_batch(tmp_path, p, status="running", pid=None):
+    batch = Path(p["node"]["remote_directory"]) / "r00-S-etl-A"
+    (batch / "job").mkdir(parents=True)
+    (batch / "job/status.json").write_text(json.dumps(dict(status=status, supervisor_pid=pid, child_pid=None)))
+    (batch / "batch.json").write_text("{}")
+    (batch / "campaign").mkdir()
+    (batch / "campaign/partial.json").write_text('{"partial": true}')
+    return batch
+
+
+def test_recover_refuses_while_running_and_records_partial_artifacts(tmp_path):
+    import subprocess as sp
+    from studies.energy_diagnosis.diagnostics.campaign_check import recover
+    if sys.platform != "linux":
+        pytest.skip("reads /proc")
+    p = cp.load(plan(tmp_path))
+    p["node"]["remote_directory"] = str(tmp_path / "results")
+    p["node"]["lock"] = str(tmp_path / "gpu.lock")
+    batch = _interrupted_batch(tmp_path, p)
+    child = sp.Popen([sys.executable, "-c", "import time; time.sleep(60)", str(batch)])
+    try:
+        ok, reasons = recover(p, "r00-S-etl-A", gpu_apps=[])
+        assert not ok and any("references the batch" in r for r in reasons)
+    finally:
+        child.kill(); child.wait()
+    ok, reasons = recover(p, "r00-S-etl-A", gpu_apps=["123"])
+    assert not ok and "GPU compute" in reasons[0]
+    ok, record = recover(p, "r00-S-etl-A", gpu_apps=[])
+    assert ok and record["status"] == "interrupted"
+    assert {f["path"] for f in record["partial_artifacts"]} >= {"campaign/partial.json", "job/status.json"}
+    assert json.loads((batch / "job/status.json").read_text())["status"] == "running"  # untouched
+    ok, reasons = recover(p, "r00-S-etl-A", gpu_apps=[])
+    assert not ok and "never overwritten" in reasons[0]
+
+
+def test_recover_refuses_terminal_batch(tmp_path):
+    from studies.energy_diagnosis.diagnostics.campaign_check import recover
+    p = cp.load(plan(tmp_path))
+    p["node"]["remote_directory"] = str(tmp_path / "results")
+    p["node"]["lock"] = str(tmp_path / "gpu.lock")
+    _interrupted_batch(tmp_path, p, status="completed")
+    ok, reasons = recover(p, "r00-S-etl-A", gpu_apps=[])
+    assert not ok and "terminal" in reasons[0]
