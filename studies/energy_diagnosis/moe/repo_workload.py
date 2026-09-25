@@ -23,7 +23,7 @@ import tempfile
 
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 
-VERSION = "repo-repair-networkx-v3"  # v3: regex search, explicit submit_answer wording; v2 added four cases
+VERSION = "repo-repair-networkx-v4"  # v4: tool test limits fixed (address space, single-threaded math); v3 regex search, submit_answer
 SOURCE_COMMIT = "2acf1590f82757c01a57b81b8c5dfb79e60aa416"  # networkx-3.4.2
 PACKAGE = "networkx"
 READ_LINES = 150
@@ -398,7 +398,7 @@ def create_task(root, *, case, source, python):
     if meta["case"] != case or meta["version"] != VERSION or meta["tool_python"]["python"] != python:
         raise ValueError("existing repository task differs from the requested case")
     return PilotTask(
-        f"repo-{case}-v3", "repository-repair", f"networkx-{SOURCE_COMMIT[:12]}", root, {}, _hash(root), (),
+        f"repo-{case}-v4", "repository-repair", f"networkx-{SOURCE_COMMIT[:12]}", root, {}, _hash(root), (),
         f"A user reports: {spec['symptom']}. The repository is networkx 3.4.2 with its test suite. "
         "Find and fix the defect in the library source (do not edit tests), using the repo tool to list, read, "
         "search, replace and run pytest targets. Before finishing, run the complete networkx/algorithms test suite "
@@ -425,7 +425,9 @@ def _is_test_file(path):
 
 def _limits():
     import resource
-    resource.setrlimit(resource.RLIMIT_AS, (8 * 2**30, 8 * 2**30))
+    # Address-space cap: math libraries reserve large virtual memory for thread pools; 8 GiB made
+    # the complete suite die with MemoryError partway through (v3 defect). 32 GiB still stops runaways.
+    resource.setrlimit(resource.RLIMIT_AS, (32 * 2**30, 32 * 2**30))
     resource.setrlimit(resource.RLIMIT_CPU, (TEST_SECONDS + 30, TEST_SECONDS + 30))
     resource.setrlimit(resource.RLIMIT_FSIZE, (256 * 2**20, 256 * 2**20))
     cpus = os.environ.get("ALEMS_TOOL_CPUS")
@@ -442,8 +444,10 @@ def _cpu_list(text):
 
 
 def run_pytest(python, root, targets, sandbox, timeout=TEST_SECONDS):
+    # Single-threaded math libraries: deterministic numerics and test outcomes across repeated runs.
     env = dict(PATH="/usr/bin:/bin", PYTHONPATH=f"{sandbox}{os.pathsep}{root}", PYTHONDONTWRITEBYTECODE="1",
-               HOME=str(root), LANG="C.UTF-8", PYTHONHASHSEED="0")
+               HOME=str(root), LANG="C.UTF-8", PYTHONHASHSEED="0", OMP_NUM_THREADS="1",
+               OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
     return subprocess.run([python, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--tb=short", "-rf",
                            "--color=no", *targets], cwd=root, env=env, capture_output=True, text=True,
                           timeout=timeout, preexec_fn=_limits, start_new_session=False)
