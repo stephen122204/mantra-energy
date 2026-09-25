@@ -66,3 +66,17 @@ def test_protocol_validity_excludes_task_outcome_checks(tmp_path):
     (tmp_path / "job/status.json").write_text(json.dumps(dict(status="interference_detected", returncode=76, cleanup_complete=True)))
     result = audit(tmp_path, prefix_mode="exact_prefix")
     assert result["protocol_valid"] is False and "native_correct_completion" not in result["checks"] or result["outcome"] == {}
+
+
+def test_refused_context_exhausted_call_is_an_outcome_not_a_protocol_failure():
+    from studies.energy_diagnosis.moe.audit_pilot import call_checks
+    def executed(prompt, reused, completion):
+        return {"adapter": {"backend": {"prefix_cache": {"mode": "exact_prefix", "new_prefill_tokens": prompt - reused,
+                "reused_prefix_tokens": reused, "decode_forward_tokens": completion - 1},
+                "tokens": {"prompt": prompt, "completion": completion}}}}
+    refused = {"adapter": {"backend": {"finish_reason": "context_exhausted", "text": "", "hook_ns": 0,
+                                       "tokens": {"prompt": 16000, "completion": 0}}}}
+    ok = call_checks([executed(100, 0, 5), executed(200, 100, 3), refused], "exact_prefix")
+    assert ok["token_accounting"] and ok["prefix_mode"] and ok["refused_calls_terminal"] and ok["prefix_reuse_exercised"]
+    bad = call_checks([executed(100, 0, 5), refused, executed(200, 100, 3)], "exact_prefix")
+    assert bad["refused_calls_terminal"] is False
