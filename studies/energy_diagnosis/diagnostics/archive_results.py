@@ -87,7 +87,9 @@ def export_bundle(root, status_path, previous, output, max_bytes):
         deleted=sorted(set(previous) - set(files)),
         # A recovered batch is recorded as such, with its original (non-terminal) status.
         remote_job=status if not recovered or status.get("status") in TERMINAL
-        else dict(status="interrupted_recovered", original_status=status.get("status")),
+        else dict(status="interrupted_recovered", original_status=status.get("status"),
+                  recovery=dict(path=str(recovery.relative_to(root)),
+                                sha256=hashlib.sha256(recovery.read_bytes()).hexdigest())),
     )
     with tempfile.TemporaryFile() as archive:
         with tarfile.open(fileobj=archive, mode="w:gz") as tar:
@@ -120,7 +122,14 @@ def verify_bundle(path, previous):
         header = json.loads(encoded)
         if header.get("protocol") != "result-archive-v1":
             raise ValueError("unsupported manifest protocol")
-        if header.get("remote_job", {}).get("status") not in TERMINAL | {"interrupted_recovered"}:
+        job = header.get("remote_job", {})
+        if job.get("status") == "interrupted_recovered":
+            # Only with the recovery record itself in this snapshot, for a genuinely non-terminal job.
+            rec = job.get("recovery") or {}
+            if (job.get("original_status") in TERMINAL or rec.get("path") not in header.get("files", {})
+                    or header["files"][rec["path"]] != rec.get("sha256")):
+                raise ValueError("recovered snapshot lacks its recovery record")
+        elif job.get("status") not in TERMINAL:
             raise ValueError("snapshot does not record a terminal job")
         files = validate_hashes(header["files"])
         changed = validate_hashes(header["changed"])

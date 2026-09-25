@@ -28,6 +28,16 @@ def successful(job):
     return job.get('status') == 'completed' and job.get('returncode') == 0 and job.get('cleanup_complete') is True
 
 
+def recovery_valid(recovery, jobpath):
+    """A recovery record written by campaign_check recover for exactly the status still on disk."""
+    if not recovery.exists():
+        return False
+    rec = read(recovery)
+    current = jobpath.read_bytes() if jobpath.exists() else b'missing'
+    return (rec.get('status') == 'interrupted' and isinstance(rec.get('partial_artifacts'), list)
+            and rec.get('status_sha256') == hashlib.sha256(current).hexdigest())
+
+
 def checkpoint(root, spool, batch, previous):
     name = safe_name(batch['id'])
     target = spool / (name + '.bundle')
@@ -114,7 +124,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
                     if job.get('status') not in {'completed','failed','timed_out','interrupted','interference_detected','blocked_by_other_job'}:
                         # An interrupted batch is never adopted or rerun. Only an explicit, verified
                         # recovery record (campaign_check recover) classifies it so dispatch can continue.
-                        if not recovered.exists() or read(recovered).get('status')!='interrupted':
+                        if not recovery_valid(recovered, jobpath):
                             raise RuntimeError('existing batch not terminal; no adoption or duplicate launch')
                         job=dict(status='interrupted_recovered')
                     save('checkpointing',batch=batch['id'])
@@ -126,6 +136,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
                     if job.get('status')=='interrupted_recovered':
                         if batch['id'] not in state.setdefault('recovered',[]):
                             state['recovered'].append(batch['id']);save('between_batches')
+                        sleep(gap)  # the same settling gap as after any batch
                         continue
                     if not successful(job):
                         raise RuntimeError('invalid batch retained; no further dispatch')

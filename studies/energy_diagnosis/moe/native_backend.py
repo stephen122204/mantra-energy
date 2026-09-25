@@ -283,9 +283,19 @@ class NativeDevice:
         # Prefetch placement/eviction (task pool) bypasses the dispatcher's own cache list and
         # budget; with nothing in flight, rebuild that accounting from physical placement so a
         # later demand miss can always find an evictable resident (see patch).
-        stale, adopted, before, after = self.dispatcher.reconcile_cache_with_placement(0)
+        # The native call changes nothing unless every expert is idle with nothing pending and no
+        # overload slot outstanding (dispatcher retirement is asynchronous); wait for that, fail closed.
+        waited = 0
+        while True:
+            stale, adopted, before, after = self.dispatcher.reconcile_cache_with_placement(0)
+            if stale != -1:
+                break
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"dispatcher not quiescent for cache reconciliation ({adopted} busy)")
+            waited += 1
+            time.sleep(0.001)
         return {"inflight_bytes": 0, "cache_reconciliation": dict(
-            stale_removed=stale, adopted=adopted, budget_before=before, budget_after=after)}
+            stale_removed=stale, adopted=adopted, budget_before=before, budget_after=after, idle_polls=waited)}
 
     def transfers(self, _):
         records = []

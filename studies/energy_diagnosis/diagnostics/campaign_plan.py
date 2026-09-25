@@ -5,7 +5,7 @@
 
 Each batch is one goal: (repetition block, task, arm). Within every block and task the arm order
 is a seeded permutation recorded in the spec, so the same plan always yields the same batches and
-node_batches can resume without duplicates. The plan's sha256 is embedded in every batch id prefix.
+node_batches can resume without duplicates. The plan's sha256 is recorded in the node spec (plan_sha256).
 """
 import argparse
 import datetime as dt

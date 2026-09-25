@@ -142,7 +142,19 @@ class RecoveredBatchTest(unittest.TestCase):
         (root / 'dispatch').mkdir(); (root / 'dispatch/b0.json').write_text('{}')
         with self.assertRaises(RuntimeError):
             run(spec, base / 'control', gap=0, free_bytes=0)
+        import hashlib
+        # A hand-written record without the evidence fields is refused.
         (root / 'b0/recovery.json').write_text(json.dumps(dict(status='interrupted')))
+        with self.assertRaises(RuntimeError):
+            run(spec, base / 'control', gap=0, free_bytes=0)
+        # A record for a different status than the one on disk is refused.
+        (root / 'b0/recovery.json').write_text(json.dumps(dict(status='interrupted', partial_artifacts=[],
+                                                              status_sha256='0' * 64)))
+        with self.assertRaises(RuntimeError):
+            run(spec, base / 'control', gap=0, free_bytes=0)
+        seen = hashlib.sha256((root / 'b0/job/status.json').read_bytes()).hexdigest()
+        (root / 'b0/recovery.json').write_text(json.dumps(dict(status='interrupted', partial_artifacts=[],
+                                                              status_sha256=seen)))
         run(spec, base / 'control', gap=0, free_bytes=0)
         state = json.loads((base / 'control/state.json').read_text())
         self.assertEqual(state['completed'], ['b1'])
@@ -150,3 +162,27 @@ class RecoveredBatchTest(unittest.TestCase):
         self.assertEqual(json.loads((root / 'b0/job/status.json').read_text())['status'], 'running')
         run(spec, base / 'control', gap=0, free_bytes=0)  # relaunch: nothing rerun, no duplicate entries
         self.assertEqual(json.loads((base / 'control/state.json').read_text())['recovered'], ['b0'])
+
+
+class RecoveredSnapshotVerificationTest(unittest.TestCase):
+    def test_recovered_label_requires_its_record(self):
+        from studies.energy_diagnosis.diagnostics.archive_results import export_bundle, verify_bundle
+        import hashlib
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / 'r'; (root / 'b0/job').mkdir(parents=True)
+        (root / 'b0/job/status.json').write_text(json.dumps(dict(status='running')))
+        rec = dict(status='interrupted', partial_artifacts=[],
+                   status_sha256=hashlib.sha256((root / 'b0/job/status.json').read_bytes()).hexdigest())
+        (root / 'b0/recovery.json').write_text(json.dumps(rec))
+        out = Path(tmp.name) / 'b.bundle'
+        with out.open('wb') as stream:
+            export_bundle(root, 'b0/job/status.json', {}, stream, 2**30)
+        header = verify_bundle(out, {})
+        self.assertEqual(header['remote_job']['status'], 'interrupted_recovered')
+        # Forge: same label, recovery record removed from the manifest.
+        raw = out.read_bytes().split(b'\n', 2)
+        forged = json.loads(raw[1]); del forged['files']['b0/recovery.json']
+        bad = Path(tmp.name) / 'bad.bundle'
+        bad.write_bytes(raw[0] + b'\n' + json.dumps(forged, separators=(',', ':')).encode() + b'\n' + raw[2])
+        with self.assertRaises(ValueError):
+            verify_bundle(bad, {})
