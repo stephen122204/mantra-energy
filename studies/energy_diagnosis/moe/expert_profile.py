@@ -10,11 +10,12 @@ from collections import Counter
 import hashlib
 import json
 from pathlib import Path
+from studies.energy_diagnosis.moe import event_log
 
 
 def _goals(campaign, policy):
-    for path in sorted(Path(campaign).glob("goals/*/expert-events.json")):
-        events = json.loads(path.read_text())
+    for path in event_log.glob_goals(campaign):
+        events = event_log.read(path)
         if events and events[0].get("policy", {}).get("name") == policy:
             record = json.loads(path.with_name("record.json").read_text())
             if (record.get("execution_status") != "completed"

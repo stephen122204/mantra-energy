@@ -60,6 +60,7 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
     _hash as asset_hash,
 )
 from studies.energy_diagnosis.workloads.pilot_tools import PilotAssetTool
+from studies.energy_diagnosis.moe import event_log
 
 SETTINGS = {"C00": (False, 1), "C01": (False, 4), "C10": (True, 1), "C11": (True, 4)}
 
@@ -81,18 +82,18 @@ def digest(value):
     ).hexdigest()
 
 
-def write_artifact(root, relative, value, role, compact=False):
+def write_artifact(root, relative, value, role, compact=False, encoded=None):
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
-    # compact: identical JSON content without indentation, for the large per-expert event log.
-    content = json.dumps(value, sort_keys=True, allow_nan=False,
-                         **(dict(separators=(",", ":")) if compact else dict(indent=2))) + "\n"
+    # compact: identical JSON content without indentation; encoded: caller-supplied bytes (e.g. the
+    # gzip event log). The recorded hash always covers the exact bytes written.
+    if encoded is None:
+        encoded = (json.dumps(value, sort_keys=True, allow_nan=False,
+                              **(dict(separators=(",", ":")) if compact else dict(indent=2))) + "\n").encode()
     # Attempt identities are unique; replacing an artifact would break auditability.
-    with path.open("x", encoding="utf-8", newline="\n") as handle:
-        handle.write(content)
-    return ArtifactRef(
-        relative.as_posix(), role, hashlib.sha256(content.encode()).hexdigest()
-    )
+    with path.open("xb") as handle:
+        handle.write(encoded)
+    return ArtifactRef(relative.as_posix(), role, hashlib.sha256(encoded).hexdigest())
 
 
 class FixtureAPI:
@@ -874,10 +875,10 @@ class GoalExecutor:
             artifacts.append(
                 write_artifact(
                     self.artifact_root,
-                    prefix / "expert-events.json",
+                    prefix / "expert-events.json.gz",
                     self.lifecycle.events,
                     "expert-events",
-                    compact=True,
+                    encoded=event_log.encode(self.lifecycle.events),
                 )
             )
         if self.initialized_model_window:
