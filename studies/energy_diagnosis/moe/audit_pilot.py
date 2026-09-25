@@ -17,7 +17,16 @@ def call_checks(calls, prefix_mode, require_timing=False):
         return dict(model_calls_present=False)
     checks = dict(model_calls_present=True, token_accounting=True, prefix_mode=True)
     reused = 0
-    for call in calls:
+    # A turn refused before generation (context budget) is a recorded model outcome, not an
+    # executed call: it carries no prefill/decode or timing. It must be the goal's final call.
+    refused = [i for i, c in enumerate(calls)
+               if c.get("adapter", {}).get("backend", {}).get("finish_reason") == "context_exhausted"]
+    checks["refused_calls_terminal"] = all(
+        i == len(calls) - 1 and calls[i]["adapter"]["backend"].get("tokens", {}).get("completion") == 0
+        and not calls[i]["adapter"]["backend"].get("text") for i in refused)
+    for index, call in enumerate(calls):
+        if index in refused:
+            continue
         backend = call.get("adapter", {}).get("backend", {})
         p, t = backend.get("prefix_cache", {}), backend.get("tokens", {})
         checks["prefix_mode"] &= p.get("mode") == prefix_mode
@@ -38,7 +47,7 @@ def call_checks(calls, prefix_mode, require_timing=False):
                 and timing.get("subsequent_tokens_ns") == stamps[2] - stamps[1])
             checks["token_timing"] = checks.get("token_timing", True) and valid_timing
     if prefix_mode == "exact_prefix":
-        checks["prefix_reuse_exercised"] = len(calls) > 1 and reused > 0
+        checks["prefix_reuse_exercised"] = len(calls) - len(refused) > 1 and reused > 0
     return checks
 
 
@@ -83,9 +92,12 @@ def audit(stage, *, prefix_mode, reference=None, required_domains=(), require_ti
         checks.update(call_checks(calls, prefix_mode, require_timing))
         if require_timing and checks.get("token_timing"):
             spans = [s for s in record["spans"] if s["kind"] == "model"]
-            stamps = [x["adapter"]["backend"]["generation_timing"] for x in calls]
-            checks["timing_inside_model_spans"] = len(spans) == len(stamps) and all(
-                s["start_ns"] <= t["started_ns"] <= t["stream_end_ns"] <= s["end_ns"] for s, t in zip(spans, stamps))
+            # Pair every call with its span; a refused (context-exhausted) call has a span but no
+            # generation timing, and call_checks has already required it to be the final call.
+            pairs = [(s, x["adapter"]["backend"].get("generation_timing")) for s, x in zip(spans, calls)
+                     if x["adapter"]["backend"].get("finish_reason") != "context_exhausted"]
+            checks["timing_inside_model_spans"] = len(spans) == len(calls) and all(
+                t is not None and s["start_ns"] <= t["started_ns"] <= t["stream_end_ns"] <= s["end_ns"] for s, t in pairs)
         if reference is not None:
             ref = json.loads(Path(reference).read_text())
             checks.update(compare_calls(calls, ref))
