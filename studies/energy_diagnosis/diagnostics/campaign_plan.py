@@ -80,7 +80,7 @@ def node_spec(plan):
         remote_directory=node["remote_directory"], remote_repository=node["remote_repository"],
         remote_python=node["remote_python"], node_output=node["node_output"], cutoff_utc=plan["cutoff_utc"],
         retry_seconds=60, first_poll_delay_seconds=60,
-        minimum_batch_seconds=plan["batch_seconds"] + 600,  # wrapper timeout plus warm-up and audit
+        minimum_batch_seconds=plan["batch_seconds"] + 180,  # wrapper timeout plus warm-up (~20 s) and audit
         maintenance=plan["maintenance"], plan_sha256=digest,
         batches=[{k: b[k] for k in ("id", "argv", "status", "log")} for b in items],
         schedule=[{k: b[k] for k in ("id", "block", "family", "task", "arm")} for b in items])
