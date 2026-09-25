@@ -96,3 +96,11 @@ def test_campaign_batch_runs_guarded_goal_and_stops_on_protocol_invalid(tmp_path
     assert first.returncode == 6
     again = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert again.returncode != 0 and "FileExistsError" in again.stderr  # no silent rerun
+
+
+def test_preflight_reports_missing_checkout_instead_of_crashing(tmp_path):
+    from studies.energy_diagnosis.diagnostics.campaign_check import preflight
+    p = cp.load(plan(tmp_path))
+    p["node"]["remote_repository"] = str(tmp_path / "missing-checkout")
+    result = preflight(p)
+    assert result["passed"] is False and result["checks"] == {"repository_present": False}
