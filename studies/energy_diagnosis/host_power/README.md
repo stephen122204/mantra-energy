@@ -10,6 +10,9 @@ Why this is measured: in the 2026-09-24 LIQID05 runs, the same verified goals de
 | A1 | alems-liqid05-20260920-72h | 2× AMD EPYC 7763 + A100-40GB PCIe (LIQID05) | now → Oct 2 20:30 |
 | A2 | alems-hostpower-liqid-b-20260926 (CHI@TACC) | same node type, second machine | Sep 26 06:00 → Oct 1 23:00 |
 | I1 | alems-hostpower-intel-rtx6000-20260926 (CHI@UC) | Intel Xeon Gold 6126 + Quadro RTX 6000 24GB | Sep 26 16:00 → Oct 1 23:00 |
+| H1 | alems-hostpower-h100-spr-1d-20260928 (CHI@TACC) | Intel Xeon Platinum 8468 + H100 (1 of 4 GPUs used) | Sep 28 04:00 → Sep 29 01:00 |
+
+H1 is execution only. Setup scripts and the Intel knob port are validated on I1 first. The H1 block design is frozen before the window. Raw data are copied off before 00:30 UTC Sep 29.
 
 ## Knob conditions
 | code | frequency policy | deepest idle state | placement |
