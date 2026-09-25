@@ -31,13 +31,14 @@ PYTHONPATH=$PWD REMOTE_PYTHON -m studies.energy_diagnosis.diagnostics.campaign_p
 ```
 Expected: one JSON line with `batches`, `plan_sha256` and `estimated_hours_excluding_windows`.
 
-Launch (detached; survives logout):
+Launch (fully detached; the command returns at once and survives logout):
 ```
-PYTHONPATH=$PWD nohup REMOTE_PYTHON -m studies.energy_diagnosis.diagnostics.node_batches \
-  --spec NODE_SPEC.json --output NODE_OUTPUT > NODE_OUTPUT.launch.log 2>&1 < /dev/null &
+setsid -f env PYTHONPATH=$PWD REMOTE_PYTHON -m studies.energy_diagnosis.diagnostics.node_batches \
+  --spec NODE_SPEC.json --output NODE_OUTPUT > NODE_OUTPUT.launch.log 2>&1 < /dev/null
 exit
 ```
-Log out immediately. The scheduler waits for the next allowed slot by itself.
+Log out immediately. The scheduler waits for the next allowed slot by itself. Do not use
+`cd DIR && nohup ... &`: the backgrounded `&&` list keeps the login session open.
 
 ## During the campaign (inside maintenance windows only)
 
