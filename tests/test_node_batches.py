@@ -122,3 +122,31 @@ class MaintenanceWindowTest(unittest.TestCase):
         with patch('studies.energy_diagnosis.diagnostics.node_batches.subprocess.run', recording):
             run(spec, base / 'control', gap=0, free_bytes=0, clock=lambda: clock[0], sleep=sleep)
         self.assertEqual(starts, [t0 + 4200])
+
+
+class RecoveredBatchTest(unittest.TestCase):
+    def test_interrupted_batch_is_retained_not_rerun_and_dispatch_continues(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'results'; root.mkdir()
+        batches = []
+        for i in range(2):
+            status = f'b{i}/job/status.json'
+            code = "import pathlib,json; p=pathlib.Path(" + repr(str(root / status)) + ");p.parent.mkdir(parents=True);p.write_text(json.dumps(dict(status='completed',returncode=0,cleanup_complete=True)))"
+            batches.append(dict(id=f'b{i}', argv=[sys.executable, '-c', code], status=status, log=f'l{i}'))
+        spec = dict(host='h', remote_directory=str(root), remote_repository=str(base), remote_python=sys.executable,
+                    cutoff_utc='2099-01-01T00:00:00Z', retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=30,
+                    batches=batches)
+        # b0 was interrupted mid-goal: non-terminal status, dispatch intent present.
+        (root / 'b0/job').mkdir(parents=True)
+        (root / 'b0/job/status.json').write_text(json.dumps(dict(status='running')))
+        (root / 'dispatch').mkdir(); (root / 'dispatch/b0.json').write_text('{}')
+        with self.assertRaises(RuntimeError):
+            run(spec, base / 'control', gap=0, free_bytes=0)
+        (root / 'b0/recovery.json').write_text(json.dumps(dict(status='interrupted')))
+        run(spec, base / 'control', gap=0, free_bytes=0)
+        state = json.loads((base / 'control/state.json').read_text())
+        self.assertEqual(state['completed'], ['b1'])
+        self.assertEqual(state['recovered'], ['b0'])
+        self.assertEqual(json.loads((root / 'b0/job/status.json').read_text())['status'], 'running')
+        run(spec, base / 'control', gap=0, free_bytes=0)  # relaunch: nothing rerun, no duplicate entries
+        self.assertEqual(json.loads((base / 'control/state.json').read_text())['recovered'], ['b0'])

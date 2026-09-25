@@ -70,7 +70,11 @@ def export_bundle(root, status_path, previous, output, max_bytes):
     safe_name(status_path)
     validate_hashes(previous)
     status = json.loads((root / status_path).read_text())
-    if status.get("status") not in TERMINAL:
+    recovery = (root / status_path).parent.parent / "recovery.json"
+    # A verified recovery record (nothing of the batch still running) makes an interrupted
+    # batch's partial artifacts safe to snapshot; they must be backed up, not lost.
+    recovered = recovery.exists() and json.loads(recovery.read_text()).get("status") == "interrupted"
+    if status.get("status") not in TERMINAL and not recovered:
         raise ValueError("result job is not terminal; no live backup")
     files = manifest(root)
     changed = {
@@ -81,7 +85,9 @@ def export_bundle(root, status_path, previous, output, max_bytes):
         files=files,
         changed=changed,
         deleted=sorted(set(previous) - set(files)),
-        remote_job=status,
+        # A recovered batch is recorded as such, with its original (non-terminal) status.
+        remote_job=status if not recovered or status.get("status") in TERMINAL
+        else dict(status="interrupted_recovered", original_status=status.get("status")),
     )
     with tempfile.TemporaryFile() as archive:
         with tarfile.open(fileobj=archive, mode="w:gz") as tar:
@@ -114,7 +120,7 @@ def verify_bundle(path, previous):
         header = json.loads(encoded)
         if header.get("protocol") != "result-archive-v1":
             raise ValueError("unsupported manifest protocol")
-        if header.get("remote_job", {}).get("status") not in TERMINAL:
+        if header.get("remote_job", {}).get("status") not in TERMINAL | {"interrupted_recovered"}:
             raise ValueError("snapshot does not record a terminal job")
         files = validate_hashes(header["files"])
         changed = validate_hashes(header["changed"])
