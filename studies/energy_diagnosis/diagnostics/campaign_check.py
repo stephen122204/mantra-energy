@@ -37,6 +37,10 @@ def preflight(plan):
     exp, node, host = plan["expected"], plan["node"], plan["host_condition"]
     checks, info = {}, {}
     repo = Path(node["remote_repository"])
+    checks["repository_present"] = repo.is_dir()
+    if not checks["repository_present"]:
+        # Nothing else can be checked meaningfully without the frozen checkout.
+        return dict(passed=False, checks=checks, info=dict(missing=str(repo)))
     head = run(["git", "-C", str(repo), "rev-parse", "HEAD"]).stdout.strip()
     checks["repository_revision"] = head == exp["repository_revision"]
     checks["repository_clean"] = run(["git", "-C", str(repo), "status", "--porcelain"]).stdout.strip() == ""
