@@ -794,3 +794,15 @@ def test_every_resume_reconciles_dispatcher_cache_accounting(tmp_path):
         assert "cache_reconciled" in kinds[max(0, i - 50):i]
     rec = next(e for e in events if e["event"] == "cache_reconciled")
     assert set(rec) >= {"stale_removed", "adopted", "budget_before", "budget_after"}
+
+
+def test_compact_artifact_keeps_content_and_hashes_written_bytes(tmp_path):
+    import hashlib
+    from studies.energy_diagnosis.local_run import write_artifact
+    value = [{"event": "expert_placement", "placement": {"layer": 3, "expert": 7, "bytes": 9437184}}] * 3
+    ref = write_artifact(tmp_path, Path("a/expert-events.json"), value, "expert-events", compact=True)
+    pretty = write_artifact(tmp_path, Path("b/expert-events.json"), value, "expert-events")
+    compact_bytes = (tmp_path / "a/expert-events.json").read_bytes()
+    assert json.loads(compact_bytes) == json.loads((tmp_path / "b/expert-events.json").read_bytes()) == value
+    assert ref.sha256 == hashlib.sha256(compact_bytes).hexdigest() and ref.sha256 != pretty.sha256
+    assert len(compact_bytes) < (tmp_path / "b/expert-events.json").stat().st_size

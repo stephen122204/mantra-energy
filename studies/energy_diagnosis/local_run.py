@@ -81,10 +81,12 @@ def digest(value):
     ).hexdigest()
 
 
-def write_artifact(root, relative, value, role):
+def write_artifact(root, relative, value, role, compact=False):
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + "\n"
+    # compact: identical JSON content without indentation, for the large per-expert event log.
+    content = json.dumps(value, sort_keys=True, allow_nan=False,
+                         **(dict(separators=(",", ":")) if compact else dict(indent=2))) + "\n"
     # Attempt identities are unique; replacing an artifact would break auditability.
     with path.open("x", encoding="utf-8", newline="\n") as handle:
         handle.write(content)
@@ -875,6 +877,7 @@ class GoalExecutor:
                     prefix / "expert-events.json",
                     self.lifecycle.events,
                     "expert-events",
+                    compact=True,
                 )
             )
         if self.initialized_model_window:
