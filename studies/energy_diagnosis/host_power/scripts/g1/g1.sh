@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G1 block (PREREG-G1.md). LIQID05, user cc, no root. Precondition: Stephen ran `sudo bash power-swap.sh apply`.
+# G1 block (design and analysis fixed before data collection). LIQID05, user cc, no root. Precondition: Stephen ran `sudo bash power-swap.sh apply`.
 # F' = CCD 72-79 performance | D' = CCD 80-87 default | N = CCD 96-103 default (null).
 # Launch: setsid -f bash g1.sh > g1.log 2>&1 < /dev/null   -- and nobody logs in during W1.
 set -u

@@ -1,4 +1,4 @@
-"""G1 analysis (frozen with PREREG-G1.md before data). Usage: analyze_g1.py G1_DIR OUT.json
+"""G1 analysis (fixed before data collection). Usage: analyze_g1.py G1_DIR OUT.json
 
 W1: per-slot accepted stage (F1a*, D1a*, ...): decode ms/token, energy by domain (ALEMS record), CCD clock, output hash.
 W2: per stack/run: mean over measured generations of (t_last - t_first)/(stamps - 1); validity = token count == n,

@@ -1,4 +1,4 @@
-"""G0 analysis (frozen with PREREG-2x2 Amendment A2 before data). Usage: analyze_g0.py G0_DIR OUT.json
+"""G0 analysis (fixed before data collection). Usage: analyze_g0.py G0_DIR OUT.json
 
 W1: per stage decode ms/token (token-weighted over calls), energy by domain (record.json measurements, whole goal),
     output hash, CCD clock during model spans (operating-state), acceptance.
