@@ -74,7 +74,7 @@ class VllmDevice:
             mode="native",
             engine="vllm",
             checkpoint_integrity=integrity,
-            placement=stock_engine.numa_placement(os.getpid()),
+            placement=stock_engine.placement_tree(os.getpid()),
             engine_init_ns=t1 - t0,
             request_prefix_cache=self.request_cache_mode,
             applied_config=self.applied,

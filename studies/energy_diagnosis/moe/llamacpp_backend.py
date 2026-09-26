@@ -84,8 +84,7 @@ class LlamaCppDevice:
             request_prefix_cache=self.request_cache_mode,
             applied_config=self.applied,
             checkpoint_integrity=integrity,
-            placement=dict(worker=stock_engine.numa_placement(os.getpid()),
-                           server=stock_engine.numa_placement(self.server.pid)),
+            placement=stock_engine.placement_tree(os.getpid()),
         )
 
     def _request(self, method, path, payload=None, timeout=600):
