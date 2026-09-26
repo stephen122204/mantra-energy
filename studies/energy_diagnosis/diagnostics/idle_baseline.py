@@ -28,7 +28,8 @@ from ..runtime.node_measurement import NodeCounterReader
 
 def _ranges(reader):
     out = {}
-    for key, path in reader.rapl.available_paths.items():
+    rapl = getattr(reader, "rapl", None)
+    for key, path in (rapl.available_paths.items() if rapl else ()):
         try:
             out[key] = int((Path(path).parent / "max_energy_range_uj").read_text())
         except (OSError, ValueError):
@@ -48,8 +49,12 @@ def _delta(a, b, wrap):
 
 
 def measure(reader, windows, seconds):
-    names = {d.domain_id: d.canonical_name for d in reader.get_measurement_schema().domains}
+    domains = reader.get_measurement_schema().domains
+    names = {d.native_key: d.canonical_name for d in domains}
     wraps = _ranges(reader)
+    for d in domains:
+        if wraps.get(d.native_key) is None and d.max_energy_range_uj:
+            wraps[d.native_key] = d.max_energy_range_uj
     rows = []
     for _ in range(windows):
         t0, e0 = time.monotonic_ns(), reader.read_energy()
