@@ -37,3 +37,22 @@ Results:
 - **Decode:** L 435.3 (SD 33.8), D 424.3 (SD 4.0), U 479.2 (SD 30.1) ms/token.
 - **Consequence:** disabling C2 alone does not restore fast decode on this EPYC.
 - **Energy:** whole-goal energy windows. These are not comparable in absolute terms with the 2026-09-24 inner-window energies.
+
+## G0, 2026-09-25 (governor per CCD; `g0_governor_liqid05_20260925.json`)
+- Setup: MoE-Infinity, C1 stage protocol. D = CCD 72-79 schedutil; F = CCD 80-87 performance; X = CCD 88-95 performance + C2 off. n = 3 each, outputs identical.
+- Decode: D 434.4, F 220.5, X 233.1 ms/token.
+- Whole-goal CPU pkg + GPU energy: D 104.4, F 78.6, X 79.8 kJ.
+- Worker-CCD clock: D ~1.55 GHz; F and X ~2.9 GHz.
+- llama.cpp GPU and CPU-expert stacks: F/D 1.000 and 0.992.
+- Raw archive sha256: fad112caea44aaa0f63a8d172c04334ceb5e12f0bfbaddc50669659f795e1eea.
+
+## G1, 2026-09-26 (CCD swap and stock stacks; `g1_ccdswap_stockstacks_liqid05_20260926.json`)
+- Setup: F′ = CCD 72-79 performance; D′ = CCD 80-87 schedutil; N = CCD 96-103 schedutil. Stock stacks run from a pinned venv (torch 2.8.0, transformers 4.57.1, vLLM 0.10.2).
+- MoE-Infinity:
+  - decode F′ 204.7 vs D′ 405.4 ms/token (F′/D′ 0.505, 95% CI 0.445-0.574);
+  - energy F′/D′ 0.793 (CI 0.744-0.844);
+  - clock 3.1 vs 1.6 GHz;
+  - outputs identical.
+- Stock stacks, F′/D′ decode: vLLM CPU offload of Qwen3-30B-A3B 1.000; vLLM in-memory 0.999; HF eager 1.007; llama.cpp GPU 1.000; llama.cpp CPU experts with OpenMP default 1.005 and with passive wait 1.002. CCD-null N/D′ is within 0.989-1.004.
+- The `handoff_bench` chain modes kept one core fully busy (a Python process at ~100% CPU), so they do not reproduce a sleeping critical path. Treat them as a benchmark limitation, not as evidence about sleeping hand-offs. chain2-F-r1 is invalid (worker device bug, fixed mid-block).
+- Raw archive sha256: bcbfb5a684b498ce41007b47c8e38f5266efed845527f67f4e76939c35456dcf.
