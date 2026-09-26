@@ -1,4 +1,4 @@
-"""Hand-off structure x host power policy microbenchmark.
+"""Hand-off structure x host power policy microbenchmark (private; direction-goal).
 
 Holds the GPU work per "token" fixed and varies only how the host critical path is organised:
   spin1    one thread launches all kernels; one torch.cuda.synchronize() per token (CUDA default sync: spin/auto)
@@ -121,13 +121,14 @@ def main():
         x = run(x)
     torch.cuda.synchronize()
     e0 = energy()
-    c0, t0 = vcsw(), time.perf_counter_ns()
+    c0, t0, w0, m0 = vcsw(), time.perf_counter_ns(), time.time_ns(), time.monotonic_ns()
     cpu0 = time.process_time()
     for _ in range(a.tokens):
         x = run(x)
         stamps.append(time.perf_counter_ns())
     torch.cuda.synchronize()
     t1, c1, cpu1 = time.perf_counter_ns(), vcsw(), time.process_time()
+    w1, m1 = time.time_ns(), time.monotonic_ns()
     e1 = energy()
     stop()
     mx = rapl_max()
@@ -137,6 +138,7 @@ def main():
     gpu_j = (e1["gpu_mj"] - e0["gpu_mj"]) / 1e3 if e0["gpu_mj"] is not None and e1["gpu_mj"] is not None else None
     res = dict(mode=a.mode, layers=a.layers, kernels=a.kernels, dim=a.dim, tokens=a.tokens,
                ms_per_token=(t1 - t0) / 1e6 / a.tokens, first_ns=t0, last_ns=t1, stamps=stamps,
+               wall_first_ns=w0, wall_last_ns=w1, mono_first_ns=m0, mono_last_ns=m1,
                vcsw_per_token=(c1 - c0) / a.tokens, cpu_pkg_j=cpu_j, gpu_j=gpu_j,
                j_per_token=(cpu_j + gpu_j) / a.tokens if cpu_j is not None and gpu_j is not None else None, process_cpu_s=cpu1 - cpu0,
                cpu_util_of_wall=(cpu1 - cpu0) / ((t1 - t0) / 1e9),
