@@ -2,7 +2,7 @@
 
 Selected with config key "engine": "vllm". Prompts are rendered with the model's own chat template by the
 same tokenizer as the native backend, so the engine receives identical prompt token IDs. vLLM exposes no
-expert placement API, so expert controls report no records (the demand policy never asks for placements).
+expert placement API, so the engine declares no expert controls and the lifecycle issues no expert RPCs.
 Timing uses host token availability from the engine step loop (same schema and clock as TokenTiming).
 """
 import importlib.metadata
@@ -11,13 +11,6 @@ import os
 import time
 from pathlib import Path
 
-CONTROLS = [
-    "acknowledged_preparation",
-    "completed_transfers",
-    "cancel_queued",
-    "drain",
-    "expert_snapshot",
-]
 VLLM_VERSION = "0.10.2"
 
 
@@ -37,12 +30,20 @@ class VllmDevice:
         manifest = json.loads((path / "alems-weights.json").read_text())
         if manifest["revision"] != config["model_revision"]:
             raise ValueError("wrong checkpoint revision")
-        from .prepare import file_sha
+        from . import stock_engine
 
-        for name, digest in manifest["files"].items():
-            p = path / name
-            if p.resolve().parent != path or file_sha(p) != digest:
-                raise ValueError(f"checkpoint bytes changed: {name}")
+        files = [path / name for name in manifest["files"]]
+        if any(p.resolve().parent != path for p in files):
+            raise ValueError("checkpoint file outside the model directory")
+        if config.get("checkpoint_verification", "full") == "full":
+            from .prepare import file_sha
+
+            for name, digest in manifest["files"].items():
+                if file_sha(path / name) != digest:
+                    raise ValueError(f"checkpoint bytes changed: {name}")
+            integrity = dict(mode="full")
+        else:
+            integrity = stock_engine.verify(files + [path / "alems-weights.json"], config)
         self.request_cache_mode = config.get("request_prefix_cache", "exact_prefix")
         if self.request_cache_mode != "exact_prefix":
             raise ValueError("vLLM comparison runs use exact-prefix (automatic prefix caching) only")
@@ -68,34 +69,22 @@ class VllmDevice:
             build=dict(engine="vllm", vllm=VLLM_VERSION, torch=torch.__version__,
                        transformers=importlib.metadata.version("transformers")),
             clock_alignment=dict(native_ns=t1, host_lower_ns=t1, host_upper_ns=t1, uncertainty_ns=0),
-            controls=CONTROLS,
+            controls=[],
+            expert_controls=False,
             mode="native",
             engine="vllm",
+            checkpoint_integrity=integrity,
+            placement=stock_engine.numa_placement(os.getpid()),
             engine_init_ns=t1 - t0,
             request_prefix_cache=self.request_cache_mode,
             applied_config=self.applied,
         )
 
-    # Expert controls: vLLM exposes no expert placement; the demand policy issues no preparation.
-    def snapshot(self, _):
-        return []
-
-    def prepare(self, arg):
-        if arg["experts"]:
-            raise RuntimeError("vLLM engine cannot prepare experts")
-        return dict(accepted_nodes=[], accepted_bytes=0, rejected_bytes=0, inflight_bytes=0)
-
-    def cancel(self, arg):
-        return 0
-
     def drain(self, arg):
+        # Each generate call runs the engine loop to completion, so no request is in flight.
+        if self.engine.has_unfinished_requests():
+            raise RuntimeError("vLLM engine still has unfinished requests")
         return {"inflight_bytes": 0}
-
-    def transfers(self, _):
-        return dict(records=[], dropped=0)
-
-    def demands_rpc(self, _):
-        return []
 
     def generate(self, arg):
         from vllm import SamplingParams, TokensPrompt

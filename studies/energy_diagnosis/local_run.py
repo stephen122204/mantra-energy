@@ -703,6 +703,15 @@ class GoalExecutor:
             owned_terminated = (
                 owned_terminated and self.lifecycle.backend.owned_work_terminated
             )
+        task_end_captured = False
+        if self.initialized_model_window and inner_settled:
+            # Task work is drained and the model is still resident: the loaded-model task window
+            # (the upstream EpG window) ends here, before the verifier runs.
+            try:
+                self.measurement.checkpoint("task_end")
+                task_end_captured = True
+            except Exception as exc:
+                inner_window["task_window_reason"] = f"task_end checkpoint failed: {exc}"
         verification_detail = dict(status="not_run", reason=error or "execution did not complete")
         verify_start = time.monotonic_ns()
         if status == "completed" and verify_start >= deadline_ns:
@@ -783,6 +792,13 @@ class GoalExecutor:
                         reason="" if inner_valid else "missing or invalid counter data",
                         measurements=[m.to_dict() for m in inner_measurements],
                     )
+                    if task_end_captured:
+                        for name, begin, end in (
+                            ("task_window", "initialized_model_start", "task_end"),
+                            ("verifier_window", "task_end", "initialized_model_end"),
+                        ):
+                            portion = self.measurement.measure_between(begin, end)
+                            inner_window[name] = dict(measurements=[m.to_dict() for m in portion])
             except Exception as exc:
                 inner_window.update(status="unavailable", reason=f"checkpoint failed: {exc}")
             finally:
@@ -798,6 +814,11 @@ class GoalExecutor:
                     dict(m, status="invalid", energy_j=None, coverage=None, reason=invalid_reason)
                     for m in inner_window["measurements"]
                 ]
+                for name in ("task_window", "verifier_window"):
+                    if name in inner_window:
+                        inner_window[name] = dict(measurements=[
+                            dict(m, status="invalid", energy_j=None, coverage=None, reason=invalid_reason)
+                            for m in inner_window[name]["measurements"]])
         measured = self.measurement.finish_goal()
         if self.initialized_model_window:
             for name, begin, end in (
