@@ -27,7 +27,9 @@ def main():
             if method == "init":
                 if device is not None:
                     raise RuntimeError("worker already initialized")
-                if mode == "native":
+                if mode == "native" and message["args"].get("engine") == "vllm":
+                    from .vllm_backend import VllmDevice as Device
+                elif mode == "native":
                     from .native_backend import NativeDevice as Device
                 elif mode == "fixture":
                     from .fixture_backend import FixtureDevice as Device
