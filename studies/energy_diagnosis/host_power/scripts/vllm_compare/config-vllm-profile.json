@@ -1,0 +1,11 @@
+{
+ "engine": "vllm",
+ "model_path": "/home/cc/alems-work/qwen3-30b-a3b-instruct-2507",
+ "model_revision": "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe",
+ "max_context": 16384,
+ "request_prefix_cache": "exact_prefix",
+ "cpu_offload_gb": 24,
+ "gpu_memory_utilization": 0.9,
+ "profile_call_index": 3,
+ "torch_profile_dir": "/home/cc/alems-work/hostpower/ca/profile"
+}

@@ -1,0 +1,195 @@
+{
+ "description": "vLLM 0.10.2 CPU offload (cpu_offload_gb=24) vs MoE-Infinity on the same verified ETL agent goal (etl-latest-v2-n1000000-s103), Qwen3-30B-A3B bf16, LIQID05 (2x EPYC 7763, A100-40GB), CCD 80-87, default governor; harness 401e492 + adapter 7180f77. Energy boundary: CPU package RAPL (both sockets) + NVML GPU board.",
+ "raw_archive_sha256": "ddf997a6efbc57cfe6bfb8dbde25adeb5fc92f01c14e8202b96c8378055c0ccc",
+ "stages": {
+  "P1": {
+   "stage": "P1",
+   "valid": true,
+   "outcome": "passed",
+   "turns": 6,
+   "prompt_tokens": 7090,
+   "completion_tokens": 651,
+   "ms_tok": 166.88595591782945,
+   "goal_kj": 61.35002437,
+   "window_kj": 34.976053255,
+   "E": {
+    "PACKAGE_SOCKET_1": 25066.963055,
+    "PACKAGE_SOCKET_0": 20578.139315,
+    "GPU_BOARD_0": 15704.922
+   },
+   "goal_s": 273.453630732,
+   "out": "bc0cb221ac79",
+   "profiled": true
+  },
+  "V1": {
+   "stage": "V1",
+   "valid": true,
+   "outcome": "passed",
+   "turns": 6,
+   "prompt_tokens": 7090,
+   "completion_tokens": 651,
+   "ms_tok": 166.98369351472869,
+   "goal_kj": 58.282557224,
+   "window_kj": 31.93676028,
+   "E": {
+    "PACKAGE_SOCKET_1": 23940.703535,
+    "PACKAGE_SOCKET_0": 19296.694689,
+    "GPU_BOARD_0": 15045.159
+   },
+   "goal_s": 258.063208682,
+   "out": "bc0cb221ac79",
+   "profiled": false
+  },
+  "V2": {
+   "stage": "V2",
+   "valid": true,
+   "outcome": "passed",
+   "turns": 6,
+   "prompt_tokens": 7090,
+   "completion_tokens": 651,
+   "ms_tok": 166.98379202170543,
+   "goal_kj": 58.353998847,
+   "window_kj": 32.019557443,
+   "E": {
+    "PACKAGE_SOCKET_1": 23941.622829,
+    "PACKAGE_SOCKET_0": 19276.371018,
+    "GPU_BOARD_0": 15136.005
+   },
+   "goal_s": 257.577467608,
+   "out": "bc0cb221ac79",
+   "profiled": false
+  },
+  "V3": {
+   "stage": "V3",
+   "valid": true,
+   "outcome": "passed",
+   "turns": 6,
+   "prompt_tokens": 7090,
+   "completion_tokens": 651,
+   "ms_tok": 167.19299794573644,
+   "goal_kj": 58.278509754,
+   "window_kj": 32.074552687,
+   "E": {
+    "PACKAGE_SOCKET_1": 23761.702567,
+    "PACKAGE_SOCKET_0": 19398.980187,
+    "GPU_BOARD_0": 15117.827
+   },
+   "goal_s": 257.24077918,
+   "out": "bc0cb221ac79",
+   "profiled": false
+  }
+ },
+ "summary": {
+  "n_valid": 3,
+  "n": 3,
+  "pass_rate": "3/3",
+  "ms_tok_mean": 167.05349449405685,
+  "goal_kj_mean": 58.305021941666666,
+  "window_kj_mean": 32.01029013666667,
+  "decode_spread": 0.0012534423368069092,
+  "outputs": [
+   "bc0cb221ac79"
+  ],
+  "comparator": {
+   "F": {
+    "ms_tok": 204.70331804977377,
+    "goal_kj": 79.13929151866667,
+    "n": 3
+   },
+   "D": {
+    "ms_tok": 405.43098902362993,
+    "goal_kj": 99.84894009233332,
+    "n": 3
+   }
+  },
+  "rows": {
+   "R1": true,
+   "R2": "pass",
+   "R3": true,
+   "R4": true,
+   "R5": true
+  }
+ },
+ "comparator_window_kj": {
+  "F": [
+   39.7,
+   37.3,
+   37.5
+  ],
+  "D": [
+   57.9,
+   57.2,
+   61.2
+  ]
+ },
+ "ratios_vllm_over_moe_infinity": {
+  "vs_performance": {
+   "decode": [
+    0.816,
+    0.798,
+    0.834
+   ],
+   "goal_energy": [
+    0.737,
+    0.697,
+    0.779
+   ],
+   "window_energy": [
+    0.839,
+    0.77,
+    0.914
+   ]
+  },
+  "vs_default": {
+   "decode": [
+    0.412,
+    0.364,
+    0.468
+   ],
+   "goal_energy": [
+    0.584,
+    0.548,
+    0.623
+   ],
+   "window_energy": [
+    0.545,
+    0.499,
+    0.596
+   ]
+  },
+  "note": "ratio of means on log scale, 95% Welch t interval, n=3 vs 3"
+ },
+ "energy_gap_split_kj": {
+  "vs_performance": {
+   "whole_goal": 20.83,
+   "initialized_window": 6.16
+  },
+  "vs_default": {
+   "whole_goal": 41.54,
+   "initialized_window": 26.76
+  }
+ },
+ "mechanism": {
+  "vllm": {
+   "trace": "alems-team-liqid05-20260920_541917.1790401428499228342.pt.trace.json.gz",
+   "kernels": 49016,
+   "launch_calls": 9800,
+   "profiled_completion_tokens": 44,
+   "kernels_per_token": 1114.0,
+   "launch_calls_per_token": 222.72727272727272,
+   "gpu_active_fraction": 0.9908690352235965
+  },
+  "moe_infinity": {
+   "kernels_per_decode_token": 10763.277777777777,
+   "gpu_active_fraction": 0.16495847663427315,
+   "source": "2026-09-24 decode-diagnosis call-2 profile (slow host state; profiler-perturbed)"
+  }
+ },
+ "kernel_time_share_profiled_call": {
+  "fused_moe_kernel": 0.651,
+  "cublas_gemvx": 0.233,
+  "bf16_gemm_64x64": 0.098,
+  "memcpy_ms": 4.39
+ },
+ "first_call_identical_across_engines": true
+}

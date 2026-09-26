@@ -80,3 +80,26 @@ Each workstream owns one goal end to end.
 | `verify_c1.py` | independent re-derivation of the 2026-09-25 idle-limit (C1) block |
 | `summarize.py` | condition summary with 95% intervals |
 | `figures_retained.py` | decode-by-placement and energy-by-domain figures |
+| `vllm_compare/vllm-adapter.patch` | harness commit 7180f77: vLLM 0.10.2 engine behind the native worker protocol (`"engine": "vllm"`); prompts rendered with the model's chat template and passed as token IDs; expert controls report no records |
+| `vllm_compare/run_block.sh` | smoke goal, or V1-V3 + one profiled goal (P1), CCD 80-87, default governor, knob check at start |
+| `vllm_compare/analyze.py`, `rederive.py` | analysis written before block data; independent re-derivation with different estimators |
+
+## Results so far (LIQID05, 2026-09-25/26)
+- **Governor (G0, G1):** MoE-Infinity decode performance/default = 0.505 (95% CI 0.445-0.574) with the CCDs swapped; energy per verified goal 0.793 (0.744-0.844); outputs identical. Idle-state limit (C1) has no effect. Six stock configurations are within ±1% (`data/g1_ccdswap_stockstacks_liqid05_20260926.json`).
+- **vLLM CPU offload on the same verified agent goal** (`data/vllm_offload_compare_liqid05_20260926.json`), n = 3, default governor:
+  - 3/3 verified, byte-identical outputs across runs, decode spread 0.13%.
+  - 167.05 ms/token and 58.3 kJ per goal.
+  - vLLM/MoE-Infinity: decode 0.816 (0.798-0.834) and energy 0.737 (0.697-0.779) against MoE-Infinity at the performance governor; 0.412 and 0.584 against it at default.
+  - About 70% of the energy gap against the performance arm is outside the initialized-model window, i.e. engine start-up and weight loading.
+  - Profile: CUDA graphs; ~1.1k kernels per token vs ~10.8k for MoE-Infinity. Kernels are active 99% of the span, and offloaded weights are read inside `fused_moe_kernel` via UVA. The host is off the per-token path, which is consistent with its governor insensitivity.
+
+## Current workstreams (supersede the WS0-WS6 table above)
+| WS | goal | done when |
+|---|---|---|
+| 1 | MoE-Infinity governor effect with the upstream math path (`ALEMS_QWEN_REFERENCE_MATH` unset): fixed-token decode, performance vs default CCD, n = 3 each | ratio with CI recorded; one `g1/power-swap.sh` apply/restore by the node owner |
+| A | Every ALEMS/MoE run fixes and records host power state: the harness sets the performance governor on the worker CCD (reversible) and records governor, EPP, idle flags and pinning in the manifest; earlier 2026-09 numbers are labelled "governor uncontrolled" | merged, with one re-baselined slice |
+| B | Intel check on I1: stock stacks (incl. vLLM offload, `--dtype half`) under default, C6-off and performance, one condition at a time, n = 3, predictions frozen | results table within one day of bring-up |
+| D | One archive of G0, G1, C1, C2, the vLLM comparison and the discovery runs, with manifests and checksums | archive and checksums published |
+
+- A2 is not needed for these workstreams.
+- H1 is used only if the Intel check shows a stock stack changing ≥ 1.3×.
