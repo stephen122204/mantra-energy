@@ -150,6 +150,7 @@ class Lifecycle:
         self.pause_index = 0
         self._pause_plan = None
         self.work_settled = False
+        self.expert_controls = True
 
     def emit(self, kind, **fields):
         self.events.append(
@@ -175,7 +176,13 @@ class Lifecycle:
             "drain",
             "expert_snapshot",
         }
-        if not required <= set(caps.get("controls", [])):
+        controls = set(caps.get("controls", []))
+        self.expert_controls = required <= controls
+        if not self.expert_controls and not (
+            caps.get("expert_controls") is False and not controls and self.policy.name == "demand"
+        ):
+            # Only a declared stock engine may omit expert controls, and only under the
+            # demand policy, which prepares nothing.
             raise RuntimeError("backend lacks required expert controls")
         startup_start = self.clock()
         self.backend.reset_goal_state()
@@ -207,7 +214,7 @@ class Lifecycle:
     def after_model(self):
         if self.work_settled:
             raise RuntimeError("model observation after work was settled")
-        for event in self.backend.drain_demands():
+        for event in (self.backend.drain_demands() if self.expert_controls else ()):
             key = (event["layer"], event["expert"])
             self.history[key] += event.get("tokens", 1)
             self.emit("expert_demand", observation=event)
@@ -223,7 +230,8 @@ class Lifecycle:
                         "first_dispatch_resident", event.get("resident_at_dispatch")
                     ),
                 )
-        self._collect_transfers()
+        if self.expert_controls:
+            self._collect_transfers()
         self.emit("model_end")
 
     def plan_pause(self):
@@ -350,10 +358,12 @@ class Lifecycle:
             self._admit(*deferred, event="deferred_preparation_admitted")
         cleanup = self.backend.cleanup_scope(timeout_seconds) if hasattr(self.backend, "cleanup_scope") else nullcontext()
         with cleanup:
-            cancelled = 0 if deferred is not None else self.backend.cancel_pending_preparation(self.generation)
+            cancelled = (0 if deferred is not None or not self.expert_controls
+                         else self.backend.cancel_pending_preparation(self.generation))
             # Cancellation is queued-only. Issued work must settle before resume.
             self.backend.drain_owned_work(timeout_seconds)
-            self._collect_transfers()
+            if self.expert_controls:
+                self._collect_transfers()
         self.emit("model_resume", cancelled_bytes=cancelled)
         self.pause = None
 
@@ -393,9 +403,11 @@ class Lifecycle:
             self._pause_plan = None
         cleanup = self.backend.cleanup_scope(timeout_seconds) if hasattr(self.backend, "cleanup_scope") else nullcontext()
         with cleanup:
-            self.backend.cancel_pending_preparation(self.generation)
+            if self.expert_controls:
+                self.backend.cancel_pending_preparation(self.generation)
             self.backend.drain_owned_work(timeout_seconds)
-            self._collect_transfers()
+            if self.expert_controls:
+                self._collect_transfers()
         for key, row in self.pending.items():
             self.emit(
                 "prepared_not_used_by_goal_end", expert=list(key), prepared=row

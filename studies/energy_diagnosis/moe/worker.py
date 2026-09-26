@@ -27,8 +27,13 @@ def main():
             if method == "init":
                 if device is not None:
                     raise RuntimeError("worker already initialized")
-                if mode == "native" and message["args"].get("engine") == "vllm":
+                engine = message["args"].get("engine")
+                if mode == "native" and engine == "vllm":
                     from .vllm_backend import VllmDevice as Device
+                elif mode == "native" and engine == "llamacpp":
+                    from .llamacpp_backend import LlamaCppDevice as Device
+                elif mode == "native" and engine not in (None, "native"):
+                    raise ValueError(f"unknown engine {engine!r}")
                 elif mode == "native":
                     from .native_backend import NativeDevice as Device
                 elif mode == "fixture":
@@ -38,7 +43,10 @@ def main():
                 device = Device(message["args"])
                 result = device.boot
             else:
-                result = getattr(device, methods[method])(message["args"])
+                handler = getattr(device, methods[method], None)
+                if handler is None:
+                    raise RuntimeError(f"engine does not support {method!r}")
+                result = handler(message["args"])
             response = dict(id=message["id"], ok=True, result=result)
         except Exception as exc:
             traceback.print_exc(file=sys.stderr)

@@ -20,6 +20,13 @@ CONTROLS = [
     "drain",
     "expert_snapshot",
 ]
+# Stock engines (no expert placement API) declare no expert controls. The lifecycle
+# then issues no expert RPCs and admits only the demand (no-preparation) policy.
+STOCK_ENGINES = frozenset({"vllm", "llamacpp"})
+
+
+def expected_controls(config):
+    return [] if (config or {}).get("engine") in STOCK_ENGINES else list(CONTROLS)
 
 
 class ProcessBackend:
@@ -46,7 +53,9 @@ class ProcessBackend:
 
     def capabilities(self):
         # Real capability verification happens in reset before returning goal-start.
-        return dict(controls=CONTROLS, mode=self.mode, verification="required_at_reset")
+        controls = expected_controls(self.config)
+        return dict(controls=controls, expert_controls=bool(controls), engine=self.config.get("engine", "native"),
+                    mode=self.mode, verification="required_at_reset")
 
     def reset_goal_state(self):
         if self.process is not None:
@@ -88,7 +97,7 @@ class ProcessBackend:
         self.reader_thread.start()
         try:
             result = self._rpc("init", self.config, timeout=self.timeout)
-            if set(result["controls"]) != set(CONTROLS) or result["mode"] != self.mode:
+            if set(result["controls"]) != set(expected_controls(self.config)) or result["mode"] != self.mode:
                 raise RuntimeError("backend capability or mode mismatch")
             self.reset_evidence = dict(
                 method="new_owned_process",
