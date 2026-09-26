@@ -25,7 +25,8 @@ Results:
 
 ## H100 node, 2026-09-24
 - GPU board energy only; RAPL was not readable.
-- Condition labels for the p8/q8/h-* stages are not mapped by `extract_stages.py`, so they show as `unknown`.
+- Condition labels were corrected 2026-09-26. On this node GPU 0 is on NUMA node 0, so node 0 is GPU-local and node 1 is remote, the reverse of LIQID05. p8 is taskset to 8 cores on node 0 and q8 to 8 cores on node 1; h-* stages are unpinned, and h-res-profile ran with the torch profiler on.
+- Every H100 stage exited rc=3 by design, because RAPL was unreadable; the goals passed their verifier. p8a exited rc=76 (guard: owned worker reparented during teardown; record complete).
 
 ## C1, 2026-09-25 (idle-limit block, first validation)
 Setup:
