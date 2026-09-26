@@ -123,6 +123,11 @@ def reference(task):
     return [[region,*groups[region]] for region in sorted(groups)]
 
 
+# Execution budget for the SQL tool and the verifier (stated to the model as 10 seconds).
+QUERY_SECONDS=10.0
+BUDGET_REASON='query did not complete within the execution budget'
+
+
 class ETLTool:
     def __init__(self,root):self.root=Path(root)
     def execute(self,action,content=None,workers=1):
@@ -134,7 +139,7 @@ class ETLTool:
             path.write_text(content,encoding='utf-8')
             return {'written':True}
         if content is not None:raise ValueError('content only allowed for write')
-        query=QueryTool(str(self.root/'raw.sqlite'),tables=('raw',))
+        query=QueryTool(str(self.root/'raw.sqlite'),max_seconds=QUERY_SECONDS,tables=('raw',))
         if action=='read':return dict(source=path.read_text(encoding='utf-8'),schema=query.execute('schema'))
         return query.execute('query',path.read_text(encoding='utf-8'))
 
@@ -167,19 +172,27 @@ class ETLRuntime:
         if _hash(task.asset_path)!=task.asset_sha256:raise ValueError('ETL inputs changed')
         # Reuse immutable original DB, not a model-writable workspace database.
         sql=(self.workspace/'pipeline.sql').read_text(encoding='utf-8')
-        def matches(database,expected):
+        def check(database,expected):
+            # 'budget' when the query was interrupted by the execution budget, so a correct but too-slow
+            # query is not reported as a wrong result.
             try:
-                result=QueryTool(str(database),tables=('raw',)).execute('query',sql)
-            except (ValueError,sqlite3.DatabaseError):return False
+                result=QueryTool(str(database),max_seconds=QUERY_SECONDS,tables=('raw',)).execute('query',sql)
+            except sqlite3.OperationalError as exc:
+                return 'budget' if 'interrupted' in str(exc) else 'error'
+            except (ValueError,sqlite3.DatabaseError):return 'error'
             rows=result['rows']
-            return (result['columns']==['region','event_count','net_cents'] and not result['truncated']
-                    and all(len(r)==3 and type(r[0]) is str and type(r[1]) is int and type(r[2]) is int for r in rows)
-                    and rows==expected)
-        if not matches(task.asset_path/'raw.sqlite',reference(task)):return dict(passed=False,reason='query failed independent input check')
+            ok=(result['columns']==['region','event_count','net_cents'] and not result['truncated']
+                and all(len(r)==3 and type(r[0]) is str and type(r[1]) is int and type(r[2]) is int for r in rows)
+                and rows==expected)
+            return 'match' if ok else 'mismatch'
+        first=check(task.asset_path/'raw.sqlite',reference(task))
+        if first=='budget':return dict(passed=False,reason=BUDGET_REASON+' on the original input',failure='budget')
+        if first!='match':return dict(passed=False,reason='query failed independent input check',failure=first)
         with tempfile.TemporaryDirectory() as directory:
             for index,records in enumerate(hidden_cases()):
                 stage=Path(directory)/f'case{index}';stage.mkdir()
                 _materialize(stage,records,random.Random(index))
-                if not matches(stage/'raw.sqlite',reference_records(records)):
-                    return dict(passed=False,reason='query failed additional input check')
+                outcome=check(stage/'raw.sqlite',reference_records(records))
+                if outcome=='budget':return dict(passed=False,reason=BUDGET_REASON+' on an additional input',failure='budget')
+                if outcome!='match':return dict(passed=False,reason='query failed additional input check',failure=outcome)
         return dict(passed=True,reason='independent CSV checks on original and irregular additional inputs')
