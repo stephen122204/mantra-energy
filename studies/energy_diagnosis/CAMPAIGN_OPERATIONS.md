@@ -69,6 +69,14 @@ python -m studies.energy_diagnosis.diagnostics.archive_results --restore-receipt
 Expected: exit 0, and `RESTORE_DIR/<batch>/job/status.json` exists for every batch.
 4. Copy `LOCAL_BACKUP_DIR` to the second storage location named in the plan and record its checksum.
 
+## Additional approved batches
+
+Additional collection requires its own approved specification, result directory,
+preflight and budget. Do not infer a launch decision from the legacy analysis
+command. `campaign_analysis` implements fixed-work preparation comparisons; its
+primary matched-request filtering is not a task-level precision analysis.
+Use the analysis and inclusion rules explicitly supplied for the current run.
+
 ## Recovery
 
 | Symptom (`campaign_check status`) | Meaning | Action |
@@ -79,7 +87,7 @@ Expected: exit 0, and `RESTORE_DIR/<batch>/job/status.json` exists for every bat
 | `stopped`, error `low disk` | storage floor reached | Report; never delete results to make room. |
 | `stopped`, error `ambiguous prior dispatch` | the node or scheduler died while launching a batch | Report; a reviewer inspects `dispatch/<id>.json` and that batch directory. |
 | scheduler not running, state `between_batches` or `maintenance_window` (e.g. after a reboot) | scheduler died between batches | In a window: run preflight, then relaunch the same command with the same NODE_SPEC and NODE_OUTPUT. Finished batches re-verify and are never repeated. |
-| scheduler not running, state `measuring` | node or scheduler died during a batch | Relaunching stops with `existing batch not terminal`: that batch is not adopted or repeated. Report the batch id; a reviewer decides. |
+| scheduler not running, state `measuring`; `needs_recovery` lists a batch | node or scheduler died during a batch | Relaunching stops with `existing batch not terminal` (never adopted or rerun). In a window: `campaign_check recover --plan PLAN.json --batch ID`. It refuses (and changes nothing) while any process of the batch, a GPU compute process or the GPU lock is still active; otherwise it writes `ID/recovery.json` classifying the attempt as interrupted, with every partial artifact's sha256, and never edits the batch's own records. Then relaunch with the same command: the batch is backed up as `interrupted_recovered`, listed under `recovered`, excluded from results, and the next batch runs. |
 
 Relaunching with the same specification never repeats a batch: completed batches are skipped after
 their snapshots re-verify, and an interrupted or uncertain batch stops the scheduler instead.

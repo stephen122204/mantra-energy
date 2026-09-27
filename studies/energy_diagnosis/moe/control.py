@@ -204,6 +204,10 @@ class Lifecycle:
             reset=self.backend.reset_evidence,
             startup_window=dict(start_ns=startup_start, end_ns=startup_end),
         )
+        # Every arm starts each goal from dispatcher accounting reconciled with placement, so the
+        # first model call does not run under the constructor's provisional budget.
+        if self.expert_controls:
+            self._record_reconciliation(self.backend.drain_owned_work(10), when="goal_start")
 
     def before_model(self, request_id):
         if self.goal is None or self.pause is not None or self._pause_plan is not None or self.work_settled:
@@ -339,7 +343,7 @@ class Lifecycle:
         if ack["accepted_bytes"] != sum(selected_nodes[n].nbytes for n in accepted):
             raise RuntimeError("backend byte acknowledgment does not reconcile")
         self.emit("ahead_preparation_admitted", selected=[asdict(e) for e in selected], ack=ack, reason=reason)
-        self.backend.drain_owned_work(timeout_seconds)
+        self._record_reconciliation(self.backend.drain_owned_work(timeout_seconds))
         self._preparing_ahead = True
         try:
             self._collect_transfers()
@@ -361,11 +365,16 @@ class Lifecycle:
             cancelled = (0 if deferred is not None or not self.expert_controls
                          else self.backend.cancel_pending_preparation(self.generation))
             # Cancellation is queued-only. Issued work must settle before resume.
-            self.backend.drain_owned_work(timeout_seconds)
+            self._record_reconciliation(self.backend.drain_owned_work(timeout_seconds))
             if self.expert_controls:
                 self._collect_transfers()
         self.emit("model_resume", cancelled_bytes=cancelled)
         self.pause = None
+
+    def _record_reconciliation(self, drained, when="resume"):
+        rec = (drained or {}).get("cache_reconciliation") if isinstance(drained, dict) else None
+        if rec is not None:
+            self.emit("cache_reconciled", when=when, **rec)
 
     def _collect_transfers(self):
         records, dropped = self.backend.drain_transfers()
@@ -405,7 +414,7 @@ class Lifecycle:
         with cleanup:
             if self.expert_controls:
                 self.backend.cancel_pending_preparation(self.generation)
-            self.backend.drain_owned_work(timeout_seconds)
+            self._record_reconciliation(self.backend.drain_owned_work(timeout_seconds), when="goal_end")
             if self.expert_controls:
                 self._collect_transfers()
         for key, row in self.pending.items():

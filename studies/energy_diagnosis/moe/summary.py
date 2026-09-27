@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import random
 import statistics
+from studies.energy_diagnosis.moe import event_log
 
 
 def paired_interval(pairs, *, seed=7, draws=2000):
@@ -181,9 +182,9 @@ def summarize(root):
             startup_ns
         ) = routing_hook_ns = transfer_bracket_ns = unused_bytes = 0
         for path, _ in entries:
-            events_path = path.with_name("expert-events.json")
-            if events_path.exists():
-                events = json.loads(events_path.read_text())
+            events_path = event_log.path_in(path.parent)
+            if events_path is not None:
+                events = event_log.read(events_path)
                 finishes = {}
                 for event in events:
                     kind = event["event"]
@@ -214,7 +215,7 @@ def summarize(root):
                 )
         components_complete = all(
             r["execution_status"] == "completed"
-            and path.with_name("expert-events.json").exists()
+            and event_log.path_in(path.parent) is not None
             and path.with_name("model-calls.json").exists()
             for path, r in entries
         )

@@ -69,8 +69,16 @@ def export_bundle(root, status_path, previous, output, max_bytes):
     root = Path(root).resolve()
     safe_name(status_path)
     validate_hashes(previous)
-    status = json.loads((root / status_path).read_text())
-    if status.get("status") not in TERMINAL:
+    status_bytes = (root / status_path).read_bytes()
+    status = json.loads(status_bytes)
+    recovery = (root / status_path).parent.parent / "recovery.json"
+    # A verified recovery record (nothing of the batch still running) makes an interrupted
+    # batch's partial artifacts safe to snapshot; they must be backed up, not lost.
+    record = json.loads(recovery.read_text()) if recovery.exists() else {}
+    recovered = (record.get("status") == "interrupted"
+                 and isinstance(record.get("partial_artifacts"), list)
+                 and record.get("status_sha256") == hashlib.sha256(status_bytes).hexdigest())
+    if status.get("status") not in TERMINAL and not recovered:
         raise ValueError("result job is not terminal; no live backup")
     files = manifest(root)
     changed = {
@@ -81,7 +89,11 @@ def export_bundle(root, status_path, previous, output, max_bytes):
         files=files,
         changed=changed,
         deleted=sorted(set(previous) - set(files)),
-        remote_job=status,
+        # A recovered batch is recorded as such, with its original (non-terminal) status.
+        remote_job=status if not recovered or status.get("status") in TERMINAL
+        else dict(status="interrupted_recovered", original_status=status.get("status"),
+                  recovery=dict(path=str(recovery.relative_to(root)),
+                                sha256=hashlib.sha256(recovery.read_bytes()).hexdigest())),
     )
     with tempfile.TemporaryFile() as archive:
         with tarfile.open(fileobj=archive, mode="w:gz") as tar:
@@ -114,7 +126,14 @@ def verify_bundle(path, previous):
         header = json.loads(encoded)
         if header.get("protocol") != "result-archive-v1":
             raise ValueError("unsupported manifest protocol")
-        if header.get("remote_job", {}).get("status") not in TERMINAL:
+        job = header.get("remote_job", {})
+        if job.get("status") == "interrupted_recovered":
+            # Only with the recovery record itself in this snapshot, for a genuinely non-terminal job.
+            rec = job.get("recovery") or {}
+            if (job.get("original_status") in TERMINAL or rec.get("path") not in header.get("files", {})
+                    or header["files"][rec["path"]] != rec.get("sha256")):
+                raise ValueError("recovered snapshot lacks its recovery record")
+        elif job.get("status") not in TERMINAL:
             raise ValueError("snapshot does not record a terminal job")
         files = validate_hashes(header["files"])
         changed = validate_hashes(header["changed"])

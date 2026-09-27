@@ -12,6 +12,7 @@ import pytest
 from studies.energy_diagnosis.moe.backend import ProcessBackend
 from studies.energy_diagnosis.moe.control import Expert, Lifecycle, Policy
 from studies.energy_diagnosis.moe.summary import paired_interval
+from studies.energy_diagnosis.moe import event_log
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,8 +55,9 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
     barrier_totals = Counter()
     barrier_counts = Counter()
     inner_totals = Counter()
-    for path in (output / "goals").glob("*/expert-events.json"):
-        events = json.loads(path.read_text())
+    from studies.energy_diagnosis.moe import event_log
+    for path in event_log.glob_goals(output):
+        events = event_log.read(path)
         policy = events[0]["policy"]["name"]
         assert events[0]["reset"]["method"] == "new_owned_process"
         transfers = [e for e in events if e["event"] == "expert_transfer"]
@@ -206,12 +208,12 @@ def test_failures_and_controls_are_not_silently_eligible(tmp_path, case):
         assert summary["energy"]["CPU_FIXTURE"]["total_attempt_joules"] is not None
     if case == "wrong_prediction":
         events = json.loads(
-            next((root / "goals").glob("*/expert-events.json")).read_text()
+            json.dumps(event_log.read(event_log.glob_goals(root)[0]))
         )
         assert any(e["event"] == "prepared_not_used_by_goal_end" for e in events)
     if case == "locked":
         events = json.loads(
-            next((root / "goals").glob("*/expert-events.json")).read_text()
+            json.dumps(event_log.read(event_log.glob_goals(root)[0]))
         )
         assert any(
             e["event"] == "preparation_admitted" and e["ack"]["rejected_bytes"]
@@ -406,7 +408,8 @@ def test_tool_timeout_still_drains_preparation(tmp_path):
     path = next((tmp_path / "goals").glob("*/record.json"))
     record = json.loads(path.read_text())
     assert record["execution_status"] == "timed_out"
-    events = json.loads(path.with_name("expert-events.json").read_text())
+    from studies.energy_diagnosis.moe import event_log
+    events = event_log.read(event_log.path_in(path.parent))
     assert events[-1]["event"] == "goal_end"
     assert any(e["event"] == "model_resume" for e in events)
 
@@ -781,3 +784,48 @@ def test_campaign_exit_keeps_model_failures_as_data_but_stops_on_crash(tmp_path,
         campaign.main(["--mode", "fixture", "--output", str(tmp_path / "crash"), "--task", "joined-orders-v1",
                        "--policies", "demand", "--max-runs", "1", "--deadline", "30", "--campaign-exit"])
     assert stopped.value.code == 3
+
+
+def test_every_resume_reconciles_dispatcher_cache_accounting(tmp_path):
+    command(tmp_path / "rec", "--task", "joined-orders-v1", "--policies", "fixed", "--max-runs", "1")
+    from studies.energy_diagnosis.moe import event_log
+    events = event_log.read(event_log.glob_goals(tmp_path / "rec")[0])
+    kinds = [e["event"] for e in events]
+    resumes = [i for i, k in enumerate(kinds) if k == "model_resume"]
+    assert resumes, "fixture goal must include a tool pause"
+    for i in resumes:
+        # The drain that precedes each resume reports its reconciliation.
+        assert "cache_reconciled" in kinds[max(0, i - 50):i]
+    rec = next(e for e in events if e["event"] == "cache_reconciled")
+    assert set(rec) >= {"stale_removed", "adopted", "budget_before", "budget_after", "when"}
+    whens = [e["when"] for e in events if e["event"] == "cache_reconciled"]
+    assert whens[0] == "goal_start" and whens[-1] == "goal_end" and "resume" in whens
+
+
+def test_compact_artifact_keeps_content_and_hashes_written_bytes_legacy(tmp_path):
+    import hashlib
+    from studies.energy_diagnosis.local_run import write_artifact
+    value = [{"event": "expert_placement", "placement": {"layer": 3, "expert": 7, "bytes": 9437184}}] * 3
+    ref = write_artifact(tmp_path, Path("a/expert-events.json"), value, "expert-events", compact=True)
+    pretty = write_artifact(tmp_path, Path("b/expert-events.json"), value, "expert-events")
+    compact_bytes = (tmp_path / "a/expert-events.json").read_bytes()
+    assert json.loads(compact_bytes) == json.loads((tmp_path / "b/expert-events.json").read_bytes()) == value
+    assert ref.sha256 == hashlib.sha256(compact_bytes).hexdigest() and ref.sha256 != pretty.sha256
+    assert len(compact_bytes) < (tmp_path / "b/expert-events.json").stat().st_size
+
+
+def test_event_log_is_deterministic_gzip_and_both_formats_read(tmp_path):
+    import hashlib
+    from studies.energy_diagnosis.local_run import write_artifact
+    value = [{"event": "expert_placement", "placement": {"layer": 3, "expert": 7}}] * 50
+    assert event_log.encode(value) == event_log.encode(value)
+    ref = write_artifact(tmp_path, Path("g1/expert-events.json.gz"), value, "expert-events", encoded=event_log.encode(value))
+    raw = (tmp_path / "g1/expert-events.json.gz").read_bytes()
+    assert ref.sha256 == hashlib.sha256(raw).hexdigest()
+    (tmp_path / "goals/old").mkdir(parents=True)
+    (tmp_path / "goals/old/expert-events.json").write_text(json.dumps(value))
+    (tmp_path / "goals/new").mkdir(parents=True)
+    (tmp_path / "goals/new/expert-events.json.gz").write_bytes(raw)
+    paths = event_log.glob_goals(tmp_path)
+    assert [p.name for p in paths] == ["expert-events.json.gz", "expert-events.json"]
+    assert event_log.read(paths[0]) == event_log.read(paths[1]) == value

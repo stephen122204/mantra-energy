@@ -119,7 +119,8 @@ class FixtureDevice:
         while True:
             with self.lock:
                 if all(j["done"] for j in self.jobs):
-                    return {"inflight_bytes": 0}
+                    return {"inflight_bytes": 0, "cache_reconciliation": dict(
+                        stale_removed=0, adopted=0, budget_before=0, budget_after=0, idle_polls=0)}
             if time.monotonic() >= deadline:
                 raise TimeoutError("fixture transfers did not drain")
             time.sleep(0.001)

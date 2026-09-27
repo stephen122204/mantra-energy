@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from studies.energy_diagnosis.moe import event_log
 
 
 def require(condition, message):
@@ -190,17 +191,10 @@ def audit_campaign(root):
                 require(ref["role"] not in payloads, "duplicate artifact role")
                 relative = Path(ref["path"])
                 path = (root / relative).resolve()
-                expected = (
-                    Path("goals")
-                    / execution
-                    / (
-                        "expert-events.json"
-                        if ref["role"] == "expert-events"
-                        else "events.json"
-                    )
-                )
+                allowed = ([Path("goals") / execution / n for n in event_log.NAMES]
+                           if ref["role"] == "expert-events" else [Path("goals") / execution / "events.json"])
                 require(
-                    relative == expected and path.is_relative_to(root),
+                    relative in allowed and path.is_relative_to(root),
                     "artifact identity/path mismatch",
                 )
                 raw = path.read_bytes()
@@ -208,7 +202,7 @@ def audit_campaign(root):
                     hashlib.sha256(raw).hexdigest() == ref["sha256"],
                     "artifact hash mismatch",
                 )
-                payloads[ref["role"]] = json.loads(raw)
+                payloads[ref["role"]] = event_log.decode(raw, relative)
             if set(payloads) != {"expert-events", "tool-events"} or not payloads.get(
                 "expert-events"
             ):
