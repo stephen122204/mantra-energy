@@ -234,3 +234,11 @@ def test_sampled_repetitions_need_distinct_seeds(tmp_path):
     for bad in ([["--decoding", "greedy"]], [["--task", "x"], []], [["--config=/x"], []]):
         with pytest.raises(ValueError):
             cp.load(plan(tmp_path, repetition_args=bad))
+
+
+def test_empty_keep_awake_omits_the_flag(tmp_path):
+    hc = dict(cpu_affinity="80-87", keep_awake_cpus="", tool_cpus="88-95", supervisor_cpus="72-79", idle_cpus="80-87")
+    spec = cp.node_spec(cp.load(plan(tmp_path, host_condition=hc)))
+    for b in spec["batches"]:
+        run = b["argv"][b["argv"].index("--") + 1:]
+        assert "--keep-awake-cpus" not in run and run[run.index("--cpu-affinity") + 1] == "80-87"
