@@ -89,8 +89,20 @@ def equal(got, want, mode, atol=0.0):
     return _norm(got, mode) == _norm(want, mode)
 
 
-def create_task(root, *, problem, bundle):
+# Model-visible submission wording. v1 is the wording used by the step-3 screen; it conflicts with the
+# system prompt (answer object) and models wrote the answer as text. v2 uses the repo workload's v3 wording.
+PROMPTS = {
+    "v1": "Grading runs your final solution.py; when finished, submit {done:true}.",
+    "v2": 'Grading runs your final solution.py. When it is complete, call the submit_answer tool with answer '
+          '{"done": true}; do not write the answer as text.',
+}
+
+
+def create_task(root, *, problem, bundle, prompt="v2"):
     """Materialize one problem from a prepared bundle (build with impl_prepare.py)."""
+    if prompt not in PROMPTS:
+        raise ValueError("unknown impl prompt version")
+    wording = prompt
     bundle = Path(bundle).resolve(strict=True)
     data = json.loads(bundle.read_text())
     if data.get("version") != VERSION or problem not in data["problems"]:
@@ -125,8 +137,8 @@ def create_task(root, *, problem, bundle):
               "current solution, write the complete solution.py, and test it. The test runs the example check and then "
               f"runs your function on a larger performance input with a {budget:g}-second budget. "
               "Your solution must be correct on additional hidden inputs and must finish the performance input within the "
-              "budget. Grading runs your final solution.py; when finished, submit {done:true}.")
-    return PilotTask(f"impl-{slug}-v1", "python-implementation", "evalperf-mbppplus-adapted-v1", root, {}, fingerprint, (), prompt)
+              "budget. " + PROMPTS[wording])
+    return PilotTask(f"impl-{slug}-{wording}", "python-implementation", "evalperf-mbppplus-adapted-v1", root, {}, fingerprint, (), prompt)
 
 
 class ImplTool:

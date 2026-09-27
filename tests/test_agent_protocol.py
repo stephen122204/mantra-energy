@@ -168,6 +168,50 @@ def test_legacy_protocol_remains_available(tmp_path):
     assert "prompt" in calls[0] and not list((output / "goals").glob("*/agent-trace.json"))
 
 
+# Responses recorded in the step-3 screen (Qwen3-30B-A3B-Instruct-2507 Q4_K_M).
+UNCLOSED_SUBMIT = '<tool_call>\n{"name": "submit_answer", "arguments": {"answer": 2}}'
+UNCLOSED_AFTER_TEXT = 'I will submit the final answer.\n<tool_call>\n{"name": "submit_answer", "arguments": {"answer": {"answer": 2}}\n}'
+
+
+def test_unclosed_final_call_is_malformed_in_v1_and_parsed_in_v2():
+    assert parse_response(UNCLOSED_SUBMIT).kind == "malformed"
+    d = parse_response(UNCLOSED_SUBMIT, accept_unclosed_final=True)
+    assert d.kind == "answer" and d.answer == 2 and d.repaired
+    d = parse_response(UNCLOSED_AFTER_TEXT, accept_unclosed_final=True)
+    assert d.kind == "answer" and d.answer == {"answer": 2} and d.content == "I will submit the final answer."
+    d = parse_response(call("python", {"action": "read"}) + "\n<tool_call>\n" + json.dumps(dict(name="python", arguments={"action": "test"})),
+                       accept_unclosed_final=True)
+    assert d.kind == "tool_calls" and [n for n, _ in d.calls] == ["python", "python"]
+    # Well-formed responses parse identically; everything else stays strict.
+    for text in (call("sql", {"action": "schema"}), call(SUBMIT, {"answer": {"done": True}}), "The answer is 3."):
+        assert parse_response(text, accept_unclosed_final=True) == parse_response(text)
+    for text in ('{"name": "submit_answer", "arguments": {"answer": 2}}\n</tool_call>',      # closing tag only
+                 '<tool_call>\n{"name": "submit_answer", "arguments": {"answer": 2}',        # truncated JSON
+                 '<tool_call>{"name": "a", "arguments": {}}<tool_call>{"name": "b", "arguments": {}}</tool_call>'):
+        assert parse_response(text, accept_unclosed_final=True).kind == "malformed"
+    assert parse_response('{"answer": {"done": true}}', accept_unclosed_final=True).kind == "no_action"
+
+
+def test_feedback_names_the_fix_only_in_v2():
+    tools = function_tools({})
+    v1, v2 = Conversation("g", tools, 5), Conversation("g", tools, 5, protocol="chat-tools-v2")
+    for c in (v1, v2):
+        c.record_turn(parse_response(UNCLOSED_SUBMIT))
+        c.feedback("unbalanced tool_call tags")
+    e1 = json.loads(v1.messages[-1]["content"])["error"]
+    e2 = json.loads(v2.messages[-1]["content"])["error"]
+    assert e1 == "unbalanced tool_call tags. Call a tool or submit_answer."
+    assert "closing tag" in e2 and e2.endswith("Call a tool or submit_answer.")
+
+
+@pytest.mark.parametrize("protocol,outcome", [("chat-tools-v1", "turn_budget_exhausted"), ("chat-tools-v2", "passed")])
+def test_unclosed_submit_end_to_end(tmp_path, protocol, outcome):
+    traces, _ = _pack_run(tmp_path, "unclosed_submit", "--agent-protocol", protocol)
+    assert traces[0]["protocol"] == protocol and traces[0]["outcome"] == outcome
+    if protocol == "chat-tools-v2":
+        assert traces[0]["turns"][-1]["repaired"] == "unclosed final tool_call accepted"
+
+
 def test_exponent_overflow_is_malformed():
     decision = parse_response('<tool_call>{"name":"sql","arguments":{"action":"query","x":1e999}}</tool_call>')
     assert decision.kind == 'malformed' and 'non-finite' in decision.reason

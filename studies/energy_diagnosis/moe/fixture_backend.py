@@ -237,7 +237,10 @@ class FixtureDevice:
             decision = {"answer": {"wrong": True}}
         if chat:
             from studies.energy_diagnosis.agent_protocol import to_native_text
-            return dict(text=to_native_text(decision), finish_reason="stop",
+            text = to_native_text(decision)
+            if self.case == "unclosed_submit" and "answer" in decision:
+                text = text[: -len("\n</tool_call>")]     # observed Qwen3 slip: submit without the closing tag
+            return dict(text=text, finish_reason="stop",
                         tokens=dict(prompt=len(json.dumps(arg["messages"])), completion=10), hook_ns=0)
         return dict(
             text=json.dumps(decision),

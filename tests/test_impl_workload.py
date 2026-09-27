@@ -85,9 +85,22 @@ def test_stub_and_forged_answers_fail(tmp_path, bundle):
 
 def test_pack_registration(tmp_path, bundle):
     pack = prepare(tmp_path / "p", [dict(kind="impl", problem="Toy/1", bundle=str(bundle))])
+    assert [t.task_id for t in pack.tasks] == ["impl-toy-1-v2"]
+    pack = prepare(tmp_path / "p1", [dict(kind="impl", problem="Toy/1", bundle=str(bundle), prompt="v1")])
     assert [t.task_id for t in pack.tasks] == ["impl-toy-1-v1"]
     with pytest.raises(ValueError):
         prepare(tmp_path / "q", [dict(kind="impl", problem="Toy/1", bundle="relative.json")])
+    with pytest.raises(ValueError):
+        prepare(tmp_path / "r", [dict(kind="impl", problem="Toy/1", bundle=str(bundle), prompt="v9")])
+
+
+def test_prompt_versions(tmp_path, bundle):
+    # v1 reproduces the step-3 screen wording exactly; v2 names the submit_answer tool.
+    v1 = create_task(tmp_path / "a1", problem="Toy/1", bundle=bundle, prompt="v1").prompt
+    v2 = create_task(tmp_path / "a2", problem="Toy/1", bundle=bundle).prompt
+    assert v1.endswith("budget. Grading runs your final solution.py; when finished, submit {done:true}.")
+    assert v2.endswith('call the submit_answer tool with answer {"done": true}; do not write the answer as text.')
+    assert v1[: v1.index("Grading")] == v2[: v2.index("Grading")]
 
 
 def test_any_submission_grades_solution_py(tmp_path, bundle):
