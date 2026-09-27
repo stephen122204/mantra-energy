@@ -228,21 +228,26 @@ class ImplRuntime:
         hidden = json.loads((private / "hidden_inputs.json").read_text())
         source = (self.workspace / "solution.py").read_text(encoding="utf-8")
         status, payload = _run(source, meta["entry"], hidden, HIDDEN_SECONDS)
+        if status == "refused":
+            raise RuntimeError("sandbox unavailable")      # infrastructure, never a model failure
         if status == "timeout":
-            return dict(passed=False, reason="hidden tests did not finish", failure="error", completion=self._completion)
+            return dict(passed=False, reason=f"hidden tests did not finish within {HIDDEN_SECONDS:g} seconds",
+                        failure="hidden_timeout", completion=self._completion)
         if status != "ok":
-            return dict(passed=False, reason=f"hidden tests: {status}", failure="error", completion=self._completion)
+            return dict(passed=False, reason=f"hidden tests: {status}", failure="runtime_error", completion=self._completion)
         wrong = [i for i, (got, want) in enumerate(zip(payload["outputs"], expected["hidden"]))
                  if not equal(got, want, meta["compare"], meta.get("atol", 0.0))]
         if wrong or len(payload["outputs"]) != len(expected["hidden"]):
             return dict(passed=False, reason=f"hidden tests: {len(wrong)} of {len(hidden)} outputs differ", failure="mismatch", completion=self._completion)
         perf_input = json.loads((task.asset_path / "public" / "performance_input.json").read_text())
         status, payload = _run(source, meta["entry"], [perf_input], meta["budget_seconds"])
+        if status == "refused":
+            raise RuntimeError("sandbox unavailable")
         if status == "timeout":
             return dict(passed=False, reason=f"performance input did not finish within the {meta['budget_seconds']:g}-second budget",
                         failure="budget", completion=self._completion)
         if status != "ok":
-            return dict(passed=False, reason="performance input: error", failure="error", completion=self._completion)
+            return dict(passed=False, reason="performance input: error", failure="runtime_error", completion=self._completion)
         if not equal(payload["outputs"][0], expected["performance"], meta["compare"], meta.get("atol", 0.0)):
             return dict(passed=False, reason="performance input output differs", failure="mismatch", completion=self._completion)
         return dict(passed=True, reason=f"hidden tests passed ({len(hidden)} inputs); performance input finished in "

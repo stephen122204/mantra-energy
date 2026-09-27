@@ -70,6 +70,14 @@ def test_history_shows_calls_hides_timing_and_counts_turns():
 def test_outcome_classes_and_paired_seeds():
     assert outcome_class("completed", "pass", None) == "passed"
     assert outcome_class("completed", "fail", None) == "wrong_answer"
+    # Verifier failure classes survive into the attempt outcome (not collapsed into wrong_answer).
+    assert outcome_class("completed", "fail", None, "mismatch") == "wrong_answer"
+    assert outcome_class("completed", "fail", None, "budget") == "performance_budget_exceeded"
+    assert outcome_class("completed", "fail", None, "budget_exceeded") == "performance_budget_exceeded"
+    assert outcome_class("completed", "fail", None, "runtime_error") == "program_error"
+    assert outcome_class("completed", "fail", None, "hidden_timeout") == "program_timeout"
+    assert outcome_class("completed", "fail", None, "worker_error") == "infrastructure_failure"
+    assert outcome_class("completed", "pass", None, "budget") == "passed"
     assert outcome_class("timed_out", "unavailable", None) == "deadline_exceeded"
     assert outcome_class("incomplete", "unavailable", "output_truncated") == "output_truncated"
     assert turn_seed(0, "task-r0", 1) == turn_seed(0, "task-r0", 1) != turn_seed(0, "task-r0", 2)

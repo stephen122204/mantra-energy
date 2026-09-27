@@ -883,7 +883,8 @@ class GoalExecutor:
             ("answer.json", answer, "answer"),
             ("verification.json", verification_detail, "verification-detail"),
             ("record.json", record.to_dict(), "execution-record"),
-        ] + ([("agent-trace.json", dict(trace, outcome=outcome_class(status, verifier.outcome, trace["terminal"])),
+        ] + ([("agent-trace.json", dict(trace, outcome=outcome_class(
+            status, verifier.outcome, trace["terminal"], ((verification_detail or {}).get("result") or {}).get("failure"))),
                "agent-trace")] if self.protocol in CHAT_PROTOCOLS else []):
             artifacts.append(
                 write_artifact(self.artifact_root, prefix / name, payload, role)

@@ -36,6 +36,9 @@ HIDDEN_KEYS = frozenset({"tool_accounting", "elapsed_ns", "cpu_ns", "workers_obs
 OUTCOMES = (
     "passed",
     "wrong_answer",
+    "performance_budget_exceeded",
+    "program_error",
+    "program_timeout",
     "output_truncated",
     "turn_budget_exhausted",
     "tool_call_budget_exhausted",
@@ -224,12 +227,26 @@ def legacy_context(request, meta):
     return dict(meta, tool_results=results)
 
 
-def outcome_class(execution_status, verifier_outcome, terminal):
+# Verifier failure labels (verification.json result["failure"]) -> attempt outcome. A correct-but-slow program,
+# a crashing program and a worker/sandbox fault are not wrong answers; unknown or absent labels stay wrong_answer.
+FAILURE_OUTCOMES = {
+    "budget": "performance_budget_exceeded",
+    "budget_exceeded": "performance_budget_exceeded",
+    "error": "program_error",
+    "runtime_error": "program_error",
+    "hidden_timeout": "program_timeout",
+    "worker_error": "infrastructure_failure",
+}
+
+
+def outcome_class(execution_status, verifier_outcome, terminal, failure=None):
     """One reason per attempt. Every class is still an attempt with its energy."""
     if terminal:
         return terminal
     if execution_status == "completed":
-        return {"pass": "passed", "fail": "wrong_answer"}.get(verifier_outcome, "infrastructure_failure")
+        if verifier_outcome == "fail":
+            return FAILURE_OUTCOMES.get(failure, "wrong_answer")
+        return {"pass": "passed"}.get(verifier_outcome, "infrastructure_failure")
     if execution_status == "timed_out":
         return "deadline_exceeded"
     return "infrastructure_failure"
