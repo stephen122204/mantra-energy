@@ -20,11 +20,22 @@ job = json.loads(sys.stdin.read())
 libraries = job['libraries']
 sys.path.extend(p for p in libraries if p not in sys.path)
 import pytest
+# HiGHS owns a global scheduler independently of OMP/BLAS settings. Initialize
+# it with one thread before forbidding process/thread creation. This preserves
+# normal SciPy optimization calls without giving candidate code fork access.
+import importlib.util
+if importlib.util.find_spec('scipy') is not None:
+    from scipy.optimize._highspy._core import _Highs, HighsStatus
+    scheduler = _Highs()
+    scheduler.setOptionValue('output_flag', False)
+    scheduler.setOptionValue('threads', 1)
+    if scheduler.run() != HighsStatus.kOk:
+        raise RuntimeError('could not initialize single-thread HiGHS scheduler')
 ''' + LANDLOCK + r'''
 if not sys.platform.startswith('linux') and job['require_landlock']:
     sys.stderr.write('ALEMS_SANDBOX_UNAVAILABLE\n'); sys.exit(86)
 if sys.platform.startswith('linux'):
-    abi = _landlock([job['root'], '/dev/null', *[p for p in libraries if os.path.isdir(p)]], [job['scratch']])
+    abi = _landlock([job['root'], '/dev/null', *job['read_libraries']], [job['scratch']])
     if job['require_landlock'] and abi < 4:
         sys.stderr.write('ALEMS_SANDBOX_UNAVAILABLE\n'); sys.exit(86)
 import resource
@@ -69,8 +80,9 @@ def run(python, root, targets, *, timeout, limits=None, require_landlock=True):
         if path != root and root not in path.parents:
             raise ValueError('pytest target outside repository')
     with tempfile.TemporaryDirectory(prefix='alems-repo-tests-') as scratch:
+        libraries = interpreter_paths(python)
         job = dict(root=str(root), scratch=scratch, targets=list(targets), require_landlock=require_landlock,
-                   libraries=interpreter_paths(python))
+                   libraries=libraries, read_libraries=library_read_paths(libraries))
         env = dict(PATH='/usr/bin:/bin', HOME=scratch, TMPDIR=scratch, LANG='C.UTF-8',
                    PYTHONHASHSEED='0', PYTHONDONTWRITEBYTECODE='1', PYTEST_DISABLE_PLUGIN_AUTOLOAD='1',
                    OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', MKL_NUM_THREADS='1')
@@ -80,3 +92,24 @@ def run(python, root, targets, *, timeout, limits=None, require_landlock=True):
     if result.returncode == 86 and 'ALEMS_SANDBOX_UNAVAILABLE' in result.stderr:
         raise RuntimeError('repository test sandbox unavailable; Linux Landlock ABI 4 is required')
     return result
+
+
+def library_read_paths(libraries):
+    """Do not expose an installed pristine NetworkX copy to submitted code.
+
+    Landlock permissions are additive: granting a parent would defeat excluding
+    its child. Split ancestors down to the excluded package, retaining other
+    installed dependencies and standard-library files as read-only.
+    """
+    roots = {Path(p).resolve() for p in libraries}
+    excluded = {p.resolve() for root in roots for p in
+                (root/'networkx', root/'site-packages/networkx', root/'dist-packages/networkx')
+                if p.exists()}
+    def allowed(path):
+        resolved = path.resolve()
+        if any(resolved == x or x in resolved.parents for x in excluded):
+            return []
+        if any(resolved in x.parents for x in excluded):
+            return [item for child in path.iterdir() for item in allowed(child)]
+        return [str(resolved)]
+    return sorted({item for root in roots for item in allowed(root)})

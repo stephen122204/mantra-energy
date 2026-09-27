@@ -100,6 +100,27 @@ def test_pytest_candidate_cannot_read_adjacent_answers(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.skipif(not sys.platform.startswith('linux'), reason='Linux boundary')
+def test_pytest_cannot_read_installed_pristine_library(tmp_path):
+    pristine = Path(networkx.__file__).resolve()
+    (tmp_path/'test_reference.py').write_text(
+        'import pytest\ndef test_reference():\n'
+        f'    with pytest.raises(PermissionError):\n        open({str(pristine)!r}).read()\n')
+    result = repo_test_process.run(sys.executable, tmp_path, ['test_reference.py'], timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(not sys.platform.startswith('linux'), reason='Linux boundary')
+def test_scipy_solver_works_without_allowing_fork(tmp_path):
+    pytest.importorskip('scipy')
+    (tmp_path/'test_solver.py').write_text(
+        'import os, pytest\nfrom scipy.optimize import linprog\n'
+        'def test_solver():\n    assert linprog([1.], bounds=[(1,None)]).success\n'
+        '    with pytest.raises(OSError):\n        os.fork()\n')
+    result = repo_test_process.run(sys.executable, tmp_path, ['test_solver.py'], timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 @pytest.mark.parametrize('target', ['../answers.py', '/etc/passwd', '--help'])
 def test_pytest_rejects_outside_targets(tmp_path, target):
     with pytest.raises(ValueError):
