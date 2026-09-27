@@ -217,3 +217,20 @@ def test_preflight_host_timer_rule(monkeypatch):
     checks, info = {}, {}
     campaign_check.host_timer_check(named, checks, info, run_timer_wait=broken)
     assert checks == {"host_maintenance_timer_schedulable": False} and "unparseable" in info["host_timer_error"]
+
+
+def test_sampled_repetitions_need_distinct_seeds(tmp_path):
+    """Every batch runs --repeats 1, so planned_run_id (and the per-turn sampling seeds derived from it) is the
+    same in every repetition: identical argv would repeat the same draw. Sampled plans must vary the seed."""
+    sampled = ["--decoding", "sampled", "--temperature", "0.7", "--sampling-seed", "1"]
+    with pytest.raises(ValueError, match="identical seeds"):
+        cp.load(plan(tmp_path, base_args=["--mode", "native", "--campaign-exit", "--max-runs", "1", *sampled]))
+    reps = [["--decoding", "greedy"], ["--decoding", "sampled", "--temperature", "0.7", "--sampling-seed", "1"]]
+    spec = cp.node_spec(cp.load(plan(tmp_path, repetition_args=reps)))
+    for s in spec["schedule"]:
+        argv = next(b["argv"] for b in spec["batches"] if b["id"] == s["id"])
+        run = argv[argv.index("--") + 1:]
+        assert run[-len(reps[s["block"]]) - 6:-6] == reps[s["block"]] and s["repetition_args"] == reps[s["block"]]
+    for bad in ([["--decoding", "greedy"]], [["--task", "x"], []], [["--config=/x"], []]):
+        with pytest.raises(ValueError):
+            cp.load(plan(tmp_path, repetition_args=bad))
