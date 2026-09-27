@@ -1,9 +1,9 @@
 name: Task screen qualification
 on:
   pull_request:
-    branches: ['research/energy-diagnosis', 'stephen/campaign-operations']
+    branches: ['research/energy-diagnosis', 'stephen/campaign-operations', 'stephen/task-screen-pack', 'stephen/precision-task-cost']
   push:
-    branches: ['stephen/task-screen-pack']
+    branches: ['stephen/task-screen-pack', 'stephen/precision-task-cost', 'stephen/pretest-qualification']
 permissions:
   contents: read
 jobs:
@@ -34,3 +34,11 @@ jobs:
           export ALEMS_NETWORKX_SOURCE="$GITHUB_WORKSPACE/.task-screen-networkx"
           export ALEMS_REPO_TOOL_PYTHON="$(command -v python)"
           python -m pytest -q tests/test_repo_workload.py
+
+  implementation-pretest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: python -m pip install -r requirements-study.txt
+      - run: python -m pytest -q tests/test_agent_protocol.py tests/test_impl_workload.py tests/test_impl_calibration.py tests/test_implementation_pretest.py tests/test_sandbox_linux.py tests/test_stock_engine_controls.py
