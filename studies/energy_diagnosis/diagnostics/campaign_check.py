@@ -40,6 +40,24 @@ def preflight(plan):
         return dict(passed=False, checks={"preflight_completed": False}, info={"error": f"{type(exc).__name__}: {exc}"})
 
 
+STOCK_ENGINE_MANIFEST = "stock-engine-build-v1"
+
+
+def stock_engine_unchanged(manifest, backend_python, *, runner=None):
+    """(ok, error) for a stock-engine identity manifest: every listed file still has its sha256 and the backend
+    interpreter's `pip freeze` still hashes to the recorded value."""
+    runner = runner or run
+    for name, digest in manifest["files"].items():
+        if not Path(name).is_file() or sha(name) != digest:
+            return False, f"changed or missing: {name}"
+    freeze = runner([backend_python, "-m", "pip", "freeze"])
+    if getattr(freeze, "returncode", 0) != 0:
+        return False, "backend pip freeze failed"
+    if hashlib.sha256(freeze.stdout.encode()).hexdigest() != manifest["backend_pip_freeze_sha256"]:
+        return False, "backend packages changed"
+    return True, None
+
+
 def host_timer_check(plan, checks, info, *, run_timer_wait=None):
     """Chameleon's cache-vendordata timer: either disabled (legacy plans) or named in maintenance.systemd_timer,
     in which case the scheduler avoids it and its actual schedule must be readable now."""
@@ -70,12 +88,20 @@ def _preflight(plan):
     checks["repository_revision"] = head == exp["repository_revision"]
     checks["repository_clean"] = run(["git", "-C", str(repo), "status", "--porcelain"]).stdout.strip() == ""
     checks["build_manifest"] = sha(exp["build_manifest"]) == exp["build_manifest_sha256"]
-    verify = run([exp["backend_python"], "-c", "import sys; from pathlib import Path; "
-                  "from studies.energy_diagnosis.moe.prepare import verify_build; "
-                  "print(verify_build(Path(sys.argv[1]))['manifest_sha256'])", exp["build_manifest"]],
-                 cwd=repo, env=dict(os.environ, PYTHONPATH=str(repo)))
-    checks["backend_dependencies_unchanged"] = verify.returncode == 0 and verify.stdout.strip() == exp["build_manifest_sha256"]
-    info["backend_verify_error"] = verify.stderr.strip()[-300:] if verify.returncode else None
+    manifest = json.loads(Path(exp["build_manifest"]).read_text())
+    if manifest.get("kind") == STOCK_ENGINE_MANIFEST:
+        # Stock engines (llama.cpp): no MoE-Infinity native build; identity = hashed engine binary, configs,
+        # model preflight identities, wrapper, plus the backend interpreter's installed packages.
+        ok, error = stock_engine_unchanged(manifest, exp["backend_python"])
+        checks["backend_dependencies_unchanged"] = ok
+        info["backend_verify_error"] = error
+    else:
+        verify = run([exp["backend_python"], "-c", "import sys; from pathlib import Path; "
+                      "from studies.energy_diagnosis.moe.prepare import verify_build; "
+                      "print(verify_build(Path(sys.argv[1]))['manifest_sha256'])", exp["build_manifest"]],
+                     cwd=repo, env=dict(os.environ, PYTHONPATH=str(repo)))
+        checks["backend_dependencies_unchanged"] = verify.returncode == 0 and verify.stdout.strip() == exp["build_manifest_sha256"]
+        info["backend_verify_error"] = verify.stderr.strip()[-300:] if verify.returncode else None
     checks["model_weights_manifest"] = sha(exp["weights_manifest"]) == exp["weights_manifest_sha256"]
     freeze = run([exp["tool_python"], "-m", "pip", "freeze"]).stdout
     checks["tool_environment"] = hashlib.sha256(freeze.encode()).hexdigest() == exp["tool_python_freeze_sha256"]
