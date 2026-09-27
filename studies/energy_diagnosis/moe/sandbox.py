@@ -112,10 +112,12 @@ def stdlib_paths():
     return sorted(p for p in paths if p and os.path.isdir(p))
 
 
-def run(source, entry, inputs, seconds, *, example=None, memory_bytes=8 << 30, require_landlock=True, cwd=None):
+def run(source, entry, inputs, seconds, *, example=None, memory_bytes=8 << 30, require_landlock=True, cwd=None,
+        read_paths=()):
     """Returns (status, payload). status: ok, timeout, error, example_failed, refused."""
     job = dict(source=source, entry=entry, inputs=inputs, example=example, memory_bytes=int(memory_bytes),
-               cpu_seconds=int(seconds) + 5, read_paths=stdlib_paths(), require_landlock=require_landlock)
+               cpu_seconds=int(seconds) + 5, read_paths=stdlib_paths() + [os.path.realpath(p) for p in read_paths],
+               require_landlock=require_landlock)
     try:
         p = subprocess.run([sys.executable, "-I", "-S", "-c", CHILD], input=json.dumps(job), text=True,
                            capture_output=True, timeout=seconds, cwd=cwd or "/",
