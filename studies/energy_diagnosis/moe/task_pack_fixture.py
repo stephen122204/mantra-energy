@@ -23,6 +23,11 @@ class ScriptedModel:
             elif len(history)==1:decision=call('etl',action='write',content=REPAIR)
             elif len(history)==2:decision=call('etl',action='test')
             else:decision={'answer':{'done':True}}
+        elif family=='python-transformation':
+            if not history:decision=call('program',action='read')
+            elif len(history)==1:decision=call('program',action='write',content=PROGRAMS[history[-1]['result']['case']])
+            elif len(history)==2:decision=call('program',action='test')
+            else:decision={'answer':{'done':True}}
         elif family=='grouped-regression':
             decision=call('regression',action='fit') if not history else {'answer':history[-1]['result']}
         else:
@@ -38,3 +43,9 @@ class ScriptedModel:
         if 'answer' in decision and self.case=='wrong_answer':decision={'answer':{'wrong':True}}
         return {'status':'ok','content':json.dumps(decision),'tokens':{'prompt':10,'completion':10},'token_provenance':'estimated'}
 
+
+# Known solutions for simulated pipeline qualification only. Never given to a live model.
+PROGRAMS = {
+    'conditional-dedup': "def solve(data):\n    seen=set()\n    out=[]\n    for r in data:\n        if r['url'] not in seen or r['keep']:\n            out.append(r['id'])\n        seen.add(r['url'])\n    return out\n",
+    'user-histogram': "def solve(data):\n    bins=data['bins']\n    out={}\n    for r in data['records']:\n        counts=out.setdefault(r['user'],[0]*(len(bins)-1))\n        for j in range(len(bins)-1):\n            if bins[j]<r['views']<=bins[j+1]:\n                counts[j]+=1\n    return out\n",
+}

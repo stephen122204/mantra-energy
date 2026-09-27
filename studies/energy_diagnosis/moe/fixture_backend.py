@@ -163,7 +163,7 @@ class FixtureDevice:
         # Return the expert to CPU to expose repeated preparation in fixtures.
         with self.lock:
             self.experts[expert] = replace(self.experts[expert], device="cpu")
-        if context.get("family") in {"business-query", "grouped-regression", "etl-sql-repair"}:
+        if context.get("family") in {"business-query", "grouped-regression", "etl-sql-repair", "python-transformation"}:
             from .task_pack_fixture import ScriptedModel
             decision = json.loads(ScriptedModel(self.case).call(json.dumps(context), 0)["content"])
         elif context.get("family") == "sql-query":

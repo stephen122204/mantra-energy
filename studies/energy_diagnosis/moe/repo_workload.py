@@ -19,6 +19,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
@@ -425,11 +426,15 @@ def _is_test_file(path):
 
 def _limits():
     import resource
-    resource.setrlimit(resource.RLIMIT_AS, (8 * 2**30, 8 * 2**30))
+    # macOS does not support this Linux address-space bound reliably.
+    if sys.platform == "linux":
+        resource.setrlimit(resource.RLIMIT_AS, (8 * 2**30, 8 * 2**30))
     resource.setrlimit(resource.RLIMIT_CPU, (TEST_SECONDS + 30, TEST_SECONDS + 30))
     resource.setrlimit(resource.RLIMIT_FSIZE, (256 * 2**20, 256 * 2**20))
     cpus = os.environ.get("ALEMS_TOOL_CPUS")
     if cpus:
+        if not hasattr(os, "sched_setaffinity"):
+            raise RuntimeError("ALEMS_TOOL_CPUS requires a platform with CPU affinity support")
         os.sched_setaffinity(0, _cpu_list(cpus))
 
 
@@ -444,9 +449,11 @@ def _cpu_list(text):
 def run_pytest(python, root, targets, sandbox, timeout=TEST_SECONDS):
     env = dict(PATH="/usr/bin:/bin", PYTHONPATH=f"{sandbox}{os.pathsep}{root}", PYTHONDONTWRITEBYTECODE="1",
                HOME=str(root), LANG="C.UTF-8", PYTHONHASHSEED="0")
+    for key in ("SystemRoot", "SYSTEMROOT", "WINDIR"):
+        if key in os.environ:env[key]=os.environ[key]
     return subprocess.run([python, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--tb=short", "-rf",
                            "--color=no", *targets], cwd=root, env=env, capture_output=True, text=True,
-                          timeout=timeout, preexec_fn=_limits, start_new_session=False)
+                          timeout=timeout, preexec_fn=_limits if os.name == "posix" else None, start_new_session=False)
 
 
 _DURATION = re.compile(r" in \d+(?:\.\d+)?s(?: \(\d+:\d\d:\d\d\))?")
