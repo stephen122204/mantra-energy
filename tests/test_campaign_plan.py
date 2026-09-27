@@ -198,3 +198,22 @@ def test_frozen_assets_cannot_be_overridden(tmp_path, location, override):
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="overridden"):
         cp.load(path)
+
+
+def test_preflight_host_timer_rule(monkeypatch):
+    from types import SimpleNamespace
+    from studies.energy_diagnosis.diagnostics import campaign_check
+    monkeypatch.setattr(campaign_check, "run", lambda argv, **kw: SimpleNamespace(stdout="ActiveState=active\n", returncode=0))
+    legacy = dict(maintenance=dict(anchor_utc="2026-01-01T00:00:00Z", period_seconds=3600, window_seconds=600))
+    checks, info = {}, {}
+    campaign_check.host_timer_check(legacy, checks, info)
+    assert checks == {"vendor_cache_timer_inactive": False}            # legacy plans still require it disabled
+    named = dict(maintenance=dict(legacy["maintenance"], systemd_timer="cache-vendordata.timer"))
+    checks, info = {}, {}
+    campaign_check.host_timer_check(named, checks, info, run_timer_wait=lambda spec: 0)
+    assert checks == {"host_maintenance_timer_schedulable": True}      # active timer allowed when avoided
+    def broken(spec):
+        raise ValueError("unparseable systemd monotonic time: 'n/a'")
+    checks, info = {}, {}
+    campaign_check.host_timer_check(named, checks, info, run_timer_wait=broken)
+    assert checks == {"host_maintenance_timer_schedulable": False} and "unparseable" in info["host_timer_error"]
