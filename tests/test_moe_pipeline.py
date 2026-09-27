@@ -835,3 +835,15 @@ def test_event_log_is_deterministic_gzip_and_both_formats_read(tmp_path):
     paths = event_log.glob_goals(tmp_path)
     assert [p.name for p in paths] == ["expert-events.json.gz", "expert-events.json"]
     assert event_log.read(paths[0]) == event_log.read(paths[1]) == value
+
+
+def test_native_window_gate_excludes_explicitly_recovered_attempt():
+    """Reproduced on LIQID05 (real-GPU rehearsal, dcce6ac): the resumed native run exited 5 because the
+    operator-reconciled interrupted attempt has no complete window. Recovered attempts are audited separately."""
+    from studies.energy_diagnosis.moe.run import native_windows_acceptable
+    ok = dict(all_domains_measured=True, owned_work_terminated=True, simulated=False)
+    recovered = dict(all_domains_measured=False, owned_work_terminated=True, simulated=False, recovered=True)
+    assert native_windows_acceptable(dict(audit_passed=True, results=[recovered, ok]))
+    assert not native_windows_acceptable(dict(audit_passed=True, results=[dict(ok, all_domains_measured=False), ok]))
+    assert not native_windows_acceptable(dict(audit_passed=False, results=[ok]))
+    assert not native_windows_acceptable(dict(audit_passed=True, results=[dict(ok, simulated=True)]))
