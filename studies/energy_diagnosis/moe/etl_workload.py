@@ -56,21 +56,29 @@ def _materialize(stage,records,rng=None):
     finally:db.close()
 
 
-def create_task(root, *, rows=8192, seed=7):
+def create_task(root, *, rows=8192, seed=7, variant=None):
     if type(rows) is not int or not 32<=rows<=1_000_000 or type(seed) is not int or not 0<=seed<2**31:
         raise ValueError('invalid bounded rows or seed')
+    variant=validate_variant(variant)
     root=Path(root);root.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(dir=root.parent) as temp:
         stage=Path(temp)/'assets';stage.mkdir()
         rng=random.Random(f'{VERSION}:{seed}')
         _materialize(stage,generate(rows,rng),rng)
         (stage/'pipeline.sql').write_text(BUGGY+'\n',encoding='utf-8')
-        (stage/'source.json').write_text(json.dumps(dict(version=VERSION,rows=rows,seed=seed,source='synthetic versioned event records'),sort_keys=True)+'\n')
+        if variant and variant['index']:
+            db=sqlite3.connect(stage/'raw.sqlite')
+            try:
+                db.execute('CREATE INDEX raw_event_seq ON raw(event_id, seq)');db.commit()
+            finally:db.close()
+        meta=dict(version=VERSION,rows=rows,seed=seed,source='synthetic versioned event records')
+        if variant is not None:meta['variant']=variant
+        (stage/'source.json').write_text(json.dumps(meta,sort_keys=True)+'\n')
         fingerprint=_hash(stage)
         if root.exists():
             if root.is_symlink() or any(p.is_symlink() for p in root.rglob('*')) or _hash(root)!=fingerprint:raise ValueError('existing ETL assets differ')
         else:stage.rename(root)
-    return PilotTask(f'etl-latest-v2-n{rows}-s{seed}','etl-sql-repair','synthetic-versioned-events-v2',root,{},fingerprint,(),
+    return PilotTask(f'etl-latest-v2-n{rows}-s{seed}'+variant_suffix(variant),'etl-sql-repair','synthetic-versioned-events-v2',root,{},fingerprint,(),
         'Repair pipeline.sql. raw contains versioned events: retain only the row with maximum seq for each event_id, then exclude events whose latest status is not paid. '
         'Group surviving events by region. Return columns region, event_count, net_cents, where net_cents sums gross_cents minus tax_cents. Keep negative/zero amounts. '
         'Order rows by region ascending. Use the etl tool to read the query/schema, write one read-only SELECT, and test its output. Return {done:true} when repaired. '
@@ -126,6 +134,40 @@ def reference(task):
 # Execution budget for the SQL tool and the verifier (stated to the model as 10 seconds).
 QUERY_SECONDS=10.0
 BUDGET_REASON='query did not complete within the execution budget'
+# Optional environment variants (default None = the original task, unchanged identity and assets):
+#   window_functions: expose SQLite window functions (ROW_NUMBER etc.) in the tool and the verifier
+#   feedback: 'generic' (the SQLite error text, e.g. "interrupted") or 'explicit' (a stated budget message)
+#   index: build an index on raw(event_id, seq) into the input database
+WINDOW_FUNCTIONS=('row_number','rank','dense_rank','percent_rank','cume_dist','ntile','lag','lead',
+                  'first_value','last_value','nth_value')
+EXPLICIT_BUDGET_MESSAGE='query exceeded the 10-second execution budget and was stopped before returning results'
+
+
+class QueryBudgetExceeded(Exception):
+    pass
+
+
+def validate_variant(variant):
+    if variant is None:return None
+    if not isinstance(variant,dict) or set(variant)!={'window_functions','feedback','index'} \
+            or type(variant['window_functions']) is not bool or type(variant['index']) is not bool \
+            or variant['feedback'] not in ('generic','explicit'):
+        raise ValueError('ETL variant requires window_functions (bool), feedback (generic|explicit), index (bool)')
+    return dict(variant)
+
+
+def variant_suffix(variant):
+    if variant is None:return ''
+    return '-w%df%si%d' % (variant['window_functions'],variant['feedback'][0],variant['index'])
+
+
+def _variant_of(directory):
+    meta=json.loads((Path(directory)/'source.json').read_text())
+    return meta.get('variant')
+
+
+def _functions(variant):
+    return WINDOW_FUNCTIONS if variant and variant['window_functions'] else ()
 
 
 class ETLTool:
@@ -139,9 +181,15 @@ class ETLTool:
             path.write_text(content,encoding='utf-8')
             return {'written':True}
         if content is not None:raise ValueError('content only allowed for write')
-        query=QueryTool(str(self.root/'raw.sqlite'),max_seconds=QUERY_SECONDS,tables=('raw',))
+        variant=_variant_of(self.root)
+        query=QueryTool(str(self.root/'raw.sqlite'),max_seconds=QUERY_SECONDS,tables=('raw',),extra_functions=_functions(variant))
         if action=='read':return dict(source=path.read_text(encoding='utf-8'),schema=query.execute('schema'))
-        return query.execute('query',path.read_text(encoding='utf-8'))
+        try:
+            return query.execute('query',path.read_text(encoding='utf-8'))
+        except sqlite3.OperationalError as exc:
+            if variant and variant['feedback']=='explicit' and 'interrupted' in str(exc):
+                raise QueryBudgetExceeded(EXPLICIT_BUDGET_MESSAGE) from None
+            raise
 
 
 class ETLRuntime:
@@ -156,8 +204,10 @@ class ETLRuntime:
             'action="write" requires content containing the complete replacement SQL and returns written=true. '
             'action="test" takes no content and runs the saved query, returning columns, rows and truncated. '
             'This is bounded read-only SQLite: one SELECT, at most 32768 SQL bytes, 10 seconds, 128 result rows and 65536 output bytes. '
-            'Joins, subqueries and aggregate functions such as MAX, SUM and COUNT are supported; ranking functions such as ROW_NUMBER are not exposed. '
-            'Read, write and test must occur in separate decisions or explicitly ordered dependencies; never run a test concurrently with its write.',
+            + ('Joins, subqueries, aggregate functions such as MAX, SUM and COUNT, and window functions such as ROW_NUMBER are supported. '
+               if _functions(_variant_of(task.asset_path)) else
+               'Joins, subqueries and aggregate functions such as MAX, SUM and COUNT are supported; ranking functions such as ROW_NUMBER are not exposed. ')
+            + 'Read, write and test must occur in separate decisions or explicitly ordered dependencies; never run a test concurrently with its write.',
             'args':{'action':'required: read, write or test','content':'required only for write; complete SQL'},
             'parameters':action_contract(ETL_ACTIONS),
             'example_call':{'id':'read_1','tool':'etl','args':{'action':'read'}}}},
@@ -176,7 +226,8 @@ class ETLRuntime:
             # 'budget' when the query was interrupted by the execution budget, so a correct but too-slow
             # query is not reported as a wrong result.
             try:
-                result=QueryTool(str(database),max_seconds=QUERY_SECONDS,tables=('raw',)).execute('query',sql)
+                result=QueryTool(str(database),max_seconds=QUERY_SECONDS,tables=('raw',),
+                                 extra_functions=_functions(_variant_of(task.asset_path))).execute('query',sql)
             except sqlite3.OperationalError as exc:
                 return 'budget' if 'interrupted' in str(exc) else 'error'
             except (ValueError,sqlite3.DatabaseError):return 'error'
