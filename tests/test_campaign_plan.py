@@ -160,3 +160,41 @@ def test_stage_two_blocks_match_the_full_plan_and_do_not_collide(tmp_path):
     assert not set(ids(stage1)) & set(ids(stage2))
     with pytest.raises(ValueError):
         cp.load(plan(tmp_path, repetitions=4, blocks=[3, 6]))
+
+
+def test_frozen_task_assets_are_shared_by_every_arm_and_block(tmp_path):
+    path = plan(tmp_path)
+    data = json.loads(path.read_text())
+    data["families"]["S"]["tasks"][0]["task_pack_assets"] = "/w/frozen assets"
+    path.write_text(json.dumps(data))
+    spec = cp.node_spec(cp.load(path))
+    selected = [b for b in spec["batches"] if "-S-etl-" in b["id"]]
+    assert len(selected) == 6
+    for batch in selected:
+        args = batch["argv"]
+        assert args.count("--task-pack-assets") == 1
+        assert args[args.index("--task-pack-assets") + 1] == "/w/frozen assets"
+    assert all("--task-pack-assets" not in b["argv"] for b in spec["batches"] if "-L-" in b["id"])
+
+
+@pytest.mark.parametrize("value", [None, "", "   ", 42])
+def test_invalid_frozen_asset_path_rejected(tmp_path, value):
+    path = plan(tmp_path)
+    data = json.loads(path.read_text())
+    data["families"]["S"]["tasks"][0]["task_pack_assets"] = value
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="task_pack_assets"):
+        cp.load(path)
+
+
+@pytest.mark.parametrize("location", ["base", "family", "arm"])
+@pytest.mark.parametrize("override", [["--task-pack-assets", "/different"], ["--task-pack-assets=/different"]])
+def test_frozen_assets_cannot_be_overridden(tmp_path, location, override):
+    path = plan(tmp_path)
+    data = json.loads(path.read_text())
+    data["families"]["S"]["tasks"][0]["task_pack_assets"] = "/w/frozen"
+    target = {"base": data["base_args"], "family": data["families"]["S"]["args"], "arm": data["arms"]["A"]}[location]
+    target.extend(override)
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="overridden"):
+        cp.load(path)

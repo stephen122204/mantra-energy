@@ -42,6 +42,15 @@ def load(path):
             raise ValueError(f"{flag} is derived from the plan, not given in base_args")
     if "--campaign-exit" not in plan["base_args"]:
         raise ValueError("campaign runs require --campaign-exit")
+    for family in plan["families"].values():
+        for task in family["tasks"]:
+            if "task_pack_assets" in task:
+                assets = task["task_pack_assets"]
+                if not isinstance(assets, str) or not assets.strip():
+                    raise ValueError("task_pack_assets must be a nonempty frozen asset directory")
+                for args in (plan["base_args"], family["args"], *plan["arms"].values()):
+                    if any(arg.split("=", 1)[0] == "--task-pack-assets" for arg in args):
+                        raise ValueError("task_pack_assets cannot be overridden by run arguments")
     return plan
 
 
@@ -63,7 +72,9 @@ def batches(plan):
                 for arm in arms:
                     ident = f"r{rep:02d}-{family}-{task['short']}-{arm}"
                     run = [py, "-m", "studies.energy_diagnosis.moe.run", *plan["base_args"], *spec["args"],
-                           "--task-pack", task["task_pack"], "--task", task["task"], *plan["arms"][arm],
+                           "--task-pack", task["task_pack"], "--task", task["task"],
+                           *(["--task-pack-assets", task["task_pack_assets"]] if "task_pack_assets" in task else []),
+                           *plan["arms"][arm],
                            "--cpu-affinity", host["cpu_affinity"], "--keep-awake-cpus", host["keep_awake_cpus"],
                            "--tool-cpus", host["tool_cpus"]]
                     argv = [py, "-m", "studies.energy_diagnosis.diagnostics.campaign_batch",
