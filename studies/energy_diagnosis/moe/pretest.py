@@ -117,6 +117,14 @@ def check(contract):
     task_sets = [{(s["task_id"], s.get("replicate", 0)) for s in stages if s["arm"] == arm} for arm in sorted(arms)]
     if task_sets[0] != task_sets[1]:
         raise ValueError("both arms must cover the same task/replicate slots")
+    paired = {}
+    for stage in stages:
+        slot = (stage["task_id"], stage.get("replicate", 0))
+        identity = {key: stage.get(key) for key in ("task_pack", "task_catalog_entry")}
+        identity.update(kind=stage.get("kind", "impl"), prompt=stage.get("prompt", "v2"))
+        if slot in paired and paired[slot] != identity:
+            raise ValueError("paired stages must share frozen task inputs, verifier and prompt identities")
+        paired[slot] = identity
     rows = [check_stage(s["path"], s, revision=contract["revision"], limits=contract["limits"]) for s in stages]
     return dict(version="task-pretest-v2", implementation_pretest_passed=all(r["passed"] for r in rows),
                 task_pretest_passed=all(r["passed"] for r in rows), records_valid=all(r["record_valid"] for r in rows),
