@@ -146,3 +146,26 @@ def test_self_reported_time_is_not_used(tmp_path, bundle):
     t.execute("write", cheat)
     perf = t.execute("test")["performance"]
     assert perf["completed"] is True and "seconds" not in perf and perf["wall_seconds"] > 0.01
+
+
+@pytest.mark.parametrize("got,want", [(float('inf'), 1.0), (-float('inf'), 1.0), (1.0, float('inf')), (float('nan'), 1.0)])
+def test_nonfinite_cannot_pass_finite_tolerance(got, want):
+    assert not impl_workload.equal(got, want, 'exact', 1e-6)
+
+
+@pytest.mark.parametrize("field,value", [('budget_seconds', 0), ('budget_seconds', float('nan')),
+    ('budget_seconds', float('inf')), ('atol', -1), ('atol', float('nan'))])
+def test_invalid_numeric_contract_rejected(tmp_path, bundle, field, value):
+    data = json.loads(bundle.read_text())
+    data['problems']['Toy/1'][field] = value
+    bundle.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        create_task(tmp_path / 'bad', problem='Toy/1', bundle=bundle)
+
+
+def test_empty_hidden_checks_rejected(tmp_path, bundle):
+    data = json.loads(bundle.read_text())
+    data['problems']['Toy/1'].update(hidden_inputs=[], hidden_expected=[])
+    bundle.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match='nonempty'):
+        create_task(tmp_path / 'bad', problem='Toy/1', bundle=bundle)

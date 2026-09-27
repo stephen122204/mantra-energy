@@ -20,6 +20,7 @@ performance input must finish within the budget with the expected output. Failur
 input exceeded the budget), mismatch (a wrong output), error (exception, crash or hidden-run timeout).
 """
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -75,6 +76,10 @@ def _close(a, b, atol):
     if isinstance(a, bool) or isinstance(b, bool):
         return a is b
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        # An infinite difference must never pass because its relative tolerance
+        # is also infinite. Exact signed infinities can only match themselves.
+        if not math.isfinite(a) or not math.isfinite(b):
+            return a == b
         return a == b or abs(a - b) <= max(atol, 1e-9 * max(abs(a), abs(b)))
     if isinstance(a, list) and isinstance(b, list):
         return len(a) == len(b) and all(_close(x, y, atol) for x, y in zip(a, b))
@@ -84,6 +89,8 @@ def _close(a, b, atol):
 
 
 def equal(got, want, mode, atol=0.0):
+    if mode not in {"exact", "set"} or not math.isfinite(atol) or atol < 0:
+        raise ValueError("invalid comparison mode or tolerance")
     if atol and mode == "exact":
         return _close(got, want, atol)
     return _norm(got, mode) == _norm(want, mode)
@@ -108,6 +115,14 @@ def create_task(root, *, problem, bundle, prompt="v2"):
     if data.get("version") != VERSION or problem not in data["problems"]:
         raise ValueError("unknown impl problem or bundle version")
     spec = data["problems"][problem]
+    budget = spec.get("budget_seconds")
+    tolerance = spec.get("atol", 0.0)
+    if (type(budget) not in (int, float) or not math.isfinite(budget) or budget <= 0
+            or type(tolerance) not in (int, float) or not math.isfinite(tolerance) or tolerance < 0):
+        raise ValueError("budget must be finite and positive; tolerance finite and nonnegative")
+    if (not spec.get("hidden_inputs") or len(spec["hidden_inputs"]) != len(spec.get("hidden_expected", []))
+            or spec.get("compare") not in {"exact", "set"}):
+        raise ValueError("nonempty aligned hidden checks and a supported comparison are required")
     root = Path(root)
     root.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=root.parent) as temp:
