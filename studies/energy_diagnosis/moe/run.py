@@ -413,6 +413,15 @@ def _agent_settings(args):
                 max_tool_calls=args.max_tool_calls, max_total_output_tokens=args.max_total_output_tokens,
                 max_output_tokens_per_turn=args.max_tokens)
 
+def native_windows_acceptable(window_audit):
+    """Every attempt measured in all domains, with owned work terminated and not simulated. An attempt classified
+    by explicit recovery (reconcile) has no complete window by design; the audit validates its provenance
+    separately (audit_recovered) and it is excluded here, so a resumed run is not rejected for it."""
+    return window_audit["audit_passed"] and all(
+        row.get("all_domains_measured") and row.get("owned_work_terminated") and not row.get("simulated", True)
+        for row in window_audit["results"] if not row.get("recovered"))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--mode", choices=["fixture", "native"], required=True)
@@ -551,11 +560,7 @@ def main(argv=None):
     ):
         raise SystemExit(3)
     if args.mode == "native":
-        if not result["window_audit"]["audit_passed"] or not all(
-            row.get("all_domains_measured") and row.get("owned_work_terminated")
-            and not row.get("simulated", True)
-            for row in result["window_audit"]["results"]
-        ):
+        if not native_windows_acceptable(result["window_audit"]):
             raise SystemExit(5)
         for setting, row in result["summary"]["settings"].items():
             if (
