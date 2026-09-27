@@ -289,3 +289,83 @@ def test_export_refuses_unbound_or_stale_recovery_note(tmp_path):
                                        status_sha256=hashlib.sha256(status.read_bytes()).hexdigest())))
     header=export_bundle(root,'b0/job/status.json',{},io.BytesIO(),2**20)
     assert header['remote_job']['status']=='interrupted_recovered'
+
+
+class HostTimerAdmissionTest(unittest.TestCase):
+    """Admission against the host's own drifting maintenance timer (systemd), in addition to fixed windows."""
+
+    def fake(self, timer='active', service='inactive', next_elapse='1h 0min 0s'):
+        from types import SimpleNamespace
+        def run(argv, **kw):
+            if argv[1] == 'is-active':
+                return SimpleNamespace(stdout=(timer if argv[2].endswith('.timer') else service) + '\n', returncode=0)
+            return SimpleNamespace(stdout=next_elapse + '\n', returncode=0)
+        return run
+
+    def spec(self, **m):
+        return dict(minimum_batch_seconds=780, maintenance=dict(anchor_utc='2026-01-01T00:00:00Z', period_seconds=3600,
+                                                                window_seconds=600, systemd_timer='cache-vendordata.timer', **m))
+
+    def test_parse_monotonic(self):
+        from studies.energy_diagnosis.diagnostics.batch_coordinator import parse_monotonic
+        self.assertAlmostEqual(parse_monotonic('6d 11h 13min 54.330386s'), 6 * 86400 + 11 * 3600 + 13 * 60 + 54.330386)
+        self.assertEqual(parse_monotonic('500ms'), 0.5)
+        for bad in ('', 'n/a', '5 minutes', '3h garbage'):
+            with self.assertRaises(ValueError):
+                parse_monotonic(bad)
+
+    def test_timer_wait_rules(self):
+        from studies.energy_diagnosis.diagnostics.batch_coordinator import timer_wait
+        s = self.spec()
+        now = lambda: 3600 - 2000.0                                   # 2000 s before the trigger: 780+60 fits
+        self.assertEqual(timer_wait(s, run=self.fake(), monotonic=now), 0)
+        self.assertEqual(timer_wait(s, run=self.fake(), monotonic=lambda: 3600 - 800.0), 30)   # would overlap
+        self.assertEqual(timer_wait(s, run=self.fake(service='active'), monotonic=now), 30)  # updater running
+        self.assertEqual(timer_wait(s, run=self.fake(service='failed'), monotonic=now), 0)   # nothing running
+        with self.assertRaises(RuntimeError):
+            timer_wait(s, run=self.fake(timer='inactive'), monotonic=now)                   # untrusted schedule
+        with self.assertRaises(RuntimeError):
+            timer_wait(s, run=self.fake(service='reloading'), monotonic=now)
+        with self.assertRaises(ValueError):
+            timer_wait(s, run=self.fake(next_elapse=''), monotonic=now)                     # fails closed
+        self.assertEqual(timer_wait(dict(minimum_batch_seconds=780, maintenance=dict(anchor_utc='2026-01-01T00:00:00Z',
+                         period_seconds=3600, window_seconds=600)), run=None), 0)           # not configured
+
+    def test_validation_of_timer_unit(self):
+        from studies.energy_diagnosis.diagnostics.batch_coordinator import validate
+        base = dict(host='h', remote_directory='/a/b/c/d', remote_repository='/r', remote_python='/p', cutoff_utc='2099-01-01T00:00:00Z',
+                    retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=600,
+                    batches=[dict(id='b0', argv=['x'], status='b0/s.json', log='l0')])
+        validate(dict(base, maintenance=self.spec()['maintenance']))
+        for bad in ('cache-vendordata', 'x.timer; rm -rf /', '../a.timer'):
+            with self.assertRaises(ValueError):
+                validate(dict(base, maintenance=dict(self.spec()['maintenance'], systemd_timer=bad)))
+
+    def test_node_holds_batch_until_timer_clear(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'results'; root.mkdir()
+        import datetime as dt
+        t0 = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc).timestamp()
+        clock = [t0 + 700]                          # outside the fixed window, so only the host timer can hold
+        holds = []
+        def sleep(seconds): clock[0] += seconds
+        waits = iter([30, 30, 0])
+        def fake_timer(spec):
+            w = next(waits); holds.append(w); return w
+        status = 'b0/status.json'
+        code = "import pathlib,json; p=pathlib.Path(" + repr(str(root / status)) + ");p.parent.mkdir();p.write_text(json.dumps(dict(status='completed',returncode=0,cleanup_complete=True)))"
+        spec = dict(host='h', remote_directory=str(root), remote_repository=str(base), remote_python=sys.executable,
+                    cutoff_utc='2099-01-01T00:00:00Z', retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=600,
+                    maintenance=dict(anchor_utc='2026-01-01T00:00:00Z', period_seconds=3600, window_seconds=600,
+                                     systemd_timer='cache-vendordata.timer'),
+                    batches=[dict(id='b0', argv=[sys.executable, '-c', code], status=status, log='l0')])
+        starts = []
+        import subprocess as sp
+        real = sp.run
+        def recording(*a, **k):
+            starts.append(clock[0]); return real(*a, **k)
+        with patch('studies.energy_diagnosis.diagnostics.node_batches.timer_wait', fake_timer), \
+                patch('studies.energy_diagnosis.diagnostics.node_batches.subprocess.run', recording):
+            run(spec, base / 'control', gap=0, free_bytes=0, clock=lambda: clock[0], sleep=sleep)
+        self.assertEqual(holds, [30, 30, 0])
+        self.assertEqual(starts, [t0 + 760])
