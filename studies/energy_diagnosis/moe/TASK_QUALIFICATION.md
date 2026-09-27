@@ -35,6 +35,12 @@ The final collection list must explicitly identify exclusions and their reasons.
   public candidate files and installed dependencies, and write disposable scratch
   files. Adjacent private assets are excluded. Portable tests that explicitly
   disable isolation do not qualify a machine for collection.
+  Installed pristine NetworkX sources are also excluded. Pytest logs go to the
+  disposable scratch directory. SciPy's HiGHS scheduler is initialized with one
+  thread before candidate process creation is prohibited. Qualify the exact SciPy
+  version: this initialization uses its bundled `_highspy` interface, and older
+  SciPy releases may not provide it. The checked Linux environment used Python
+  3.12.3, pytest 9.1.1, NumPy 2.5.3, SciPy 1.18.1 and NetworkX 3.4.2.
 - ETL v3 and Python transformation v2 keep private challenge seeds outside the
   model workspace. These seeds are frozen with the asset hash, identical across
   arms and resumes, and different for independently prepared packs. Keep explicit
@@ -65,3 +71,21 @@ The final collection list must explicitly identify exclusions and their reasons.
 The inventory is a starting record, not a replacement for these per-case and
 per-machine checks. A previously qualified small implementation pack does not
 automatically qualify the heavier SQL, transformation or repository workloads.
+
+## Saved-stage check for each family
+
+`python -m studies.energy_diagnosis.moe.pretest CONTRACT.json REPORT.json` checks
+completed guarded stages; it does not launch runs. For the extended contract,
+each stage supplies its `kind`, the complete prepared `task_pack` envelope and
+the selected `task_catalog_entry`, in addition to the existing arm, task ID,
+model path, revision and budget fields. Copy these identities from the frozen
+preparation artifacts before execution; do not derive expected values from the
+run being checked. Both arms must cover the same task/replicate slots.
+
+The check validates task assets and helper identities against that contract,
+expects SQL or Python files where appropriate, and hashes changed repository
+files. Structured-answer tasks do not need a source file. `record_valid` is
+separate from successful smoke completion: a genuine model failure can have
+valid measurements, and must remain in the data. Passing a successful smoke
+check still does not authorize the full campaign. The original implementation-
+only contract remains supported for archived checks.

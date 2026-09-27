@@ -10,7 +10,7 @@ LIMITS = dict(context=16384, max_turns=12, max_tool_calls=24, max_total_output_t
 
 @pytest.fixture
 def stage(tmp_path, monkeypatch):
-    monkeypatch.setattr(pretest, 'audit', lambda *a, **k: {'smoke_passed':True})
+    monkeypatch.setattr(pretest, 'audit', lambda *a, **k: {'smoke_passed':True, 'protocol_valid':True})
     root=tmp_path/'stage';campaign=root/'campaign';goal=campaign/'goals'/'g';goal.mkdir(parents=True)
     manifest=dict(source_revision='abc', agent=dict(protocol='chat-tools-v2', **{k:v for k,v in LIMITS.items() if k.startswith('max_')}),
         config=dict(engine='llamacpp',gguf_path='/models/q4.gguf',max_context=16384),limits=dict(goal_seconds=180),
@@ -67,3 +67,36 @@ def test_prompt_change_must_be_explicit_in_contract(stage):
     assert not checked(stage)['passed']
     expected = dict(arm='q4', gguf_path='/models/q4.gguf', task_id='impl-toy-v2', prompt='v3')
     assert pretest.check_stage(stage, expected, revision='abc', limits=LIMITS)['passed']
+
+
+@pytest.mark.parametrize('kind', ['etl','program','business','numerical','repo'])
+def test_explicit_full_pack_contract_supports_other_families(stage,kind):
+    path=stage/'campaign/moe-manifest.json';m=json.loads(path.read_text())
+    m['task_pack']={'specifications':[{'kind':kind}], 'components':{kind:'component-hash'},
+                    'support_components':{'helper':'helper-hash'}}
+    m['task_catalog']=[{'task_id':'task-v4','family':pretest.FAMILIES[kind],
+                        'asset_sha256':'asset-hash','verifier_sha256':'verifier-hash'}]
+    path.write_text(json.dumps(m))
+    workspace=stage/'campaign/workspaces/g'
+    if kind=='etl':(workspace/'pipeline.sql').write_text('SELECT 1')
+    if kind=='repo':
+        (workspace/'networkx').mkdir();(workspace/'networkx/f.py').write_text('def f(): return 1')
+        verification=stage/'campaign/goals/g/verification.json'
+        v=json.loads(verification.read_text());v['result']['changed_files']=['networkx/f.py']
+        verification.write_text(json.dumps(v))
+    expected=dict(arm='q4',gguf_path='/models/q4.gguf',task_id='task-v4',kind=kind,
+                  task_pack=copy.deepcopy(m['task_pack']),task_catalog_entry=copy.deepcopy(m['task_catalog'][0]))
+    assert pretest.check_stage(stage,expected,revision='abc',limits=LIMITS)['passed']
+    m['task_pack']['support_components']['helper']='changed'
+    path.write_text(json.dumps(m))
+    assert not pretest.check_stage(stage,expected,revision='abc',limits=LIMITS)['passed']
+
+
+def test_model_failure_does_not_invalidate_intact_records(stage,monkeypatch):
+    monkeypatch.setattr(pretest,'audit',lambda *a,**kw:dict(smoke_passed=False,protocol_valid=True))
+    (stage/'campaign/goals/g/agent-trace.json').write_text(json.dumps(
+        dict(outcome='turn_limit',turns=[dict(kind='no_action')])))
+    (stage/'campaign/goals/g/verification.json').write_text(json.dumps(
+        dict(status='returned',result=dict(passed=False,failure='mismatch'))))
+    result=checked(stage)
+    assert result['record_valid'] and not result['passed']
