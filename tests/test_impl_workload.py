@@ -68,7 +68,7 @@ def test_tool_reports_completion_not_outputs(tmp_path, bundle):
     assert r["performance"]["completed"] is False and "1.5-second budget" in r["performance"]["message"]
     t.execute("write", FAST)
     r = t.execute("test")
-    assert r["performance"]["completed"] is True and set(r["performance"]) == {"completed", "seconds"}
+    assert r["performance"]["completed"] is True and set(r["performance"]) == {"completed", "wall_seconds", "measured"}
     t.execute("write", WRONG)
     r = t.execute("test")
     assert r["example"]["passed"] is False
@@ -77,7 +77,8 @@ def test_tool_reports_completion_not_outputs(tmp_path, bundle):
 def test_stub_and_forged_answers_fail(tmp_path, bundle):
     task, rt = start(tmp_path, bundle)
     assert rt.verify(task, {"done": True})["passed"] is False            # untouched stub raises
-    assert rt.verify(task, {"done": 1})["passed"] is False
+    v = rt.verify(task, {"done": 1})
+    assert v["passed"] is False and v["completion"]["format_ok"] is False
     tool(rt, task).execute("write", "def total_pairs(xs):\n    return 12\n")  # hard-coded example answer
     assert rt.verify(task, {"done": True})["failure"] == "mismatch"
 
@@ -87,3 +88,23 @@ def test_pack_registration(tmp_path, bundle):
     assert [t.task_id for t in pack.tasks] == ["impl-toy-1-v1"]
     with pytest.raises(ValueError):
         prepare(tmp_path / "q", [dict(kind="impl", problem="Toy/1", bundle="relative.json")])
+
+
+def test_any_submission_grades_solution_py(tmp_path, bundle):
+    task, rt = start(tmp_path, bundle)
+    tool(rt, task).execute("write", FAST)
+    v = rt.verify(task, FAST)                         # the model submitted its code instead of {done: true}
+    assert v["passed"] is True and v["completion"] == dict(format_ok=False, submitted_type="str")
+    v = rt.verify(task, {"done": True})
+    assert v["passed"] is True and v["completion"]["format_ok"] is True
+
+
+def test_self_reported_time_is_not_used(tmp_path, bundle):
+    task, rt = start(tmp_path, bundle)
+    cheat = ("import time\n_real = time.perf_counter\ntime.perf_counter = lambda: 0.0\n"
+             "def total_pairs(xs):\n    t = __import__('time')\n    s = 0\n    for _ in range(300000):\n        s += 1\n"
+             "    return sum(xs) * (len(xs) - 1)\n")
+    t = tool(rt, task)
+    t.execute("write", cheat)
+    perf = t.execute("test")["performance"]
+    assert perf["completed"] is True and "seconds" not in perf and perf["wall_seconds"] > 0.01
