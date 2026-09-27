@@ -545,6 +545,12 @@ def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path, p
     assert dispositions[lease.planned_run_id] != "pending"
     again = command(output, "--policies", "demand", "--max-runs", "5")
     assert again["executed"] == 0
+    # Reproduced on LIQID05: the campaign exit check re-read goal files and crashed (FileNotFoundError) on the
+    # recovered attempt's missing record.json, or read its preserved pre-recovery status. After recovery, a
+    # campaign-exit resume must exit 0 (the recovered attempt stays incomplete with unknown energy).
+    settled = command(output, "--policies", "demand", "--max-runs", "5", "--campaign-exit")
+    (row,) = settled["summary"]["settings"].values()
+    assert settled["executed"] == 0 and row["recovered_attempts"] == 1 and row["crashed_attempts"] == 0
     if partial_artifact:
         retained_path.write_text(retained_path.read_text() + " ")
         assert not audit(output)["audit_passed"]
