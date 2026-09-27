@@ -538,9 +538,11 @@ def main(argv=None):
     if args.campaign_exit:
         # Campaign data: model outcomes (wrong answer, budget/context/deadline exhaustion) are
         # results, not errors. Stop only for invalid energy or an infrastructure crash.
-        crashed = [p for row in rows for p in row["records"]
-                   if json.loads((Path(args.output) / p).read_text())["execution_status"] == "crashed"]
-        if any(row["invalid_energy_attempts"] for row in rows) or crashed:
+        # Statuses come from the ledger export (summary), not goal files: an attempt classified by explicit
+        # recovery may have no record.json, and its unknown energy is expected, not a new measurement failure.
+        crashed = sum(row["crashed_attempts"] for row in rows)
+        unexplained_invalid = sum(row["invalid_energy_attempts"] - row["recovered_attempts"] for row in rows)
+        if unexplained_invalid > 0 or crashed:
             raise SystemExit(3)
     # A structurally valid ledger alone is not a successful native smoke test.
     elif args.mode == "native" and any(

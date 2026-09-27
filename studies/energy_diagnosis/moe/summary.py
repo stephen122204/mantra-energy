@@ -77,6 +77,7 @@ def summarize(root):
     root = Path(root)
     groups = defaultdict(list)
     registered_windows = set()
+    recovered = set()   # attempts classified by explicit recovery (reconcile): expected unknown energy
     attempts_path = root / "exports" / "attempts.jsonl"
     if attempts_path.exists():
         for line in attempts_path.read_text().splitlines():
@@ -84,6 +85,8 @@ def summarize(root):
             attempt = row["attempt"]
             path = root / "goals" / attempt["execution_id"] / "record.json"
             record = attempt.get("execution_record")
+            if "recovery" in (attempt.get("outcome_metadata") or {}):
+                recovered.add(attempt["execution_id"])
             if record is None:
                 record = dict(
                     setting_id=row["plan"]["setting_id"],
@@ -236,6 +239,10 @@ def summarize(root):
             attempts=len(entries),
             successful=successes,
             invalid_energy_attempts=invalid,
+            # From the ledger export, never from goal files: a recovered attempt may have no record.json, and a
+            # preserved pre-recovery observation is not its terminal status.
+            crashed_attempts=sum(r["execution_status"] == "crashed" for _, r in entries),
+            recovered_attempts=sum(p.parent.name in recovered for p, _ in entries),
             total_seconds=sum(
                 (r["ended_ns"] - r["started_ns"]) / 1e9 for _, r in entries
             )
