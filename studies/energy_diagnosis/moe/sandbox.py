@@ -17,11 +17,8 @@ import subprocess
 import sys
 import sysconfig
 
-CHILD = r'''
-import json, sys, time
-job = json.loads(sys.stdin.read())
-
-def _landlock(paths):
+LANDLOCK = r'''
+def _landlock(paths, writable=()):
     import ctypes, os
     libc = ctypes.CDLL(None, use_errno=True)
     SYS_CREATE, SYS_ADD, SYS_RESTRICT = 444, 445, 446  # x86_64 and aarch64 share these numbers
@@ -44,9 +41,14 @@ def _landlock(paths):
     if rfd < 0:
         raise OSError(ctypes.get_errno(), "landlock_create_ruleset")
     READ = (1 << 2) | (1 << 3)              # read_file | read_dir
-    for path in paths:
+    for path in dict.fromkeys([*paths, *writable]):
         pfd = os.open(path, os.O_PATH | os.O_CLOEXEC)
-        rule = Beneath(READ, pfd)
+        allowed = READ
+        if path in writable:
+            # Scratch files/directories only; never executables, symlinks or devices.
+            allowed |= (1 << 1) | (1 << 4) | (1 << 5) | (1 << 7) | (1 << 8)
+            if abi >= 3: allowed |= 1 << 14
+        rule = Beneath(allowed, pfd)
         if libc.syscall(SYS_ADD, rfd, ctypes.c_int(1), ctypes.byref(rule), ctypes.c_uint32(0)) != 0:
             raise OSError(ctypes.get_errno(), "landlock_add_rule")
         os.close(pfd)
@@ -56,6 +58,9 @@ def _landlock(paths):
         raise OSError(ctypes.get_errno(), "landlock_restrict_self")
     os.close(rfd)
     return abi
+'''
+
+CHILD = 'import json, sys, time\njob = json.loads(sys.stdin.read())\n' + LANDLOCK + r'''
 
 abi = 0
 if sys.platform.startswith("linux"):

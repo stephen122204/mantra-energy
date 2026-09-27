@@ -14,8 +14,10 @@ import tempfile
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 from .query_workload import QueryTool
 from .tool_contracts import ETL_ACTIONS, action_contract, validate_action
+from . import private_challenges
 
-VERSION='etl-latest-record-v2'
+VERSION='etl-latest-record-v3'
+DATA_VERSION='etl-latest-record-v2'  # Preserve visible v2 input generation; v3 changes private checks.
 BUGGY='SELECT region, COUNT(*) AS event_count, SUM(gross_cents + tax_cents) AS net_cents FROM raw GROUP BY region ORDER BY region'
 COLUMNS=['seq','event_id','region','gross_cents','tax_cents','status']
 REGIONS=('central','coastal','east','mountain','north','south','west')
@@ -63,7 +65,7 @@ def create_task(root, *, rows=8192, seed=7, variant=None):
     root=Path(root);root.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(dir=root.parent) as temp:
         stage=Path(temp)/'assets';stage.mkdir()
-        rng=random.Random(f'{VERSION}:{seed}')
+        rng=random.Random(f'{DATA_VERSION}:{seed}')
         _materialize(stage,generate(rows,rng),rng)
         (stage/'pipeline.sql').write_text(BUGGY+'\n',encoding='utf-8')
         if variant and variant['index']:
@@ -74,11 +76,12 @@ def create_task(root, *, rows=8192, seed=7, variant=None):
         meta=dict(version=VERSION,rows=rows,seed=seed,source='synthetic versioned event records')
         if variant is not None:meta['variant']=variant
         (stage/'source.json').write_text(json.dumps(meta,sort_keys=True)+'\n')
+        private_challenges.prepare(stage,root)
         fingerprint=_hash(stage)
         if root.exists():
             if root.is_symlink() or any(p.is_symlink() for p in root.rglob('*')) or _hash(root)!=fingerprint:raise ValueError('existing ETL assets differ')
         else:stage.rename(root)
-    return PilotTask(f'etl-latest-v2-n{rows}-s{seed}'+variant_suffix(variant),'etl-sql-repair','synthetic-versioned-events-v2',root,{},fingerprint,(),
+    return PilotTask(f'etl-latest-v3-n{rows}-s{seed}'+variant_suffix(variant),'etl-sql-repair','synthetic-versioned-events-v2',root,{},fingerprint,(),
         'Repair pipeline.sql. raw contains versioned events: retain only the row with maximum seq for each event_id, then exclude events whose latest status is not paid. '
         'Group surviving events by region. Return columns region, event_count, net_cents, where net_cents sums gross_cents minus tax_cents. Keep negative/zero amounts. '
         'Order rows by region ascending. Use the etl tool to read the query/schema, write one read-only SELECT, and test its output. Return {done:true} when repaired. '
@@ -86,7 +89,7 @@ def create_task(root, *, rows=8192, seed=7, variant=None):
         'This is SQL query repair; no Python code or database mutation is permitted.')
 
 
-def hidden_cases():
+def hidden_cases(seeds=(1009,2027,40961)):
     """Verifier-only inputs; never copied to the model workspace."""
     # Hand-built edge cases: single-version events, latest non-paid after paid,
     # paid after non-paid, region change, negative/zero net, sparse and large
@@ -101,7 +104,7 @@ def hidden_cases():
     # v1 pair layout with seq shifted by one: parity shortcuts select the
     # earlier version, and statuses/amounts differ within each pair.
     yield [(i+1,i//2,REGIONS[(i//2)%4],(i*37)%900,(i*11)%120,'paid' if i%3 else 'cancelled') for i in range(96)]
-    for seed,rows in ((1009,97),(2027,211),(40961,64)):
+    for seed,rows in zip(seeds,(97,211,64)):
         yield generate(rows,random.Random(f'{VERSION}:hidden:{seed}'))
 
 
@@ -197,7 +200,7 @@ class ETLRuntime:
     def begin(self,task,lease):
         if _hash(task.asset_path)!=task.asset_sha256:raise ValueError('ETL inputs changed')
         self.workspace=self.root/'workspaces'/lease.execution_id
-        shutil.copytree(task.asset_path,self.workspace)
+        shutil.copytree(task.asset_path,self.workspace,ignore=shutil.ignore_patterns('private'))
     def context(self,task):
         return dict(family=task.family,tools={'etl':{
             'description':'The action argument is mandatory on every call. action="read" takes no content and returns the current SQL and table schema. '
@@ -240,7 +243,7 @@ class ETLRuntime:
         if first=='budget':return dict(passed=False,reason=BUDGET_REASON+' on the original input',failure='budget')
         if first!='match':return dict(passed=False,reason='query failed independent input check',failure=first)
         with tempfile.TemporaryDirectory() as directory:
-            for index,records in enumerate(hidden_cases()):
+            for index,records in enumerate(hidden_cases(private_challenges.read(task.asset_path))):
                 stage=Path(directory)/f'case{index}';stage.mkdir()
                 _materialize(stage,records,random.Random(index))
                 outcome=check(stage/'raw.sqlite',reference_records(records))

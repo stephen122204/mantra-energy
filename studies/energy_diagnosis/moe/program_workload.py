@@ -16,8 +16,10 @@ import sys
 import tempfile
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
 from .tool_contracts import action_contract, validate_action
+from . import private_challenges
 
-VERSION = 'python-transform-v1'
+VERSION = 'python-transform-v2'
+DATA_VERSION = 'python-transform-v1'
 CASES = ('conditional-dedup', 'user-histogram')
 ACTIONS = {'read': None, 'write': 'content', 'test': None}
 MAX_CODE_BYTES = 32768
@@ -42,7 +44,7 @@ PROMPTS = {
 def generate(case, rows, seed):
     if case not in CASES or type(rows) is not int or rows < 8:
         raise ValueError('unknown case or fewer than eight rows')
-    rng = random.Random(f'{VERSION}:{case}:{seed}')
+    rng = random.Random(f'{DATA_VERSION}:{case}:{seed}')
     if case == 'conditional-dedup':
         records = [dict(id=i*7+19, url=f'key-{rng.randrange(max(2, rows//5))}', keep=bool(rng.randrange(2))) for i in range(rows)]
         records[:4] = [dict(id=i*7+19, url='forced', keep=k) for i,k in enumerate([False, True, False, True])]
@@ -154,11 +156,12 @@ def create_task(root, *, case, rows=8192, seed=7):
         (stage/'input.json').write_text(json.dumps(generate(case,rows,seed),sort_keys=True)+'\n')
         (stage/'solution.py').write_text('def solve(data):\n    return None\n')
         (stage/'source.json').write_text(json.dumps(dict(version=VERSION,case=case,rows=rows,seed=seed,source='DS-1000 semantics adaptation',problem_id=7 if case=='conditional-dedup' else 229),sort_keys=True)+'\n')
+        private_challenges.prepare(stage,root)
         fingerprint=_hash(stage)
         if root.exists():
             if root.is_symlink() or any(p.is_symlink() for p in root.rglob('*')) or _hash(root)!=fingerprint:raise ValueError('existing program assets differ')
         else:stage.rename(root)
-    return PilotTask(f'python-{case}-v1-n{rows}-s{seed}','python-transformation',f'ds1000-origin-{7 if case=="conditional-dedup" else 229}',root,{},fingerprint,(),
+    return PilotTask(f'python-{case}-v2-n{rows}-s{seed}','python-transformation',f'ds1000-origin-{7 if case=="conditional-dedup" else 229}',root,{},fingerprint,(),
         PROMPTS[case]+' Use program read/write/test. Submit {done:true} after implementing the function. Additional unseen inputs obey the same contract.')
 
 
@@ -187,7 +190,7 @@ class ProgramRuntime:
     def begin(self,task,lease):
         if _hash(task.asset_path)!=task.asset_sha256:raise ValueError('program inputs changed')
         self.workspace=self.root/'workspaces'/lease.execution_id
-        shutil.copytree(task.asset_path,self.workspace)
+        shutil.copytree(task.asset_path,self.workspace,ignore=shutil.ignore_patterns('private'))
     def context(self,task):
         return dict(family=task.family,tools={'program':dict(description=
             'read returns source, input sample and metadata; write replaces solution.py; test executes it on full visible input and checks output. '
@@ -206,7 +209,8 @@ class ProgramRuntime:
         path=self.workspace/'solution.py'
         if not path.is_file() or path.is_symlink():return dict(passed=False,reason='missing_or_invalid_program')
         source=path.read_text()
-        inputs=[json.loads((task.asset_path/'input.json').read_text())]+[generate(case,n,s) for n,s in [(32,7919),(73,15401),(251,32443)]]
+        seeds=private_challenges.read(task.asset_path)
+        inputs=[json.loads((task.asset_path/'input.json').read_text())]+[generate(case,n,s) for n,s in zip((32,73,251),seeds)]
         inputs += edge_cases(case)
         for data in inputs:
             result=execute(source,data)

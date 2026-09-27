@@ -12,7 +12,7 @@ def setup(tmp_path,rows=128,seed=7):
 @pytest.mark.parametrize('rows,seed',[(32,0),(8192,7),(65536,29)])
 def test_repair_with_real_query_and_csv_reference(tmp_path,rows,seed):
     task,runtime,tool=setup(tmp_path,rows,seed)
-    assert task.task_id.startswith('etl-latest-v2-')
+    assert task.task_id.startswith('etl-latest-v3-')
     assert task.lineage == 'synthetic-versioned-events-v2'
     assert not runtime.verify(task,{'done':True})['passed']
     tool.execute('write',CORRECT)

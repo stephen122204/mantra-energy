@@ -7,8 +7,21 @@ import hashlib
 import json
 from pathlib import Path
 from . import numerical_workload, business_workload, etl_workload, repo_workload, program_workload, impl_workload
+from . import sandbox, repo_oracle, repo_test_process, private_challenges
 
 MODULES = {'numerical':numerical_workload, 'business':business_workload, 'etl':etl_workload, 'repo':repo_workload, 'program':program_workload, 'impl':impl_workload}
+
+
+def support_components(kinds):
+    modules = set()
+    if 'repo' in kinds:
+        modules.update((sandbox, repo_oracle, repo_test_process))
+    if 'impl' in kinds:
+        modules.add(sandbox)
+    if {'etl','program'} & set(kinds):
+        modules.add(private_challenges)
+    return {m.__name__.rsplit('.', 1)[-1]: hashlib.sha256(Path(m.__file__).read_bytes()).hexdigest()
+            for m in sorted(modules, key=lambda m: m.__name__)}
 
 
 @dataclass
@@ -92,7 +105,8 @@ def prepare(root, specifications):
     root=Path(root)
     manifest=root/'task-pack.json'
     envelope={'version':'task-pack-v1','specifications':specifications,
-              'components':{k:hashlib.sha256(Path(MODULES[k].__file__).read_bytes()).hexdigest() for k in sorted({s['kind'] for s in specifications})}}
+              'components':{k:hashlib.sha256(Path(MODULES[k].__file__).read_bytes()).hexdigest() for k in sorted({s['kind'] for s in specifications})},
+              'support_components':support_components({s['kind'] for s in specifications})}
     if manifest.exists() and json.loads(manifest.read_text())!=envelope:
         raise ValueError('task pack changed; use a new directory')
     root.mkdir(parents=True,exist_ok=True)

@@ -163,7 +163,7 @@ def same(actual, expected):
 def verify(workspace, case, *, seed=None, require_landlock=True, seconds=30):
     """Return evidence; production requires Landlock, false is only for portable tests."""
     root = Path(workspace).resolve()
-    if any(p.is_symlink() for p in (root/'networkx').rglob('*')):
+    if (root/'networkx').is_symlink() or any(p.is_symlink() for p in (root/'networkx').rglob('*')):
         return dict(passed=False, failure='mismatch', reason='candidate contains symlinks')
     seed = secrets.randbits(128) if seed is None else seed
     cases = inputs(case, seed)
