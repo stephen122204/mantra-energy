@@ -6,9 +6,9 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
-from . import numerical_workload, business_workload, etl_workload, repo_workload
+from . import numerical_workload, business_workload, etl_workload, repo_workload, program_workload
 
-MODULES = {'numerical':numerical_workload, 'business':business_workload, 'etl':etl_workload, 'repo':repo_workload}
+MODULES = {'numerical':numerical_workload, 'business':business_workload, 'etl':etl_workload, 'repo':repo_workload, 'program':program_workload}
 
 
 @dataclass
@@ -32,7 +32,7 @@ class PackRuntime:
         self.modules=modules;self.output=output;self.active=None;self.task_id=None
     def begin(self,task,lease):
         module=self.modules[task.task_id]
-        cls={numerical_workload:numerical_workload.RegressionRuntime, business_workload:business_workload.BusinessRuntime, etl_workload:etl_workload.ETLRuntime, repo_workload:repo_workload.RepoRuntime}[module]
+        cls={numerical_workload:numerical_workload.RegressionRuntime, business_workload:business_workload.BusinessRuntime, etl_workload:etl_workload.ETLRuntime, repo_workload:repo_workload.RepoRuntime, program_workload:program_workload.ProgramRuntime}[module]
         self.active=cls(self.output);self.task_id=task.task_id
         self.active.begin(task,lease)
     def _runtime(self,task):
@@ -62,6 +62,10 @@ def prepare(root, specifications):
             external[index]=numerical_workload.load_task(spec['assets'],task_id=spec['task_id'],
                 lineage=spec['lineage'],asset_sha256=spec['asset_sha256'])
             key=('prepared',spec['task_id'])
+        elif spec.get('kind')=='program':
+            if set(spec)!={'kind','case','rows','seed'} or spec['case'] not in program_workload.CASES or type(spec['rows']) is not int or not 32<=spec['rows']<=program_workload.MAX_ROWS or type(spec['seed']) is not int or not 0<=spec['seed']<2**31:
+                raise ValueError('program specification requires a supported case, rows and seed')
+            key=('program',spec['case'],spec['rows'],spec['seed'])
         elif spec.get('kind')=='repo':
             # Repository repair: an explicit case over a pinned source checkout and tool Python.
             if set(spec)!={'kind','case','source','python'} or spec['case'] not in repo_workload.CASES \
@@ -97,6 +101,9 @@ def prepare(root, specifications):
                     numerical_workload.load_task(snapshot,task_id=spec['task_id'],lineage=spec['lineage'],asset_sha256=spec['asset_sha256'])
                     snapshot.rename(path)
             created=(numerical_workload.load_task(path,task_id=spec['task_id'],lineage=spec['lineage'],asset_sha256=spec['asset_sha256']),)
+        elif spec['kind']=='program':
+            path=root/f"program-{spec['case']}-n{spec['rows']}-s{spec['seed']}"
+            created=(program_workload.create_task(path,case=spec['case'],rows=spec['rows'],seed=spec['seed']),)
         elif spec['kind']=='repo':
             path=root/f"repo-{spec['case']}"
             created=(repo_workload.create_task(path,case=spec['case'],source=spec['source'],python=spec['python']),)

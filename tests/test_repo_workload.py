@@ -130,3 +130,19 @@ def test_tool_output_is_normalized_for_paired_arms(tmp_path):
     assert str(root) not in got["output"] and "0.14s" not in got["output"]
     slow = subprocess.CompletedProcess([], 0, "5443 passed, 61 skipped in 61.20s (0:01:01)\n", "")
     assert rw._summarize(slow, root)["summary"] == "5443 passed, 61 skipped"
+
+
+def test_linux_limits_are_preserved_and_mac_skips_only_address_space(monkeypatch):
+    import types
+    import sys
+    calls=[]
+    resource=types.SimpleNamespace(RLIMIT_AS=1,RLIMIT_CPU=2,RLIMIT_FSIZE=3,
+                                  setrlimit=lambda kind,value:calls.append((kind,value)))
+    monkeypatch.setitem(sys.modules,'resource',resource)
+    monkeypatch.delenv('ALEMS_TOOL_CPUS',raising=False)
+    monkeypatch.setattr(rw.sys,'platform','linux')
+    rw._limits()
+    assert calls==[(1,(8*2**30,8*2**30)),(2,(rw.TEST_SECONDS+30,rw.TEST_SECONDS+30)),(3,(256*2**20,256*2**20))]
+    calls.clear();monkeypatch.setattr(rw.sys,'platform','darwin')
+    rw._limits()
+    assert [kind for kind,value in calls]==[2,3]
