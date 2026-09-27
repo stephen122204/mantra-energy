@@ -27,7 +27,10 @@ def run(tmp_path, variant, name="one"):
 def test_default_is_the_original_task(tmp_path):
     a = create_task(tmp_path / "a", rows=2048, seed=5)
     b = create_task(tmp_path / "b", rows=2048, seed=5, variant=None)
-    assert a.task_id == b.task_id == "etl-latest-v2-n2048-s5" and a.asset_sha256 == b.asset_sha256
+    assert a.task_id == b.task_id == "etl-latest-v3-n2048-s5"
+    assert (a.asset_path/'raw.csv').read_bytes() == (b.asset_path/'raw.csv').read_bytes()
+    assert a.asset_sha256 != b.asset_sha256  # independently prepared private challenge seeds
+    assert create_task(a.asset_path, rows=2048, seed=5).asset_sha256 == a.asset_sha256
     desc = ETLRuntime(tmp_path).context(a)["tools"]["etl"]["description"]
     assert "ranking functions such as ROW_NUMBER are not exposed" in desc and "Read, write and test" in desc
 
@@ -75,7 +78,7 @@ def test_index_variant_changes_assets_not_answers(tmp_path):
 
 def test_pack_accepts_and_validates_variants(tmp_path):
     pack = prepare(tmp_path / "p", [dict(kind="etl", rows=64, seed=1), dict(kind="etl", rows=64, seed=1, variant=V)])
-    assert sorted(t.task_id for t in pack.tasks) == ["etl-latest-v2-n64-s1", "etl-latest-v2-n64-s1-w1fei1"]
+    assert sorted(t.task_id for t in pack.tasks) == ["etl-latest-v3-n64-s1", "etl-latest-v3-n64-s1-w1fei1"]
     with pytest.raises(ValueError):
         prepare(tmp_path / "q", [dict(kind="etl", rows=64, seed=1, variant=dict(V, feedback="loud"))])
     with pytest.raises(ValueError):

@@ -3,13 +3,12 @@
 A known, deterministic defect is injected into networkx 3.4.2 library code. The model
 reads, searches and edits library source and runs pytest targets it chooses; running
 broader suites is ordinary development work that takes seconds to about a minute.
-Verification overlays only the model's source edits onto a pristine tree and runs the
-case's original test module (including tests withheld from the workspace) plus
-independently written checks that compare against brute-force references.
+Verification compares graph results in a separate parent process, then runs the
+public algorithms regression suite. Expected graph results never enter the candidate
+process. A pytest exit code alone cannot establish correctness.
 
-Isolation is best effort, not a security boundary: fresh workspace per attempt, edits
-restricted to non-test library files, no shell, sockets disabled in test processes,
-resource limits, and a declared CPU set for test runs (ALEMS_TOOL_CPUS).
+Submitted test processes require Linux Landlock and cannot read adjacent private
+assets. This is workload confinement, not a general hostile-code security certification.
 """
 import ast
 import hashlib
@@ -17,14 +16,16 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
 import subprocess
 import sys
 import tempfile
 
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
+from . import repo_oracle, repo_test_process
 
-VERSION = "repo-repair-networkx-v3"  # v3: regex search, explicit submit_answer wording; v2 added four cases
+VERSION = "repo-repair-networkx-v4"  # Parent-owned graph oracle and confined public regression tests.
 SOURCE_COMMIT = "2acf1590f82757c01a57b81b8c5dfb79e60aa416"  # networkx-3.4.2
 PACKAGE = "networkx"
 READ_LINES = 150
@@ -373,6 +374,10 @@ def create_task(root, *, case, source, python):
         raise ValueError("source and python must be absolute paths")
     if not (source / PACKAGE).is_dir():
         raise ValueError("source checkout does not contain the package")
+    revision = subprocess.run(['git','-C',str(source),'rev-parse','HEAD'], capture_output=True,text=True,check=True).stdout.strip()
+    dirty = subprocess.run(['git','-C',str(source),'status','--porcelain','--untracked-files=no'],capture_output=True,text=True,check=True).stdout
+    if revision != SOURCE_COMMIT or dirty:
+        raise ValueError('repository source must be the clean pinned NetworkX checkout')
     if not root.exists():
         with tempfile.TemporaryDirectory(dir=root.parent) as staging:
             stage = Path(staging) / "task"
@@ -393,13 +398,14 @@ def create_task(root, *, case, source, python):
             (stage / "sandbox" / "sitecustomize.py").write_text(SANDBOX)
             (stage / "task.json").write_text(json.dumps(dict(
                 version=VERSION, case=case, source_commit=SOURCE_COMMIT,
+                oracle_seed=str(secrets.randbits(128)), oracle_version=repo_oracle.VERSION,
                 source_sha256=_tree_sha(source / PACKAGE, {".py"}), tool_python=_python_identity(python)), indent=2) + "\n")
             stage.rename(root)
     meta = json.loads((root / "task.json").read_text())
     if meta["case"] != case or meta["version"] != VERSION or meta["tool_python"]["python"] != python:
         raise ValueError("existing repository task differs from the requested case")
     return PilotTask(
-        f"repo-{case}-v3", "repository-repair", f"networkx-{SOURCE_COMMIT[:12]}", root, {}, _hash(root), (),
+        f"repo-{case}-v4", "repository-repair", f"networkx-{SOURCE_COMMIT[:12]}", root, {}, _hash(root), (),
         f"A user reports: {spec['symptom']}. The repository is networkx 3.4.2 with its test suite. "
         "Find and fix the defect in the library source (do not edit tests), using the repo tool to list, read, "
         "search, replace and run pytest targets. Before finishing, run the complete networkx/algorithms test suite "
@@ -447,13 +453,9 @@ def _cpu_list(text):
 
 
 def run_pytest(python, root, targets, sandbox, timeout=TEST_SECONDS):
-    env = dict(PATH="/usr/bin:/bin", PYTHONPATH=f"{sandbox}{os.pathsep}{root}", PYTHONDONTWRITEBYTECODE="1",
-               HOME=str(root), LANG="C.UTF-8", PYTHONHASHSEED="0")
-    for key in ("SystemRoot", "SYSTEMROOT", "WINDIR"):
-        if key in os.environ:env[key]=os.environ[key]
-    return subprocess.run([python, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--tb=short", "-rf",
-                           "--color=no", *targets], cwd=root, env=env, capture_output=True, text=True,
-                          timeout=timeout, preexec_fn=_limits if os.name == "posix" else None, start_new_session=False)
+    # Legacy sandbox argument is retained for callers; no candidate sitecustomize
+    # is loaded. Test output is feedback, independently checked at final grading.
+    return repo_test_process.run(python, root, targets, timeout=timeout, limits=_limits)
 
 
 _DURATION = re.compile(r" in \d+(?:\.\d+)?s(?: \(\d+:\d\d:\d\d\))?")
@@ -507,6 +509,7 @@ class RepoTool:
                 raise ValueError(f"invalid regular expression: {exc}")
             matches, total = [], 0
             for path in sorted((ws / PACKAGE).rglob("*.py")):
+                _inside(ws, str(path.relative_to(ws)))
                 for number, line in enumerate(path.read_text().splitlines(), 1):
                     if compiled.search(line[:1000]):
                         total += 1
@@ -610,10 +613,13 @@ class RepoRuntime:
 
 def verify_workspace(assets, workspace, python):
     meta = json.loads((Path(assets) / "task.json").read_text())
-    spec = CASES[meta["case"]]
-    visible, pristine = Path(assets) / "visible", Path(assets) / "pristine"
+    visible = Path(assets) / "visible"
     changed = []
+    if (Path(workspace)/PACKAGE).is_symlink():
+        return dict(passed=False, failure="mismatch", reason="candidate contains symlinks")
     for path in sorted((Path(workspace) / PACKAGE).rglob("*")):
+        if path.is_symlink():
+            return dict(passed=False, failure="mismatch", reason="candidate contains symlinks")
         if not path.is_file() or "__pycache__" in path.parts:
             continue
         relative = path.relative_to(workspace)
@@ -625,23 +631,28 @@ def verify_workspace(assets, workspace, python):
     for path in sorted((visible / PACKAGE).rglob("*.py")):
         if not (Path(workspace) / path.relative_to(visible)).exists():
             return dict(passed=False, reason=f"library file removed: {path.relative_to(visible)}")
+    if meta.get('version') != VERSION or meta.get('oracle_version') != repo_oracle.VERSION:
+        raise ValueError('repository verifier requires newly prepared v4 assets')
+    # Frozen privately at preparation, shared by all arms; no per-arm challenge drift.
+    oracle = repo_oracle.verify(workspace, meta["case"], seed=int(meta['oracle_seed']))
+    if not oracle['passed']:
+        return dict(oracle, changed_files=[str(c) for c in changed])
     with tempfile.TemporaryDirectory() as directory:
-        # Library code comes entirely from the workspace (the injected defect stays unless
-        # repaired); every test file comes from the pristine tree (withheld tests restored).
+        # Only public tests enter the child. Private references stay in the parent.
         tree = Path(directory) / "tree"
-        shutil.copytree(pristine, tree)
+        shutil.copytree(visible, tree)
         for path in sorted((Path(workspace) / PACKAGE).rglob("*.py")):
             relative = path.relative_to(workspace)
             if "__pycache__" not in relative.parts and not _is_test_file(relative):
                 shutil.copyfile(path, tree / relative)
-        heldout = next((Path(assets) / "heldout").glob("test_*.py"))
-        shutil.copyfile(heldout, tree / heldout.name)
         try:
-            result = run_pytest(python, tree, [spec["module"], heldout.name], str(Path(assets) / "sandbox"))
+            result = run_pytest(python, tree, ["networkx/algorithms"], str(Path(assets) / "sandbox"))
         except subprocess.TimeoutExpired:
-            return dict(passed=False, reason="verification tests exceeded their time limit", changed_files=[str(c) for c in changed])
+            return dict(passed=False, failure="budget", reason="verification tests exceeded their time limit",
+                        changed_files=[str(c) for c in changed], independent_oracle=oracle)
         summary = _summarize(result, tree)
     return dict(passed=result.returncode == 0,
-                reason="original module (incl. withheld tests) and independent held-out checks passed" if result.returncode == 0
+                reason="independent graph checks and public algorithms regression passed" if result.returncode == 0
                 else "verification tests failed", changed_files=[str(c) for c in changed],
+                failure=None if result.returncode == 0 else ("mismatch" if result.returncode == 1 else "runtime_error"), independent_oracle=oracle,
                 verification_summary=summary["summary"], verification_failed=summary["failed"])

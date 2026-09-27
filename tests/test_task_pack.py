@@ -28,3 +28,21 @@ def test_invalid_packs_do_not_create_assets(tmp_path,specs):
     root=tmp_path/'assets'
     with pytest.raises(ValueError):prepare(root,specs)
     assert not root.exists()
+
+
+def test_support_change_prevents_resuming_frozen_pack(tmp_path, monkeypatch):
+    from studies.energy_diagnosis.moe import task_pack
+    root=tmp_path/'pack'
+    prepare(root,SPECS)
+    monkeypatch.setattr(task_pack,'support_components',lambda kinds:{'changed':'a'*64})
+    with pytest.raises(ValueError,match='task pack changed'):
+        prepare(root,SPECS)
+
+
+def test_inventory_distinguishes_input_variants_and_never_claims_ready(tmp_path):
+    from studies.energy_diagnosis.moe.prepare_task_screen import inventory
+    specs=SPECS+[dict(kind='etl',rows=256,seed=8)]
+    report=inventory(prepare(tmp_path/'pack',specs))
+    assert report['task_cases']==6 and report['task_types']==5
+    assert report['counts']['etl-sql-repair']==2
+    assert all(t['qualification'].startswith('pending') for t in report['tasks'])
