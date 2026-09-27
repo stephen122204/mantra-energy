@@ -57,3 +57,13 @@ def test_both_arms_must_match_task_slots():
     contract=dict(stages=[dict(path='a',arm='q4',task_id='x',gguf_path='/q4'),dict(path='b',arm='q8',task_id='y',gguf_path='/q8')])
     with pytest.raises(ValueError,match='same task'):
         pretest.check(contract)
+
+
+def test_prompt_change_must_be_explicit_in_contract(stage):
+    path = stage / 'campaign/moe-manifest.json'
+    manifest = json.loads(path.read_text())
+    manifest['task_pack']['specifications'][0]['prompt'] = 'v3'
+    path.write_text(json.dumps(manifest))
+    assert not checked(stage)['passed']
+    expected = dict(arm='q4', gguf_path='/models/q4.gguf', task_id='impl-toy-v2', prompt='v3')
+    assert pretest.check_stage(stage, expected, revision='abc', limits=LIMITS)['passed']
