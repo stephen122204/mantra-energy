@@ -25,7 +25,9 @@ CHAT_PROTOCOLS = (PROTOCOL_VERSION, PROTOCOL_V2)
 FEEDBACK_HINTS = {
     "unbalanced tool_call tags": 'write each call as <tool_call>{"name": ..., "arguments": {...}}</tool_call>, '
                                  "including the closing tag",
-    "no tool call": "text outside a tool call is not acted on; to finish, call the submit_answer tool",
+    "no tool call": 'text outside <tool_call> tags is not acted on; wrap the call as '
+                    '<tool_call>{"name": "TOOL_NAME", "arguments": {...}}</tool_call>. '
+                    'To finish, use name "submit_answer" and arguments {"answer": <your task answer>}',
 }
 SUBMIT = "submit_answer"
 MAX_CALLS_PER_TURN = 8
