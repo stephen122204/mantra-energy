@@ -97,3 +97,15 @@ separate from successful smoke completion: a genuine model failure can have
 valid measurements, and must remain in the data. Passing a successful smoke
 check still does not authorize the full campaign. The original implementation-
 only contract remains supported for archived checks.
+
+## Frozen inputs in batch plans
+
+For campaigns generated with `diagnostics.campaign_plan`, set
+`task_pack_assets` on each task entry to the same prepared asset directory used
+for qualification. The launcher passes it to every arm and repetition. It
+rejects an empty path or a conflicting override in base, family or arm
+arguments. The runner validates the copied manifest and helper identities.
+Legacy plans without this field remain readable, but do not establish identical
+private challenges across independently prepared runs. New collection plans
+must include it and explicitly specify the qualified turn, tool, token and
+whole-goal budgets; runner defaults are not budget qualification evidence.
