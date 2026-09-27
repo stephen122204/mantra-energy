@@ -122,3 +122,87 @@ class MaintenanceWindowTest(unittest.TestCase):
         with patch('studies.energy_diagnosis.diagnostics.node_batches.subprocess.run', recording):
             run(spec, base / 'control', gap=0, free_bytes=0, clock=lambda: clock[0], sleep=sleep)
         self.assertEqual(starts, [t0 + 4200])
+
+
+def test_real_mid_batch_scheduler_kill_refuses_duplicate_then_restores(tmp_path):
+    """Kill an actual coordinator while its owned fixture batch is still alive.
+
+    This exercises scheduler recovery and backup, not GPU process cleanup or
+    energy validity. The fixture batch exits only after an explicit release.
+    """
+    import os
+    import subprocess
+    import time
+    import psutil
+    import pytest
+    if os.name != 'posix':
+        pytest.skip('POSIX scheduler termination')
+    root=tmp_path/'results';root.mkdir();control=tmp_path/'control'
+    release=tmp_path/'release'
+    worker=tmp_path/'batch.py'
+    worker.write_text('''import json,os,pathlib,sys,time
+root=pathlib.Path(sys.argv[1]);release=pathlib.Path(sys.argv[2]);name=sys.argv[3]
+p=root/name/'status.json';p.parent.mkdir()
+with (root/'launches.txt').open('a') as out:out.write(name+'\\n')
+def save(value):
+ t=p.with_suffix('.tmp');t.write_text(json.dumps(value));t.replace(p)
+save(dict(status='running',child_pid=os.getpid(),cleanup_complete=False))
+limit=time.monotonic()+30
+while name=='first' and not release.exists():
+ if time.monotonic()>limit:raise RuntimeError('fixture release timeout')
+ time.sleep(.02)
+save(dict(status='completed',returncode=0,cleanup_complete=True,child_pid=os.getpid()))
+''')
+    spec=dict(host='fixture',remote_directory=str(root),remote_repository=str(tmp_path),
+              remote_python=sys.executable,cutoff_utc='2099-01-01T00:00:00Z',retry_seconds=1,
+              first_poll_delay_seconds=1,minimum_batch_seconds=40,batches=[
+                  dict(id=n,argv=[sys.executable,str(worker),str(root),str(release),n],
+                       status=n+'/status.json',log='logs/'+n) for n in ('first','second')])
+    specfile=tmp_path/'spec.json';specfile.write_text(json.dumps(spec))
+    command=[sys.executable,'-c',
+             'import json,sys;from studies.energy_diagnosis.diagnostics.node_batches import run;'
+             'run(json.load(open(sys.argv[1])),sys.argv[2],gap=0,free_bytes=0)',str(specfile),str(control)]
+    repository=Path(__file__).resolve().parents[1]
+    child=None
+    def until(predicate):
+        deadline=time.monotonic()+10
+        while not predicate():
+            if time.monotonic()>deadline:raise AssertionError('fixture state did not arrive')
+            time.sleep(.02)
+    with (tmp_path/'coordinator.log').open('w') as log:
+        coordinator=subprocess.Popen(command,cwd=repository,stdout=log,stderr=log)
+        try:
+            status=root/'first/status.json'
+            until(status.exists)
+            running=json.loads(status.read_text())
+            child=psutil.Process(running['child_pid'])
+            assert running['status']=='running' and child.is_running()
+            coordinator.kill();coordinator.wait(timeout=10)
+            assert child.is_running() and child.status()!=psutil.STATUS_ZOMBIE
+            refused=subprocess.run(command,cwd=repository,capture_output=True,text=True,timeout=10)
+            assert refused.returncode != 0 and 'existing batch not terminal' in refused.stderr
+            assert (root/'launches.txt').read_text().splitlines()==['first']
+            assert not (root/'second').exists()
+            release.touch()
+            until(lambda: not child.is_running() or child.status()==psutil.STATUS_ZOMBIE)
+            resumed=subprocess.run(command,cwd=repository,capture_output=True,text=True,timeout=10)
+            assert resumed.returncode==0,resumed.stdout+resumed.stderr
+            assert (root/'launches.txt').read_text().splitlines()==['first','second']
+            # A repeated resume cannot repeat either completed batch.
+            again=subprocess.run(command,cwd=repository,capture_output=True,text=True,timeout=10)
+            assert again.returncode==0,again.stderr
+            assert (root/'launches.txt').read_text().splitlines()==['first','second']
+            catalog=json.loads((control/'catalog.json').read_text())
+            wire=tmp_path/'wire.tar'
+            with tarfile.open(wire,'w') as bundle:
+                for name in ('catalog.json','state.json'):bundle.add(control/name,arcname=name)
+                for item in catalog['snapshots']:bundle.add(control/'spool'/item['file'],arcname=item['file'])
+            received=ingest(wire,tmp_path/'receiver','fixture',str(root))
+            restore_snapshot(received['previous'],tmp_path/'restored')
+            assert (tmp_path/'restored/launches.txt').read_bytes()==(root/'launches.txt').read_bytes()
+            assert json.loads((tmp_path/'restored/first/status.json').read_text())['status']=='completed'
+        finally:
+            release.touch()
+            if coordinator.poll() is None:coordinator.kill();coordinator.wait(timeout=10)
+            if child is not None and child.is_running() and child.status()!=psutil.STATUS_ZOMBIE:
+                child.terminate()
