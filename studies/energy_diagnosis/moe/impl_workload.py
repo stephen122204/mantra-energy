@@ -102,6 +102,10 @@ PROMPTS = {
     "v1": "Grading runs your final solution.py; when finished, submit {done:true}.",
     "v2": 'Grading runs your final solution.py. When it is complete, call the submit_answer tool with answer '
           '{"done": true}; do not write the answer as text.',
+    "v3": 'Grading runs your final solution.py. When it is complete, finish with exactly this tool call: '
+          '<tool_call>{"name":"submit_answer","arguments":{"answer":{"done":true}}}</tool_call>. '
+          'The plain text {"answer":{"done":true}} does not call a tool and does not finish the task. '
+          'Submission triggers independent grading of solution.py; it does not assert that your code passed.',
 }
 
 

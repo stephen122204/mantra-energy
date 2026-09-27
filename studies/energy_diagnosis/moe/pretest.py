@@ -33,7 +33,8 @@ def check_stage(stage, expected, *, revision, limits):
         checks["deadline"] = m["limits"]["goal_seconds"] == limits["goal_seconds"]
         specs = m["task_pack"]["specifications"]
         checks["qualified_task_path"] = (len(specs) == 1 and specs[0]["kind"] == "impl"
-            and specs[0].get("prompt", "v2") == "v2")
+            and expected.get("prompt", "v2") in {"v2", "v3"}
+            and specs[0].get("prompt", "v2") == expected.get("prompt", "v2"))
         checks["task_identity"] = len(m["task_catalog"]) == 1 and m["task_catalog"][0]["task_id"] == expected["task_id"]
         goals = sorted((stage / "campaign/goals").glob("*/verification.json"))
         checks["one_verifier"] = len(goals) == 1

@@ -4,7 +4,9 @@ This is an implementation qualification procedure. It does not select a research
 
 ## Supported execution path
 
-Use `kind: impl` task specifications with explicit `prompt: v2`, `--agent-protocol chat-tools-v2`, and the supplied llama.cpp configurations. The two configurations must refer to different qualified model files. Keep the same tasks, context, tool access, decoding policy and agent limits in both arms. Never select the historical BF16-only NativeDevice for GGUF execution.
+Use `kind: impl` task specifications with explicit versioned `prompt` (`v2` or `v3`), `--agent-protocol chat-tools-v2`, and the supplied llama.cpp configurations. The two configurations must refer to different qualified model files. Keep the same tasks, context, tool access, decoding policy and agent limits in both arms. Never select the historical BF16-only NativeDevice for GGUF execution.
+
+Prompt v3 adds a literal submit_answer call example after a live v2 attempt repeated plain answer text despite feedback. It changes prompt tokens and task identity; never pool the versions. It does not relax parsing or grading. Apply the same version to both arms.
 
 The current smoke contract uses the submit_answer tool to finish and grades the saved solution.py. It does not interpret arbitrary plain text as success. The v2 parser permits an otherwise valid final tool call missing its closing tag; malformed JSON, duplicate keys and mixed submission/tool responses are still rejected. Explicit feedback names the repair. Existing frozen v1 runs stay unchanged.
 
@@ -28,7 +30,7 @@ Build a private JSON execution contract containing:
 
 - `revision`: exact execution commit;
 - `limits`: `context`, `max_turns`, `max_tool_calls`, `max_total_output_tokens`, `max_output_tokens_per_turn`, `goal_seconds`;
-- `stages`: objects with `path` (guarded stage output), `arm`, `task_id`, `gguf_path`, and optional `replicate`.
+- `stages`: objects with `path` (guarded stage output), `arm`, `task_id`, `gguf_path`, `prompt` (defaults to `v2`), and optional `replicate`.
 
 Every task/replicate slot must occur in both arms, with a distinct stage directory. Then run:
 

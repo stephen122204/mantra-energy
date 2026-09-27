@@ -169,3 +169,14 @@ def test_empty_hidden_checks_rejected(tmp_path, bundle):
     bundle.write_text(json.dumps(data))
     with pytest.raises(ValueError, match='nonempty'):
         create_task(tmp_path / 'bad', problem='Toy/1', bundle=bundle)
+
+
+def test_explicit_submission_example_is_a_valid_tool_call(tmp_path, bundle):
+    from studies.energy_diagnosis.agent_protocol import parse_response
+    task = create_task(tmp_path / "v3", problem="Toy/1", bundle=bundle, prompt="v3")
+    assert task.task_id == "impl-toy-1-v3"
+    example = task.prompt[task.prompt.index("<tool_call>"):task.prompt.index("</tool_call>") + len("</tool_call>")]
+    decision = parse_response(example)
+    assert decision.kind == "answer" and decision.answer == {"done": True}
+    v2 = create_task(tmp_path / "v2", problem="Toy/1", bundle=bundle).prompt
+    assert task.prompt[:task.prompt.index("Grading")] == v2[:v2.index("Grading")]
