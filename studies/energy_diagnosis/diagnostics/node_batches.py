@@ -28,6 +28,16 @@ def successful(job):
     return job.get('status') == 'completed' and job.get('returncode') == 0 and job.get('cleanup_complete') is True
 
 
+def recovery_valid(recovery, jobpath):
+    """A recovery record written by campaign_check recover for exactly the status still on disk."""
+    if not recovery.exists():
+        return False
+    rec = read(recovery)
+    current = jobpath.read_bytes() if jobpath.exists() else b'missing'
+    return (rec.get('status') == 'interrupted' and isinstance(rec.get('partial_artifacts'), list)
+            and rec.get('status_sha256') == hashlib.sha256(current).hexdigest())
+
+
 def checkpoint(root, spool, batch, previous):
     name = safe_name(batch['id'])
     target = spool / (name + '.bundle')
@@ -110,14 +120,24 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
                         if result.returncode and successful(read(jobpath)):
                             raise RuntimeError('wrapper failed after job completion')
                     job=read(jobpath)
+                    recovered=jobpath.parent.parent/'recovery.json'
                     if job.get('status') not in {'completed','failed','timed_out','interrupted','interference_detected','blocked_by_other_job'}:
-                        raise RuntimeError('existing batch not terminal; no adoption or duplicate launch')
+                        # An interrupted batch is never adopted or rerun. Only an explicit, verified
+                        # recovery record (campaign_check recover) classifies it so dispatch can continue.
+                        if not recovery_valid(recovered, jobpath):
+                            raise RuntimeError('existing batch not terminal; no adoption or duplicate launch')
+                        job=dict(status='interrupted_recovered')
                     save('checkpointing',batch=batch['id'])
                     if not any(x['id']==batch['id'] for x in catalog):
                         header=checkpoint(root,spool,batch,previous);previous=header['files']
                         target=spool/(batch['id']+'.bundle')
                         catalog.append(dict(id=batch['id'],file=target.name,sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
                         write(out/'catalog.json',dict(root=str(root),snapshots=catalog))
+                    if job.get('status')=='interrupted_recovered':
+                        if batch['id'] not in state.setdefault('recovered',[]):
+                            state['recovered'].append(batch['id']);save('between_batches')
+                        sleep(gap)  # the same settling gap as after any batch
+                        continue
                     if not successful(job):
                         raise RuntimeError('invalid batch retained; no further dispatch')
                     state['completed'].append(batch['id']);save('between_batches')

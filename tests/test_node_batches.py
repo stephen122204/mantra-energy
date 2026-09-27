@@ -206,3 +206,86 @@ save(dict(status='completed',returncode=0,cleanup_complete=True,child_pid=os.get
             if coordinator.poll() is None:coordinator.kill();coordinator.wait(timeout=10)
             if child is not None and child.is_running() and child.status()!=psutil.STATUS_ZOMBIE:
                 child.terminate()
+
+
+class RecoveredBatchTest(unittest.TestCase):
+    def test_interrupted_batch_is_retained_not_rerun_and_dispatch_continues(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'results'; root.mkdir()
+        batches = []
+        for i in range(2):
+            status = f'b{i}/job/status.json'
+            code = "import pathlib,json; p=pathlib.Path(" + repr(str(root / status)) + ");p.parent.mkdir(parents=True);p.write_text(json.dumps(dict(status='completed',returncode=0,cleanup_complete=True)))"
+            batches.append(dict(id=f'b{i}', argv=[sys.executable, '-c', code], status=status, log=f'l{i}'))
+        spec = dict(host='h', remote_directory=str(root), remote_repository=str(base), remote_python=sys.executable,
+                    cutoff_utc='2099-01-01T00:00:00Z', retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=30,
+                    batches=batches)
+        # b0 was interrupted mid-goal: non-terminal status, dispatch intent present.
+        (root / 'b0/job').mkdir(parents=True)
+        (root / 'b0/job/status.json').write_text(json.dumps(dict(status='running')))
+        (root / 'dispatch').mkdir(); (root / 'dispatch/b0.json').write_text('{}')
+        with self.assertRaises(RuntimeError):
+            run(spec, base / 'control', gap=0, free_bytes=0)
+        import hashlib
+        # A hand-written record without the evidence fields is refused.
+        (root / 'b0/recovery.json').write_text(json.dumps(dict(status='interrupted')))
+        with self.assertRaises(RuntimeError):
+            run(spec, base / 'control', gap=0, free_bytes=0)
+        # A record for a different status than the one on disk is refused.
+        (root / 'b0/recovery.json').write_text(json.dumps(dict(status='interrupted', partial_artifacts=[],
+                                                              status_sha256='0' * 64)))
+        with self.assertRaises(RuntimeError):
+            run(spec, base / 'control', gap=0, free_bytes=0)
+        seen = hashlib.sha256((root / 'b0/job/status.json').read_bytes()).hexdigest()
+        (root / 'b0/recovery.json').write_text(json.dumps(dict(status='interrupted', partial_artifacts=[],
+                                                              status_sha256=seen)))
+        run(spec, base / 'control', gap=0, free_bytes=0)
+        state = json.loads((base / 'control/state.json').read_text())
+        self.assertEqual(state['completed'], ['b1'])
+        self.assertEqual(state['recovered'], ['b0'])
+        self.assertEqual(json.loads((root / 'b0/job/status.json').read_text())['status'], 'running')
+        run(spec, base / 'control', gap=0, free_bytes=0)  # relaunch: nothing rerun, no duplicate entries
+        self.assertEqual(json.loads((base / 'control/state.json').read_text())['recovered'], ['b0'])
+
+
+class RecoveredSnapshotVerificationTest(unittest.TestCase):
+    def test_recovered_label_requires_its_record(self):
+        from studies.energy_diagnosis.diagnostics.archive_results import export_bundle, verify_bundle
+        import hashlib
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / 'r'; (root / 'b0/job').mkdir(parents=True)
+        (root / 'b0/job/status.json').write_text(json.dumps(dict(status='running')))
+        rec = dict(status='interrupted', partial_artifacts=[],
+                   status_sha256=hashlib.sha256((root / 'b0/job/status.json').read_bytes()).hexdigest())
+        (root / 'b0/recovery.json').write_text(json.dumps(rec))
+        out = Path(tmp.name) / 'b.bundle'
+        with out.open('wb') as stream:
+            export_bundle(root, 'b0/job/status.json', {}, stream, 2**30)
+        header = verify_bundle(out, {})
+        self.assertEqual(header['remote_job']['status'], 'interrupted_recovered')
+        # Forge: same label, recovery record removed from the manifest.
+        raw = out.read_bytes().split(b'\n', 2)
+        forged = json.loads(raw[1]); del forged['files']['b0/recovery.json']
+        bad = Path(tmp.name) / 'bad.bundle'
+        bad.write_bytes(raw[0] + b'\n' + json.dumps(forged, separators=(',', ':')).encode() + b'\n' + raw[2])
+        with self.assertRaises(ValueError):
+            verify_bundle(bad, {})
+
+
+def test_export_refuses_unbound_or_stale_recovery_note(tmp_path):
+    import hashlib
+    import io
+    import pytest
+    from studies.energy_diagnosis.diagnostics.archive_results import export_bundle
+    root=tmp_path/'results';job=root/'b0/job';job.mkdir(parents=True)
+    status=job/'status.json';status.write_text(json.dumps({'status':'running'}))
+    recovery=root/'b0/recovery.json'
+    for note in ({'status':'interrupted'},
+                 {'status':'interrupted','partial_artifacts':[],'status_sha256':'0'*64}):
+        recovery.write_text(json.dumps(note))
+        with pytest.raises(ValueError,match='not terminal'):
+            export_bundle(root,'b0/job/status.json',{},io.BytesIO(),2**20)
+    recovery.write_text(json.dumps(dict(status='interrupted',partial_artifacts=[],
+                                       status_sha256=hashlib.sha256(status.read_bytes()).hexdigest())))
+    header=export_bundle(root,'b0/job/status.json',{},io.BytesIO(),2**20)
+    assert header['remote_job']['status']=='interrupted_recovered'

@@ -119,19 +119,104 @@ def status(plan):
         job = json.loads((batch / "job/status.json").read_text()) if (batch / "job/status.json").exists() else {}
         acc = json.loads((batch / "acceptance.json").read_text()) if (batch / "acceptance.json").exists() else {}
         rows.append(dict(id=batch.name, job=job.get("status"), returncode=job.get("returncode"),
-                         protocol_valid=acc.get("protocol_valid"), outcome=acc.get("outcome")))
+                         protocol_valid=acc.get("protocol_valid"), outcome=acc.get("outcome"),
+                         recovered=(batch / "recovery.json").exists()))
     from .campaign_plan import node_spec
     total = len(node_spec(plan)["batches"])
     return dict(node_state=state, batches_total=total, batches_finished=len(rows),
-                protocol_invalid=[r["id"] for r in rows if r["protocol_valid"] is False], batches=rows)
+                protocol_invalid=[r["id"] for r in rows if r["protocol_valid"] is False],
+                needs_recovery=[r["id"] for r in rows if r["job"] not in TERMINAL and not r["recovered"]],
+                recovered=[r["id"] for r in rows if r["recovered"]], batches=rows)
+
+
+TERMINAL = {"completed", "failed", "timed_out", "interrupted", "interference_detected", "blocked_by_other_job"}
+
+
+def _cmdline(pid):
+    try:
+        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+    except OSError:
+        return None
+
+
+def recover(plan, batch_id, proc=Path("/proc"), gpu_apps=None):
+    """Classify one interrupted (non-terminal) batch after verifying nothing of it is still running.
+
+    Never edits or deletes the batch's own records; writes <batch>/recovery.json exclusively. The
+    scheduler then retains the batch as an interrupted, invalid attempt and continues; it is never
+    rerun. Returns (ok, record_or_reasons)."""
+    node = plan["node"]
+    batch = Path(node["remote_directory"]) / batch_id
+    status_path = batch / "job" / "status.json"
+    reasons = []
+    if "/" in batch_id or not batch.is_dir():
+        return False, ["no such batch directory"]
+    if (batch / "recovery.json").exists():
+        return False, ["batch already has a recovery record; it is never overwritten"]
+    status = json.loads(status_path.read_text()) if status_path.exists() else {"status": "missing"}
+    if status.get("status") in TERMINAL:
+        return False, [f"batch is terminal ({status.get('status')}); nothing to recover"]
+    for key in ("supervisor_pid", "child_pid"):
+        pid = status.get(key)
+        line = _cmdline(pid) if pid else None
+        if line is not None and str(batch) in line:
+            reasons.append(f"{key} {pid} is still running")
+    id_arg = f"--id {batch_id} "
+    for entry in proc.iterdir():
+        if entry.name.isdigit():
+            line = _cmdline(entry.name)
+            if line and int(entry.name) != os.getpid() and (str(batch) in line or id_arg in line + " "):
+                reasons.append(f"process {entry.name} still references the batch")
+    import fcntl
+    lock_path = batch / "active.lock"
+    if lock_path.exists():
+        with open(lock_path, "a") as active:
+            try:
+                fcntl.flock(active, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(active, fcntl.LOCK_UN)
+            except BlockingIOError:
+                reasons.append("the batch's active lock is still held by one of its processes")
+    if gpu_apps is None:
+        smi = run(["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"])
+        gpu_apps = [x.strip() for x in smi.stdout.splitlines() if x.strip()] if smi.returncode == 0 else ["nvidia-smi failed"]
+    if gpu_apps:
+        reasons.append(f"GPU compute processes present: {gpu_apps}")
+    import fcntl
+    with open(node["lock"], "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock, fcntl.LOCK_UN)
+        except BlockingIOError:
+            reasons.append("GPU lock is held")
+    if reasons:
+        return False, reasons
+    files = [dict(path=str(p.relative_to(batch)), bytes=p.stat().st_size, sha256=sha(p))
+             for p in sorted(batch.rglob("*")) if p.is_file()]
+    status_bytes = status_path.read_bytes() if status_path.exists() else b"missing"
+    record = dict(status="interrupted", batch=batch_id, job_status_seen=status.get("status"),
+                  status_sha256=hashlib.sha256(status_bytes).hexdigest(),
+                  classified_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
+                  checks=["supervisor/child pids not running", "no process references the batch",
+                          "batch active lock free", "no GPU compute process", "GPU lock free"],
+                  partial_artifacts=files)
+    with (batch / "recovery.json").open("x") as stream:
+        json.dump(record, stream, indent=2)
+    return True, record
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("command", choices=["preflight", "status"])
+    p.add_argument("command", choices=["preflight", "status", "recover"])
     p.add_argument("--plan", required=True)
+    p.add_argument("--batch", help="recover: the interrupted batch id reported by status")
     a = p.parse_args(argv)
     plan = load(a.plan)
+    if a.command == "recover":
+        if not a.batch:
+            p.error("recover needs --batch")
+        ok, detail = recover(plan, a.batch)
+        print(json.dumps(dict(recovered=ok, detail=detail), indent=2))
+        return 0 if ok else 1
     result = preflight(plan) if a.command == "preflight" else status(plan)
     print(json.dumps(result, indent=2))
     return 0 if a.command == "status" or result["passed"] else 1

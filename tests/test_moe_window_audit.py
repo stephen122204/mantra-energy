@@ -50,7 +50,8 @@ def test_rehashed_bad_artifact_cannot_pass(packet, tmp_path, defect, match):
     rows = [json.loads(line) for line in path.read_text().splitlines()]
     attempt = rows[0]["attempt"]
     refs = {a["role"]: a for a in attempt["artifacts"]}
-    data = {role: json.loads((root / ref["path"]).read_text()) for role, ref in refs.items()}
+    from studies.energy_diagnosis.moe import event_log
+    data = {role: event_log.read(root / ref["path"]) for role, ref in refs.items()}
     raw, window = data["raw-measurement"], data["initialized-model-window"]
     if defect == "energy":
         window["measurements"][0]["energy_j"] += 0.01
@@ -78,7 +79,8 @@ def test_rehashed_bad_artifact_cannot_pass(packet, tmp_path, defect, match):
         window["reason"] = "changed after registration"
     for role, ref in refs.items():
         artifact = root / ref["path"]
-        artifact.write_text(json.dumps(data[role]))
+        artifact.write_bytes(event_log.encode(data[role]) if artifact.name.endswith(".gz")
+                             else json.dumps(data[role]).encode())
         if defect != "hash":
             ref["sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
     attempt["execution_record"] = data["execution-record"]

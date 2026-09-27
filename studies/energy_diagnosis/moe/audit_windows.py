@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from studies.energy_diagnosis.moe import event_log
 
 
 def require(condition, message):
@@ -57,7 +58,7 @@ def audit_attempt(root, row):
         "execution-record": "record.json",
         "raw-measurement": "measurement.json",
         "initialized-model-window": "initialized-model-window.json",
-        "expert-events": "expert-events.json",
+        "expert-events": event_log.NAMES,
     }
     artifacts = {}
     for ref in attempt["artifacts"]:
@@ -67,9 +68,10 @@ def audit_attempt(root, row):
         raw = path.read_bytes()
         require(hashlib.sha256(raw).hexdigest() == ref["sha256"], "artifact hash mismatch")
         if ref["role"] in required:
-            require(relative == base / required[ref["role"]], "artifact identity/path mismatch")
+            names = required[ref["role"]] if isinstance(required[ref["role"]], tuple) else (required[ref["role"]],)
+            require(relative in [base / n for n in names], "artifact identity/path mismatch")
             require(ref["role"] not in artifacts, "duplicate artifact role")
-            artifacts[ref["role"]] = json.loads(raw)
+            artifacts[ref["role"]] = event_log.decode(raw, relative)
     require(set(required) <= artifacts.keys(), "required registered artifact missing")
     record = artifacts["execution-record"]
     raw = artifacts["raw-measurement"]
