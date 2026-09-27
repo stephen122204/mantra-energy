@@ -57,8 +57,11 @@ def check_stage(stage, expected, *, revision, limits):
         g = goals[0].parent
         v = json.loads(goals[0].read_text())
         trace = json.loads((g / "agent-trace.json").read_text())
-        checks["verified_completion"] = v.get("status") == "returned" and v["result"].get("passed") is True and trace["outcome"] == "passed"
-        result["protocol_slips"] = sum(t["kind"] in {"malformed", "no_action"} for t in trace["turns"])
+        checks["verified_completion"] = (v.get("status") == "returned" and (v.get("result") or {}).get("passed") is True
+                                         and trace["outcome"] == "passed")
+        # A turn ended by a limit (context exhausted, output truncated) is recorded before parsing and has no
+        # kind; it is a model outcome, not a protocol slip and not a record defect.
+        result["protocol_slips"] = sum(t.get("kind") in {"malformed", "no_action"} for t in trace["turns"])
         result["turns"] = len(trace["turns"])
         checks["clean_submission"] = result["protocol_slips"] == 0
         workspace = stage / "campaign/workspaces" / g.name
@@ -68,7 +71,7 @@ def check_stage(stage, expected, *, revision, limits):
             if checks["saved_program"]:
                 result["solution_sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
         elif kind == "repo":
-            changed = v.get("result", {}).get("changed_files", [])
+            changed = (v.get("result") or {}).get("changed_files", [])   # no submission: no result
             artifacts = {}
             for relative in changed:
                 source = workspace / relative

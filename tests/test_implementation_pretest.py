@@ -134,3 +134,18 @@ def test_changed_budget_invalidates_record(stage, key):
     path.write_text(json.dumps(manifest))
     result = checked(stage)
     assert not result["passed"] and not result["record_valid"]
+
+
+@pytest.mark.parametrize("terminal", ["context_exhausted", "output_truncated"])
+def test_limit_terminated_turn_is_a_model_outcome_not_a_record_defect(stage, monkeypatch, terminal):
+    """Reproduced on LIQID05 (repo-core-number-comparison, Q4): the final turn of a context-exhausted attempt has
+    no 'kind' (it ends before parsing) and there is no verifier result; the checker raised KeyError and marked an
+    intact record invalid, stopping the qualification block."""
+    monkeypatch.setattr(pretest, 'audit', lambda *a, **kw: dict(smoke_passed=False, protocol_valid=True))
+    (stage/'campaign/goals/g/agent-trace.json').write_text(json.dumps(dict(
+        outcome=terminal, terminal=terminal,
+        turns=[dict(kind='tool_calls', step=0), dict(kind='malformed', step=1), dict(step=2, finish_reason='length')])))
+    (stage/'campaign/goals/g/verification.json').write_text(json.dumps(dict(status='unavailable', result=None)))
+    result = checked(stage)
+    assert result['errors'] == [] and result['record_valid'] and not result['passed']
+    assert result['protocol_slips'] == 1 and result['turns'] == 3
