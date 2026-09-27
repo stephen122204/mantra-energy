@@ -17,7 +17,7 @@ import sys
 import time
 
 from .archive_results import export_bundle, verify_bundle, safe_name
-from .batch_coordinator import validate, write, dispatch_wait
+from .batch_coordinator import validate, write, dispatch_wait, timer_wait
 
 
 def read(path):
@@ -84,11 +84,17 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
                 jobpath = root / batch['status']
                 if batch['id'] not in state['completed'] and not jobpath.exists():
                     # Outside the io lock: transfers may run during the maintenance window.
-                    wait = dispatch_wait(spec, clock())
-                    while wait > 0:
-                        save('maintenance_window', batch=batch['id'], resume_utc=dt.datetime.fromtimestamp(clock()+wait, dt.timezone.utc).isoformat())
-                        sleep(min(wait, 60))
+                    while True:
                         wait = dispatch_wait(spec, clock())
+                        if wait > 0:
+                            save('maintenance_window', batch=batch['id'], resume_utc=dt.datetime.fromtimestamp(clock()+wait, dt.timezone.utc).isoformat())
+                            sleep(min(wait, 60)); continue
+                        # The host's own maintenance timer drifts against fixed windows; never overlap it.
+                        hold = timer_wait(spec)
+                        if hold > 0:
+                            save('host_maintenance_hold', batch=batch['id'], unit=spec['maintenance']['systemd_timer'])
+                            sleep(hold); continue
+                        break
                 with (out/'io.lock').open('a') as gate:
                     fcntl.flock(gate, fcntl.LOCK_EX)
                     jobpath = root / batch['status']

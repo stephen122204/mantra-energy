@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shlex
 import subprocess
 import sys
@@ -114,8 +115,11 @@ def validate(spec):
         raise ValueError("empty or duplicate batches")
     if "maintenance" in spec:
         m = spec["maintenance"]
-        if set(m) != {"anchor_utc", "period_seconds", "window_seconds"}:
-            raise ValueError("maintenance needs anchor_utc, period_seconds, window_seconds")
+        if not {"anchor_utc", "period_seconds", "window_seconds"} <= set(m) <= {
+                "anchor_utc", "period_seconds", "window_seconds", "systemd_timer"}:
+            raise ValueError("maintenance needs anchor_utc, period_seconds, window_seconds (optional systemd_timer)")
+        if "systemd_timer" in m and not re.fullmatch(r"[A-Za-z0-9_.@-]+\.timer", str(m["systemd_timer"])):
+            raise ValueError("systemd_timer must name a .timer unit")
         anchor = dt.datetime.fromisoformat(m["anchor_utc"].replace("Z", "+00:00"))
         if anchor.utcoffset() != dt.timedelta(0):
             raise ValueError("UTC maintenance anchor required")
@@ -158,6 +162,45 @@ def dispatch_wait(spec, now):
     inside, start, end = schedule
     if inside or now + spec["minimum_batch_seconds"] + WINDOW_MARGIN_SECONDS > start:
         return end - now
+    return 0
+
+
+_UNITS = dict(us=1e-6, ms=0.001, s=1, min=60, h=3600, d=86400, w=604800)
+UPDATER_RECHECK_SECONDS = 30
+
+
+def parse_monotonic(raw):
+    """systemd monotonic timespan ('6d 11h 13min 54.330386s') -> seconds since boot. Fails closed."""
+    pattern = r"([0-9]+(?:\.[0-9]+)?)(us|ms|min|s|h|d|w)"
+    parts = re.findall(pattern, raw)
+    if not parts or re.sub(pattern, "", raw).strip():
+        raise ValueError(f"unparseable systemd monotonic time: {raw!r}")
+    return sum(float(value) * _UNITS[unit] for value, unit in parts)
+
+
+def timer_wait(spec, *, run=subprocess.run, monotonic=time.monotonic):
+    """Seconds to wait so that a batch cannot overlap the node's own periodic maintenance job.
+
+    Fixed windows (maintenance_windows) keep operator logins and transfers away from measurement. A
+    host timer such as Chameleon's hourly cache-vendordata drifts against any fixed schedule (about
+    +10 s per hour observed), so when the spec names it, admission also reads systemd's actual next
+    deadline: a batch starts only if the service is inactive and the deadline is further away than
+    minimum_batch_seconds + WINDOW_MARGIN_SECONDS. Anything unreadable stops dispatch (fails closed)."""
+    unit = spec.get("maintenance", {}).get("systemd_timer")
+    if not unit:
+        return 0
+    show = lambda prop: run(["systemctl", "show", unit, "--value", "-p", prop],
+                            capture_output=True, text=True, check=True).stdout.strip()
+    if run(["systemctl", "is-active", unit], capture_output=True, text=True).stdout.strip() != "active":
+        raise RuntimeError(f"{unit} is not active; its schedule cannot be trusted")
+    service = unit[: -len(".timer")] + ".service"
+    state = run(["systemctl", "is-active", service], capture_output=True, text=True).stdout.strip()
+    if state not in {"active", "activating", "inactive", "deactivating", "failed"}:
+        raise RuntimeError(f"unrecognized {service} state {state!r}")
+    remaining = parse_monotonic(show("NextElapseUSecMonotonic")) - monotonic()
+    running = state in {"active", "activating", "deactivating"}    # 'failed' = last run failed, nothing running
+    if running or remaining <= spec["minimum_batch_seconds"] + WINDOW_MARGIN_SECONDS:
+        return UPDATER_RECHECK_SECONDS
     return 0
 
 

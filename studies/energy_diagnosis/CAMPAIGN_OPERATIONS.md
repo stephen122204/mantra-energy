@@ -12,6 +12,9 @@ maintenance windows, and keep verified backups.
    stops for review. List the windows from your laptop (no login needed):
    `python -m studies.energy_diagnosis.diagnostics.campaign_plan --plan PLAN.json --windows 8`
 2. Do not start other work on the node (builds, notebooks, downloads) at any time during a campaign.
+   The node also has its own periodic maintenance job (Chameleon: `cache-vendordata.timer`, hourly, drifting
+   about +10 s per hour). Name it in the plan as `maintenance.systemd_timer`; the scheduler then reads systemd's
+   actual next trigger and never starts a batch that could overlap it (state `host_maintenance_hold`).
 3. Do not edit, pull or rebuild anything in the campaign checkout or environments.
 4. Never delete or rename a batch directory, a dispatch intent or a snapshot. Failed batches are data.
 5. A task that the model fails (wrong answer, budgets, context, deadline) is a normal result. It does
