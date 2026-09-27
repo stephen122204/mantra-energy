@@ -100,3 +100,37 @@ def test_model_failure_does_not_invalidate_intact_records(stage,monkeypatch):
         dict(status='returned',result=dict(passed=False,failure='mismatch'))))
     result=checked(stage)
     assert result['record_valid'] and not result['passed']
+
+
+@pytest.mark.parametrize("field", ["task_pack", "task_catalog_entry", "kind", "prompt"])
+def test_pair_rejects_different_inputs_or_verification_before_reading_stages(field, monkeypatch):
+    stages = [dict(path=arm, arm=arm, task_id="same-task", gguf_path="/"+arm, kind="impl",
+                   prompt="v2", task_pack={"components": {"task": "frozen"}},
+                   task_catalog_entry={"asset_sha256": "frozen", "verifier_sha256": "verifier"})
+              for arm in ("q4", "q8")]
+    stages[1][field] = "different"
+    def unexpected(*args, **kwargs):
+        pytest.fail("mismatched pair must be rejected before stage inspection")
+    monkeypatch.setattr(pretest, "check_stage", unexpected)
+    with pytest.raises(ValueError, match="paired stages must share"):
+        pretest.check(dict(stages=stages))
+
+
+def test_pair_allows_identical_inputs_and_preserves_valid_model_failure(monkeypatch):
+    stages = [dict(path=arm, arm=arm, task_id="same-task", gguf_path="/"+arm, kind="etl",
+                   task_pack={"components": {"task": "frozen"}},
+                   task_catalog_entry={"asset_sha256": "frozen"}) for arm in ("q4", "q8")]
+    monkeypatch.setattr(pretest, "check_stage", lambda path, *a, **kw:
+                        dict(passed=path=="q8", record_valid=True))
+    result = pretest.check(dict(stages=stages, revision="abc", limits=LIMITS))
+    assert result["records_valid"] and not result["task_pretest_passed"]
+
+
+@pytest.mark.parametrize("key", ["max_turns", "max_tool_calls", "max_total_output_tokens", "max_output_tokens_per_turn", "goal_seconds"])
+def test_changed_budget_invalidates_record(stage, key):
+    path = stage / "campaign/moe-manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["limits" if key == "goal_seconds" else "agent"][key] += 1
+    path.write_text(json.dumps(manifest))
+    result = checked(stage)
+    assert not result["passed"] and not result["record_valid"]
