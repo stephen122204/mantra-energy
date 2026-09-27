@@ -7,11 +7,12 @@ import pytest
 from studies.energy_diagnosis.moe import sandbox
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Landlock is Linux-only")
+PRIVATE_MARKER = "private-answer-7a9c2ed61bd34b0daaf82055"
 
 
 def attempt(body, tmp_path):
     secret = tmp_path / "expected.json"
-    secret.write_text(json.dumps({"answer": 42}))
+    secret.write_text(json.dumps({"answer": PRIVATE_MARKER}))
     src = "def f():\n" + "".join("    " + l + "\n" for l in body.format(secret=secret, dir=tmp_path).splitlines())
     return sandbox.run(src, "f", [[]], 20)
 
@@ -37,7 +38,7 @@ def test_landlock_active(tmp_path):
 def test_escape_attempts_fail(tmp_path, body):
     status, payload = attempt(body, tmp_path)
     assert status == "error", (status, payload)
-    assert "42" not in json.dumps(payload)
+    assert PRIVATE_MARKER not in json.dumps(payload)
 
 
 def test_stdlib_imports_work(tmp_path):
