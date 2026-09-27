@@ -50,13 +50,32 @@ def _run(source, entry, inputs, seconds, example=None):
 
 
 def _norm(value, mode):
-    """Comparison: 'exact', or 'set' (order-insensitive over the top-level container)."""
+    """Canonical form for comparison: 'exact', or 'set' (order-insensitive over the top-level container)."""
     if mode == "set":
         items = value.get("__set__") if isinstance(value, dict) and "__set__" in value else value
         if not isinstance(items, list):
             return ("scalar", json.dumps(value, sort_keys=True))
         return ("set", sorted(json.dumps(v, sort_keys=True) for v in items))
     return json.dumps(value, sort_keys=True)
+
+
+def _close(a, b, atol):
+    """Structural equality with EvalPlus-style float tolerance (abs <= atol, or rel <= 1e-9)."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return a == b or abs(a - b) <= max(atol, 1e-9 * max(abs(a), abs(b)))
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_close(x, y, atol) for x, y in zip(a, b))
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_close(a[k], b[k], atol) for k in a)
+    return a == b
+
+
+def equal(got, want, mode, atol=0.0):
+    if atol and mode == "exact":
+        return _close(got, want, atol)
+    return _norm(got, mode) == _norm(want, mode)
 
 
 def create_task(root, *, problem, bundle):
@@ -81,7 +100,7 @@ def create_task(root, *, problem, bundle):
         (stage / "private" / "expected.json").write_text(json.dumps(dict(
             hidden=spec["hidden_expected"], performance=spec["performance_expected"])))
         (stage / "private" / "meta.json").write_text(json.dumps(dict(
-            version=VERSION, problem=problem, entry=spec["entry"], compare=spec["compare"],
+            version=VERSION, problem=problem, entry=spec["entry"], compare=spec["compare"], atol=spec.get("atol", 0.0),
             budget_seconds=spec["budget_seconds"], provenance=spec["provenance"]), indent=1, sort_keys=True))
         fingerprint = _hash(stage)
         if root.exists():
@@ -188,7 +207,7 @@ class ImplRuntime:
         if status != "ok":
             return dict(passed=False, reason=f"hidden tests: {status}", failure="error")
         wrong = [i for i, (got, want) in enumerate(zip(payload["outputs"], expected["hidden"]))
-                 if _norm(got, meta["compare"]) != _norm(want, meta["compare"])]
+                 if not equal(got, want, meta["compare"], meta.get("atol", 0.0))]
         if wrong or len(payload["outputs"]) != len(expected["hidden"]):
             return dict(passed=False, reason=f"hidden tests: {len(wrong)} of {len(hidden)} outputs differ", failure="mismatch")
         perf_input = json.loads((task.asset_path / "public" / "performance_input.json").read_text())
@@ -198,7 +217,7 @@ class ImplRuntime:
                         failure="budget")
         if status != "ok":
             return dict(passed=False, reason="performance input: error", failure="error")
-        if _norm(payload["outputs"][0], meta["compare"]) != _norm(expected["performance"], meta["compare"]):
+        if not equal(payload["outputs"][0], expected["performance"], meta["compare"], meta.get("atol", 0.0)):
             return dict(passed=False, reason="performance input output differs", failure="mismatch")
         return dict(passed=True, reason=f"hidden tests passed ({len(hidden)} inputs); performance input finished in "
                                         f"{payload['seconds']:.3f} s within the budget", performance_seconds=payload["seconds"])
