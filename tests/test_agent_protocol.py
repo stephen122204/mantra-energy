@@ -346,3 +346,18 @@ def test_completed_turns_survive_interruption_before_final_result(tmp_path, monk
     assert len(rows) == 1 and rows[0]['attempt']['status'] == 'running'
     roles = {a['role'] for a in rows[0]['attempt']['artifacts']}
     assert {'agent-turn-model', 'agent-turn-tools'} <= roles
+
+
+def test_untagged_submission_gets_explicit_syntax_feedback_without_acceptance():
+    text = '{"name": "submit_answer", "arguments": {"answer": {"done": true}}}'
+    decision = parse_response(text, accept_unclosed_final=True)
+    assert decision.kind == "no_action"
+    conversation = Conversation("g", function_tools({}), 24, protocol="chat-tools-v2")
+    conversation.record_turn(decision)
+    conversation.feedback(decision.reason)
+    feedback = json.loads(conversation.messages[-1]["content"])
+    assert "<tool_call>" in feedback["error"] and "</tool_call>" in feedback["error"]
+    assert 'name "submit_answer"' in feedback["error"]
+    assert feedback["turns_remaining"] == 23
+    # The response is still not a submission; only an explicit tool call can finish.
+    assert parse_response(text, accept_unclosed_final=True).kind == "no_action"

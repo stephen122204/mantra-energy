@@ -109,3 +109,10 @@ Legacy plans without this field remain readable, but do not establish identical
 private challenges across independently prepared runs. New collection plans
 must include it and explicitly specify the qualified turn, tool, token and
 whole-goal budgets; runner defaults are not budget qualification evidence.
+
+For `chat-tools-v2`, recovery feedback for an untagged response now shows the
+required opening and closing tool-call tags. Bare JSON is still not executed
+or accepted as completion. This changes model-visible recovery text: identify
+the execution revision, apply it to both arms, and retain older results under
+their original revision. A post-hoc check of a saved program does not replace
+the original failed submission or add unmeasured verification to its energy.
