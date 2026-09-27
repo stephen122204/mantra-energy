@@ -43,7 +43,7 @@ def _landlock(paths, writable=()):
     READ = (1 << 2) | (1 << 3)              # read_file | read_dir
     for path in dict.fromkeys([*paths, *writable]):
         pfd = os.open(path, os.O_PATH | os.O_CLOEXEC)
-        allowed = READ
+        allowed = READ if os.path.isdir(path) else (1 << 2)
         if path in writable:
             # Scratch files/directories only; never executables, symlinks or devices.
             allowed |= (1 << 1) | (1 << 4) | (1 << 5) | (1 << 7) | (1 << 8)
@@ -114,6 +114,13 @@ def stdlib_paths():
     dyn = os.path.join(sysconfig.get_path("platstdlib"), "lib-dynload")
     if os.path.isdir(dyn):
         paths.add(dyn)
+    # Standard-library extension modules (bz2, lzma, decimal, ...) dynamically
+    # load system libraries after confinement. Permit those libraries read-only.
+    if sys.platform.startswith('linux'):
+        multiarch = sysconfig.get_config_var('MULTIARCH')
+        if multiarch:
+            paths.update(os.path.realpath(p) for p in (f'/lib/{multiarch}', f'/usr/lib/{multiarch}'))
+        paths.add(os.path.realpath('/lib64'))
     return sorted(p for p in paths if p and os.path.isdir(p))
 
 
