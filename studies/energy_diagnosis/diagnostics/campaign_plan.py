@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 import random
 
+OPTIONAL = {"blocks", "repetition_args"}
 REQUIRED = {"campaign_id", "node", "cutoff_utc", "maintenance", "host_condition", "warm", "required_domains",
             "base_args", "families", "arms", "repetitions", "seed", "batch_seconds", "estimated_batch_seconds", "expected"}
 EXPECTED = {"repository_revision", "build_manifest", "build_manifest_sha256", "backend_python", "weights_manifest",
@@ -26,7 +27,7 @@ HOST = {"cpu_affinity", "keep_awake_cpus", "tool_cpus", "supervisor_cpus", "idle
 
 def load(path):
     plan = json.loads(Path(path).read_text())
-    if set(plan) - {"blocks"} != REQUIRED or set(plan["node"]) != NODE or set(plan["host_condition"]) != HOST \
+    if set(plan) - OPTIONAL != REQUIRED or set(plan["node"]) != NODE or set(plan["host_condition"]) != HOST \
             or set(plan["expected"]) != EXPECTED:
         raise ValueError("plan fields differ from the frozen plan schema")
     blocks = plan.get("blocks", [0, plan["repetitions"]])
@@ -40,6 +41,19 @@ def load(path):
     for flag in ("--output", "--cpu-affinity", "--keep-awake-cpus", "--tool-cpus"):
         if flag in plan["base_args"]:
             raise ValueError(f"{flag} is derived from the plan, not given in base_args")
+    # Each batch runs one planned run (--repeats 1), so its planned_run_id and therefore its per-turn sampling
+    # seeds are the same in every repetition; sampled repetitions need explicit per-repetition arguments.
+    reps = plan.get("repetition_args")
+    if reps is not None:
+        if not (isinstance(reps, list) and len(reps) == plan["repetitions"]
+                and all(isinstance(r, list) and all(isinstance(x, str) for x in r) for r in reps)):
+            raise ValueError("repetition_args must hold one argument list per repetition")
+        reserved = {"--output", "--cpu-affinity", "--keep-awake-cpus", "--tool-cpus", "--task", "--task-pack",
+                    "--task-pack-assets", "--repeats", "--max-runs", "--config", "--policies"}
+        if any(x.split("=", 1)[0] in reserved for r in reps for x in r):
+            raise ValueError("repetition_args may set decoding and seeds only, not task, arm or output arguments")
+    if "--decoding" in " ".join(plan["base_args"]) and reps is None and "sampled" in plan["base_args"]:
+        raise ValueError("sampled decoding in base_args would repeat identical seeds; use repetition_args")
     if "--campaign-exit" not in plan["base_args"]:
         raise ValueError("campaign runs require --campaign-exit")
     for family in plan["families"].values():
@@ -75,6 +89,7 @@ def batches(plan):
                            "--task-pack", task["task_pack"], "--task", task["task"],
                            *(["--task-pack-assets", task["task_pack_assets"]] if "task_pack_assets" in task else []),
                            *plan["arms"][arm],
+                           *(plan["repetition_args"][rep] if "repetition_args" in plan else []),
                            "--cpu-affinity", host["cpu_affinity"], "--keep-awake-cpus", host["keep_awake_cpus"],
                            "--tool-cpus", host["tool_cpus"]]
                     argv = [py, "-m", "studies.energy_diagnosis.diagnostics.campaign_batch",
@@ -86,7 +101,8 @@ def batches(plan):
                             *[x for d in plan["required_domains"] for x in ("--required-domain", d)],
                             "--", *run]
                     out.append(dict(id=ident, argv=argv, status=f"{ident}/job/status.json", log=f"logs/{ident}.log",
-                                    block=rep, family=family, task=task["task"], arm=arm))
+                                    block=rep, family=family, task=task["task"], arm=arm,
+                                    repetition_args=plan["repetition_args"][rep] if "repetition_args" in plan else []))
     return digest, out
 
 
@@ -101,7 +117,7 @@ def node_spec(plan):
         minimum_batch_seconds=plan["batch_seconds"] + 180,  # wrapper timeout plus warm-up (~20 s) and audit
         maintenance=plan["maintenance"], plan_sha256=digest,
         batches=[{k: b[k] for k in ("id", "argv", "status", "log")} for b in items],
-        schedule=[{k: b[k] for k in ("id", "block", "family", "task", "arm")} for b in items])
+        schedule=[{k: b[k] for k in ("id", "block", "family", "task", "arm", "repetition_args")} for b in items])
 
 
 def main(argv=None):
