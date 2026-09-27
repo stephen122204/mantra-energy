@@ -40,6 +40,24 @@ def preflight(plan):
         return dict(passed=False, checks={"preflight_completed": False}, info={"error": f"{type(exc).__name__}: {exc}"})
 
 
+def host_timer_check(plan, checks, info, *, run_timer_wait=None):
+    """Chameleon's cache-vendordata timer: either disabled (legacy plans) or named in maintenance.systemd_timer,
+    in which case the scheduler avoids it and its actual schedule must be readable now."""
+    timer = run(["systemctl", "show", "cache-vendordata.timer", "--property=ActiveState"]).stdout.strip()
+    info["vendor_timer"] = timer
+    if plan["maintenance"].get("systemd_timer"):
+        if run_timer_wait is None:
+            from .batch_coordinator import timer_wait as run_timer_wait
+        try:
+            run_timer_wait(dict(minimum_batch_seconds=0, maintenance=plan["maintenance"]))
+            checks["host_maintenance_timer_schedulable"] = True
+        except Exception as exc:
+            checks["host_maintenance_timer_schedulable"] = False
+            info["host_timer_error"] = f"{type(exc).__name__}: {exc}"
+    else:
+        checks["vendor_cache_timer_inactive"] = timer in ("ActiveState=inactive", "")
+
+
 def _preflight(plan):
     exp, node, host = plan["expected"], plan["node"], plan["host_condition"]
     checks, info = {}, {}
@@ -77,9 +95,7 @@ def _preflight(plan):
     smi = run(["nvidia-smi", "--query-gpu=memory.used,utilization.gpu", "--format=csv,noheader,nounits"])
     used = [int(x.split(",")[0]) for x in smi.stdout.strip().splitlines()] if smi.returncode == 0 else []
     checks["gpu_idle"] = smi.returncode == 0 and bool(used) and max(used) < 1024
-    timer = run(["systemctl", "show", "cache-vendordata.timer", "--property=ActiveState"]).stdout.strip()
-    info["vendor_timer"] = timer
-    checks["vendor_cache_timer_inactive"] = timer in ("ActiveState=inactive", "")
+    host_timer_check(plan, checks, info)
     target = Path(node["remote_directory"])
     while not target.exists():
         target = target.parent  # measure the filesystem that will hold the results
