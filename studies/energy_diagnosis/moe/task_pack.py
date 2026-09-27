@@ -60,7 +60,7 @@ class PackRuntime:
         return self._runtime(task).verify
 
 
-def prepare(root, specifications):
+def prepare(root, specifications, *, prepared_assets=None):
     """Each specification has kind, rows, seed; sizes are explicit, not inferred."""
     if not isinstance(specifications,list) or not 1<=len(specifications)<=64:
         raise ValueError('provide 1..64 task specifications')
@@ -107,6 +107,8 @@ def prepare(root, specifications):
     envelope={'version':'task-pack-v1','specifications':specifications,
               'components':{k:hashlib.sha256(Path(MODULES[k].__file__).read_bytes()).hexdigest() for k in sorted({s['kind'] for s in specifications})},
               'support_components':support_components({s['kind'] for s in specifications})}
+    if prepared_assets is not None:
+        _snapshot_prepared(root, Path(prepared_assets), envelope)
     if manifest.exists() and json.loads(manifest.read_text())!=envelope:
         raise ValueError('task pack changed; use a new directory')
     root.mkdir(parents=True,exist_ok=True)
@@ -149,3 +151,31 @@ def prepare(root, specifications):
         temporary.write_text(json.dumps(envelope,indent=2,sort_keys=True)+'\n')
         temporary.replace(manifest)
     return TaskPack(tuple(tasks),modules,root)
+
+
+def _snapshot_prepared(root, source, envelope):
+    """Reuse frozen private challenges across separately launched model arms."""
+    import shutil
+    import tempfile
+    from studies.energy_diagnosis.workloads.pilot_tasks import _hash
+    root, source = root.absolute(), source.absolute()
+    if root.resolve() == source.resolve() or root.resolve() in source.resolve().parents or source.resolve() in root.resolve().parents:
+        raise ValueError('prepared assets and run assets must be disjoint')
+    def fingerprint(path):
+        if path.is_symlink() or not path.is_dir() or any(p.is_symlink() or not (p.is_file() or p.is_dir()) for p in path.rglob('*')):
+            raise ValueError('prepared assets require ordinary files and directories without symlinks')
+        if json.loads((path/'task-pack.json').read_text()) != envelope:
+            raise ValueError('prepared task pack differs from specifications or verifier code')
+        return _hash(path)
+    before = fingerprint(source)
+    if root.exists():
+        if fingerprint(root) != before:
+            raise ValueError('run assets differ from frozen prepared assets')
+        return
+    root.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='prepared-pack-', dir=root.parent) as temp:
+        snapshot=Path(temp)/'assets'
+        shutil.copytree(source, snapshot)
+        if fingerprint(snapshot) != before or fingerprint(source) != before:
+            raise ValueError('prepared assets changed while copying')
+        snapshot.rename(root)

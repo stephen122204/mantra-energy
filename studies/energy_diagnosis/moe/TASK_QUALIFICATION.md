@@ -24,6 +24,14 @@ types; larger inputs increase the case count, not the type count. The emitted
 inventory records both counts, family counts, versions, hashes and pending status.
 The final collection list must explicitly identify exclusions and their reasons.
 
+When model arms use separate output directories, supply both `--task-pack
+SPECIFICATIONS.json` and `--task-pack-assets /absolute/path/prepared/assets` to
+the run command. Prepare that source once, then reuse it for both arms. The
+runner copies and fingerprints the immutable source, checks verifier/helper
+identities and refuses changed assets on resume. Preparing each arm independently
+would generate different private challenge seeds; equal visible seeds alone do
+not establish matched correctness checks.
+
 ## Verification boundaries
 
 - Repository v4: pinned, clean NetworkX source; only public tests enter submitted
