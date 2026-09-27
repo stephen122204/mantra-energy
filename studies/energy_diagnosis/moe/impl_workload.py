@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
@@ -44,9 +45,19 @@ class BudgetExceeded(Exception):
 
 
 def _run(source, entry, inputs, seconds, example=None):
-    """Execute submitted code in the Landlock sandbox (sandbox.py). Returns (status, payload)."""
-    return sandbox.run(source, entry, inputs, seconds, example=example, memory_bytes=MEMORY_BYTES,
-                       require_landlock=REQUIRE_LANDLOCK)
+    """Execute submitted code in the Landlock sandbox (sandbox.py). Returns (status, payload).
+
+    The budget and every reported time are the whole-process wall time measured here, by the parent (interpreter
+    start, input load and execution). Any timing computed inside the child is under the submitted code's control
+    and is discarded."""
+    t0 = time.monotonic()
+    status, payload = sandbox.run(source, entry, inputs, seconds, example=example, memory_bytes=MEMORY_BYTES,
+                                  require_landlock=REQUIRE_LANDLOCK)
+    wall = time.monotonic() - t0
+    if isinstance(payload, dict):
+        payload.pop("seconds", None)
+        payload["wall_seconds"] = wall
+    return status, (payload if payload is not None else dict(wall_seconds=wall))
 
 
 def _norm(value, mode):
@@ -114,7 +125,7 @@ def create_task(root, *, problem, bundle):
               "current solution, write the complete solution.py, and test it. The test runs the example check and then "
               f"runs your function on a larger performance input with a {budget:g}-second budget. "
               "Your solution must be correct on additional hidden inputs and must finish the performance input within the "
-              "budget. Return {done:true} when finished.")
+              "budget. Grading runs your final solution.py; when finished, submit {done:true}.")
     return PilotTask(f"impl-{slug}-v1", "python-implementation", "evalperf-mbppplus-adapted-v1", root, {}, fingerprint, (), prompt)
 
 
@@ -155,7 +166,8 @@ class ImplTool:
             performance = dict(completed=False, message="the function raised an error on the performance input",
                                error=str((payload or {}).get("error", status))[-1500:])
         else:
-            performance = dict(completed=True, seconds=round(payload["seconds"], 3))
+            performance = dict(completed=True, wall_seconds=round(payload["wall_seconds"], 3),
+                               measured="whole-process wall time (interpreter start, input load, execution)")
         return dict(example=example, performance=performance)
 
 
@@ -177,8 +189,8 @@ class ImplRuntime:
             "description": 'The action argument is mandatory on every call. action="read" returns the problem statement and '
             'the current solution.py. action="write" requires content containing the complete replacement solution.py and '
             'returns written=true. action="test" runs the example check and then runs the function on a larger performance '
-            f'input with a {meta["budget_seconds"]:g}-second budget, reporting whether it finished and how long it took '
-            '(its output is not shown). Use the Python standard library only.',
+            f'input with a {meta["budget_seconds"]:g}-second budget (whole-process wall time), reporting whether it finished '
+            'and how long it took (its output is not shown). Use the Python standard library only.',
             "args": {"action": "required: read, write or test", "content": "required only for write; complete solution.py"},
             "parameters": action_contract(IMPL_ACTIONS),
             "example_call": {"id": "read_1", "tool": "python", "args": {"action": "read"}}}},
@@ -192,8 +204,10 @@ class ImplRuntime:
         return ImplTool(self.workspace, self.meta["entry"], self.meta["budget_seconds"])
 
     def verify(self, task, answer):
-        if not isinstance(answer, dict) or set(answer) != {"done"} or answer["done"] is not True:
-            return dict(passed=False, reason="invalid completion answer", failure="error")
+        # Any submission ends the goal; grading always runs the program in solution.py. Whether the submission used
+        # the stated {"done": true} format is recorded, never used as the verdict.
+        self._completion = dict(format_ok=isinstance(answer, dict) and set(answer) == {"done"} and answer.get("done") is True,
+                                submitted_type=type(answer).__name__)
         if _hash(task.asset_path) != task.asset_sha256:
             raise ValueError("impl inputs changed")
         private = task.asset_path / "private"
@@ -203,21 +217,22 @@ class ImplRuntime:
         source = (self.workspace / "solution.py").read_text(encoding="utf-8")
         status, payload = _run(source, meta["entry"], hidden, HIDDEN_SECONDS)
         if status == "timeout":
-            return dict(passed=False, reason="hidden tests did not finish", failure="error")
+            return dict(passed=False, reason="hidden tests did not finish", failure="error", completion=self._completion)
         if status != "ok":
-            return dict(passed=False, reason=f"hidden tests: {status}", failure="error")
+            return dict(passed=False, reason=f"hidden tests: {status}", failure="error", completion=self._completion)
         wrong = [i for i, (got, want) in enumerate(zip(payload["outputs"], expected["hidden"]))
                  if not equal(got, want, meta["compare"], meta.get("atol", 0.0))]
         if wrong or len(payload["outputs"]) != len(expected["hidden"]):
-            return dict(passed=False, reason=f"hidden tests: {len(wrong)} of {len(hidden)} outputs differ", failure="mismatch")
+            return dict(passed=False, reason=f"hidden tests: {len(wrong)} of {len(hidden)} outputs differ", failure="mismatch", completion=self._completion)
         perf_input = json.loads((task.asset_path / "public" / "performance_input.json").read_text())
         status, payload = _run(source, meta["entry"], [perf_input], meta["budget_seconds"])
         if status == "timeout":
             return dict(passed=False, reason=f"performance input did not finish within the {meta['budget_seconds']:g}-second budget",
-                        failure="budget")
+                        failure="budget", completion=self._completion)
         if status != "ok":
-            return dict(passed=False, reason="performance input: error", failure="error")
+            return dict(passed=False, reason="performance input: error", failure="error", completion=self._completion)
         if not equal(payload["outputs"][0], expected["performance"], meta["compare"], meta.get("atol", 0.0)):
-            return dict(passed=False, reason="performance input output differs", failure="mismatch")
+            return dict(passed=False, reason="performance input output differs", failure="mismatch", completion=self._completion)
         return dict(passed=True, reason=f"hidden tests passed ({len(hidden)} inputs); performance input finished in "
-                                        f"{payload['seconds']:.3f} s within the budget", performance_seconds=payload["seconds"])
+                                        f"{payload['wall_seconds']:.3f} s (whole-process wall) within the budget",
+                    performance_wall_seconds=payload["wall_seconds"], completion=self._completion)

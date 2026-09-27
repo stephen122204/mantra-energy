@@ -29,31 +29,45 @@ def _timed(source, entry, inputs, cap):
 
 
 def calibrate(sources, out, problems=None, reps=3):
+    """Time canonical, fastest and slowest references on the performance input (parent-measured whole-process wall),
+    and check every reference against the canonical outputs on the hidden inputs and the performance input."""
+    from .impl_workload import equal
     src = json.loads(Path(sources).read_text())["problems"]
     res = {}
     for pid, p in src.items():
         if problems and pid not in problems:
             continue
+        mode = "set" if "assert set(" in (p.get("assertion") or "") else "exact"
+        atol = float(p.get("atol") or 0.0)
+        hidden = list(p["base_input"]) + list(p["plus_input"])
         inp = [p["pe_inputs"][0]]
+        _, _, c_hidden = _timed(p["canonical"], p["entry"], hidden, 300.0)
+        _, _, c_perf = _timed(p["canonical"], p["entry"], inp, 300.0)
         row = {}
         for label in ("canonical", "fast_ref", "slow_ref"):
-            walls, outs, status = [], [], None
+            hs, _, hp = _timed(p[label], p["entry"], hidden, 300.0)
+            hidden_ok = hs == "ok" and len(hp["outputs"]) == len(c_hidden["outputs"]) and all(
+                equal(a, b, mode, atol) for a, b in zip(hp["outputs"], c_hidden["outputs"]))
+            walls, perf_ok, status = [], None, None
             for _ in range(reps if label != "slow_ref" else 1):
                 status, wall, payload = _timed(p[label], p["entry"], inp, 120.0)
                 walls.append(wall)
                 if status != "ok":
                     break
-                outs.append(json.dumps(payload["outputs"], sort_keys=True))
+                perf_ok = equal(payload["outputs"][0], c_perf["outputs"][0], mode, atol)
             row[label] = dict(status=status, wall_s=[round(w, 3) for w in walls], median_wall_s=round(st.median(walls), 3),
-                              consistent_output=len(set(outs)) <= 1)
+                              hidden_correct=hidden_ok, perf_correct=perf_ok)
         budget = max(2.0, 3 * row["canonical"]["median_wall_s"])
-        slow = row["slow_ref"]
-        row.update(budget_seconds=round(budget, 1),
-                   eligible=row["canonical"]["status"] == "ok" and (slow["status"] == "timeout" or slow["median_wall_s"] >= 3 * budget))
+        slow, fast = row["slow_ref"], row["fast_ref"]
+        correct = all(r["hidden_correct"] and r["perf_correct"] is not False for r in row.values()) and fast["status"] == "ok"
+        row.update(budget_seconds=round(budget, 1), all_references_correct=correct,
+                   eligible=correct and row["canonical"]["status"] == "ok"
+                   and (slow["status"] == "timeout" or slow["median_wall_s"] >= 3 * budget))
         res[pid] = row
         print(pid, json.dumps(row), flush=True)
-    Path(out).write_text(json.dumps(dict(rule="budget = max(2 s, 3 x canonical wall); eligible if slowest wall >= 3 x budget",
-                                         problems=res), indent=1))
+    Path(out).write_text(json.dumps(dict(rule="budget = max(2 s, 3 x canonical whole-process wall); eligible only if canonical, "
+                                              "fastest and slowest references are correct on hidden and performance inputs, the "
+                                              "fastest completes, and the slowest takes >= 3 x budget", problems=res), indent=1))
 
 
 def _statement(p, first_input, first_output):
