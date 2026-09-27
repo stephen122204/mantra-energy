@@ -163,13 +163,16 @@ def run(args):
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     query_assets = getattr(args, "query_assets", None)
     pack_path = getattr(args, "task_pack", None)
+    prepared_assets = getattr(args, "task_pack_assets", None)
     pack = None
+    if prepared_assets and not pack_path:
+        raise ValueError("task-pack-assets requires task-pack specifications")
     if pack_path and query_assets:
         raise ValueError("task-pack and query-assets are mutually exclusive")
     if pack_path:
         from .task_pack import prepare
         specifications = json.loads(Path(pack_path).read_text(encoding="utf-8"))
-        pack = prepare(root / "assets", specifications)
+        pack = prepare(root / "assets", specifications, prepared_assets=prepared_assets)
         tasks = pack.tasks
     elif query_assets:
         from .query_workload import load_task, QueryRuntime, VERSION as query_version
@@ -441,6 +444,7 @@ def main(argv=None):
     p.add_argument("--task", default="all")
     p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
+    p.add_argument("--task-pack-assets", help="Frozen prepared task-pack assets to copy and verify, preserving private challenges across model arms")
     p.add_argument("--query-engine", choices=["duckdb", "sqlite"], default="duckdb")
     p.add_argument("--max-runs", type=int, default=4)
     p.add_argument("--repeats", type=int, default=1)
