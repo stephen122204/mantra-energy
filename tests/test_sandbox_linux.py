@@ -41,7 +41,7 @@ def test_escape_attempts_fail(tmp_path, body):
 
 
 def test_stdlib_imports_work(tmp_path):
-    status, payload = attempt("import collections, heapq, itertools, functools, bisect, math\nreturn 7", tmp_path)
+    status, payload = attempt("import collections, heapq, itertools, functools, bisect, math, bz2, lzma, decimal\nreturn 7", tmp_path)
     assert status == "ok" and payload["outputs"] == [7]
 
 

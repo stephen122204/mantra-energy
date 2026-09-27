@@ -24,7 +24,7 @@ import pytest
 if not sys.platform.startswith('linux') and job['require_landlock']:
     sys.stderr.write('ALEMS_SANDBOX_UNAVAILABLE\n'); sys.exit(86)
 if sys.platform.startswith('linux'):
-    abi = _landlock([job['root'], *[p for p in libraries if os.path.isdir(p)]], [job['scratch']])
+    abi = _landlock([job['root'], '/dev/null', *[p for p in libraries if os.path.isdir(p)]], [job['scratch']])
     if job['require_landlock'] and abi < 4:
         sys.stderr.write('ALEMS_SANDBOX_UNAVAILABLE\n'); sys.exit(86)
 import resource
@@ -41,7 +41,14 @@ sys.exit(pytest.main(['-q', '-p', 'no:cacheprovider', '--tb=short', '-rf', '--co
 def interpreter_paths(python):
     # Python <3.14 loses the venv prefix with -S. Resolve installed dependencies
     # using the trusted interpreter before starting the isolated candidate process.
-    code = "import json,sysconfig; print(json.dumps(sorted({sysconfig.get_path(k) for k in ('stdlib','platstdlib','purelib','platlib')})))"
+    code = """import json,sysconfig,os,sys
+paths={sysconfig.get_path(k) for k in ('stdlib','platstdlib','purelib','platlib')}
+if sys.platform.startswith('linux'):
+    multiarch=sysconfig.get_config_var('MULTIARCH')
+    if multiarch: paths.update(os.path.realpath(p) for p in (f'/lib/{multiarch}',f'/usr/lib/{multiarch}'))
+    paths.add(os.path.realpath('/lib64'))
+print(json.dumps(sorted(p for p in paths if os.path.isdir(p))))
+"""
     result = subprocess.run([python, '-I', '-c', code], cwd='/', capture_output=True, text=True, check=True, timeout=15)
     paths = json.loads(result.stdout)
     if not isinstance(paths, list) or not paths or any(not isinstance(p, str) or not Path(p).is_absolute() for p in paths):
