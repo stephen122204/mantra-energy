@@ -242,3 +242,20 @@ def test_empty_keep_awake_omits_the_flag(tmp_path):
     for b in spec["batches"]:
         run = b["argv"][b["argv"].index("--") + 1:]
         assert "--keep-awake-cpus" not in run and run[run.index("--cpu-affinity") + 1] == "80-87"
+
+
+def test_stock_engine_identity_manifest(tmp_path):
+    import hashlib
+    from types import SimpleNamespace
+    from studies.energy_diagnosis.diagnostics import campaign_check as cc
+    binary = tmp_path / "llama-server"; binary.write_bytes(b"engine")
+    config = tmp_path / "q4.json"; config.write_text("{}")
+    freeze = "numpy==2.0\n"
+    manifest = dict(kind=cc.STOCK_ENGINE_MANIFEST, files={str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in (binary, config)},
+                    backend_pip_freeze_sha256=hashlib.sha256(freeze.encode()).hexdigest())
+    runner = lambda argv, **kw: SimpleNamespace(stdout=freeze, returncode=0)
+    assert cc.stock_engine_unchanged(manifest, "/py", runner=runner) == (True, None)
+    changed = lambda argv, **kw: SimpleNamespace(stdout=freeze + "extra==1\n", returncode=0)
+    assert cc.stock_engine_unchanged(manifest, "/py", runner=changed)[1] == "backend packages changed"
+    binary.write_bytes(b"rebuilt")
+    assert "changed or missing" in cc.stock_engine_unchanged(manifest, "/py", runner=runner)[1]
