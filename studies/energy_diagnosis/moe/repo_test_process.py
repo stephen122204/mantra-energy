@@ -32,6 +32,7 @@ resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
 sys.path.insert(0, job['root'])
 os.chdir(job['root'])
 sys.exit(pytest.main(['-q', '-p', 'no:cacheprovider', '--tb=short', '-rf', '--color=no',
+    '--log-file', job['scratch'] + '/pytest.log',
     '--confcutdir', job['root'], '--rootdir', job['root'], '--basetemp', job['scratch'] + '/pytest',
     *job['targets']]))
 '''
