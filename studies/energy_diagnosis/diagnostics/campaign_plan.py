@@ -90,7 +90,9 @@ def batches(plan):
                            *(["--task-pack-assets", task["task_pack_assets"]] if "task_pack_assets" in task else []),
                            *plan["arms"][arm],
                            *(plan["repetition_args"][rep] if "repetition_args" in plan else []),
-                           "--cpu-affinity", host["cpu_affinity"], "--keep-awake-cpus", host["keep_awake_cpus"],
+                           "--cpu-affinity", host["cpu_affinity"],
+                           # An empty keep_awake_cpus declares no keep-awake condition (flag omitted).
+                           *(["--keep-awake-cpus", host["keep_awake_cpus"]] if host["keep_awake_cpus"] else []),
                            "--tool-cpus", host["tool_cpus"]]
                     argv = [py, "-m", "studies.energy_diagnosis.diagnostics.campaign_batch",
                             "--root", node["remote_directory"], "--id", ident,

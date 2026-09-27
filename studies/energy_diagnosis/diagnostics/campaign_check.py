@@ -82,7 +82,7 @@ def _preflight(plan):
     checks["networkx_source"] = run(["git", "-C", exp["networkx_source"], "rev-parse", "HEAD"]).stdout.strip() == exp["networkx_commit"] \
         and run(["git", "-C", exp["networkx_source"], "status", "--porcelain"]).stdout.strip() == ""
     online = set(cpus(Path("/sys/devices/system/cpu/online").read_text().strip()))
-    declared = {k: cpus(host[k]) for k in ("cpu_affinity", "keep_awake_cpus", "tool_cpus", "supervisor_cpus")}
+    declared = {k: cpus(host[k]) if host[k] else [] for k in ("cpu_affinity", "keep_awake_cpus", "tool_cpus", "supervisor_cpus")}
     checks["declared_cpus_online"] = all(set(v) <= online for v in declared.values())
     sets = list(declared.values())
     checks["declared_cpu_sets_disjoint"] = all(not (set(a) & set(b)) for i, a in enumerate(sets) for b in sets[i + 1:])
