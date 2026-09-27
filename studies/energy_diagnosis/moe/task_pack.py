@@ -73,11 +73,12 @@ def prepare(root, specifications):
                 raise ValueError('repo specification requires case, absolute source and absolute python')
             key=('repo',spec['case'])
         else:
-            if set(spec)!={'kind','rows','seed'}:
+            if not (set(spec)=={'kind','rows','seed'} or (set(spec)=={'kind','rows','seed','variant'} and spec.get('kind')=='etl')):
                 raise ValueError('task specification requires generated or prepared fields')
+            if 'variant' in spec:etl_workload.validate_variant(spec['variant'])
             if not isinstance(spec['kind'],str) or spec['kind'] not in MODULES or type(spec['rows']) is not int or not 32<=spec['rows']<=1_000_000 or type(spec['seed']) is not int or not 0<=spec['seed']<2**31:
                 raise ValueError('invalid task specification')
-            key=(spec['kind'],spec['rows'],spec['seed'])
+            key=(spec['kind'],spec['rows'],spec['seed'],json.dumps(spec.get('variant'),sort_keys=True))
         if key in seen:raise ValueError('duplicate task specification')
         seen.add(key)
     root=Path(root)
@@ -109,7 +110,10 @@ def prepare(root, specifications):
             created=(repo_workload.create_task(path,case=spec['case'],source=spec['source'],python=spec['python']),)
         else:
             path=root/f"{spec['kind']}-n{spec['rows']}-s{spec['seed']}"
-            if module in (numerical_workload,etl_workload):
+            if spec.get('variant') is not None:
+                path=root/(path.name+etl_workload.variant_suffix(spec['variant']))
+                created=(etl_workload.create_task(path,rows=spec['rows'],seed=spec['seed'],variant=spec['variant']),)
+            elif module in (numerical_workload,etl_workload):
                 created=(module.create_task(path,rows=spec['rows'],seed=spec['seed']),)
             else:created=module.create_tasks(path,rows=spec['rows'],seed=spec['seed'])
         for task in created:
