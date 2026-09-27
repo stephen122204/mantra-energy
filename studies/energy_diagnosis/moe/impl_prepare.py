@@ -56,16 +56,39 @@ def calibrate(sources, out, problems=None, reps=3):
                                          problems=res), indent=1))
 
 
-def _statement(prompt):
-    text = prompt.strip().strip('"').strip()
+def _statement(p, first_input, first_output):
+    """MBPP+: the docstring states the task and its example assert. HumanEval+: the signature and docstring state
+    the task; the example assert is built from the first base input and its canonical output."""
+    if p.get("family") == "humaneval":
+        text = p["prompt"].rstrip()
+        args = ", ".join(repr(a) for a in first_input)
+        if p.get("atol"):
+            example = f"assert abs({p['entry']}({args}) - {first_output!r}) <= {p['atol']!r}"
+        else:
+            example = f"assert {p['entry']}({args}) == {first_output!r}"
+        return text, example
+    text = p["prompt"].strip().strip('"').strip()
     asserts = [l.strip() for l in text.splitlines() if l.strip().startswith("assert ")]
     return text, asserts[0] if asserts else ""
 
 
-def _stub(canonical, entry):
-    m = re.search(rf"^def\s+{re.escape(entry)}\s*\(.*?\)\s*(->\s*[^:]+)?:", canonical, re.M | re.S)
-    header = m.group(0) if m else f"def {entry}(*args):"
+def _stub(p):
+    if p.get("family") == "humaneval":
+        return p["prompt"].rstrip() + "\n    raise NotImplementedError\n"
+    m = re.search(rf"^def\s+{re.escape(p['entry'])}\s*\(.*?\)\s*(->\s*[^:]+)?:", p["canonical"], re.M | re.S)
+    header = m.group(0) if m else f"def {p['entry']}(*args):"
     return header + "\n    raise NotImplementedError\n"
+
+
+def _decode(x):
+    """Inverse of the sandbox output encoding for building example literals."""
+    if isinstance(x, dict) and "__tuple__" in x:
+        return tuple(_decode(v) for v in x["__tuple__"])
+    if isinstance(x, dict) and "__set__" in x:
+        return set(_decode(v) for v in x["__set__"])
+    if isinstance(x, list):
+        return [_decode(v) for v in x]
+    return x
 
 
 def build(sources, calibration, bundle, problems):
@@ -84,14 +107,16 @@ def build(sources, calibration, bundle, problems):
         status2, _, perf = _timed(p["canonical"], p["entry"], [p["pe_inputs"][0]], 300.0)
         if status2 != "ok":
             raise ValueError(f"canonical failed on the performance input for {pid}")
-        text, example = _statement(p["prompt"])
+        text, example = _statement(p, hidden[0], _decode(payload["outputs"][0]))
         out[pid] = dict(entry=p["entry"], statement=text + "\n", statement_text=text, example_assert=example,
-                        stub=_stub(p["canonical"], p["entry"]), hidden_inputs=hidden, hidden_expected=payload["outputs"],
+                        stub=_stub(p), hidden_inputs=hidden, hidden_expected=payload["outputs"], atol=float(p.get("atol") or 0.0),
                         performance_input=p["pe_inputs"][0], performance_expected=perf["outputs"][0],
-                        compare="set" if "assert set(" in p["assertion"] else "exact",
+                        compare="set" if "assert set(" in (p.get("assertion") or "") else "exact",
                         budget_seconds=c["budget_seconds"],
-                        provenance=dict(evalperf="huggingface.co/datasets/evalplus/evalperf (test split)",
-                                        mbppplus="github.com/evalplus/mbppplus_release v0.2.0 MbppPlus.jsonl.gz",
+                        provenance=dict(evalperf="huggingface.co/datasets/evalplus/evalperf revision ba4395260c2705af25e3b0ef5b0f69d83a541b1a (test split)",
+                                        evalplus=("github.com/evalplus/humanevalplus_release v0.1.10 HumanEvalPlus.jsonl.gz"
+                                                  if p.get("family") == "humaneval" else
+                                                  "github.com/evalplus/mbppplus_release v0.2.0 MbppPlus.jsonl.gz"),
                                         sources_sha256=hashlib.sha256(raw).hexdigest(), calibration=c))
     Path(bundle).write_text(json.dumps(dict(version=VERSION, problems=out)))
     print(json.dumps({k: dict(entry=v["entry"], hidden=len(v["hidden_inputs"]), compare=v["compare"],
