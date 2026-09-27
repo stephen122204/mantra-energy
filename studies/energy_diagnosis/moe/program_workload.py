@@ -210,8 +210,9 @@ class ProgramRuntime:
         inputs += edge_cases(case)
         for data in inputs:
             result=execute(source,data)
-            if result['status']!='ok':return dict(passed=False,reason=result['status'])
-            if not matches(case,result['result'],reference(case,data)):return dict(passed=False,reason='incorrect_result')
+            # failure carries the class (budget_exceeded, runtime_error, worker_error, mismatch) to the attempt outcome.
+            if result['status']!='ok':return dict(passed=False,reason=result['status'],failure=result['status'])
+            if not matches(case,result['result'],reference(case,data)):return dict(passed=False,reason='incorrect_result',failure='mismatch')
         return dict(passed=True,reason='original and unseen input checks')
 
 

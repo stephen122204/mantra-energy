@@ -59,6 +59,31 @@ def test_verdicts(tmp_path, bundle, source, passed, failure):
     assert v["passed"] is passed and v.get("failure") == failure
 
 
+CRASH = "def total_pairs(xs):\n    return xs[10**9]\n"
+LOOP = "def total_pairs(xs):\n    while True:\n        pass\n"
+
+
+def test_failure_labels_separate_crash_timeout_and_infrastructure(tmp_path, bundle, monkeypatch):
+    task, rt = start(tmp_path, bundle)
+    tool(rt, task).execute("write", CRASH)
+    assert rt.verify(task, {"done": True})["failure"] == "runtime_error"
+    monkeypatch.setattr(impl_workload, "HIDDEN_SECONDS", 0.5)
+    tool(rt, task).execute("write", LOOP)
+    assert rt.verify(task, {"done": True})["failure"] == "hidden_timeout"
+    monkeypatch.setattr(impl_workload.sandbox, "run", lambda *a, **k: ("refused", None))
+    tool(rt, task).execute("write", FAST)
+    with pytest.raises(RuntimeError):
+        rt.verify(task, {"done": True})
+
+
+def test_verifier_failure_class_reaches_the_attempt_outcome(tmp_path, bundle):
+    from studies.energy_diagnosis.agent_protocol import outcome_class
+    task, rt = start(tmp_path, bundle)
+    tool(rt, task).execute("write", SLOW)
+    v = rt.verify(task, {"done": True})
+    assert outcome_class("completed", "fail", None, v["failure"]) == "performance_budget_exceeded"
+
+
 def test_tool_reports_completion_not_outputs(tmp_path, bundle):
     task, rt = start(tmp_path, bundle)
     t = tool(rt, task)

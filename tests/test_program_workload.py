@@ -49,7 +49,7 @@ def test_wrong_algorithms_rejected(tmp_path,case,source):
     task,rt=runtime(tmp_path,case)
     (rt.workspace/'solution.py').write_text(source)
     result=rt.verify(task,{'done':True})
-    assert result=={'passed':False,'reason':'incorrect_result'}
+    assert result=={'passed':False,'reason':'incorrect_result','failure':'mismatch'}
 
 
 @pytest.mark.parametrize('case',pw.CASES)
