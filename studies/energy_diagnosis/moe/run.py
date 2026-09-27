@@ -446,8 +446,9 @@ def main(argv=None):
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--max-steps", "--max-turns", dest="max_steps", type=int, default=5,
                    help="Model responses per goal, including the answer")
-    p.add_argument("--agent-protocol", choices=["chat-tools-v1", "legacy-json-v1"], default="chat-tools-v1",
-                   help="chat-tools-v1: native multi-turn chat and tool calls; legacy-json-v1 reproduces V6")
+    p.add_argument("--agent-protocol", choices=["chat-tools-v1", "chat-tools-v2", "legacy-json-v1"], default="chat-tools-v1",
+                   help="chat-tools-v1: native multi-turn chat and tool calls; chat-tools-v2: v1 plus an unclosed final "
+                        "tool_call parsed as vLLM's hermes parser does and feedback that names the fix; legacy-json-v1 reproduces V6")
     p.add_argument("--decoding", choices=["greedy", "sampled"], default="greedy")
     p.add_argument("--temperature", type=float, default=0.7, help="Sampled decoding only (model card value)")
     p.add_argument("--top-p", type=float, default=0.8)
@@ -479,6 +480,7 @@ def main(argv=None):
             "tool_timeout",
             "truncated_output",
             "no_action",
+            "unclosed_submit",
         ],
     )
     args = p.parse_args(argv)

@@ -68,10 +68,12 @@ def prepare(root, specifications):
             key=('program',spec['case'],spec['rows'],spec['seed'])
         elif spec.get('kind')=='impl':
             # Python implementation problem from a prepared bundle (impl_prepare.py).
-            if set(spec)!={'kind','problem','bundle'} or not isinstance(spec['problem'],str) \
-                    or not isinstance(spec['bundle'],str) or not Path(spec['bundle']).is_absolute():
+            # Optional prompt version (impl_workload.PROMPTS); v2 is the default.
+            if not {'kind','problem','bundle'}<=set(spec)<={'kind','problem','bundle','prompt'} or not isinstance(spec['problem'],str) \
+                    or not isinstance(spec['bundle'],str) or not Path(spec['bundle']).is_absolute() \
+                    or spec.get('prompt','v2') not in impl_workload.PROMPTS:
                 raise ValueError('impl specification requires problem and absolute bundle')
-            key=('impl',spec['problem'])
+            key=('impl',spec['problem'],spec.get('prompt','v2'))
         elif spec.get('kind')=='repo':
             # Repository repair: an explicit case over a pinned source checkout and tool Python.
             if set(spec)!={'kind','case','source','python'} or spec['case'] not in repo_workload.CASES \
@@ -113,7 +115,7 @@ def prepare(root, specifications):
             created=(program_workload.create_task(path,case=spec['case'],rows=spec['rows'],seed=spec['seed']),)
         elif spec['kind']=='impl':
             path=root/f"impl-{spec['problem'].lower().replace('/','-')}"
-            created=(impl_workload.create_task(path,problem=spec['problem'],bundle=spec['bundle']),)
+            created=(impl_workload.create_task(path,problem=spec['problem'],bundle=spec['bundle'],prompt=spec.get('prompt','v2')),)
         elif spec['kind']=='repo':
             path=root/f"repo-{spec['case']}"
             created=(repo_workload.create_task(path,case=spec['case'],source=spec['source'],python=spec['python']),)

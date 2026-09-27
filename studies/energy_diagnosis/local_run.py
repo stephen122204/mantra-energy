@@ -22,6 +22,8 @@ import uuid
 from core.execution.adapters.openai_compat import OpenAICompatAdapter
 from studies.energy_diagnosis.agent_protocol import (
     PROTOCOL_VERSION as CHAT_PROTOCOL,
+    CHAT_PROTOCOLS,
+    PROTOCOL_V2,
     Conversation,
     function_tools,
     outcome_class,
@@ -203,9 +205,9 @@ class GoalExecutor:
         self.initialized_model_window = initialized_model_window
         if initialized_model_window and lifecycle is None:
             raise ValueError("initialized-model measurement requires an owned lifecycle")
-        if protocol not in {"legacy-json-v1", CHAT_PROTOCOL}:
+        if protocol not in {"legacy-json-v1", *CHAT_PROTOCOLS}:
             raise ValueError("unknown agent protocol")
-        if protocol == CHAT_PROTOCOL and workload_runtime is None:
+        if protocol in CHAT_PROTOCOLS and workload_runtime is None:
             raise ValueError("the chat protocol requires a workload runtime")
         # legacy-json-v1 reproduces V6: one user message per step holding a
         # static instruction and tool results. chat-tools-v1 is the native
@@ -241,7 +243,7 @@ class GoalExecutor:
         limits end the attempt. The reason is recorded in trace["terminal"].
         """
         deadline_ns = lease.started_ns + int(self.timeout_seconds * 1e9)
-        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps)
+        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps, protocol=self.protocol)
         meta = dict(task_id=task.task_id, family=task.family, asset_sha256=task.asset_sha256)
         suffix = "-" + plan.setting_id
         pair_key = plan.planned_run_id[: -len(suffix)] if plan.planned_run_id.endswith(suffix) else plan.planned_run_id
@@ -334,8 +336,10 @@ class GoalExecutor:
             if finish == "length":
                 kind = "output_budget_exhausted" if remaining_output is not None and output_used >= self.max_output_tokens else "output_truncated"
                 return stop(kind, f"response reached {call_budget} output tokens")
-            decision = parse_response(raw.get("content"))
+            decision = parse_response(raw.get("content"), accept_unclosed_final=self.protocol == PROTOCOL_V2)
             turn.update(kind=decision.kind, reason=decision.reason)
+            if decision.repaired:
+                turn["repaired"] = decision.repaired
             if decision.kind == "answer":
                 conversation.record_turn(decision)
                 return "completed", "", decision.answer, response, True
@@ -474,11 +478,11 @@ class GoalExecutor:
             if self.workload_runtime:
                 self.workload_runtime.begin(task, lease)
                 context.update(self.workload_runtime.context(task))
-            if self.protocol == CHAT_PROTOCOL:
+            if self.protocol in CHAT_PROTOCOLS:
                 status, error, answer, response, owned_terminated = self._chat(
                     task, lease, plan, context, model_calls, tool_results, spans, events, trace, artifacts, request.checkpoint
                 )
-            for step in range(self.max_steps if self.protocol != CHAT_PROTOCOL else 0):
+            for step in range(self.max_steps if self.protocol not in CHAT_PROTOCOLS else 0):
                 if (
                     time.monotonic_ns() - lease.started_ns
                 ) / 1e9 >= self.timeout_seconds:
@@ -880,7 +884,7 @@ class GoalExecutor:
             ("verification.json", verification_detail, "verification-detail"),
             ("record.json", record.to_dict(), "execution-record"),
         ] + ([("agent-trace.json", dict(trace, outcome=outcome_class(status, verifier.outcome, trace["terminal"])),
-               "agent-trace")] if self.protocol == CHAT_PROTOCOL else []):
+               "agent-trace")] if self.protocol in CHAT_PROTOCOLS else []):
             artifacts.append(
                 write_artifact(self.artifact_root, prefix / name, payload, role)
             )
