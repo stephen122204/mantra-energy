@@ -664,10 +664,63 @@ def test_surviving_process_group_refuses_termination_claim(tmp_path, monkeypatch
     monkeypatch.setattr(psutil, "process_iter", lambda *args: [
         SimpleNamespace(pid=fake_pid, status=lambda: psutil.STATUS_RUNNING)])
     monkeypatch.setattr(os, "getpgid", lambda pid: group if pid == fake_pid else real_getpgid(pid))
+    backend.release_settle_seconds = 0.3
     with pytest.raises(RuntimeError, match="process group termination unverified"):
         backend.end_goal()
     assert backend.process is None
     assert not backend.owned_work_terminated
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group ownership")
+def test_group_member_still_exiting_after_leader_reap_is_awaited(tmp_path, monkeypatch):
+    # Reproduced on LIQID05 (r02-etl-etl-latest-v3-n1000000-s7-q8, Q8): release failed after verification
+    # while killed group members could still be exiting; a bounded wait now confirms termination.
+    import psutil
+    from types import SimpleNamespace
+    backend = ProcessBackend({}, python=sys.executable, mode="fixture",
+                             log_path=tmp_path / "exiting.log")
+    backend.reset_goal_state()
+    group = backend.process.pid
+    real_getpgid = os.getpgid
+    fake_pid = 2147483646
+    scans = []
+
+    def process_iter(*args):
+        scans.append(1)
+        return [SimpleNamespace(pid=fake_pid, status=lambda: psutil.STATUS_DISK_SLEEP)] if len(scans) < 4 else []
+
+    monkeypatch.setattr(psutil, "process_iter", process_iter)
+    monkeypatch.setattr(os, "getpgid", lambda pid: group if pid == fake_pid else real_getpgid(pid))
+    backend.end_goal()
+    assert len(scans) == 4
+    assert backend.process is None
+    assert backend.owned_work_terminated
+
+
+def test_release_failure_after_verification_is_recorded_not_passed(tmp_path, monkeypatch):
+    from studies.energy_diagnosis.moe import run as campaign
+    original = Lifecycle.end_goal
+    calls = []
+
+    def end_goal(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("backend process group termination unverified: [1]")
+
+    monkeypatch.setattr(Lifecycle, "end_goal", end_goal)
+    campaign.main(["--mode", "fixture", "--output", str(tmp_path),
+                   "--task", "joined-orders-v1", "--policies", "demand",
+                   "--max-runs", "1", "--deadline", "30"])
+    records = [json.loads(p.read_text()) for p in (tmp_path / "goals").glob("*/record.json")]
+    assert len(records) == 1
+    record = records[0]
+    assert record["execution_status"] == "crashed"
+    assert "expert release failed: backend process group termination unverified" in record["error"]
+    assert record["verifier"]["outcome"] == "unavailable"
+    assert "backend release failed after verification" in record["verifier"]["reason"]
+    goal = next((tmp_path / "goals").glob("*/"))
+    assert json.loads((goal / "verification.json").read_text())["status"] == "returned"
 
 
 

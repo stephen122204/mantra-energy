@@ -399,13 +399,13 @@ class CalendarTimerAndRetainedInvalidTest(unittest.TestCase):
         # two minutes later fwupd is within the batch horizon -> hold
         self.assertEqual(timer_wait(spec, run=run, monotonic=lambda: 0.0, now=lambda: now + 120), 30)
 
-    def spec(self, root, base, retained):
+    def spec(self, root, base, retained, middle='interference_detected', cleanup=True):
         import json as _json
         batches = []
-        for i, status in enumerate(['completed', 'interference_detected', 'completed']):
+        for i, status in enumerate(['completed', middle, 'completed']):
             st = f'b{i}/job/status.json'
             code = ("import pathlib,json; p=pathlib.Path(" + repr(str(root / st)) + ");p.parent.mkdir(parents=True);"
-                    "p.write_text(json.dumps(dict(status=" + repr(status) + ",returncode=0 if " + repr(status) + "=='completed' else 76,cleanup_complete=True)))")
+                    "p.write_text(json.dumps(dict(status=" + repr(status) + ",returncode=0 if " + repr(status) + "=='completed' else 76,cleanup_complete=" + repr(cleanup) + ")))")
             batches.append(dict(id=f'b{i}', argv=[sys.executable, '-c', code], status=st, log=f'l{i}'))
         return dict(host='h', remote_directory=str(root), remote_repository=str(base), remote_python=sys.executable,
                     cutoff_utc='2099-01-01T00:00:00Z', retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=10,
@@ -425,6 +425,29 @@ class CalendarTimerAndRetainedInvalidTest(unittest.TestCase):
         saved = json.loads((base / 'control' / 'state.json').read_text())
         self.assertEqual(saved['completed'], ['b0', 'b2']); self.assertEqual(saved['retained_invalid'], ['b1'])
         self.assertEqual(json.loads((root / 'b1/job/status.json').read_text())['status'], 'interference_detected')
+
+    def test_reviewed_failed_batch_with_confirmed_cleanup_is_kept(self):
+        # Reproduced on LIQID05 (r02-etl-etl-latest-v3-n1000000-s7-q8): the harness failed after measurement
+        # (backend release), leaving a failed batch with confirmed cleanup that stopped collection.
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'r' / 'e' / 's'; root.mkdir(parents=True)
+        run(self.spec(root, base, ['b1'], middle='failed'), base / 'control', gap=0, free_bytes=0)
+        saved = json.loads((base / 'control' / 'state.json').read_text())
+        self.assertEqual(saved['completed'], ['b0', 'b2']); self.assertEqual(saved['retained_invalid'], ['b1'])
+
+    def test_reviewed_failed_batch_without_confirmed_cleanup_still_stops(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'r' / 'e' / 's'; root.mkdir(parents=True)
+        with self.assertRaisesRegex(RuntimeError, 'invalid batch retained'):
+            run(self.spec(root, base, ['b1'], middle='failed', cleanup=False), base / 'control', gap=0, free_bytes=0)
+        self.assertFalse((root / 'b2').exists())
+
+    def test_unreviewed_failed_batch_still_stops(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'r' / 'e' / 's'; root.mkdir(parents=True)
+        with self.assertRaisesRegex(RuntimeError, 'invalid batch retained'):
+            run(self.spec(root, base, [], middle='failed'), base / 'control', gap=0, free_bytes=0)
+        self.assertFalse((root / 'b2').exists())
 
 
 class SpecificationRevisionTest(unittest.TestCase):

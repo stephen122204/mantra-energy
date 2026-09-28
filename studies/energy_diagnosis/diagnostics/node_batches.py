@@ -168,8 +168,9 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
                         continue
                     if not successful(job):
                         # A reviewed invalid batch named in the specification (retained_invalid; e.g. host
-                        # interference) is kept as evidence, never rerun, and collection continues.
-                        if (batch['id'] in spec.get('retained_invalid', []) and job.get('status') == 'interference_detected'
+                        # interference, or a harness failure after measurement) is kept as evidence, never
+                        # rerun, and collection continues. Cleanup must still be confirmed.
+                        if (batch['id'] in spec.get('retained_invalid', []) and job.get('status') in {'interference_detected', 'failed'}
                                 and job.get('cleanup_complete') is True):
                             if batch['id'] not in state.setdefault('retained_invalid', []):
                                 state['retained_invalid'].append(batch['id']); save('between_batches')
