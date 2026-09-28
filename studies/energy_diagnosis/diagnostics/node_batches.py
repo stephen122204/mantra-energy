@@ -16,7 +16,7 @@ import subprocess
 import sys
 import time
 
-from .archive_results import export_bundle, verify_bundle, safe_name
+from .archive_results import export_bundle, verify_bundle, safe_name, bundle_files
 from .batch_coordinator import validate, write, dispatch_wait, timer_wait
 
 
@@ -92,7 +92,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
         for batch in spec['batches']:
             target = spool / (batch['id']+'.bundle')
             if not target.exists(): break
-            header = verify_bundle(target, previous); previous = header['files']
+            header = verify_bundle(target, previous); previous = bundle_files(header, previous)
             catalog.append(dict(id=batch['id'], file=target.name, sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
         if not set(state['completed']).issubset({x['id'] for x in catalog}):
             raise ValueError('completed state lacks verified snapshots')
@@ -157,7 +157,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
                         job=dict(status='interrupted_recovered')
                     save('checkpointing',batch=batch['id'])
                     if not any(x['id']==batch['id'] for x in catalog):
-                        header=checkpoint(root,spool,batch,previous);previous=header['files']
+                        header=checkpoint(root,spool,batch,previous);previous=bundle_files(header,previous)
                         target=spool/(batch['id']+'.bundle')
                         catalog.append(dict(id=batch['id'],file=target.name,sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
                         write(out/'catalog.json',dict(root=str(root),snapshots=catalog))

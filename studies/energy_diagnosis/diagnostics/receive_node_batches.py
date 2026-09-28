@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 import time
 
-from .archive_results import verify_bundle, verified_chain, safe_name
+from .archive_results import verify_bundle, verified_chain, safe_name, bundle_files
 from .batch_coordinator import write, maintenance_windows
 from .copy_results import ssh_arguments
 
@@ -51,7 +51,7 @@ def ingest(wire, out, host, root):
                 p=Path(state['previous']);link=dict(path=str(p),sha256=hashlib.sha256(p.read_bytes()).hexdigest())
             receipt=dict(status='verified',host=host,remote_directory=root,previous=link,bundle_sha256=item['sha256'],manifest=header)
             write(dest/'receipt.json',receipt)
-            state.update(after=batch,previous=str((dest/'receipt.json').resolve()),files=header['files'])
+            state.update(after=batch,previous=str((dest/'receipt.json').resolve()),files=bundle_files(header,state['files']))
             write(out/'receiver.json',state)
         write(out/'remote-state.json',remote_state)
     return state
