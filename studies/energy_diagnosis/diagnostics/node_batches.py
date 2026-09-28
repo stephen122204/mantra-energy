@@ -54,7 +54,21 @@ def checkpoint(root, spool, batch, previous):
     return header
 
 
-def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=time.sleep):
+# A reviewed specification revision may change only how batches are admitted or which reviewed invalid batches
+# are retained; the batches themselves (ids, argv, status and log paths, order) must be identical.
+REVISABLE = {'maintenance', 'retained_invalid', 'plan_sha256'}
+
+
+def revision_allowed(new, old, recorded_sha):
+    if hashlib.sha256(json.dumps(old, sort_keys=True).encode()).hexdigest() != recorded_sha:
+        return False, 'superseded specification does not match the recorded one'
+    for key in (set(new) | set(old)) - REVISABLE:
+        if new.get(key) != old.get(key):
+            return False, f'field {key} differs; only {sorted(REVISABLE)} may change'
+    return True, None
+
+
+def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=time.sleep, supersedes=None):
     cutoff = validate(spec)
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     root = Path(spec['remote_directory'])
@@ -64,7 +78,15 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
         fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
         state = read(out/'state.json') if (out/'state.json').exists() else dict(spec_sha256=identity, completed=[])
         if state['spec_sha256'] != identity:
-            raise ValueError('changed node specification')
+            ok, why = revision_allowed(spec, supersedes, state['spec_sha256']) if supersedes else (False, None)
+            if not ok:
+                raise ValueError('changed node specification' + (f': {why}' if why else ''))
+            state.setdefault('revisions', []).append(dict(
+                from_spec_sha256=state['spec_sha256'], to_spec_sha256=identity,
+                utc=dt.datetime.now(dt.timezone.utc).isoformat(),
+                changed=sorted(k for k in REVISABLE if spec.get(k) != supersedes.get(k))))
+            state['spec_sha256'] = identity
+            write(out/'state.json', state)
         previous = {}; catalog = []
         # Validate every published incremental snapshot, including after restart.
         for batch in spec['batches']:
@@ -182,10 +204,11 @@ def main():
     p.add_argument('--spec');p.add_argument('--output',required=True)
     p.add_argument('--serve',action='store_true');p.add_argument('--after',default='')
     p.add_argument('--gap-seconds',type=int,default=45)
+    p.add_argument('--supersedes',help='previous node specification (reviewed revision; batches must be identical)')
     a=p.parse_args()
     if a.serve:serve(a.output,a.after)
     else:
         if not a.spec or not 0<=a.gap_seconds<=300:p.error('spec and bounded gap required')
-        run(read(a.spec),a.output,gap=a.gap_seconds)
+        run(read(a.spec),a.output,gap=a.gap_seconds,supersedes=read(a.supersedes) if a.supersedes else None)
 
 if __name__=='__main__':main()
