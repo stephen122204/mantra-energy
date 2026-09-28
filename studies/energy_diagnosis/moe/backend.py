@@ -190,6 +190,9 @@ class ProcessBackend:
         args = dict(max_tokens=max_tokens, **chat) if chat else dict(prompt=prompt, max_tokens=max_tokens)
         return self._rpc("generate", args, timeout=timeout)
 
+    # Bound for killed group members to finish exiting after the leader is reaped.
+    release_settle_seconds = 60
+
     def end_goal(self):
         p = self.process
         if p is None:
@@ -222,18 +225,28 @@ class ProcessBackend:
             # exit after SIGKILL. Keep a finite bound, but allow the observed
             # multi-gigabyte teardown to finish before rejecting ownership.
             p.wait(timeout=60)
+            # Killed group members (e.g. the model server holding the pinned model) can still be
+            # exiting when the leader is reaped; wait for them within a finite bound, then fail closed.
+            settle_deadline = time.monotonic() + self.release_settle_seconds
             if os.name == "posix":
                 # Reaping only the leader does not prove the process group is empty.
                 import psutil
 
-                for child in psutil.process_iter(["pid", "status"]):
-                    try:
-                        if os.getpgid(child.pid) == p.pid and child.status() != psutil.STATUS_ZOMBIE:
-                            raise RuntimeError("backend process group termination unverified")
-                    except (ProcessLookupError, psutil.NoSuchProcess):
-                        pass
+                while True:
+                    remaining = []
+                    for child in psutil.process_iter(["pid", "status"]):
+                        try:
+                            if os.getpgid(child.pid) == p.pid and child.status() != psutil.STATUS_ZOMBIE:
+                                remaining.append(child.pid)
+                        except (ProcessLookupError, psutil.NoSuchProcess):
+                            pass
+                    if not remaining:
+                        break
+                    if time.monotonic() >= settle_deadline:
+                        raise RuntimeError(f"backend process group termination unverified: {remaining}")
+                    time.sleep(0.1)
             if self.reader_thread is not threading.current_thread():
-                self.reader_thread.join(timeout=2)
+                self.reader_thread.join(timeout=max(2, settle_deadline - time.monotonic()))
             if self.reader_thread.is_alive():
                 raise RuntimeError("backend output reader did not terminate")
             self.termination_confirmed = True

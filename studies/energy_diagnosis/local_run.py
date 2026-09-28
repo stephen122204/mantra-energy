@@ -812,7 +812,15 @@ class GoalExecutor:
                 try:
                     self.lifecycle.end_goal()
                 except Exception as exc:
-                    status, error = "crashed", f"{error}; expert release failed: {exc}"
+                    status, error = "crashed", f"{error}; expert release failed: {exc}".lstrip("; ")
+                    if verifier.outcome in {"pass", "fail"}:
+                        # The verifier result stays in verification.json for audit; an attempt whose
+                        # backend release failed is not a completed run, so it is not a pass or fail.
+                        verifier = VerifierResult(
+                            plan.verifier_version, "unavailable",
+                            f"backend release failed after verification: {exc}",
+                            evidence=((prefix / "verification.json").as_posix(),),
+                        )
                 owned_terminated = owned_terminated and self.lifecycle.backend.owned_work_terminated
             invalid_reason = self._termination_invalidity(owned_terminated)
             if invalid_reason:
