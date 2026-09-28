@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 import random
 
-OPTIONAL = {"blocks", "repetition_args"}
+OPTIONAL = {"blocks", "repetition_args", "retained_invalid"}
 REQUIRED = {"campaign_id", "node", "cutoff_utc", "maintenance", "host_condition", "warm", "required_domains",
             "base_args", "families", "arms", "repetitions", "seed", "batch_seconds", "estimated_batch_seconds", "expected"}
 EXPECTED = {"repository_revision", "build_manifest", "build_manifest_sha256", "backend_python", "weights_manifest",
@@ -118,6 +118,7 @@ def node_spec(plan):
         retry_seconds=60, first_poll_delay_seconds=60,
         minimum_batch_seconds=plan["batch_seconds"] + 180,  # wrapper timeout plus warm-up (~20 s) and audit
         maintenance=plan["maintenance"], plan_sha256=digest,
+        **({"retained_invalid": plan["retained_invalid"]} if plan.get("retained_invalid") else {}),
         batches=[{k: b[k] for k in ("id", "argv", "status", "log")} for b in items],
         schedule=[{k: b[k] for k in ("id", "block", "family", "task", "arm", "repetition_args")} for b in items])
 
