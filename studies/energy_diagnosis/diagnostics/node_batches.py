@@ -114,7 +114,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
                         # The host's own maintenance timer drifts against fixed windows; never overlap it.
                         hold = timer_wait(spec)
                         if hold > 0:
-                            save('host_maintenance_hold', batch=batch['id'], unit=spec['maintenance']['systemd_timer'])
+                            save('host_maintenance_hold', batch=batch['id'], units=spec['maintenance'].get('systemd_timers') or [spec['maintenance'].get('systemd_timer')])
                             sleep(hold); continue
                         break
                 with (out/'io.lock').open('a') as gate:
