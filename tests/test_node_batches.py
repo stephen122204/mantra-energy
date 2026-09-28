@@ -294,12 +294,13 @@ def test_export_refuses_unbound_or_stale_recovery_note(tmp_path):
 class HostTimerAdmissionTest(unittest.TestCase):
     """Admission against the host's own drifting maintenance timer (systemd), in addition to fixed windows."""
 
-    def fake(self, timer='active', service='inactive', next_elapse='1h 0min 0s'):
+    def fake(self, timer='active', service='inactive', next_elapse='1h 0min 0s', realtime=''):
         from types import SimpleNamespace
         def run(argv, **kw):
             if argv[1] == 'is-active':
                 return SimpleNamespace(stdout=(timer if argv[2].endswith('.timer') else service) + '\n', returncode=0)
-            return SimpleNamespace(stdout=next_elapse + '\n', returncode=0)
+            value = next_elapse if argv[-1] == 'NextElapseUSecMonotonic' else realtime
+            return SimpleNamespace(stdout=value + '\n', returncode=0)
         return run
 
     def spec(self, **m):
@@ -322,12 +323,15 @@ class HostTimerAdmissionTest(unittest.TestCase):
         self.assertEqual(timer_wait(s, run=self.fake(), monotonic=lambda: 3600 - 800.0), 30)   # would overlap
         self.assertEqual(timer_wait(s, run=self.fake(service='active'), monotonic=now), 30)  # updater running
         self.assertEqual(timer_wait(s, run=self.fake(service='failed'), monotonic=now), 0)   # nothing running
+        self.assertEqual(timer_wait(s, run=self.fake(timer='inactive'), monotonic=now), 0)   # stopped: cannot elapse
         with self.assertRaises(RuntimeError):
-            timer_wait(s, run=self.fake(timer='inactive'), monotonic=now)                   # untrusted schedule
+            timer_wait(s, run=self.fake(timer='reloading'), monotonic=now)                  # untrusted schedule
         with self.assertRaises(RuntimeError):
             timer_wait(s, run=self.fake(service='reloading'), monotonic=now)
         with self.assertRaises(ValueError):
-            timer_wait(s, run=self.fake(next_elapse=''), monotonic=now)                     # fails closed
+            timer_wait(s, run=self.fake(next_elapse='garbage'), monotonic=now)              # fails closed
+        with self.assertRaises(RuntimeError):
+            timer_wait(s, run=self.fake(next_elapse='', realtime=''), monotonic=now)         # active but no elapse
         self.assertEqual(timer_wait(dict(minimum_batch_seconds=780, maintenance=dict(anchor_utc='2026-01-01T00:00:00Z',
                          period_seconds=3600, window_seconds=600)), run=None), 0)           # not configured
 
@@ -369,3 +373,55 @@ class HostTimerAdmissionTest(unittest.TestCase):
             run(spec, base / 'control', gap=0, free_bytes=0, clock=lambda: clock[0], sleep=sleep)
         self.assertEqual(holds, [30, 30, 0])
         self.assertEqual(starts, [t0 + 760])
+
+
+class CalendarTimerAndRetainedInvalidTest(unittest.TestCase):
+    """Reproduced on LIQID05 (C2, 02:51 UTC): fwupd-refresh.timer (hourly, randomized delay, realtime) started
+    fwupdmgr during a measured batch; the guard invalidated it and the scheduler stopped."""
+
+    def test_realtime_timers_and_multiple_units(self):
+        from types import SimpleNamespace
+        from studies.energy_diagnosis.diagnostics.batch_coordinator import timer_wait, parse_realtime
+        import datetime as dt
+        now = dt.datetime(2026, 9, 28, 3, 21, tzinfo=dt.timezone.utc).timestamp()
+        self.assertEqual(parse_realtime('Mon 2026-09-28 03:36:03 UTC') - now, 15 * 60 + 3)
+        schedule = {'cache-vendordata.timer': ('1h 0min 0s', ''), 'fwupd-refresh.timer': ('0', 'Mon 2026-09-28 03:36:03 UTC')}
+        def run(argv, **kw):
+            unit = argv[2]
+            if argv[1] == 'is-active':
+                return SimpleNamespace(stdout='active\n' if unit.endswith('.timer') else 'inactive\n', returncode=0)
+            mono, real = schedule[unit]
+            return SimpleNamespace(stdout=(mono if argv[-1] == 'NextElapseUSecMonotonic' else real) + '\n', returncode=0)
+        spec = dict(minimum_batch_seconds=780, maintenance=dict(anchor_utc='2026-01-01T00:00:00Z', period_seconds=3600,
+                    window_seconds=600, systemd_timers=['cache-vendordata.timer', 'fwupd-refresh.timer']))
+        # fwupd elapses in 903 s <= 780 + 60? no: 903 > 840 -> clear; vendordata far away
+        self.assertEqual(timer_wait(spec, run=run, monotonic=lambda: 0.0, now=lambda: now), 0)
+        # two minutes later fwupd is within the batch horizon -> hold
+        self.assertEqual(timer_wait(spec, run=run, monotonic=lambda: 0.0, now=lambda: now + 120), 30)
+
+    def spec(self, root, base, retained):
+        import json as _json
+        batches = []
+        for i, status in enumerate(['completed', 'interference_detected', 'completed']):
+            st = f'b{i}/job/status.json'
+            code = ("import pathlib,json; p=pathlib.Path(" + repr(str(root / st)) + ");p.parent.mkdir(parents=True);"
+                    "p.write_text(json.dumps(dict(status=" + repr(status) + ",returncode=0 if " + repr(status) + "=='completed' else 76,cleanup_complete=True)))")
+            batches.append(dict(id=f'b{i}', argv=[sys.executable, '-c', code], status=st, log=f'l{i}'))
+        return dict(host='h', remote_directory=str(root), remote_repository=str(base), remote_python=sys.executable,
+                    cutoff_utc='2099-01-01T00:00:00Z', retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=10,
+                    batches=batches, **({'retained_invalid': retained} if retained else {}))
+
+    def test_unreviewed_invalid_batch_still_stops(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'r' / 'e' / 's'; root.mkdir(parents=True)
+        with self.assertRaisesRegex(RuntimeError, 'invalid batch retained'):
+            run(self.spec(root, base, []), base / 'control', gap=0, free_bytes=0)
+        self.assertFalse((root / 'b2').exists())
+
+    def test_reviewed_invalid_batch_is_kept_and_collection_continues(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'r' / 'e' / 's'; root.mkdir(parents=True)
+        state = run(self.spec(root, base, ['b1']), base / 'control', gap=0, free_bytes=0)
+        saved = json.loads((base / 'control' / 'state.json').read_text())
+        self.assertEqual(saved['completed'], ['b0', 'b2']); self.assertEqual(saved['retained_invalid'], ['b1'])
+        self.assertEqual(json.loads((root / 'b1/job/status.json').read_text())['status'], 'interference_detected')

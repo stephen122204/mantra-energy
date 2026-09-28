@@ -145,6 +145,14 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=tim
                         sleep(gap)  # the same settling gap as after any batch
                         continue
                     if not successful(job):
+                        # A reviewed invalid batch named in the specification (retained_invalid; e.g. host
+                        # interference) is kept as evidence, never rerun, and collection continues.
+                        if (batch['id'] in spec.get('retained_invalid', []) and job.get('status') == 'interference_detected'
+                                and job.get('cleanup_complete') is True):
+                            if batch['id'] not in state.setdefault('retained_invalid', []):
+                                state['retained_invalid'].append(batch['id']); save('between_batches')
+                            sleep(gap)
+                            continue
                         raise RuntimeError('invalid batch retained; no further dispatch')
                     state['completed'].append(batch['id']);save('between_batches')
                 sleep(gap)

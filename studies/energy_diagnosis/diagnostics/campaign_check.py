@@ -63,7 +63,7 @@ def host_timer_check(plan, checks, info, *, run_timer_wait=None):
     in which case the scheduler avoids it and its actual schedule must be readable now."""
     timer = run(["systemctl", "show", "cache-vendordata.timer", "--property=ActiveState"]).stdout.strip()
     info["vendor_timer"] = timer
-    if plan["maintenance"].get("systemd_timer"):
+    if plan["maintenance"].get("systemd_timer") or plan["maintenance"].get("systemd_timers"):
         if run_timer_wait is None:
             from .batch_coordinator import timer_wait as run_timer_wait
         try:
