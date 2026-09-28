@@ -8,6 +8,7 @@ import pytest
 
 from studies.energy_diagnosis.diagnostics.archive_results import (
     MAGIC,
+    bundle_files,
     digest,
     export_bundle,
     manifest,
@@ -57,7 +58,7 @@ def test_incremental_chain_restores_latest_and_preserves_old(root, tmp_path):
     second, h2 = snapshot(root, tmp_path / "second", first)
     assert set(h2["changed"]) == {"changed.txt", "new.txt"}
     assert h2["deleted"] == ["deleted.txt"]
-    assert len(h2["changed"]) < len(h2["files"])
+    assert len(h2["changed"]) < h2["file_count"] and "files" not in h2
     restored = tmp_path / "restored"
     assert restore_snapshot(second, restored)["status"] == "verified"
     assert manifest(restored) == manifest(root)
@@ -169,4 +170,39 @@ def test_server_cli_round_trip(root, tmp_path):
             check=True,
             timeout=10,
         )
-    assert verify_bundle(bundle, {})["files"] == manifest(root)
+    assert bundle_files(verify_bundle(bundle, {}), {}) == manifest(root)
+
+
+def test_bounded_v2_snapshots_extend_a_v1_chain_and_detect_tampering(tmp_path):
+    # Reproduced on LIQID05: listing the full manifest in every snapshot exceeded the 16 MiB header
+    # bound after ~160 batches. v2 lists only the increment plus the full-manifest digest; existing
+    # v1 snapshots remain valid predecessors.
+    import io
+    from studies.energy_diagnosis.diagnostics import archive_results as ar
+    root = tmp_path / "r"; (root / "b0/job").mkdir(parents=True)
+    (root / "b0/job/status.json").write_text(json.dumps(dict(status="completed")))
+    (root / "b0/data.txt").write_text("zero")
+    files0 = ar.manifest(root)
+    v1 = dict(protocol="result-archive-v1", files=files0, changed=files0, deleted=[],
+              remote_job=dict(status="completed"))
+    assert ar.bundle_files(v1, {}) == files0
+    (root / "b1/job").mkdir(parents=True)
+    (root / "b1/job/status.json").write_text(json.dumps(dict(status="completed")))
+    (root / "b1/data.txt").write_text("one")
+    out = io.BytesIO()
+    header = ar.export_bundle(root, "b1/job/status.json", files0, out, 2**30)
+    assert header["protocol"] == "result-archive-v2" and "files" not in header
+    assert set(header["changed"]) == {"b1/job/status.json", "b1/data.txt"}
+    path = tmp_path / "b1.bundle"; path.write_bytes(out.getvalue())
+    verified = ar.verify_bundle(path, files0)
+    assert ar.bundle_files(verified, files0) == ar.manifest(root)
+    # A predecessor that differs from the one the snapshot was built on is refused.
+    with pytest.raises(ValueError):
+        ar.verify_bundle(path, dict(files0, **{"b0/extra.txt": "0" * 64}))
+    # A tampered digest is refused.
+    raw = path.read_bytes().split(b"\n", 2)
+    forged = json.loads(raw[1]); forged["files_sha256"] = "0" * 64
+    bad = tmp_path / "bad.bundle"
+    bad.write_bytes(raw[0] + b"\n" + json.dumps(forged, separators=(",", ":")).encode() + b"\n" + raw[2])
+    with pytest.raises(ValueError):
+        ar.verify_bundle(bad, files0)

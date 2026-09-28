@@ -265,7 +265,7 @@ class RecoveredSnapshotVerificationTest(unittest.TestCase):
         self.assertEqual(header['remote_job']['status'], 'interrupted_recovered')
         # Forge: same label, recovery record removed from the manifest.
         raw = out.read_bytes().split(b'\n', 2)
-        forged = json.loads(raw[1]); del forged['files']['b0/recovery.json']
+        forged = json.loads(raw[1]); del forged['changed']['b0/recovery.json']
         bad = Path(tmp.name) / 'bad.bundle'
         bad.write_bytes(raw[0] + b'\n' + json.dumps(forged, separators=(',', ':')).encode() + b'\n' + raw[2])
         with self.assertRaises(ValueError):
