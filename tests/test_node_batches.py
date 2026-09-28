@@ -494,3 +494,33 @@ class SpecificationRevisionTest(unittest.TestCase):
             run(changed, self.base / 'control', gap=0, free_bytes=0, supersedes=old)
         other = dict(old, cutoff_utc='2098-01-01T00:00:00Z')
         self.assertFalse(revision_allowed(dict(old, retained_invalid=[]), other, 'x')[0])
+
+
+class HostTimerHoldTest(unittest.TestCase):
+    """Reproduced on LIQID05 (2026-09-28 17:59 UTC): with maintenance.systemd_timers (a list) the scheduler's
+    hold path read the removed singular key and crashed with KeyError the first time a timer actually held."""
+
+    def test_hold_with_timer_list_records_units_and_continues(self):
+        from unittest import mock
+        from studies.energy_diagnosis.diagnostics import node_batches as nb
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); root = base / 'r' / 'e' / 's'; root.mkdir(parents=True)
+        st = 'b0/job/status.json'
+        code = ("import pathlib,json; p=pathlib.Path(" + repr(str(root / st)) + ");p.parent.mkdir(parents=True);"
+                "p.write_text(json.dumps(dict(status='completed',returncode=0,cleanup_complete=True)))")
+        spec = dict(host='h', remote_directory=str(root), remote_repository=str(base), remote_python=sys.executable,
+                    cutoff_utc='2099-01-01T00:00:00Z', retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=10,
+                    maintenance=dict(anchor_utc='2026-01-01T00:00:00Z', period_seconds=3600, window_seconds=600,
+                                     systemd_timers=['systemd-tmpfiles-clean.timer']),
+                    batches=[dict(id='b0', argv=[sys.executable, '-c', code], status=st, log='l0')])
+        holds = iter([7, 0]); saved = []
+        real_write = nb.write
+        def write(path, data):
+            if Path(path).name == 'state.json': saved.append(dict(data))
+            return real_write(path, data)
+        with mock.patch.object(nb, 'dispatch_wait', lambda *a: 0), mock.patch.object(nb, 'timer_wait', lambda *a: next(holds)), \
+                mock.patch.object(nb, 'write', write):
+            nb.run(spec, base / 'control', gap=0, free_bytes=0, sleep=lambda s: None)
+        hold = [s for s in saved if s['status'] == 'host_maintenance_hold']
+        self.assertEqual(hold[0]['units'], ['systemd-tmpfiles-clean.timer'])
+        self.assertEqual(json.loads((base / 'control' / 'state.json').read_text())['completed'], ['b0'])
