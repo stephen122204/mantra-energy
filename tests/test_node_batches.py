@@ -425,3 +425,49 @@ class CalendarTimerAndRetainedInvalidTest(unittest.TestCase):
         saved = json.loads((base / 'control' / 'state.json').read_text())
         self.assertEqual(saved['completed'], ['b0', 'b2']); self.assertEqual(saved['retained_invalid'], ['b1'])
         self.assertEqual(json.loads((root / 'b1/job/status.json').read_text())['status'], 'interference_detected')
+
+
+class SpecificationRevisionTest(unittest.TestCase):
+    """Reproduced on LIQID05: continuing a stopped campaign under a revised specification in a fresh control
+    directory must re-snapshot every earlier batch at once and exceeded the 1 GiB snapshot bound. A reviewed
+    revision instead continues the existing control directory (and snapshot chain) when batches are identical."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name); self.root = self.base / 'r' / 'e' / 's'; self.root.mkdir(parents=True)
+
+    def spec(self, statuses, **extra):
+        batches = []
+        for i, status in enumerate(statuses):
+            st = f'b{i}/job/status.json'
+            code = ("import pathlib,json; p=pathlib.Path(" + repr(str(self.root / st)) + ");p.parent.mkdir(parents=True);"
+                    "p.write_text(json.dumps(dict(status=" + repr(status) + ",returncode=0 if " + repr(status) + "=='completed' else 76,cleanup_complete=True)))")
+            batches.append(dict(id=f'b{i}', argv=[sys.executable, '-c', code], status=st, log=f'l{i}'))
+        return dict(host='h', remote_directory=str(self.root), remote_repository=str(self.base), remote_python=sys.executable,
+                    cutoff_utc='2099-01-01T00:00:00Z', retry_seconds=1, first_poll_delay_seconds=1, minimum_batch_seconds=10,
+                    batches=batches, **extra)
+
+    def test_reviewed_revision_continues_same_control_without_rerun(self):
+        from studies.energy_diagnosis.diagnostics.node_batches import run
+        old = self.spec(['completed', 'interference_detected', 'completed'])
+        control = self.base / 'control'
+        with self.assertRaisesRegex(RuntimeError, 'invalid batch retained'):
+            run(old, control, gap=0, free_bytes=0)
+        new = dict(old, retained_invalid=['b1'])
+        with self.assertRaisesRegex(ValueError, 'changed node specification'):
+            run(new, control, gap=0, free_bytes=0)                         # no reviewed predecessor given
+        run(new, control, gap=0, free_bytes=0, supersedes=old)
+        state = json.loads((control / 'state.json').read_text())
+        self.assertEqual(state['completed'], ['b0', 'b2']) ; self.assertEqual(state['retained_invalid'], ['b1'])
+        self.assertEqual(state['revisions'][0]['changed'], ['retained_invalid'])
+        self.assertEqual(len(list((control / 'spool').glob('*.bundle'))), 3)
+
+    def test_revision_refused_if_batches_or_predecessor_differ(self):
+        from studies.energy_diagnosis.diagnostics.node_batches import run, revision_allowed
+        old = self.spec(['completed', 'completed'])
+        run(old, self.base / 'control', gap=0, free_bytes=0)
+        changed = self.spec(['completed', 'completed']); changed['batches'][1]['argv'] = changed['batches'][1]['argv'] + ['x']
+        with self.assertRaisesRegex(ValueError, 'field batches differs'):
+            run(changed, self.base / 'control', gap=0, free_bytes=0, supersedes=old)
+        other = dict(old, cutoff_utc='2098-01-01T00:00:00Z')
+        self.assertFalse(revision_allowed(dict(old, retained_invalid=[]), other, 'x')[0])
