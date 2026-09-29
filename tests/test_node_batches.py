@@ -73,6 +73,57 @@ class NodeBatchesTest(unittest.TestCase):
         with self.assertRaises((tarfile.ReadError,EOFError)):ingest(damaged,self.base/'receiver2','example',str(self.root))
         state=ingest(wire,self.base/'receiver2','example',str(self.root))
         self.assertEqual(state['after'],'batch-1')
+    def test_cut_transfer_keeps_complete_leading_snapshots(self):
+        run(self.spec,self.out,gap=0,free_bytes=0)
+        catalog=json.loads((self.out/'catalog.json').read_text())
+        wire=self.base/'wire.tar'
+        with tarfile.open(wire,'w') as t:
+            for n in ['catalog.json','state.json']:t.add(self.out/n,arcname=n)
+            for x in catalog['snapshots']:t.add(self.out/'spool'/x['file'],arcname=x['file'])
+        with tarfile.open(wire) as t:
+            members={m.name:m for m in t.getmembers()}
+        raw=wire.read_bytes();last=members[catalog['snapshots'][1]['file']]
+        receiver=self.base/'receiver3'
+        self.assertIsNone(ingest(self._cut(raw,members['catalog.json'].offset_data+5),receiver,'example',str(self.root),partial=True))
+        self.assertFalse((receiver/'receiver.json').exists())
+        cut=self._cut(raw,last.offset_data+last.size//2)
+        with self.assertRaises((tarfile.ReadError,EOFError)):ingest(cut,receiver,'example',str(self.root))
+        state=ingest(cut,receiver,'example',str(self.root),partial=True)
+        self.assertEqual((state['after'],state['caught_up']),('batch-0',False))
+        self.assertFalse((receiver/'batch-1').exists())
+        state=ingest(wire,receiver,'example',str(self.root))
+        self.assertEqual((state['after'],state['caught_up']),('batch-1',True))
+        restore_snapshot(state['previous'],self.base/'restored3')
+        self.assertTrue((self.base/'restored3/batch-0/status.json').exists())
+        self.assertTrue((self.base/'restored3/batch-1/status.json').exists())
+    def test_receiver_loop_resumes_after_timed_out_transfer(self):
+        import subprocess
+        from studies.energy_diagnosis.diagnostics import receive_node_batches as rnb
+        run(self.spec,self.out,gap=0,free_bytes=0)
+        catalog=json.loads((self.out/'catalog.json').read_text())
+        wire=self.base/'wire.tar'
+        with tarfile.open(wire,'w') as t:
+            for n in ['catalog.json','state.json']:t.add(self.out/n,arcname=n)
+            for x in catalog['snapshots']:t.add(self.out/'spool'/x['file'],arcname=x['file'])
+        with tarfile.open(wire) as t:
+            last=[m for m in t.getmembers()][-1]
+        raw=wire.read_bytes();sends=[raw[:last.offset_data+last.size//2],raw]
+        def fake(cmd,stdout,stderr,check,timeout):
+            stdout.write(sends.pop(0))
+            if sends:raise subprocess.TimeoutExpired(cmd,timeout)
+        spec=dict(host='example',identity_file='/dev/null',known_hosts='/dev/null',remote_python='python3',
+                  node_output=str(self.out),remote_repository=str(self.base),remote_directory=str(self.root))
+        (self.base/'spec.json').write_text(json.dumps(spec));receiver=self.base/'receiver4'
+        argv=['receive_node_batches','--spec',str(self.base/'spec.json'),'--output',str(receiver),'--once']
+        with patch.object(rnb.subprocess,'run',side_effect=fake),patch.object(sys,'argv',argv):
+            rnb.main()
+            self.assertEqual(json.loads((receiver/'receiver.json').read_text())['after'],'batch-0')
+            self.assertEqual(json.loads((receiver/'transport-state.json').read_text())['status'],'waiting_to_reconnect_or_for_batch_boundary')
+            rnb.main()
+        self.assertEqual(json.loads((receiver/'receiver.json').read_text())['after'],'batch-1')
+        self.assertFalse((receiver/'transfer.partial').exists())
+    def _cut(self,raw,size):
+        path=self.base/f'cut-{size}.tar';path.write_bytes(raw[:size]);return path
 
 
 class MaintenanceWindowTest(unittest.TestCase):
