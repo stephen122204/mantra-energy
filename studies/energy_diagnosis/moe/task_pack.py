@@ -6,10 +6,10 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
-from . import numerical_workload, business_workload, etl_workload, repo_workload, program_workload, impl_workload
+from . import numerical_workload, business_workload, etl_workload, repo_workload, program_workload, impl_workload, bird_workload
 from . import sandbox, repo_oracle, repo_test_process, private_challenges
 
-MODULES = {'numerical':numerical_workload, 'business':business_workload, 'etl':etl_workload, 'repo':repo_workload, 'program':program_workload, 'impl':impl_workload}
+MODULES = {'numerical':numerical_workload, 'business':business_workload, 'etl':etl_workload, 'repo':repo_workload, 'program':program_workload, 'impl':impl_workload, 'bird':bird_workload}
 
 
 def support_components(kinds):
@@ -45,7 +45,7 @@ class PackRuntime:
         self.modules=modules;self.output=output;self.active=None;self.task_id=None
     def begin(self,task,lease):
         module=self.modules[task.task_id]
-        cls={numerical_workload:numerical_workload.RegressionRuntime, business_workload:business_workload.BusinessRuntime, etl_workload:etl_workload.ETLRuntime, repo_workload:repo_workload.RepoRuntime, program_workload:program_workload.ProgramRuntime, impl_workload:impl_workload.ImplRuntime}[module]
+        cls={numerical_workload:numerical_workload.RegressionRuntime, business_workload:business_workload.BusinessRuntime, etl_workload:etl_workload.ETLRuntime, repo_workload:repo_workload.RepoRuntime, program_workload:program_workload.ProgramRuntime, impl_workload:impl_workload.ImplRuntime, bird_workload:bird_workload.BirdRuntime}[module]
         self.active=cls(self.output);self.task_id=task.task_id
         self.active.begin(task,lease)
     def _runtime(self,task):
@@ -87,6 +87,14 @@ def prepare(root, specifications, *, prepared_assets=None):
                     or spec.get('prompt','v2') not in impl_workload.PROMPTS:
                 raise ValueError('impl specification requires problem and absolute bundle')
             key=('impl',spec['problem'],spec.get('prompt','v2'))
+        elif spec.get('kind')=='bird':
+            # BIRD dev questions of one database from the extracted, pinned release folder (bird_workload.py).
+            if set(spec)!={'kind','db_id','question_ids','source'} or not isinstance(spec['db_id'],str) \
+                    or not isinstance(spec['source'],str) or not Path(spec['source']).is_absolute() \
+                    or not isinstance(spec['question_ids'],list) or not spec['question_ids'] \
+                    or any(type(q) is not int for q in spec['question_ids']) or spec['question_ids']!=sorted(set(spec['question_ids'])):
+                raise ValueError('bird specification requires db_id, increasing question_ids and absolute source')
+            key=('bird',spec['db_id'])
         elif spec.get('kind')=='repo':
             # Repository repair: an explicit case over a pinned source checkout and tool Python.
             if set(spec)!={'kind','case','source','python'} or spec['case'] not in repo_workload.CASES \
@@ -132,6 +140,9 @@ def prepare(root, specifications, *, prepared_assets=None):
         elif spec['kind']=='impl':
             path=root/f"impl-{spec['problem'].lower().replace('/','-')}"
             created=(impl_workload.create_task(path,problem=spec['problem'],bundle=spec['bundle'],prompt=spec.get('prompt','v2')),)
+        elif spec['kind']=='bird':
+            path=root/f"bird-{spec['db_id']}"
+            created=bird_workload.create_tasks(path,db_id=spec['db_id'],question_ids=spec['question_ids'],source=spec['source'])
         elif spec['kind']=='repo':
             path=root/f"repo-{spec['case']}"
             created=(repo_workload.create_task(path,case=spec['case'],source=spec['source'],python=spec['python']),)
