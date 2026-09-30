@@ -29,6 +29,20 @@ FEEDBACK_HINTS = {
                     '<tool_call>{"name": "TOOL_NAME", "arguments": {...}}</tool_call>. '
                     'To finish, use name "submit_answer" and arguments {"answer": <your task answer>}',
 }
+# Tool-call syntax the model's chat template renders and the model emits. "hermes" (Qwen:
+# <tool_call>{json}</tool_call>) is the default; "mistral" (tekken v13, e.g. Devstral Small 2:
+# [TOOL_CALLS]name[ARGS]{json}, one marker per call, no call ids) is selected per model config.
+TOOL_CALL_FORMATS = ("hermes", "mistral")
+# Each format's markers must be single tokens of the model's tokenizer (checked at engine boot).
+TOOL_CALL_MARKERS = dict(hermes=("<tool_call>", "</tool_call>"), mistral=("[TOOL_CALLS]", "[ARGS]"))
+# Mistral markers are control tokens; feedback text must never spell them, or the rendered
+# user message would carry control tokens the model did not emit.
+MISTRAL_FEEDBACK_HINTS = {
+    "no tool call": "text alone is not acted on; respond with a tool call. "
+                    'To finish, call submit_answer with arguments {"answer": <your task answer>}',
+    "tool call without an arguments object": "give each call its tool name followed by one JSON arguments object",
+}
+FEEDBACK_HINTS_BY_FORMAT = dict(hermes=FEEDBACK_HINTS, mistral=MISTRAL_FEEDBACK_HINTS)
 SUBMIT = "submit_answer"
 MAX_CALLS_PER_TURN = 8
 # Keys that describe execution cost rather than task semantics. They stay in
@@ -155,6 +169,11 @@ def parse_response(text, max_calls=MAX_CALLS_PER_TURN, *, accept_unclosed_final=
                 or not isinstance(call["arguments"], dict):
             return Decision("malformed", reason="tool call must be {name, arguments}", content=content)
         calls.append((call["name"], call["arguments"]))
+    return _decision(calls, content, repaired)
+
+
+def _decision(calls, content, repaired=""):
+    """Submit/ordinary-call rules shared by every tool-call syntax."""
     if any(name == SUBMIT for name, _ in calls):
         if len(calls) != 1:
             return Decision("malformed", reason="submit_answer mixed with other tool calls", content=content)
@@ -163,6 +182,63 @@ def parse_response(text, max_calls=MAX_CALLS_PER_TURN, *, accept_unclosed_final=
             return Decision("malformed", reason="submit_answer takes exactly {answer}", content=content)
         return Decision("answer", answer=arguments["answer"], content=content, repaired=repaired)
     return Decision("tool_calls", calls=tuple(calls), content=content, repaired=repaired)
+
+
+_MISTRAL_CALL = "[TOOL_CALLS]"
+_MISTRAL_ARGS = "[ARGS]"
+
+
+def parse_mistral_response(text, max_calls=MAX_CALLS_PER_TURN):
+    """Parse a Mistral tekken-v13 response: optional text, then one or more
+    [TOOL_CALLS]name[ARGS]{json} calls (Devstral Small 2 chat template and mistral-common
+    InstructTokenizerV13). Never guesses: anything else after the first marker is malformed.
+
+    The response ends at the end-of-sequence token, so the last call's JSON runs to the end of
+    the text. Malformed and no-action turns keep the whole response as visible content: the
+    Mistral chat template rejects an assistant message with neither content nor tool calls.
+    """
+    if not isinstance(text, str):
+        return Decision("malformed", reason="response text missing")
+    start = text.find(_MISTRAL_CALL)
+    if start < 0:
+        if _MISTRAL_ARGS in text:
+            return Decision("malformed", reason="arguments marker outside a tool call", content=text.strip())
+        return Decision("no_action", reason="no tool call", content=text.strip())
+    content = text[:start].strip()
+    if _MISTRAL_ARGS in content:
+        return Decision("malformed", reason="arguments marker outside a tool call", content=text.strip())
+    segments = text[start + len(_MISTRAL_CALL):].split(_MISTRAL_CALL)
+    if len(segments) > max_calls:
+        return Decision("malformed", reason=f"more than {max_calls} tool calls", content=text.strip())
+    calls = []
+    for segment in segments:
+        parts = segment.split(_MISTRAL_ARGS)
+        if len(parts) != 2:
+            return Decision("malformed", reason="tool call without an arguments object", content=text.strip())
+        name = parts[0].strip()
+        if not name or any(c.isspace() for c in name) or "[" in name or "{" in name:
+            return Decision("malformed", reason="tool call name missing or invalid", content=text.strip())
+        try:
+            arguments = strict_loads(parts[1].strip())
+        except ValueError as exc:
+            return Decision("malformed", reason=f"invalid tool call JSON: {exc}", content=text.strip())
+        if not isinstance(arguments, dict):
+            return Decision("malformed", reason="tool call arguments must be a JSON object", content=text.strip())
+        calls.append((name, arguments))
+    decision = _decision(calls, content)
+    if decision.kind == "malformed":
+        return Decision("malformed", reason=decision.reason, content=text.strip())
+    return decision
+
+
+def parse_tool_response(text, tool_call_format="hermes", *, accept_unclosed_final=False):
+    """Dispatch on the model's tool-call syntax. hermes is parse_response unchanged."""
+    if tool_call_format == "hermes":
+        return parse_response(text, accept_unclosed_final=accept_unclosed_final)
+    if tool_call_format == "mistral":
+        # No closing tag exists in this syntax, so there is nothing for v2 to repair.
+        return parse_mistral_response(text)
+    raise ValueError(f"unknown tool-call format {tool_call_format!r}")
 
 
 @dataclass
@@ -174,8 +250,11 @@ class Conversation:
     protocol: str = PROTOCOL_VERSION
     messages: list = field(default_factory=list)
     turns_used: int = 0
+    tool_call_format: str = "hermes"
 
     def __post_init__(self):
+        if self.tool_call_format not in TOOL_CALL_FORMATS:
+            raise ValueError(f"unknown tool-call format {self.tool_call_format!r}")
         self.messages = [dict(role="system", content=SYSTEM),
                          dict(role="user", content=f"{self.goal}\n\nYou have {self.max_turns} turns.")]
 
@@ -188,6 +267,10 @@ class Conversation:
         if decision.kind == "tool_calls":
             message["tool_calls"] = [dict(type="function", id=i, function=dict(name=n, arguments=a))
                                      for i, (n, a) in zip(call_ids, decision.calls)]
+        if self.tool_call_format == "mistral" and not message["content"] and "tool_calls" not in message:
+            # The Mistral template raises on an empty assistant message; the turn still counts and
+            # the feedback that follows is merged with the preceding message by the same template.
+            return
         self.messages.append(message)
 
     def remaining(self):
@@ -201,18 +284,20 @@ class Conversation:
 
     def feedback(self, reason):
         # No tool result exists to carry the notice, so it is a user message.
-        hint = FEEDBACK_HINTS.get(reason) if self.protocol == PROTOCOL_V2 else None
+        hint = FEEDBACK_HINTS_BY_FORMAT[self.tool_call_format].get(reason) if self.protocol == PROTOCOL_V2 else None
         error = f"{reason}: {hint}. Call a tool or submit_answer." if hint else f"{reason}. Call a tool or submit_answer."
         self.messages.append(dict(role="user", content=json.dumps(
             dict(status="error", error=error, turns_remaining=self.remaining()), sort_keys=True)))
 
 
-def to_native_text(decision):
-    """Legacy scripted decision {tool_calls|answer} -> Qwen-format text (fixtures only)."""
+def to_native_text(decision, tool_call_format="hermes"):
+    """Legacy scripted decision {tool_calls|answer} -> model-format text (fixtures only)."""
     if "answer" in decision:
         calls = [dict(name=SUBMIT, arguments=dict(answer=decision["answer"]))]
     else:
         calls = [dict(name=c["tool"], arguments=c.get("args", {})) for c in decision["tool_calls"]]
+    if tool_call_format == "mistral":
+        return "".join(f"{_MISTRAL_CALL}{c['name']}{_MISTRAL_ARGS}{json.dumps(c['arguments'])}" for c in calls)
     return "\n".join(f"<tool_call>\n{json.dumps(c)}\n</tool_call>" for c in calls)
 
 
