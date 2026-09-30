@@ -1,4 +1,4 @@
-"""BIRD text-to-SQL workload: execution-match verifier, read-only tool, pre-registered sampling, task identity."""
+"""BIRD text-to-SQL workload: execution-match verifier, read-only tool, seeded sampling, task identity."""
 import collections
 import hashlib
 import json
@@ -316,8 +316,7 @@ def test_selection_report_and_task_pack_dispatch(tmp_path, source, monkeypatch):
         assert not (tmp_path / 'bad').exists()
 
 
-REAL = Path(os.environ.get('BIRD_DEV_DIR', '/Users/Stephen/Documents/ALEMS Private Research/2026-09-27/'
-            'full-task-qualification/campaign-c2/external/bird/extracted/dev_20240627'))
+REAL = Path(os.environ.get('BIRD_DEV_DIR', '/nonexistent-bird-dev'))
 
 
 @pytest.mark.skipif(not (REAL / 'dev.json').is_file(), reason='BIRD dev release not available (set BIRD_DEV_DIR)')
