@@ -58,7 +58,7 @@ DATABASE_SHA256 = {
     'thrombosis_prediction': 'e7e16d74b4731b4b8d33fdbe8c29cd5622620788ce8d1f335631f65fc7cf1db9',
     'toxicology': 'f5fa7f21af1ad878ff8fef1b0582b8cb2d7ed63dbac65ff16d2ba05667650c5b',
 }
-# Pre-registered selection rule (ANALYSIS-C2-EXTERNAL-VALIDATION.md).
+# Fixed selection rule (seeded; recorded in each selection report).
 SELECTION = dict(seed=20260929, size=40, per_database=5, difficulty='simple')
 TOOL_SECONDS = 30.0
 VERIFY_SECONDS = 30.0
@@ -390,7 +390,7 @@ class BirdRuntime:
         return verify(task, answer)
 
 
-# ---------------------------------------------------------------- pre-registered selection
+# ---------------------------------------------------------------- fixed selection
 
 def sample(questions, *, seed=SELECTION['seed'], size=SELECTION['size'], per_database=SELECTION['per_database'],
            difficulty=SELECTION['difficulty']):
@@ -438,7 +438,7 @@ def check_task(task, runtime=None):
 
 
 def select(source, output, *, work=None, pinned=True):
-    """Apply the pre-registered rule, build the tasks, run the gold and wrong-query checks, write selection.json."""
+    """Apply the fixed selection rule, build the tasks, run the gold and wrong-query checks, write selection.json."""
     source = Path(source).resolve()
     questions = load_questions(source, pinned=pinned)
     picked = sample(questions)
@@ -484,7 +484,7 @@ def specifications(question_ids_by_db, source):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Pre-registered BIRD dev selection with gold and wrong-query checks; no model run')
+    parser = argparse.ArgumentParser(description='Fixed BIRD dev selection with gold and wrong-query checks; no model run')
     parser.add_argument('--source', required=True, help='extracted BIRD dev folder (dev_20240627)')
     parser.add_argument('--output', required=True, help='selection.json path')
     parser.add_argument('--work', help='scratch directory for temporary task assets')
