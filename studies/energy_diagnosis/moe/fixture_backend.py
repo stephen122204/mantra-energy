@@ -11,6 +11,7 @@ from .control import Expert
 class FixtureDevice:
     def __init__(self, config):
         self.case = config.get("fixture_case", "success")
+        self.tool_call_format = config.get("tool_call_format", "hermes")
         self.delay = config.get("transfer_seconds", 0.02)
         self.experts = {i: Expert(0, i, i + 100, i, 64, "cpu") for i in range(4)}
         self.records, self.demand_rows, self.jobs = [], [], []
@@ -238,7 +239,7 @@ class FixtureDevice:
             decision = {"answer": {"wrong": True}}
         if chat:
             from studies.energy_diagnosis.agent_protocol import to_native_text
-            text = to_native_text(decision)
+            text = to_native_text(decision, self.tool_call_format)
             if self.case == "unclosed_submit" and "answer" in decision:
                 text = text[: -len("\n</tool_call>")]     # observed Qwen3 slip: submit without the closing tag
             return dict(text=text, finish_reason="stop",
