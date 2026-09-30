@@ -13,7 +13,8 @@ from .audit_pilot import audit
 
 DOMAINS = ("PACKAGE_SOCKET_0", "PACKAGE_SOCKET_1", "GPU_BOARD_0")
 FAMILIES = dict(impl="python-implementation", program="python-transformation", etl="etl-sql-repair",
-                repo="repository-repair", business="business-query", numerical="grouped-regression")
+                repo="repository-repair", business="business-query", numerical="grouped-regression",
+                bird="bird-sql")
 
 
 def check_stage(stage, expected, *, revision, limits):
@@ -83,7 +84,7 @@ def check_stage(stage, expected, *, revision, limits):
         else:
             # SQL analysis and numerical-tool tasks return structured answers;
             # requiring a Python file here would reject valid task completions.
-            checks["saved_program"] = kind in {"business", "numerical"}
+            checks["saved_program"] = kind in {"business", "numerical", "bird"}
         window = json.loads((g / "initialized-model-window.json").read_text())
         energies = {}
         for phase in ("before_task_window", "task_window", "verifier_window"):
