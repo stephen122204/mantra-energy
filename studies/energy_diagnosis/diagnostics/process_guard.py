@@ -38,8 +38,8 @@ def snapshot(proc=Path("/proc")):
                     uid=path.stat().st_uid,
                 )
             )
-        except FileNotFoundError:
-            continue  # Exited between directory listing and read.
+        except (FileNotFoundError, ProcessLookupError):
+            continue  # Exited between directory listing and read (Linux reports ESRCH when reading a vanished stat).
     return dict(
         boot_id=(proc / "sys/kernel/random/boot_id").read_text().strip(),
         monotonic_ns=time.monotonic_ns(),
