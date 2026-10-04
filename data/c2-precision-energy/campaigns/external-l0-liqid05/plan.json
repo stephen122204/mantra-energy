@@ -1,0 +1,667 @@
+{
+ "campaign_id": "C2-external-liqid05-L0-b0-2",
+ "cutoff_utc": "2026-10-02T14:30:00Z",
+ "node": {
+  "host": "cc@129.114.109.13",
+  "remote_repository": "/home/cc/alems-work/campaign-exec-35ebbc6",
+  "remote_python": "/home/cc/alems-work/full-task-qualification-env/bin/python",
+  "remote_directory": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/results",
+  "node_output": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/control",
+  "lock": "/home/cc/alems-work/gpu.lock",
+  "identity_file": "/Users/Stephen/.ssh/id_ed25519",
+  "known_hosts": "/Users/Stephen/.ssh/liqid05-known-hosts"
+ },
+ "maintenance": {
+  "anchor_utc": "2026-09-27T00:20:00Z",
+  "period_seconds": 10800,
+  "window_seconds": 600,
+  "systemd_timers": [
+   "cache-vendordata.timer",
+   "fwupd-refresh.timer",
+   "apt-daily.timer",
+   "apt-daily-upgrade.timer",
+   "motd-news.timer",
+   "man-db.timer",
+   "logrotate.timer",
+   "dpkg-db-backup.timer",
+   "sysstat-summary.timer",
+   "systemd-tmpfiles-clean.timer",
+   "update-notifier-download.timer",
+   "update-notifier-motd.timer",
+   "e2scrub_all.timer",
+   "fstrim.timer"
+  ]
+ },
+ "host_condition": {
+  "cpu_affinity": "80-87",
+  "keep_awake_cpus": "",
+  "tool_cpus": "88-95",
+  "supervisor_cpus": "72-79",
+  "idle_cpus": "80-87"
+ },
+ "warm": [],
+ "required_domains": [
+  "PACKAGE_SOCKET_0",
+  "PACKAGE_SOCKET_1",
+  "GPU_BOARD_0"
+ ],
+ "base_args": [
+  "--mode",
+  "native",
+  "--backend-python",
+  "/home/cc/alems-work/hostpower/p0/deploy/py-m1",
+  "--allocation-id",
+  "alems-team-liqid05-20260920",
+  "--isolation",
+  "C2 campaign on liqid05; model CPUs 80-87, tools 88-95",
+  "--deadline",
+  "600",
+  "--agent-protocol",
+  "chat-tools-v2",
+  "--max-turns",
+  "24",
+  "--max-tool-calls",
+  "48",
+  "--max-total-output-tokens",
+  "8192",
+  "--max-tokens",
+  "2048",
+  "--max-runs",
+  "1",
+  "--repeats",
+  "1",
+  "--policies",
+  "demand",
+  "--byte-budget",
+  "0",
+  "--campaign-exit"
+ ],
+ "families": {
+  "bird": {
+   "args": [],
+   "tasks": [
+    {
+     "short": "bird-california_schools-q73-v1",
+     "task": "bird-california_schools-q73-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-california_schools.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-california_schools"
+    },
+    {
+     "short": "bird-california_schools-q78-v1",
+     "task": "bird-california_schools-q78-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-california_schools.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-california_schools"
+    },
+    {
+     "short": "bird-california_schools-q86-v1",
+     "task": "bird-california_schools-q86-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-california_schools.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-california_schools"
+    },
+    {
+     "short": "bird-card_games-q368-v1",
+     "task": "bird-card_games-q368-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games"
+    },
+    {
+     "short": "bird-card_games-q398-v1",
+     "task": "bird-card_games-q398-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games"
+    },
+    {
+     "short": "bird-card_games-q403-v1",
+     "task": "bird-card_games-q403-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games"
+    },
+    {
+     "short": "bird-card_games-q481-v1",
+     "task": "bird-card_games-q481-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games"
+    },
+    {
+     "short": "bird-card_games-q491-v1",
+     "task": "bird-card_games-q491-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-card_games"
+    },
+    {
+     "short": "bird-codebase_community-q543-v1",
+     "task": "bird-codebase_community-q543-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community"
+    },
+    {
+     "short": "bird-codebase_community-q549-v1",
+     "task": "bird-codebase_community-q549-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community"
+    },
+    {
+     "short": "bird-codebase_community-q577-v1",
+     "task": "bird-codebase_community-q577-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community"
+    },
+    {
+     "short": "bird-codebase_community-q580-v1",
+     "task": "bird-codebase_community-q580-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community"
+    },
+    {
+     "short": "bird-codebase_community-q703-v1",
+     "task": "bird-codebase_community-q703-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-codebase_community"
+    },
+    {
+     "short": "bird-debit_card_specializing-q1505-v1",
+     "task": "bird-debit_card_specializing-q1505-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-debit_card_specializing.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-debit_card_specializing"
+    },
+    {
+     "short": "bird-european_football_2-q1064-v1",
+     "task": "bird-european_football_2-q1064-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-european_football_2.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-european_football_2"
+    },
+    {
+     "short": "bird-financial-q101-v1",
+     "task": "bird-financial-q101-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial"
+    },
+    {
+     "short": "bird-financial-q107-v1",
+     "task": "bird-financial-q107-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial"
+    },
+    {
+     "short": "bird-financial-q155-v1",
+     "task": "bird-financial-q155-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial"
+    },
+    {
+     "short": "bird-financial-q176-v1",
+     "task": "bird-financial-q176-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial"
+    },
+    {
+     "short": "bird-financial-q183-v1",
+     "task": "bird-financial-q183-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-financial"
+    },
+    {
+     "short": "bird-formula_1-q888-v1",
+     "task": "bird-formula_1-q888-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1"
+    },
+    {
+     "short": "bird-formula_1-q948-v1",
+     "task": "bird-formula_1-q948-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1"
+    },
+    {
+     "short": "bird-formula_1-q968-v1",
+     "task": "bird-formula_1-q968-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1"
+    },
+    {
+     "short": "bird-formula_1-q999-v1",
+     "task": "bird-formula_1-q999-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1"
+    },
+    {
+     "short": "bird-formula_1-q1004-v1",
+     "task": "bird-formula_1-q1004-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-formula_1"
+    },
+    {
+     "short": "bird-student_club-q1315-v1",
+     "task": "bird-student_club-q1315-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club"
+    },
+    {
+     "short": "bird-student_club-q1343-v1",
+     "task": "bird-student_club-q1343-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club"
+    },
+    {
+     "short": "bird-student_club-q1354-v1",
+     "task": "bird-student_club-q1354-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club"
+    },
+    {
+     "short": "bird-student_club-q1372-v1",
+     "task": "bird-student_club-q1372-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club"
+    },
+    {
+     "short": "bird-student_club-q1374-v1",
+     "task": "bird-student_club-q1374-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-student_club"
+    },
+    {
+     "short": "bird-superhero-q763-v1",
+     "task": "bird-superhero-q763-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero"
+    },
+    {
+     "short": "bird-superhero-q793-v1",
+     "task": "bird-superhero-q793-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero"
+    },
+    {
+     "short": "bird-superhero-q806-v1",
+     "task": "bird-superhero-q806-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero"
+    },
+    {
+     "short": "bird-superhero-q816-v1",
+     "task": "bird-superhero-q816-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero"
+    },
+    {
+     "short": "bird-superhero-q833-v1",
+     "task": "bird-superhero-q833-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-superhero"
+    },
+    {
+     "short": "bird-thrombosis_prediction-q1166-v1",
+     "task": "bird-thrombosis_prediction-q1166-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-thrombosis_prediction.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-thrombosis_prediction"
+    },
+    {
+     "short": "bird-thrombosis_prediction-q1184-v1",
+     "task": "bird-thrombosis_prediction-q1184-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-thrombosis_prediction.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-thrombosis_prediction"
+    },
+    {
+     "short": "bird-thrombosis_prediction-q1220-v1",
+     "task": "bird-thrombosis_prediction-q1220-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-thrombosis_prediction.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-thrombosis_prediction"
+    },
+    {
+     "short": "bird-thrombosis_prediction-q1222-v1",
+     "task": "bird-thrombosis_prediction-q1222-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-thrombosis_prediction.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-thrombosis_prediction"
+    },
+    {
+     "short": "bird-toxicology-q221-v1",
+     "task": "bird-toxicology-q221-v1",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-toxicology.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/bird-toxicology"
+    }
+   ]
+  },
+  "implx": {
+   "args": [],
+   "tasks": [
+    {
+     "short": "impl-humaneval-0-v3",
+     "task": "impl-humaneval-0-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-0.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-0"
+    },
+    {
+     "short": "impl-humaneval-121-v3",
+     "task": "impl-humaneval-121-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-121.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-121"
+    },
+    {
+     "short": "impl-humaneval-149-v3",
+     "task": "impl-humaneval-149-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-149.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-149"
+    },
+    {
+     "short": "impl-humaneval-33-v3",
+     "task": "impl-humaneval-33-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-33.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-33"
+    },
+    {
+     "short": "impl-humaneval-34-v3",
+     "task": "impl-humaneval-34-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-34.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-34"
+    },
+    {
+     "short": "impl-humaneval-37-v3",
+     "task": "impl-humaneval-37-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-37.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-37"
+    },
+    {
+     "short": "impl-humaneval-4-v3",
+     "task": "impl-humaneval-4-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-4.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-4"
+    },
+    {
+     "short": "impl-humaneval-54-v3",
+     "task": "impl-humaneval-54-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-54.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-54"
+    },
+    {
+     "short": "impl-humaneval-59-v3",
+     "task": "impl-humaneval-59-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-59.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-59"
+    },
+    {
+     "short": "impl-humaneval-90-v3",
+     "task": "impl-humaneval-90-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-90.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-humaneval-90"
+    },
+    {
+     "short": "impl-mbpp-108-v3",
+     "task": "impl-mbpp-108-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-108.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-108"
+    },
+    {
+     "short": "impl-mbpp-12-v3",
+     "task": "impl-mbpp-12-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-12.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-12"
+    },
+    {
+     "short": "impl-mbpp-130-v3",
+     "task": "impl-mbpp-130-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-130.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-130"
+    },
+    {
+     "short": "impl-mbpp-19-v3",
+     "task": "impl-mbpp-19-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-19.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-19"
+    },
+    {
+     "short": "impl-mbpp-230-v3",
+     "task": "impl-mbpp-230-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-230.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-230"
+    },
+    {
+     "short": "impl-mbpp-240-v3",
+     "task": "impl-mbpp-240-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-240.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-240"
+    },
+    {
+     "short": "impl-mbpp-251-v3",
+     "task": "impl-mbpp-251-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-251.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-251"
+    },
+    {
+     "short": "impl-mbpp-265-v3",
+     "task": "impl-mbpp-265-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-265.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-265"
+    },
+    {
+     "short": "impl-mbpp-281-v3",
+     "task": "impl-mbpp-281-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-281.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-281"
+    },
+    {
+     "short": "impl-mbpp-395-v3",
+     "task": "impl-mbpp-395-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-395.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-395"
+    },
+    {
+     "short": "impl-mbpp-414-v3",
+     "task": "impl-mbpp-414-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-414.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-414"
+    },
+    {
+     "short": "impl-mbpp-421-v3",
+     "task": "impl-mbpp-421-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-421.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-421"
+    },
+    {
+     "short": "impl-mbpp-428-v3",
+     "task": "impl-mbpp-428-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-428.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-428"
+    },
+    {
+     "short": "impl-mbpp-474-v3",
+     "task": "impl-mbpp-474-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-474.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-474"
+    },
+    {
+     "short": "impl-mbpp-578-v3",
+     "task": "impl-mbpp-578-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-578.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-578"
+    },
+    {
+     "short": "impl-mbpp-586-v3",
+     "task": "impl-mbpp-586-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-586.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-586"
+    },
+    {
+     "short": "impl-mbpp-587-v3",
+     "task": "impl-mbpp-587-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-587.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-587"
+    },
+    {
+     "short": "impl-mbpp-604-v3",
+     "task": "impl-mbpp-604-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-604.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-604"
+    },
+    {
+     "short": "impl-mbpp-631-v3",
+     "task": "impl-mbpp-631-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-631.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-631"
+    },
+    {
+     "short": "impl-mbpp-644-v3",
+     "task": "impl-mbpp-644-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-644.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-644"
+    },
+    {
+     "short": "impl-mbpp-754-v3",
+     "task": "impl-mbpp-754-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-754.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-754"
+    },
+    {
+     "short": "impl-mbpp-755-v3",
+     "task": "impl-mbpp-755-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-755.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-755"
+    },
+    {
+     "short": "impl-mbpp-760-v3",
+     "task": "impl-mbpp-760-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-760.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-760"
+    },
+    {
+     "short": "impl-mbpp-777-v3",
+     "task": "impl-mbpp-777-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-777.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-777"
+    },
+    {
+     "short": "impl-mbpp-805-v3",
+     "task": "impl-mbpp-805-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-805.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-805"
+    },
+    {
+     "short": "impl-mbpp-88-v3",
+     "task": "impl-mbpp-88-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-88.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-88"
+    },
+    {
+     "short": "impl-mbpp-94-v3",
+     "task": "impl-mbpp-94-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-94.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/frozen-assets/implx-mbpp-94"
+    }
+   ]
+  }
+ },
+ "arms": {
+  "q4": [
+   "--config",
+   "/home/cc/alems-work/hostpower/p0/deploy/configs/q4.json"
+  ],
+  "q8": [
+   "--config",
+   "/home/cc/alems-work/hostpower/p0/deploy/configs/q8.json"
+  ]
+ },
+ "repetitions": 4,
+ "repetition_args": [
+  [
+   "--decoding",
+   "greedy"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.7",
+   "--top-p",
+   "0.8",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "1"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.7",
+   "--top-p",
+   "0.8",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "2"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.7",
+   "--top-p",
+   "0.8",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "3"
+  ]
+ ],
+ "blocks": [
+  0,
+  2
+ ],
+ "seed": 20260927,
+ "batch_seconds": 720,
+ "estimated_batch_seconds": 240,
+ "expected": {
+  "repository_revision": "187c227417475d2e20632b7237ea930217237538",
+  "build_manifest": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/backend-build-manifest.json",
+  "build_manifest_sha256": "0d33a95618f68cfc0040a91cde04957ca616a1b5dcfdd6da0489d70e458ee265",
+  "backend_python": "/home/cc/alems-work/hostpower/p0/deploy/py-m1",
+  "weights_manifest": "/home/cc/alems-work/campaign-c2-external-liqid05-b0-2/weights-manifest.json",
+  "weights_manifest_sha256": "2217ffc8480725c279f78fa28a0a517a3c708e15957c1260b51c2dc3f8c8fb4f",
+  "tool_python": "/home/cc/alems-work/full-task-qualification-env/bin/python",
+  "tool_python_freeze_sha256": "afc8a2450c10d300c9e77aefa80b61115485e7f10d6c66851ae8bd88a81aad21",
+  "networkx_source": "/home/cc/alems-work/networkx-src",
+  "networkx_commit": "2acf1590f82757c01a57b81b8c5dfb79e60aa416",
+  "cpu_power": [
+   {
+    "governor": "schedutil",
+    "idle": [
+     {
+      "disabled": "0",
+      "exit_latency_us": "0",
+      "name": "POLL"
+     },
+     {
+      "disabled": "0",
+      "exit_latency_us": "1",
+      "name": "C1"
+     },
+     {
+      "disabled": "0",
+      "exit_latency_us": "30",
+      "name": "C2"
+     }
+    ],
+    "max_khz": "2450000",
+    "min_khz": "1500000",
+    "cpus": [
+     80,
+     81,
+     82,
+     83,
+     84,
+     85,
+     86,
+     87
+    ]
+   }
+  ],
+  "min_free_gib": 30,
+  "lease_end_utc": "2026-10-02T20:30:00Z"
+ }
+}

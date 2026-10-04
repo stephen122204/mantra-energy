@@ -1,0 +1,61 @@
+{
+ "config": "hostpower/devstral/deploy/configs/q4-ctx65536.json",
+ "command": [
+  "/home/cc/alems-work/stock-stacks/llama.cpp/build/bin/llama-server",
+  "-m",
+  "/dev/shm/gguf/mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "18431",
+  "-c",
+  "65536",
+  "-np",
+  "1",
+  "-ngl",
+  "999",
+  "-t",
+  "8",
+  "--no-webui",
+  "--seed",
+  "0",
+  "-lv",
+  "4"
+ ],
+ "max_context": 65536,
+ "probe": {
+  "ok": true,
+  "prompt_tokens": 61184,
+  "tokens_evaluated": 61184,
+  "tokens_predicted": 64,
+  "seconds": 54.0,
+  "timings": {
+   "cache_n": 0,
+   "prompt_n": 61184,
+   "prompt_ms": 52385.0,
+   "prompt_per_token_ms": 0.8561878922594143,
+   "prompt_per_second": 1167.9679297508828,
+   "predicted_n": 64,
+   "predicted_ms": 1585.871,
+   "predicted_per_token_ms": 25.172555555555558,
+   "predicted_per_second": 39.72580367507824
+  },
+  "gpu_memory_high_water_mib": 24339
+ },
+ "offloaded": [
+  [
+   "41",
+   "41"
+  ]
+ ],
+ "n_ctx": 65536,
+ "gpu_memory_used_total_mib": "24315, 40960",
+ "cpu_model_buffers_mib": [
+  "360.00"
+ ],
+ "fit_or_reduction_log_lines": [
+  "0.00.285.349 I cmn  common_init_: (for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on)",
+  "0.00.611.144 I common_fit_params: successfully fit params to free device memory"
+ ],
+ "resident": true
+}

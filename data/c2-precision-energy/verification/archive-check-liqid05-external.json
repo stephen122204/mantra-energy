@@ -1,0 +1,16 @@
+{
+ "status": "verified",
+ "node_files": 14795,
+ "backup_files": 14795,
+ "missing_from_backup": 0,
+ "differ": 0,
+ "only_in_backup": 0,
+ "chain_snapshots": 269,
+ "examples": {
+  "missing": [],
+  "differ": [],
+  "only_in_backup": []
+ },
+ "receipt": "r01-implx-impl-mbpp-265-v3-q4/receipt.json",
+ "utc": "2026-10-02T17:30:20Z"
+}

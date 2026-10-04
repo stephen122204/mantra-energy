@@ -1,0 +1,17 @@
+{
+ "status": "verified",
+ "node_files": 29613,
+ "backup_files": 29613,
+ "missing_from_backup": 0,
+ "differ": 0,
+ "only_in_backup": 0,
+ "chain_snapshots": 15,
+ "examples": {
+  "missing": [],
+  "differ": [],
+  "only": []
+ },
+ "receipt": "r07-repo-repo-overall-reciprocity-overlap-v4-bf16/receipt.json",
+ "node_manifest_sha256": "d0b07eed0c0856ddae433c81078d7a9c90f6f7637d996fef043de8966ecd8a0c",
+ "utc": "2026-10-04T06:58:38Z"
+}

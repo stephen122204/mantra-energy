@@ -1,0 +1,17 @@
+{
+ "status": "verified",
+ "node_files": 417292,
+ "backup_files": 417292,
+ "missing_from_backup": 0,
+ "differ": 0,
+ "only_in_backup": 0,
+ "chain_snapshots": 681,
+ "examples": {
+  "missing": [],
+  "differ": [],
+  "only": []
+ },
+ "receipt": "r07-repo-repo-dag-longest-path-multigraph-v4-q4/receipt.json",
+ "node_manifest_sha256": "5f7bdcae42562031d87fe3c94f5b4232106cc08b459c1ae5699d6089774e6ad2",
+ "utc": "2026-10-03T19:47:30Z"
+}

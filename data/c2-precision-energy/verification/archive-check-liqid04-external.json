@@ -1,0 +1,17 @@
+{
+ "status": "verified",
+ "node_files": 16644,
+ "backup_files": 16644,
+ "missing_from_backup": 0,
+ "differ": 0,
+ "only_in_backup": 0,
+ "chain_snapshots": 308,
+ "examples": {
+  "missing": [],
+  "differ": [],
+  "only": []
+ },
+ "receipt": "r03-implx-impl-mbpp-94-v3-q8/receipt.json",
+ "node_manifest_sha256": "5e96685ab3fc7a8af20ded7fe26fcb59a2767ff70525ee669f9994f387f5ffce",
+ "utc": "2026-10-03T00:35:41Z"
+}

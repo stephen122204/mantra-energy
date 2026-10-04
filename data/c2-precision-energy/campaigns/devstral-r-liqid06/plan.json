@@ -1,0 +1,493 @@
+{
+ "campaign_id": "C2-full-task-all-liqid06-liqid06-devstral-R",
+ "cutoff_utc": "2026-10-05T17:59:00Z",
+ "node": {
+  "host": "cc@129.114.109.169",
+  "remote_repository": "/home/cc/alems-work/campaign-exec",
+  "remote_python": "/home/cc/alems-work/full-task-qualification-env/bin/python",
+  "remote_directory": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/results",
+  "node_output": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/control",
+  "lock": "/home/cc/alems-work/gpu.lock",
+  "identity_file": "/Users/Stephen/.ssh/id_ed25519",
+  "known_hosts": "/Users/Stephen/.ssh/liqid06-known-hosts"
+ },
+ "maintenance": {
+  "anchor_utc": "2026-09-27T00:20:00Z",
+  "period_seconds": 10800,
+  "window_seconds": 600,
+  "systemd_timers": [
+   "cache-vendordata.timer",
+   "fwupd-refresh.timer",
+   "apt-daily.timer",
+   "apt-daily-upgrade.timer",
+   "motd-news.timer",
+   "man-db.timer",
+   "logrotate.timer",
+   "dpkg-db-backup.timer",
+   "sysstat-summary.timer",
+   "systemd-tmpfiles-clean.timer",
+   "update-notifier-download.timer",
+   "update-notifier-motd.timer",
+   "e2scrub_all.timer",
+   "fstrim.timer"
+  ]
+ },
+ "host_condition": {
+  "cpu_affinity": "80-87",
+  "keep_awake_cpus": "",
+  "tool_cpus": "88-95",
+  "supervisor_cpus": "72-79",
+  "idle_cpus": "80-87"
+ },
+ "warm": [],
+ "required_domains": [
+  "PACKAGE_SOCKET_0",
+  "PACKAGE_SOCKET_1",
+  "GPU_BOARD_0"
+ ],
+ "base_args": [
+  "--mode",
+  "native",
+  "--backend-python",
+  "/home/cc/alems-work/hostpower/devstral/deploy/py-m1",
+  "--allocation-id",
+  "alems-liqid-replication-20261001",
+  "--isolation",
+  "C2 campaign on liqid06; model CPUs 80-87, tools 88-95",
+  "--deadline",
+  "1800",
+  "--agent-protocol",
+  "chat-tools-v2",
+  "--max-turns",
+  "250",
+  "--max-tool-calls",
+  "500",
+  "--max-total-output-tokens",
+  "65536",
+  "--max-tokens",
+  "4096",
+  "--max-runs",
+  "1",
+  "--repeats",
+  "1",
+  "--policies",
+  "demand",
+  "--byte-budget",
+  "0",
+  "--campaign-exit"
+ ],
+ "families": {
+  "business": {
+   "args": [],
+   "tasks": [
+    {
+     "short": "business-segments-v2-n8192-s7",
+     "task": "business-segments-v2-n8192-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n8192-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n8192-s7"
+    },
+    {
+     "short": "business-orphans-v2-n8192-s7",
+     "task": "business-orphans-v2-n8192-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n8192-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n8192-s7"
+    },
+    {
+     "short": "business-declines-v2-n8192-s7",
+     "task": "business-declines-v2-n8192-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n8192-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n8192-s7"
+    },
+    {
+     "short": "business-segments-v2-n1000000-s7",
+     "task": "business-segments-v2-n1000000-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n1000000-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n1000000-s7"
+    },
+    {
+     "short": "business-orphans-v2-n1000000-s7",
+     "task": "business-orphans-v2-n1000000-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n1000000-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n1000000-s7"
+    },
+    {
+     "short": "business-declines-v2-n1000000-s7",
+     "task": "business-declines-v2-n1000000-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n1000000-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/business-n1000000-s7"
+    }
+   ]
+  },
+  "etl": {
+   "args": [],
+   "tasks": [
+    {
+     "short": "etl-latest-v3-n8192-s7",
+     "task": "etl-latest-v3-n8192-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/etl-n8192-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/etl-n8192-s7"
+    },
+    {
+     "short": "etl-latest-v3-n1000000-s7",
+     "task": "etl-latest-v3-n1000000-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/etl-n1000000-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/etl-n1000000-s7"
+    }
+   ]
+  },
+  "numerical": {
+   "args": [],
+   "tasks": [
+    {
+     "short": "grouped-fit-v1-n8192-s7",
+     "task": "grouped-fit-v1-n8192-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/numerical-n8192-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/numerical-n8192-s7"
+    },
+    {
+     "short": "grouped-fit-v1-n1000000-s7",
+     "task": "grouped-fit-v1-n1000000-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/numerical-n1000000-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/numerical-n1000000-s7"
+    }
+   ]
+  },
+  "program": {
+   "args": [],
+   "tasks": [
+    {
+     "short": "python-conditional-dedup-v2-n8192-s7",
+     "task": "python-conditional-dedup-v2-n8192-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/program-conditional-dedup-n8192-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/program-conditional-dedup-n8192-s7"
+    },
+    {
+     "short": "python-user-histogram-v2-n8192-s7",
+     "task": "python-user-histogram-v2-n8192-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/program-user-histogram-n8192-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/program-user-histogram-n8192-s7"
+    },
+    {
+     "short": "python-conditional-dedup-v2-n100000-s7",
+     "task": "python-conditional-dedup-v2-n100000-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/program-conditional-dedup-n100000-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/program-conditional-dedup-n100000-s7"
+    },
+    {
+     "short": "python-user-histogram-v2-n100000-s7",
+     "task": "python-user-histogram-v2-n100000-s7",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/program-user-histogram-n100000-s7.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/program-user-histogram-n100000-s7"
+    }
+   ]
+  },
+  "repo": {
+   "args": [],
+   "tasks": [
+    {
+     "short": "repo-degree-centrality-normalization-v4",
+     "task": "repo-degree-centrality-normalization-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-degree-centrality-normalization.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-degree-centrality-normalization"
+    },
+    {
+     "short": "repo-core-number-comparison-v4",
+     "task": "repo-core-number-comparison-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-core-number-comparison.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-core-number-comparison"
+    },
+    {
+     "short": "repo-bfs-layers-visited-v4",
+     "task": "repo-bfs-layers-visited-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-bfs-layers-visited.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-bfs-layers-visited"
+    },
+    {
+     "short": "repo-dag-longest-path-multigraph-v4",
+     "task": "repo-dag-longest-path-multigraph-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-dag-longest-path-multigraph.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-dag-longest-path-multigraph"
+    },
+    {
+     "short": "repo-connected-components-bfs-v4",
+     "task": "repo-connected-components-bfs-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-connected-components-bfs.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-connected-components-bfs"
+    },
+    {
+     "short": "repo-dijkstra-tentative-distance-v4",
+     "task": "repo-dijkstra-tentative-distance-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-dijkstra-tentative-distance.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-dijkstra-tentative-distance"
+    },
+    {
+     "short": "repo-topological-generations-multiedge-v4",
+     "task": "repo-topological-generations-multiedge-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-topological-generations-multiedge.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-topological-generations-multiedge"
+    },
+    {
+     "short": "repo-edge-boundary-symmetric-v4",
+     "task": "repo-edge-boundary-symmetric-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-edge-boundary-symmetric.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-edge-boundary-symmetric"
+    },
+    {
+     "short": "repo-overall-reciprocity-overlap-v4",
+     "task": "repo-overall-reciprocity-overlap-v4",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-overall-reciprocity-overlap.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/repo-overall-reciprocity-overlap"
+    }
+   ]
+  },
+  "impl": {
+   "args": [],
+   "tasks": [
+    {
+     "short": "impl-humaneval-20-v3",
+     "task": "impl-humaneval-20-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-humaneval-20.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-humaneval-20"
+    },
+    {
+     "short": "impl-humaneval-26-v3",
+     "task": "impl-humaneval-26-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-humaneval-26.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-humaneval-26"
+    },
+    {
+     "short": "impl-mbpp-3-v3",
+     "task": "impl-mbpp-3-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-mbpp-3.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-mbpp-3"
+    },
+    {
+     "short": "impl-mbpp-757-v3",
+     "task": "impl-mbpp-757-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-mbpp-757.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-mbpp-757"
+    },
+    {
+     "short": "impl-humaneval-85-v3",
+     "task": "impl-humaneval-85-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-humaneval-85.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-humaneval-85"
+    },
+    {
+     "short": "impl-humaneval-87-v3",
+     "task": "impl-humaneval-87-v3",
+     "task_pack": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-humaneval-87.json",
+     "task_pack_assets": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/frozen-assets/impl-humaneval-87"
+    }
+   ]
+  }
+ },
+ "arms": {
+  "q4": [
+   "--config",
+   "/home/cc/alems-work/hostpower/devstral/deploy/configs/q4-ctx65536.json"
+  ],
+  "q8": [
+   "--config",
+   "/home/cc/alems-work/hostpower/devstral/deploy/configs/q8-ctx65536.json"
+  ]
+ },
+ "repetitions": 11,
+ "repetition_args": [
+  [
+   "--decoding",
+   "greedy"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "1"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "2"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "3"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "4"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "5"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "6"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "7"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "8"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "9"
+  ],
+  [
+   "--decoding",
+   "sampled",
+   "--temperature",
+   "0.15",
+   "--top-p",
+   "1.0",
+   "--top-k",
+   "131072",
+   "--min-p",
+   "0",
+   "--sampling-seed",
+   "10"
+  ]
+ ],
+ "seed": 20260927,
+ "batch_seconds": 2400,
+ "estimated_batch_seconds": 900,
+ "expected": {
+  "repository_revision": "7dfd892f829e9e5c791449a63659c8d97fc989b9",
+  "build_manifest": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/backend-build-manifest.json",
+  "build_manifest_sha256": "ca2a05dd7c5ded1228385668c240568e4645afb6d0adfee9ab4c2b1384488bce",
+  "backend_python": "/home/cc/alems-work/hostpower/devstral/deploy/py-m1",
+  "weights_manifest": "/home/cc/alems-work/campaign-c2-liqid06-devstral-R/weights-manifest.json",
+  "weights_manifest_sha256": "16d7bb672a18ab158e7e03d3b53ffe04d3006ec955b25f3c165f6973b49e7704",
+  "tool_python": "/home/cc/alems-work/full-task-qualification-env/bin/python",
+  "tool_python_freeze_sha256": "afc8a2450c10d300c9e77aefa80b61115485e7f10d6c66851ae8bd88a81aad21",
+  "networkx_source": "/home/cc/alems-work/networkx-src",
+  "networkx_commit": "2acf1590f82757c01a57b81b8c5dfb79e60aa416",
+  "cpu_power": [
+   {
+    "governor": "schedutil",
+    "idle": [
+     {
+      "disabled": "0",
+      "exit_latency_us": "0",
+      "name": "POLL"
+     },
+     {
+      "disabled": "0",
+      "exit_latency_us": "1",
+      "name": "C1"
+     },
+     {
+      "disabled": "0",
+      "exit_latency_us": "30",
+      "name": "C2"
+     }
+    ],
+    "max_khz": "2450000",
+    "min_khz": "1500000",
+    "cpus": [
+     80,
+     81,
+     82,
+     83,
+     84,
+     85,
+     86,
+     87
+    ]
+   }
+  ],
+  "min_free_gib": 30,
+  "lease_end_utc": "2026-10-05T23:59:00Z"
+ }
+}

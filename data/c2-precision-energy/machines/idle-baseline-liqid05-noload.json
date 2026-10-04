@@ -1,0 +1,19 @@
+{
+ "start_utc": "2026-09-30T07:02:36.748117+00:00",
+ "seconds": 600.6,
+ "condition": "no model loaded; no campaign processes",
+ "rapl_domains": {
+  "package-0": "/sys/class/powercap/intel-rapl:0",
+  "package-1": "/sys/class/powercap/intel-rapl:1"
+ },
+ "mean_watts": {
+  "package-0": 43.23,
+  "package-1": 42.84,
+  "gpu_board": 32.71
+ },
+ "gpu_memory_used_mib": [
+  515.8125,
+  515.8125
+ ],
+ "gpu_utilization_max_pct": 0.0
+}

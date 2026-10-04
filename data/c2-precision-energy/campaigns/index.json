@@ -1,0 +1,65 @@
+[
+ {
+  "campaign": "c2-l0-liqid05",
+  "machine": "LIQID05 (A100 40GB)",
+  "model": "Qwen3-30B-A3B-Instruct-2507",
+  "level": "L0",
+  "attempts": 638,
+  "valid": 636,
+  "passed": 454
+ },
+ {
+  "campaign": "repo-r-liqid05",
+  "machine": "LIQID05 (A100 40GB)",
+  "model": "Qwen3-30B-A3B-Instruct-2507",
+  "level": "R",
+  "attempts": 198,
+  "valid": 196,
+  "passed": 76
+ },
+ {
+  "campaign": "qwen-r-3arm-gigaio08",
+  "machine": "gigaio-08 (A100 80GB)",
+  "model": "Qwen3-30B-A3B-Instruct-2507",
+  "level": "R",
+  "attempts": 681,
+  "valid": 681,
+  "passed": 513
+ },
+ {
+  "campaign": "qwen-r-r07-gigaio07",
+  "machine": "gigaio-07 (A100 80GB)",
+  "model": "Qwen3-30B-A3B-Instruct-2507",
+  "level": "R",
+  "attempts": 15,
+  "valid": 15,
+  "passed": 4
+ },
+ {
+  "campaign": "devstral-r-liqid06",
+  "machine": "LIQID06 (A100 40GB)",
+  "model": "Devstral-Small-2",
+  "level": "R",
+  "attempts": 638,
+  "valid": 637,
+  "passed": 561
+ },
+ {
+  "campaign": "external-l0-liqid05",
+  "machine": "LIQID05 (A100 40GB)",
+  "model": "Qwen3-30B-A3B-Instruct-2507",
+  "level": "L0",
+  "attempts": 269,
+  "valid": 269,
+  "passed": 206
+ },
+ {
+  "campaign": "external-l0-liqid04",
+  "machine": "liqid04 (A100 40GB)",
+  "model": "Qwen3-30B-A3B-Instruct-2507",
+  "level": "L0",
+  "attempts": 308,
+  "valid": 308,
+  "passed": 234
+ }
+]

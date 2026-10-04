@@ -1,0 +1,61 @@
+{
+ "config": "hostpower/p0/deploy/configs/bf16-ctx65536.json",
+ "command": [
+  "/home/cc/alems-work/stock-stacks/llama.cpp/build/bin/llama-server",
+  "-m",
+  "/dev/shm/gguf/Qwen_Qwen3-30B-A3B-Instruct-2507-bf16.gguf",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "18431",
+  "-c",
+  "65536",
+  "-np",
+  "1",
+  "-ngl",
+  "999",
+  "-t",
+  "8",
+  "--no-webui",
+  "--seed",
+  "0",
+  "-lv",
+  "4"
+ ],
+ "max_context": 65536,
+ "probe": {
+  "ok": true,
+  "prompt_tokens": 61184,
+  "tokens_evaluated": 61184,
+  "tokens_predicted": 64,
+  "seconds": 30.8,
+  "timings": {
+   "cache_n": 0,
+   "prompt_n": 61184,
+   "prompt_ms": 30027.476,
+   "prompt_per_token_ms": 0.49077333943514645,
+   "prompt_per_second": 2037.6004962921295,
+   "predicted_n": 64,
+   "predicted_ms": 766.449,
+   "predicted_per_token_ms": 12.165857142857142,
+   "predicted_per_second": 82.19724991486714
+  },
+  "gpu_memory_high_water_mib": 64503
+ },
+ "offloaded": [
+  [
+   "49",
+   "49"
+  ]
+ ],
+ "n_ctx": 65536,
+ "gpu_memory_used_total_mib": "64447, 81920",
+ "cpu_model_buffers_mib": [
+  "593.50"
+ ],
+ "fit_or_reduction_log_lines": [
+  "0.00.265.053 I cmn  common_init_: (for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on)",
+  "0.00.525.074 I common_fit_params: successfully fit params to free device memory"
+ ],
+ "resident": true
+}

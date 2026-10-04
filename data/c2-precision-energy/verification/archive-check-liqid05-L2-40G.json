@@ -1,0 +1,16 @@
+{
+ "status": "verified",
+ "node_files": 384770,
+ "backup_files": 384770,
+ "missing_from_backup": 0,
+ "differ": 0,
+ "only_in_backup": 0,
+ "chain_snapshots": 198,
+ "examples": {
+  "missing": [],
+  "differ": [],
+  "only_in_backup": []
+ },
+ "receipt": "r10-repo-repo-overall-reciprocity-overlap-v4-q4/receipt.json",
+ "utc": "2026-10-02T17:41:40Z"
+}

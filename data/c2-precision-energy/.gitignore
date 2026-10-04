@@ -1,0 +1,2 @@
+# Per-attempt tables are the purpose of this folder (repository .gitignore excludes *.csv elsewhere).
+!campaigns/*/attempts.csv

@@ -1,0 +1,67 @@
+{
+  "passed": true,
+  "checks": {
+    "repository_present": true,
+    "repository_revision": true,
+    "repository_clean": true,
+    "build_manifest": true,
+    "backend_dependencies_unchanged": true,
+    "model_weights_manifest": true,
+    "tool_environment": true,
+    "networkx_source": true,
+    "declared_cpus_online": true,
+    "declared_cpu_sets_disjoint": true,
+    "cpu_power_as_frozen": true,
+    "rapl_packages_readable": true,
+    "gpu_idle": true,
+    "host_maintenance_timer_schedulable": true,
+    "disk_free": true,
+    "gpu_lock_free": true,
+    "no_other_users_logged_in": true,
+    "lease_covers_campaign_plus_12h": true,
+    "cutoff_before_lease_end": true
+  },
+  "info": {
+    "backend_verify_error": null,
+    "cpu_power": [
+      {
+        "governor": "schedutil",
+        "idle": [
+          {
+            "disabled": "0",
+            "exit_latency_us": "0",
+            "name": "POLL"
+          },
+          {
+            "disabled": "0",
+            "exit_latency_us": "1",
+            "name": "C1"
+          },
+          {
+            "disabled": "0",
+            "exit_latency_us": "30",
+            "name": "C2"
+          }
+        ],
+        "max_khz": "2450000",
+        "min_khz": "1500000",
+        "cpus": [
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55
+        ]
+      }
+    ],
+    "vendor_timer": "ActiveState=inactive",
+    "disk_free_gib": 276.6,
+    "logged_in_users": [
+      "cc"
+    ],
+    "estimated_end_utc": "2026-10-05T01:00:44.920495+00:00"
+  }
+}
