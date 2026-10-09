@@ -1,110 +1,102 @@
-# A-LEMS energy-diagnosis research workspace
+# A-LEMS: Agentic LLM Energy Measurement System
 
-**Team members: start with [START_HERE.md](START_HERE.md).** The default/integration branch is `research/energy-diagnosis`; `main` preserves the initial upstream baseline.
+A-LEMS is a research platform for measuring the energy consumption, latency,
+correctness and execution behavior of LLM and agentic workloads. This repository
+extends the upstream platform with bounded task execution, independent verifiers,
+CPU/GPU measurement, MoE inference and expert preparation controls, and campaign
+recovery and result export.
 
-This private research copy retains upstream history and licensing. Student assignments, first issues, agent prompts and the proposed experiment contracts are in [docs/agent-context](docs/agent-context/README.md). The study is not a completed diagnostic system or validated campaign.
+The repository supports two uses:
 
-Run `python3 scripts/check_energy_diagnosis_setup.py` for the lightweight setup check. Runtime and hardware validation remain separate issues. The upstream documentation below is retained for reference and includes broader platform claims/setup commands that must be checked against the current task and cluster permissions. The root LICENSE is MIT; the upstream badge below differs and is not the license authority.
+- inspect saved experimental records and regenerate available analyses;
+- run new experiments with explicit models, tasks, configurations and measurement
+  boundaries.
 
----
+This guide describes the integrated baseline at `6a49455` with the approved
+cleanup. Additional functionality and data in PRs #62–75 remain unmerged.
+The integration branch is `research/energy-diagnosis`; `main` preserves the
+upstream baseline.
 
-<div align="center">
-  
-  # ⚡ A-LEMS
-  ### **Agentic LLM Energy Measurement System**
-  
-  [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)](https://python.org)
-  [![License](https://img.shields.io/badge/License-Apache%202.0-green?style=for-the-badge)](LICENSE)
-  [![Streamlit](https://img.shields.io/badge/GUI-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit)](https://streamlit.io)
-  [![Documentation](https://img.shields.io/badge/Documentation-live-brightgreen?style=for-the-badge)](https://deepakpanigrahy03.github.io/a-lems)
-  [![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit)](https://a-lems-dash.streamlit.app/)
-  
-  **Quantifying the energy cost of agentic AI workflows**
-  
-  <a href="https://deepakpanigrahy03.github.io/a-lems" target="_blank">📖 Documentation</a> • 
-  <a href="https://a-lems-dash.streamlit.app/" target="_blank">📊 Live Demo</a>
-  
-</div>
+## Install and run
 
----
+Obtain the [study repository](https://github.com/stephen122204/alems-energy-diagnosis)
+with the required access. From the repository root, create a dedicated study
+environment and install its dependencies:
 
-## 🔬 **What is A-LEMS?**
-
-A research platform that measures **hardware-level energy consumption** of AI workflows:
-
-| **Linear** | **Agentic** |
-|------------|-------------|
-| Single LLM call | Planning + Tools + Synthesis |
-| 1 API request | Multiple steps + reasoning |
-
-**Core contribution:** Quantifying the **orchestration tax** — the energy overhead of agentic coordination.
-
----
-
-## ✨ **Key Features**
-
-✅ **100Hz hardware sampling** — RAPL, MSR, perf counters  
-✅ **3-layer data model** — Raw → Baseline → Derived (immutable)  
-✅ **80+ metrics per run** — ML-ready dataset  
-✅ **Sustainability metrics** — Carbon, water, methane per query  
-✅ **Multi-provider** — Groq, OpenRouter, Ollama  
-✅ **11 developer tools** — Code analysis, docs, diagnostics  
-
----
-
-## 🚀 **Quick Start**
-
+```bash
+python3 -m venv .venv-study
+source .venv-study/bin/activate
+python -m pip install -r requirements-study.txt
 ```
-bash
-# 1. Install
-git clone https://github.com/deepakpanigrahy03/a-lems.git
-cd a-lems
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
 
-# 2. Detect hardware
-sudo python scripts/detect_hardware.py
+On Windows PowerShell, activate it with `.\.venv-study\Scripts\Activate.ps1`.
+The study requirements specify version ranges, not a frozen historical environment.
+Use a separate environment for the upstream GUI/server dependencies in
+`requirements.txt`, whose constraints differ.
 
-# 3. Run first experiment
-python -m core.execution.tests.test_harness --task-id simple --repetitions 1 --provider local --save-db
+Run the portable checks:
 
-# 4. Launch dashboard
-streamlit run streamlit_app.py
+```bash
+python scripts/check_energy_diagnosis_setup.py
+python scripts/check_study_runtime.py
+python scripts/check_moe_pipeline.py
 ```
----
 
-## 📊 **Live Demo**
+The setup checker validates planning/context integrity. Runtime and MoE checks
+exercise fixtures; native lifecycle tests also need a C++17 compiler. These checks
+do not qualify physical measurements or model correctness.
 
-Try the dashboard: [a-lems-dash.streamlit.app](https:///a-lems-dash.streamlit.app)  (or)
-Alternatively on : [a-lems-dashboard.onrender.com](https://a-lems-dashboard.onrender.com/)
+To exercise the complete local workflow with simulated model responses and counters:
 
-*(No installation needed — runs in your browser)*
+```bash
+python -m studies.energy_diagnosis.local_run --mode fixture \
+  --settings C00,C01,C10,C11 --max-runs 12 --output /tmp/alems-local-smoke
+```
 
----
+Use a new output directory initially; rerun the identical command to check resume.
+The command performs real tool computation but produces no physical energy evidence.
+It is source-supported and was not executed for this documentation update.
 
-## 📚 **Documentation**
+For new measurements, follow [RUN_LOCAL.md](studies/energy_diagnosis/RUN_LOCAL.md)
+for local vLLM/Ollama serving, or the [MoE guide](studies/energy_diagnosis/moe/README.md)
+for the pinned native backend and its separate Python 3.11/CUDA environment.
+Both require prepared models and qualified hardware/counters. The
+[operations guide](studies/energy_diagnosis/moe/OPERATIONS.md) covers bounded runs,
+recovery and verified output collection. Original Chameleon allocations have expired.
 
-- [Getting Started](docs-src/mkdocs/source/getting-started/01-installation.md)
-- [User Guide](docs-src/mkdocs/source/user-guide/01-running.md)
-- [Developer Guide](docs-src/mkdocs/source/developer-guide/01-architecture.md)
-- [API Reference](https://deepakpanigrahy03.github.io/a-lems)
+## Reproducibility
 
----
+The [reproduction guide](studies/energy_diagnosis/reproduction/README.md) separates
+**regenerating reported results** from **running new experiments**. It provides
+verified CSV-to-summary/figure instructions, source-supported commands that remain
+untested, and the steps needed to obtain and verify original artifacts. Different
+hardware may reproduce the methodology without identical numerical measurements.
 
-## 📄 **License**
+Complete raw-to-summary-to-paper reproduction is not yet possible here. Raw
+campaign archives are inaccessible, some configurations and analysis scripts are
+missing, and final manuscript outputs are unavailable. The
+[artifact manifest](studies/energy_diagnosis/reproduction/artifact-manifest.json)
+records available evidence, known hashes, unmerged revisions and remaining gaps.
+A future Zenodo release has not been completed. Installation and full runtime/GPU
+validation were not repeated for this documentation update; see the guide for
+verified checks and limitations.
 
-Apache License 2.0 — see [LICENSE](LICENSE)
+## Repository layout
 
----
+- `core/`, `alems/`, `gui/`: platform execution, measurement, databases and interfaces.
+- `studies/energy_diagnosis/`: study runtime, tasks/verifiers, MoE controls, campaigns,
+  diagnostics and reproduction documentation.
+- `config/`, `tests/`, `scripts/`: configurations, validation and operator utilities.
+- `docs/`, `docs-src/`: technical and historical documentation. Team contributors
+  start at [START_HERE.md](START_HERE.md).
 
-## 📝 **Citation**
+## Citations
 
-```bibtex
-@software{panigrahy2026alems,
-  title={A-LEMS: Agentic LLM Energy Measurement System},
-  author={Panigrahy, Deepak},
-  year={2026},
-  url={https://github.com/deepakpanigrahy03/a-lems}
-}
-<div align="center"> Built with ⚡ for sustainable AI research </div> ```
+Until a versioned release citation is available, identify this repository and the
+exact source revision used for an experiment. No final paper citation or Zenodo
+DOI is established by this documentation.
+
+A-LEMS originates from [Deepak Panigrahy's upstream platform](https://github.com/deepakpanigrahy03/alems-platform);
+its baseline is recorded in [provenance.json](studies/energy_diagnosis/provenance.json).
+The repository uses the [MIT license](LICENSE). Models, external datasets and
+backend dependencies retain their own licenses and citation requirements.

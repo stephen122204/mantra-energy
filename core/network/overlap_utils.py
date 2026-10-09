@@ -12,7 +12,6 @@ Used by: rapl_slice_estimator.py, spbm_fraction_estimator.py, fallback_estimator
 import logging
 import sqlite3
 from typing import List, Optional, Tuple
-import sqlite3
 
 logger = logging.getLogger(__name__)
 

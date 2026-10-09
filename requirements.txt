@@ -28,8 +28,6 @@ tomli>=2.0.1
 # sudo apt install iptables-persistent netfilter-persistent
 sqlparse>=0.4.4
 sympy>=1.12
-fastapi>=0.100.0
-uvicorn>=0.23.0
 datasets>=2.14.0
 google-generativeai>=0.8.0
 pytest>=7.0.0
