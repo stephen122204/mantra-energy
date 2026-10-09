@@ -68,7 +68,6 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Import the new raw measurement model (Layer 1)
-from core.models.raw_energy_measurement import RawEnergyMeasurement
 # MSRReader and SchedulerMonitor now via factory — PAC-2 compliant
 # PerfReader via factory (self.cpu_reader) — direct import removed (PAC-2)
 # ============================================================================
@@ -79,12 +78,9 @@ from core.readers.rapl_reader import RAPLReader
 from core.readers.factory import ReaderFactory as _ReaderFactory
 from core.readers.sensor_reader import SensorReader
 # TurbostatReader now via ReaderFactory.get_turbostat_reader() — PAC-2 compliant
-from core.utils.core_pinner import CorePinner
 # Import utilities
-from core.utils.debug import dprint, init_debug_from_env
 # Import baseline utilities (will be used by analysis layer, not here)
 from core.utils.idle_baseline import measure_idle_baseline as measure_baseline
-from core.utils.validators import MeasurementValidator
 
 # Initialize debug system
 init_debug_from_env()

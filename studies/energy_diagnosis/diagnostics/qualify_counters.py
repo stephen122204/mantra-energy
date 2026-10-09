@@ -1,6 +1,5 @@
 """Bounded on-node consistency check; not external electrical calibration."""
 import argparse
-import dataclasses
 import hashlib
 import json
 from pathlib import Path

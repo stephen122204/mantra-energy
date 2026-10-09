@@ -112,7 +112,6 @@ def _convert_gpu_to_telemetry(gpu_samples):
         ))
     return result
 
-import platform
 import pathlib
 
 def _get_power_paths() -> dict:
@@ -400,14 +399,6 @@ class ExperimentRunner:
     # ========================================================================
     # DUPLICATE CODE 3: Database setup (similar in both scripts)
     # ========================================================================
-    def setup_database(self) -> Tuple[DatabaseManager, int]:
-        """Database setup - similar in both scripts"""
-        db_config = self.config.get_db_config()
-        db = DatabaseManager(db_config)
-        db.create_tables()
-        hw_id = db.insert_hardware(self.get_hardware_info())
-        env_id = self.setup_environment(db)
-        return db, hw_id
 
     # ========================================================================
     # DUPLICATE CODE 4: Run data preparation (identical in both scripts)
