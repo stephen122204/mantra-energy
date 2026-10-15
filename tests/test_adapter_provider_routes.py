@@ -209,5 +209,36 @@ class OpenAICompatTimingTests(unittest.TestCase):
             executor.pending_interactions[0]["token_provenance"], "provider")
 
 
+class OllamaRunnerOptionsTests(unittest.TestCase):
+    def test_preparation_and_actual_request_use_identical_options(self):
+        adapter = OpenAICompatAdapter(provider("ollama_local"), {
+            **model(), "ollama_num_thread": 8, "ollama_num_ctx": 4096,
+            "ollama_keep_alive": "5m"})
+        actual = adapter._build_payload("inspect this", 0.0)
+        prepared = adapter.build_ollama_preparation_payload()
+        self.assertEqual(actual["options"], {
+            "temperature": 0.0, "num_predict": 32, "num_thread": 8, "num_ctx": 4096})
+        self.assertEqual(prepared["options"], actual["options"])
+        self.assertEqual(prepared["keep_alive"], actual["keep_alive"])
+        self.assertEqual(prepared["messages"], [])
+        self.assertFalse(prepared["stream"])
+        # Preparation is a separate payload; it cannot erase the actual prompt.
+        self.assertEqual(actual["messages"], [{"role": "user", "content": "inspect this"}])
+
+    def test_non_ollama_payload_is_unaffected(self):
+        adapter = OpenAICompatAdapter(provider("vllm_local"), {
+            **model(), "ollama_num_thread": 8, "ollama_num_ctx": 4096})
+        self.assertNotIn("options", adapter._build_payload("prompt", 0.0))
+        with self.assertRaises(ValueError):
+            adapter.build_ollama_preparation_payload()
+
+    def test_invalid_thread_or_context_fails_before_http(self):
+        for key in ("ollama_num_thread", "ollama_num_ctx"):
+            for value in (0, -1, True, "8"):
+                adapter = OpenAICompatAdapter(provider("ollama_local"), {**model(), key: value})
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    adapter._build_payload("prompt", 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

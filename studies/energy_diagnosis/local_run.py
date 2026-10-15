@@ -93,14 +93,40 @@ def write_artifact(root, relative, value, role):
     )
 
 
+def legacy_instruction(task):
+    """Describe the existing JSON protocol without supplying reference answers."""
+    fields = (dict(total_units="<computed number>", total_revenue="<computed number>")
+              if task.family == "data" else
+              dict(file_count="<computed integer>", checks=["<sorted relative paths>"]))
+    final = {"answer": {**fields, "task_id": task.task_id,
+                        "evidence": [task.asset_sha256]}}
+    tool = {"tool_calls": [{"id": "inspect_1", "tool": "inspect_asset", "args": {}}]}
+    return (
+        "Return only one JSON object per turn. First inspect the local input with "
+        + json.dumps(tool) + ". Tool calls require a unique string id, tool "
+        "inspect_asset and empty args {}; optional depends_on is a list of call ids. "
+        "Return 1..8 tool calls, without an answer in the same object. "
+        "After receiving successful tool_results, return this complete final shape: "
+        + json.dumps(final) + ". Replace computed-value placeholders with values "
+        "from the tool result. All totals or repository fields, task_id and evidence "
+        "belong INSIDE answer; no required field belongs beside answer. Data totals "
+        "must be numbers or decimal strings, never null. Repository checks must be "
+        "a sorted list of relative paths. Never invent observations or evidence."
+    )
+
+
 class FixtureAPI:
     """Deterministic HTTP responder, clearly labeled and only explicitly selected."""
 
-    def __init__(self, case="success"):
+    def __init__(self, case="success", *, scripted_responses=None):
         self.case = case
+        self.scripted_responses = None if scripted_responses is None else iter(scripted_responses)
+        self.requests = []
 
     def __enter__(self):
         case = self.case
+        scripted = self.scripted_responses
+        requests_seen = self.requests
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -109,6 +135,7 @@ class FixtureAPI:
             def do_POST(self):
                 raw = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 context = json.loads(raw["messages"][-1]["content"])
+                requests_seen.append(raw)
                 if case == "model_failure":
                     self.send_response(500)
                     self.end_headers()
@@ -134,7 +161,7 @@ class FixtureAPI:
                             answer["answer"]["total_revenue"] = "-999"
                         else:
                             answer["answer"]["checks"] = []
-                text = json.dumps(answer)
+                text = next(scripted) if scripted is not None else json.dumps(answer)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.end_headers()
@@ -459,7 +486,7 @@ class GoalExecutor:
             task_id=task.task_id,
             asset_sha256=task.asset_sha256,
             goal=task.prompt,
-            instruction='Return only JSON. To inspect the local input use {"tool_calls":[{"id":"unique_id","tool":"inspect_asset","args":{}}]}. After inspecting results return {"answer":{...}}. Never invent observations. For data answers use total_units and total_revenue; for repository answers use file_count and checks. Include task_id and evidence [asset_sha256].',
+            instruction=legacy_instruction(task),
             tool_results=tool_results,
         )
         try:
@@ -947,22 +974,27 @@ def run(args, *, endpoint=None):
             stream=True,
             is_local=True,
             fixture_case=args.fixture_case if simulated else None,
+            ollama_num_thread=getattr(args, "ollama_num_thread", None),
+            ollama_num_ctx=getattr(args, "ollama_num_ctx", None),
+            ollama_keep_alive=getattr(args, "ollama_keep_alive", None),
         ),
     )
     model_hash = args.model_sha256 or digest(
         {"model": "SIMULATED", "case": args.fixture_case}
     )
-    preparation = digest(
-        dict(
-            provider=args.provider,
-            model=model_hash,
-            temperature=0,
-            max_tokens=args.max_tokens,
-            max_steps=args.max_steps,
-            deadline=args.deadline,
-            mode=args.mode,
-        )
+    preparation_config = dict(
+        provider=args.provider, model=model_hash, temperature=0,
+        max_tokens=args.max_tokens, max_steps=args.max_steps,
+        deadline=args.deadline, mode=args.mode,
     )
+    ollama_preparation = None
+    if args.provider == "ollama":
+        ollama_preparation = adapter.build_ollama_preparation_payload()
+        preparation_config.update(
+            ollama_options=ollama_preparation["options"],
+            ollama_keep_alive=ollama_preparation.get("keep_alive"),
+        )
+    preparation = digest(preparation_config)
     verifier_hash = hashlib.sha256(
         Path(__file__).with_name("workloads").joinpath("pilot_tasks.py").read_bytes()
     ).hexdigest()
@@ -1025,6 +1057,8 @@ def run(args, *, endpoint=None):
         provider=args.provider,
         base_url=base_url,
         preparation_sha256=preparation,
+        ollama_options=(ollama_preparation["options"] if ollama_preparation else None),
+        ollama_keep_alive=getattr(args, "ollama_keep_alive", None),
     )
     manifest_path = root / "environment.json"
     if not manifest_path.exists():
@@ -1094,6 +1128,9 @@ def main(argv=None):
     parser.add_argument("--deadline", type=float, default=120)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--ollama-num-thread", type=int)
+    parser.add_argument("--ollama-num-ctx", type=int)
+    parser.add_argument("--ollama-keep-alive", help="Ollama residency duration, e.g. 5m")
     parser.add_argument("--provider", choices=["vllm", "ollama"], default="vllm")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000/v1")
     parser.add_argument("--model")
@@ -1149,6 +1186,15 @@ def main(argv=None):
         return
     if args.max_runs < 1 or args.max_steps < 1 or not 0 < args.deadline <= 600:
         parser.error("invalid run/step/deadline budget")
+    if any(value is not None and value < 1 for value in
+           (args.ollama_num_thread, args.ollama_num_ctx)):
+        parser.error("Ollama thread/context values must be positive")
+    if args.provider != "ollama" and any(value is not None for value in
+            (args.ollama_num_thread, args.ollama_num_ctx, args.ollama_keep_alive)):
+        parser.error("Ollama options require --provider ollama")
+    if args.mode == "fixture" and any(value is not None for value in
+            (args.ollama_num_thread, args.ollama_num_ctx, args.ollama_keep_alive)):
+        parser.error("Ollama runner options are unavailable in fixture mode")
     if args.mode == "fixture":
         args.provider = "vllm"
         with FixtureAPI(args.fixture_case) as endpoint:

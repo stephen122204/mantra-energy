@@ -238,15 +238,19 @@ class OpenAICompatAdapter(TextGenABC):
         """
         messages = [{"role": "user", "content": prompt}]
         if self._is_ollama:
-            return {
-                "model": self.model_id,
-                "messages": messages,
-                "stream": False,
-                "options": {
-                    "temperature": temperature,
-                    "num_predict": self.max_tokens,
-                },
-            }
+            options = {"temperature": temperature, "num_predict": self.max_tokens}
+            for key in ("num_thread", "num_ctx"):
+                value = self.model_config.get("ollama_" + key)
+                if value is not None:
+                    if type(value) is not int or value < 1:
+                        raise ValueError(f"ollama_{key} must be a positive integer")
+                    options[key] = value
+            payload = {"model": self.model_id, "messages": messages,
+                       "stream": False, "options": options}
+            keep_alive = self.model_config.get("ollama_keep_alive")
+            if keep_alive is not None:
+                payload["keep_alive"] = keep_alive
+            return payload
         # OpenAI-compat format (groq, openai)
         return {
             "model": self.model_id,
@@ -254,6 +258,18 @@ class OpenAICompatAdapter(TextGenABC):
             "max_tokens": self.max_tokens,
             "temperature": temperature,
         }
+
+    def build_ollama_preparation_payload(self) -> Dict:
+        """Preload via /api/chat with exactly the actual request's runner options.
+
+        Empty messages request loading only. This does not reset prompt/KV caches
+        or prove runner reuse; the operator must verify server state and logs.
+        """
+        if not self._is_ollama:
+            raise ValueError("preparation payload requires an Ollama provider")
+        payload = self._build_payload("", 0.0)
+        payload["messages"] = []
+        return payload
 
     def _build_headers(self) -> Dict:
         """
