@@ -51,7 +51,8 @@ without installing a service. Its downloaded archive SHA-256 is retained locally
 The smoke model is `qwen2.5:3b-instruct-q4_K_M`, about 1.93 GB. Every registry blob
 was checked against its manifest digest; the exact manifest and its SHA-256 are
 retained. This small GGUF model is a software/hardware smoke input, not an approved
-research model. Model loading remains outside the integrated goal window.
+research model. The intended preparation step precedes the goal, but server reloads must be checked
+in the retained logs; the first smoke attempt reloaded its runner (see below).
 
 ## Devices and measurement scope
 
@@ -148,12 +149,74 @@ work if cleanup or record validity fails. Confirm no owned GPU processes remain.
 
 ## Validation status
 
-Setup/read-only discovery is complete. Controlled workloads and live inference
-are pending the explicitly required allocation/session budget. The original
-portable suite reported 10 Python 3.10 mock-resolution failures and 198 passes;
-the failures are retained. Object-targeted patches in the test module resolve the
-problem without altering provider runtime behavior. Subsequent verification and
-hardware evidence are recorded in the scoped PR and Alex's immutable context.
+The exact hardware-tested code is `ad2d97b639faafe093be45941df8d131326e940c`.
+The readiness-only session used allocation `CHI-261719`, a 1,200-second allowance,
+and cutoff `2026-10-16T18:55:00Z`. It ran from 04:24:30 to 04:31:33 UTC on
+15 October (about 423 seconds). The outer supervisor completed with verified
+process cleanup. No pilot or full campaign was launched.
+
+| Check | Result and retained evidence |
+| --- | --- |
+| Setup | Passed; `logs/setup-final.log` |
+| Portable runtime | 216 passed plus 5 subtests; `logs/runtime-final.log` |
+| Focused diagnostics | 23 passed; `logs/diagnostics-fixed.log` |
+| Final edited-path checks | 43 passed; `logs/focused-final.log` |
+| Dependency consistency | Both isolated environments passed `pip check` |
+| Device/counter validation | Four GPUs, two repetitions each of idle/CPU/GPU/combined; 32 windows reconciled independently with raw counter differences |
+| GPU arithmetic | All 16 GPU/combined load workers reported FP16 and the exact expected matrix result |
+| Device placement | 832 retained observations; at most one occupied GPU at a time and no unrelated GPU process observed |
+| Live inference | Two completed real attempts, both independently **incorrect**; no inspection tool calls, null totals and misplaced answer identity/evidence |
+| Ledger/artifacts | Both attempts retained as terminal verification failures; both export validations pass, 16 artifact hashes checked independently |
+| Cleanup | All four GPUs had no compute processes at completion; no server left running |
+
+The original portable suite reported 10 Python 3.10 mock-resolution failures,
+198 passes and 5 passing subtests. The failure log is retained. Object-targeted
+patches in the test module resolve the problem without changing provider behavior.
+At the implementation commit, CI passed the Linux/Windows integrated runtime and
+adapter jobs. The separate Windows MoE controls job failed its profile hash
+round-trip assertion (`test_all_arms_run_through_campaign_and_profiles_build`);
+that profile writer/test is unchanged here. Source inspection identifies text
+newline translation versus raw-byte hashing as a likely cause. Full CI is not
+claimed green, and the PR remains draft.
+
+Hardware records are under `hardware-01/`, including four `counters-N/` directories,
+per-device audit logs, separate model-loading evidence, `inference-1/` and
+`inference-2/`, all-GPU observations and cleanup status. The independent post-run
+check is `audit_readiness.py`; its report is `evidence/readiness-audit.json`.
+The exact operator commands, session identity and source revision are retained in
+`hardware-01/*-command.json`, `session.json`, and `hardware-supervisor-01/status.json`.
+The external `run_readiness.py` records its own source hash and invokes the existing
+platform rather than another measurement implementation.
+
+### Limitations that affect the next session
+
+- **Correct live task completion is unvalidated.** The Qwen smoke model returned
+  null totals without inspecting the asset, and the verifier rejected both
+  responses. Keep these failed attempts. Stephen supplies the approved
+  model/configuration; Aldric checks task/protocol suitability. Do not relax the
+  verifier or treat these responses as completed useful work.
+- Operating-state reads of 286 fields took approximately 1.6 seconds on this host;
+  the maximum observed energy-read gap was 3.34 seconds despite a nominal 100 ms
+  target. Existing [operating-state semantics](../moe/OPERATIONS.md) intentionally
+  include observation overhead inside the goal. That definition is preserved.
+  Counter arithmetic passed, but fine-grained attribution and collector overhead
+  acceptance remain open. A proposed ordering change was evaluated locally and
+  not applied because it changes the shared measurement scope; Stephen owns that
+  decision. Historical records must not be silently reinterpreted.
+- Initial preparation specified eight inference CPU threads; the first adapter
+  call omitted that option and Ollama reloaded with its default of 40 threads.
+  The reload is inside that goal's counter window. GPU offload remained on the
+  selected V100, but this is not an initialized-only or matched-cache comparison.
+  The next session must align preparation/request settings and record the supplied
+  starting-state rules before comparing configurations.
+- The second idle observations were higher after load. Keep warm-state/clock and
+  thermal history explicit; these short tests establish sensor responsiveness,
+  not a stable idle baseline or a performance comparison.
+- No exclusive reservation enforcement, off-node archive verification, real
+  timeout/failure cleanup under inference, or electrical calibration was tested.
+  Another user's login remained present; GPU monitoring alone does not isolate
+  shared CPU-package energy. Preserve the local evidence archive and arrange an
+  approved off-node destination before the node expires.
 
 This readiness work does not establish native MoE/model-reference agreement,
 expert-transfer activation, multi-GPU inference, electrical calibration, or
