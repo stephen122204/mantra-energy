@@ -138,7 +138,7 @@ disabled. Set `OLLAMA_MODELS` to the external cache, `OLLAMA_HOST=127.0.0.1:1153
 supervisor to stop the server and its workers within the same session budget.
 
 ```sh
-"$V100_WORK/venv/bin/python" -m studies.energy_diagnosis.local_run   --mode live --provider ollama --base-url http://127.0.0.1:11534   --model qwen2.5:3b-instruct-q4_K_M --model-sha256 "$V100_MODEL_MANIFEST_SHA256"   --allocation-id "$V100_ALLOCATION" --isolation "$V100_ISOLATION" --gpu-index 0   --task data-units-v2 --settings C00 --max-runs 1 --max-steps 4 --deadline 120   --output "$V100_ATTEMPT/inference-1"
+"$V100_WORK/venv/bin/python" -m studies.energy_diagnosis.local_run   --mode live --provider ollama --base-url http://127.0.0.1:11534   --model qwen2.5:3b-instruct-q4_K_M --model-sha256 "$V100_MODEL_MANIFEST_SHA256"   --allocation-id "$V100_ALLOCATION" --isolation "$V100_ISOLATION" --gpu-index 0   --task data-units-v2 --settings C00 --max-runs 1 --max-steps 4 --deadline 120   --max-tokens 512 --ollama-num-thread 8 --ollama-num-ctx 4096 --ollama-keep-alive 5m   --output "$V100_ATTEMPT/inference-1"
 ```
 
 Repeat once in a new directory only after checking the first attempt and cleanup.
@@ -223,3 +223,114 @@ expert-transfer activation, multi-GPU inference, electrical calibration, or
 campaign isolation. Those are separate acceptance requirements for the chosen
 pilot configuration. Raw node records, user/session details and model files remain
 outside Git.
+
+
+## Follow-up implementation and proposed live check (not executed)
+
+The JSON prompt now gives complete task-specific tool-call and final-answer shapes.
+Totals (or repository fields), `task_id`, and `evidence` all belong inside `answer`.
+The strict verifier still rejects missing identity, evidence and malformed totals;
+the runtime does not repair answers or manufacture tool history. Both original
+responses were identical. Their exact response text is retained in the small
+`tests/fixtures/v100_failed_answer.txt` regression fixture; both original attempts
+and their raw measurements remain untouched outside Git. Replaying this response
+and scripted inspection-then-answer coverage use a simulated model and sensors.
+The latter executes the actual local CSV tool, verifier and ledger, but does not
+establish live model tool selection or correctness.
+
+### Match preparation and request settings
+
+The CLI accepts `--ollama-num-thread`, `--ollama-num-ctx` and
+`--ollama-keep-alive`. Supply all three explicitly for readiness work; omitted
+options preserve server defaults. The effective options are recorded in
+`environment.json` and included in the preparation digest. The adapter's
+`build_ollama_preparation_payload()` builds a non-streaming `/api/chat` load-only
+request (`messages: []`) from the same options as a temperature-zero task request.
+It does not send a request or reset cache state by itself.
+
+After a new hardware budget is approved, use a fresh owned server process for
+EACH attempt, restricted to the same physical GPU. Preload with the same model,
+thread count, context size, token limit, keep-alive and parallelism as execution.
+For example, with the loopback server already supervised and a new external
+`V100_ATTEMPT` directory, this preparation uses the matching adapter configuration:
+
+```sh
+"$V100_WORK/venv/bin/python" - <<'PY_PREP'
+import json
+import os
+from pathlib import Path
+import requests
+from core.execution.adapters.openai_compat import OpenAICompatAdapter
+
+root = Path(os.environ["V100_ATTEMPT"])
+root.mkdir(parents=True, exist_ok=False)
+adapter = OpenAICompatAdapter(
+    {"provider_id": "ollama_local", "base_url": "http://127.0.0.1:11534", "is_local": True},
+    {"model_id": "qwen2.5:3b-instruct-q4_K_M", "max_tokens": 512,
+     "ollama_num_thread": 8, "ollama_num_ctx": 4096, "ollama_keep_alive": "5m"},
+)
+payload = adapter.build_ollama_preparation_payload()
+(root / "preparation-request.json").write_text(json.dumps(payload, indent=2) + "\n")
+response = requests.post("http://127.0.0.1:11534/api/chat", json=payload, timeout=90)
+(root / "preparation-response.txt").write_text(response.text)
+response.raise_for_status()
+resident = requests.get("http://127.0.0.1:11534/api/ps", timeout=5)
+resident.raise_for_status()
+(root / "prepared-residency.json").write_text(json.dumps(resident.json(), indent=2) + "\n")
+PY_PREP
+```
+
+The model above remains a smoke asset. Substitute Stephen's supplied model and
+manifest in BOTH preparation and execution if a different configuration is approved.
+Do not run the old `run_readiness.py` unchanged: its preparation options caused the
+historical reload. The next operator must use the matching preparation above and
+the updated CLI options, inside an owned bounded supervisor.
+
+Retain the server/runner PIDs, start times, complete logs and preparation payload.
+Require one runner launch during preparation and no replacement launch during any
+model turn. Confirm threads 8, context 4096, GPU identity/offload and model manifest;
+compare `environment.json` options with the saved preparation request. Stop the
+comparison if options or placement differ. Matching requested options alone does
+not prove matching effective runtime state.
+
+Fresh server AND runner processes, no task-bearing warm-up requests, and a load-only
+preparation establish the same operational prompt-cache starting procedure for each
+attempt. Capture every request so earlier prompt reuse cannot be silently introduced.
+Internal KV contents are not directly instrumented. Filesystem/page-cache and thermal
+history remain separate uncontrolled state unless Stephen supplies further rules;
+do not claim all caches are cold or compare these smoke timings as controlled effects.
+
+Proposed renewed budget: ten minutes total, two sequential GPU-0 attempts, at most
+120 seconds per goal, four model steps and 512 tokens per response; allow 90 seconds
+per preparation and reserve at least 60 seconds for cleanup. An outer deadline must
+also respect the newly confirmed allocation cutoff. Recheck competing work before
+each attempt. Inspect attempt 1 before proceeding; stop on invalid records, unexpected
+reload or failed cleanup. Retain ordinary correctness failures without extra retries.
+Audit model/tool spans, independent correctness, all artifact hashes and counter
+windows, then terminate only owned processes. This proposal is not authorization.
+A clean reviewed source revision is required by live mode; current uncommitted
+follow-up edits must be approved and committed before that check.
+
+### Collector diagnostic scope
+
+The focused fake-clock fixture models 1.6-second operating-state acquisitions.
+It demonstrates that initial/final observations extend the goal and a periodic
+observation holds the counter sampling lock. It does not read host sensors, measure
+actual collector CPU/energy cost, or identify the expensive sensor family. Saved
+acquisition brackets provide aggregate elapsed cost only; overlapping observation
+and model spans must not be added or subtracted as exclusive CPU or energy totals.
+The production collector and measurement boundaries are unchanged. A per-source
+cost experiment, if needed, should be a separate non-measured diagnostic with an
+explicit resource budget and no competing measurement, followed by Stephen's review.
+
+### Evidence backup gate
+
+No verified off-node backup is recorded. Before further hardware testing, transfer
+`evidence-bundle.tar.gz`, `evidence-bundle.sha256` and `bundle-manifest.json` from
+`/home/alex/alems-data/v100-readiness-20261015` to an approved durable off-node location.
+Use an ordinary file transfer between measurements, not Git or a PR attachment.
+Verify SHA-256 on the destination against
+`f226cc9bfee37f2a94e596f015b0e184574d2074fac04b4ddb73e182923e03b1` and retain a receipt
+identifying the destination and verification time. Destination/access and transfer
+authorization are still needed. New follow-up outputs need their own preservation;
+do not overwrite the immutable original bundle.
