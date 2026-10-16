@@ -334,3 +334,48 @@ Verify SHA-256 on the destination against
 identifying the destination and verification time. Destination/access and transfer
 authorization are still needed. New follow-up outputs need their own preservation;
 do not overwrite the immutable original bundle.
+
+### Optional staged-inspection diagnostic
+
+`local_run --diagnostic-variant staged-inspection-v1` selects a versioned prompt
+diagnostic and provider response capture. Omit the flag to reproduce the existing
+legacy prompt and preparation identity. The variant and capture version enter the
+preparation digest and `environment.json`; task assets, model options, custom JSON
+protocol, parser, numerical verifier and production measurement boundaries stay
+the same. Use the same approved model/options/output arguments as the preceding
+procedure. Live mode still requires a clean reviewed revision and separate hardware
+authorization; this flag is not authorization to run.
+
+Before a successful runtime-owned `inspect_asset` outcome, the instruction contains
+only the custom tool-call schema and inspection instructions. The final-answer
+example is withheld. After success, the next request contains the answer schema
+and the actual tool results. Failed inspection retains the inspection-stage prompt;
+the existing executor stops failed tool execution without another model request.
+No tool call is inserted, no answer is repaired and no retry is added. A premature
+answer still takes the unchanged parser path and is checked by the strict verifier.
+
+Each goal additionally saves `diagnostic-acceptance.json`. Diagnostic success
+requires a completed inspection, complete captured response bodies, completed
+execution and a passing independent verifier. A premature lucky guess may pass
+the numerical verifier but fails diagnostic acceptance and is marked ineligible
+in campaign metadata. This keeps arithmetic verification separate from evidence
+that the model actually requested inspection. Telemetry validity, artifact auditing
+and owned cleanup remain additional live acceptance requirements.
+
+`provider-response-N.body` preserves bytes exposed by requests after HTTP
+transfer/content decoding, before line/JSON parsing, including native tool fields,
+original line endings and body bytes after the provider completion marker. These
+are HTTP entity bytes, not compressed wire bytes or TCP framing. Request/response
+headers, authorization, URLs and request bodies are not included by this recorder.
+Do not put credentials into model prompts. Raw body hashes are ledger artifact
+references; `model-calls.json` records byte counts, hashes and `body_complete`.
+EOF completeness is separate from model/protocol success. Transport errors and
+deadlines retain available partial bytes with incomplete status; malformed and
+HTTP-error bodies are retained without retry. Existing files are never overwritten.
+
+Capture writing, hashing and draining execute inside the adapter call and goal
+window, including partial failures. Saved timings/energy include this diagnostic
+I/O in addition to the existing collector costs; no overhead subtraction or change
+to measurement boundaries is made. Fresh processes do not establish matched cache,
+warm-up or thermal state. Local fixtures test byte preservation and prompt staging;
+scripted successes do not establish live model/tool correctness or performance.

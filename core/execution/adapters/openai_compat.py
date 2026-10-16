@@ -31,6 +31,7 @@ import psutil
 import requests
 
 from core.execution.adapters.base import AdapterCallError, TextGenABC
+from core.execution.adapters.response_capture import ProviderResponseCapture
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,7 @@ class OpenAICompatAdapter(TextGenABC):
         self._last_token_provenance = "unknown"
         self._partial_content = ""
         self._observed_tokens = {}
+        self._last_provider_response = None
         # ── Phase 1: PRE-PROCESSING — local JSON build ────────────────────────
         t_pre = time.perf_counter()
         payload = self._build_payload(prompt, temperature)
@@ -210,6 +212,8 @@ class OpenAICompatAdapter(TextGenABC):
             "total_time_ms": total_ms,
             "phase_metrics": phase_metrics,
             **net_delta,  # bytes_sent, bytes_recv, tcp_retransmits
+            **({"provider_response": self._last_provider_response}
+               if self._last_provider_response is not None else {}),
         }
 
     def require_success(self, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -320,20 +324,27 @@ class OpenAICompatAdapter(TextGenABC):
         finish_reason = None
         complete = False
         response = None
+        capture = None
         self._last_stream_metrics = {"request_start_ns": request_start_ns}
         request_payload = {**payload, "stream": stream}
         if stream and not self._is_ollama:
             request_payload["stream_options"] = {"include_usage": True}
         try:
+            capture_path = self.model_config.get("response_capture_path")
+            if capture_path is not None:
+                capture = ProviderResponseCapture(
+                    capture_path, start + int(request_timeout * 1e9))
             response = requests.post(
                 self._endpoint_url(), json=request_payload,
                 headers=self._build_headers(), timeout=request_timeout, stream=stream,
             )
+            if capture is not None:
+                capture.attach(response)
             response.raise_for_status()
             media_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
             if not stream or media_type == "application/json":
                 stream = False
-                raw = response.json()
+                raw = capture.json() if capture is not None else response.json()
                 if not isinstance(raw, dict):
                     raise ValueError("provider response must be a JSON object")
                 if self._is_ollama:
@@ -350,7 +361,7 @@ class OpenAICompatAdapter(TextGenABC):
                     raise RuntimeError("Ollama response ended without done=true")
                 return raw
 
-            for raw_line in response.iter_lines():
+            for raw_line in (capture.lines() if capture is not None else response.iter_lines()):
                 line_time = time.perf_counter_ns()
                 if (line_time - start) / 1e9 > request_timeout:
                     raise TimeoutError("stream exceeded request deadline")
@@ -448,8 +459,15 @@ class OpenAICompatAdapter(TextGenABC):
                 "token_throughput": completion_count / (decode_ms / 1000) if measured_decode else None,
                 "streaming_enabled": int(stream),
             }
-            if response is not None:
-                response.close()
+            try:
+                if capture is not None:
+                    try:
+                        capture.finish()
+                    finally:
+                        self._last_provider_response = capture.close()
+            finally:
+                if response is not None:
+                    response.close()
 
     def _parse_response(self, data: Dict, prompt: str) -> Tuple[str, Dict]:
         """Normalize content using the shared provider/estimated provenance values."""
@@ -508,4 +526,6 @@ class OpenAICompatAdapter(TextGenABC):
             "tokens": {}, "token_provenance": "unknown",
             "observed_tokens": self._observed_tokens,
             "total_time_ms": total_ms, "phase_metrics": phase_metrics, **net_delta,
+            **({"provider_response": self._last_provider_response}
+               if self._last_provider_response is not None else {}),
         }
