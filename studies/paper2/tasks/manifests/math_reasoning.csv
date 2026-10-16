@@ -1,0 +1,61 @@
+set,problem_idx,problem_type
+aime_2025,1,Number Theory
+aime_2025,2,Geometry
+aime_2025,3,Combinatorics
+aime_2025,4,Algebra
+aime_2025,5,Combinatorics|Number Theory
+aime_2025,6,Geometry
+aime_2025,7,Combinatorics
+aime_2025,8,Algebra
+aime_2025,9,Algebra
+aime_2025,10,Combinatorics
+aime_2025,11,Algebra
+aime_2025,12,Algebra
+aime_2025,13,Combinatorics
+aime_2025,14,Geometry
+aime_2025,15,Number Theory
+aime_2025,16,Geometry
+aime_2025,17,Number Theory
+aime_2025,18,Combinatorics
+aime_2025,19,Algebra
+aime_2025,20,Geometry
+aime_2025,21,Algebra|Geometry
+aime_2025,22,Number Theory
+aime_2025,23,Combinatorics
+aime_2025,24,Algebra
+aime_2025,25,Combinatorics
+aime_2025,26,Combinatorics
+aime_2025,27,Geometry
+aime_2025,28,Number Theory
+aime_2025,29,Geometry
+aime_2025,30,Algebra
+hmmt_feb_2025,1,Number Theory
+hmmt_feb_2025,2,Number Theory
+hmmt_feb_2025,3,Algebra
+hmmt_feb_2025,4,Algebra
+hmmt_feb_2025,5,Algebra
+hmmt_feb_2025,6,Number Theory
+hmmt_feb_2025,7,Algebra
+hmmt_feb_2025,8,Algebra
+hmmt_feb_2025,9,Algebra|Number Theory
+hmmt_feb_2025,10,Algebra
+hmmt_feb_2025,11,Combinatorics
+hmmt_feb_2025,12,Combinatorics
+hmmt_feb_2025,13,Combinatorics
+hmmt_feb_2025,14,Combinatorics
+hmmt_feb_2025,15,Combinatorics
+hmmt_feb_2025,16,Combinatorics
+hmmt_feb_2025,17,Combinatorics
+hmmt_feb_2025,18,Combinatorics
+hmmt_feb_2025,19,Combinatorics|Geometry
+hmmt_feb_2025,20,Combinatorics
+hmmt_feb_2025,21,Geometry
+hmmt_feb_2025,22,Geometry
+hmmt_feb_2025,23,Geometry
+hmmt_feb_2025,24,Geometry
+hmmt_feb_2025,25,Geometry
+hmmt_feb_2025,26,Geometry
+hmmt_feb_2025,27,Geometry
+hmmt_feb_2025,28,Geometry
+hmmt_feb_2025,29,Geometry
+hmmt_feb_2025,30,Geometry

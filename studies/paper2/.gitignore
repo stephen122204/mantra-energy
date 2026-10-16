@@ -1,0 +1,3 @@
+# Small test results and task manifests are part of this study folder (repo root ignores *.csv).
+!*.csv
+__pycache__/
