@@ -62,6 +62,7 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
 from studies.energy_diagnosis.workloads.pilot_tools import PilotAssetTool
 
 SETTINGS = {"C00": (False, 1), "C01": (False, 4), "C10": (True, 1), "C11": (True, 4)}
+STAGED_INSPECTION = "staged-inspection-v1"
 
 
 class _VerificationTool:
@@ -93,19 +94,14 @@ def write_artifact(root, relative, value, role):
     )
 
 
-def legacy_instruction(task):
-    """Describe the existing JSON protocol without supplying reference answers."""
+def _answer_instruction(task):
+    """Shared final schema; never includes reference totals."""
     fields = (dict(total_units="<computed number>", total_revenue="<computed number>")
               if task.family == "data" else
               dict(file_count="<computed integer>", checks=["<sorted relative paths>"]))
     final = {"answer": {**fields, "task_id": task.task_id,
                         "evidence": [task.asset_sha256]}}
-    tool = {"tool_calls": [{"id": "inspect_1", "tool": "inspect_asset", "args": {}}]}
     return (
-        "Return only one JSON object per turn. First inspect the local input with "
-        + json.dumps(tool) + ". Tool calls require a unique string id, tool "
-        "inspect_asset and empty args {}; optional depends_on is a list of call ids. "
-        "Return 1..8 tool calls, without an answer in the same object. "
         "After receiving successful tool_results, return this complete final shape: "
         + json.dumps(final) + ". Replace computed-value placeholders with values "
         "from the tool result. All totals or repository fields, task_id and evidence "
@@ -113,6 +109,40 @@ def legacy_instruction(task):
         "must be numbers or decimal strings, never null. Repository checks must be "
         "a sorted list of relative paths. Never invent observations or evidence."
     )
+
+
+def legacy_instruction(task):
+    """Describe the existing JSON protocol without supplying reference answers."""
+    tool = {"tool_calls": [{"id": "inspect_1", "tool": "inspect_asset", "args": {}}]}
+    return (
+        "Return only one JSON object per turn. First inspect the local input with "
+        + json.dumps(tool) + ". Tool calls require a unique string id, tool "
+        "inspect_asset and empty args {}; optional depends_on is a list of call ids. "
+        "Return 1..8 tool calls, without an answer in the same object. "
+        + _answer_instruction(task)
+    )
+
+
+def inspected_asset(tool_results):
+    """Only runtime-owned successful inspection outcomes unlock the answer stage."""
+    return any(r.get("tool") == "inspect_asset" and r.get("status") == "completed"
+               and isinstance(r.get("result"), dict) for r in tool_results)
+
+
+def staged_instruction(task, tool_results):
+    if not inspected_asset(tool_results):
+        tool = {"tool_calls": [{"id": "inspect_1", "tool": "inspect_asset", "args": {}}]}
+        return (
+            "Return only one JSON object requesting inspection of the local input: "
+            + json.dumps(tool) + ". Use a unique string id, tool inspect_asset and "
+            "empty args {}; optional depends_on is a list of call ids. Return 1..8 "
+            "tool calls. No successful inspection result exists yet. Do not return "
+            "an answer or invent observations."
+        )
+    # Reuse the reviewed final schema and its constraints, without the first-stage
+    # tool-call example. Values come exclusively from actual runtime tool results.
+    return ("Return only one JSON object using the actual successful inspect_asset "
+            "result in tool_results. " + _answer_instruction(task))
 
 
 class FixtureAPI:
@@ -217,6 +247,7 @@ class GoalExecutor:
         sampling=None,
         max_tool_calls=None,
         max_output_tokens=None,
+        diagnostic_variant=None,
     ):
         self.tasks = tasks
         self.adapter = adapter
@@ -238,6 +269,11 @@ class GoalExecutor:
         # static instruction and tool results. chat-tools-v1 is the native
         # multi-turn protocol (agent_protocol.py).
         self.protocol = protocol
+        if diagnostic_variant not in {None, STAGED_INSPECTION}:
+            raise ValueError("unknown diagnostic variant")
+        if diagnostic_variant and (protocol != "legacy-json-v1" or workload_runtime is not None):
+            raise ValueError("staged inspection requires the legacy pilot runtime")
+        self.diagnostic_variant = diagnostic_variant
         self.sampling = sampling or dict(mode="greedy")
         self.max_tool_calls = max_tool_calls
         self.max_output_tokens = max_output_tokens
@@ -511,6 +547,8 @@ class GoalExecutor:
                 ) / 1e9 >= self.timeout_seconds:
                     status, error = "timed_out", "goal deadline exhausted between calls"
                     break
+                if self.diagnostic_variant == STAGED_INSPECTION:
+                    context["instruction"] = staged_instruction(task, tool_results)
                 prompt = json.dumps(context, sort_keys=True)
                 started = time.monotonic_ns()
                 self.adapter.model_config["request_timeout_seconds"] = max(
@@ -518,8 +556,20 @@ class GoalExecutor:
                 )
                 if self.lifecycle:
                     self.lifecycle.before_model(f"{lease.attempt_id}:model:{step}")
-                raw = self.adapter.call(prompt, 0.0)
+                capture_relative = prefix / f"provider-response-{step}.body"
+                if self.diagnostic_variant:
+                    (self.artifact_root / prefix).mkdir(parents=True, exist_ok=True)
+                    self.adapter.model_config["response_capture_path"] = str(
+                        self.artifact_root / capture_relative)
+                try:
+                    raw = self.adapter.call(prompt, 0.0)
+                finally:
+                    if self.diagnostic_variant:
+                        self.adapter.model_config.pop("response_capture_path", None)
                 ended = time.monotonic_ns()
+                if self.diagnostic_variant and raw.get("provider_response") is not None:
+                    artifacts.append(ArtifactRef(capture_relative.as_posix(), "provider-response-body",
+                                                 raw["provider_response"]["sha256"]))
                 tokens = raw.get("tokens") or {}
                 ok = raw.get("status", "ok") == "ok"
                 response = ModelResponse(
@@ -909,6 +959,25 @@ class GoalExecutor:
                 self.artifact_root, prefix / "initialized-model-window.json",
                 inner_window, "initialized-model-window",
             ))
+        diagnostic_reason = ""
+        if self.diagnostic_variant:
+            inspection_ok = inspected_asset(tool_results)
+            capture_ok = bool(model_calls) and all(
+                c["adapter"].get("provider_response", {}).get("body_complete") is True
+                for c in model_calls)
+            if not inspection_ok:
+                diagnostic_reason = "no successful inspect_asset before answer"
+            elif not capture_ok:
+                diagnostic_reason = "provider response capture incomplete"
+            diagnostic = dict(
+                variant=self.diagnostic_variant, inspection_completed=inspection_ok,
+                provider_bodies_complete=capture_ok,
+                passed=not diagnostic_reason and status == "completed" and verifier.outcome == "pass",
+                reason=diagnostic_reason or error or verifier.reason,
+                simulated=self.simulated,
+            )
+            artifacts.append(write_artifact(self.artifact_root, prefix / "diagnostic-acceptance.json",
+                                            diagnostic, "diagnostic-acceptance"))
         metadata = OutcomeMetadata(
             plan.setting_id,
             plan.tool_concurrency,
@@ -916,12 +985,12 @@ class GoalExecutor:
             request.scheduled_run.preparation_sha256,
             observed_resources=(("cpu_affinity", measured.environment.cpu_allocation),),
             owned_work_terminated=owned_terminated,
-            fidelity_status="eligible",
+            fidelity_status="ineligible" if diagnostic_reason else "eligible",
             sensor_gaps=tuple(
                 m.domain_id for m in measured.measurements if m.status != "valid"
             ),
             cost_seconds=(("goal", (record.ended_ns - record.started_ns) / 1e9),),
-            failure_reason=error,
+            failure_reason=diagnostic_reason or error,
         )
         if request.checkpoint:
             request.checkpoint(
@@ -987,6 +1056,10 @@ def run(args, *, endpoint=None):
         max_tokens=args.max_tokens, max_steps=args.max_steps,
         deadline=args.deadline, mode=args.mode,
     )
+    diagnostic_variant = getattr(args, "diagnostic_variant", None)
+    if diagnostic_variant:
+        preparation_config.update(diagnostic_variant=diagnostic_variant,
+                                  provider_response_capture="http-entity-bytes-v1")
     ollama_preparation = None
     if args.provider == "ollama":
         ollama_preparation = adapter.build_ollama_preparation_payload()
@@ -1061,6 +1134,9 @@ def run(args, *, endpoint=None):
         ollama_keep_alive=getattr(args, "ollama_keep_alive", None),
     )
     manifest_path = root / "environment.json"
+    if diagnostic_variant:
+        manifest.update(diagnostic_variant=diagnostic_variant,
+                        provider_response_capture="http-entity-bytes-v1")
     if not manifest_path.exists():
         manifest_path.write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
@@ -1087,6 +1163,7 @@ def run(args, *, endpoint=None):
                 max_steps=args.max_steps,
                 timeout_seconds=args.deadline,
                 simulated=simulated,
+                diagnostic_variant=diagnostic_variant,
             )
             try:
                 lease = runner.run_next(
@@ -1131,6 +1208,8 @@ def main(argv=None):
     parser.add_argument("--ollama-num-thread", type=int)
     parser.add_argument("--ollama-num-ctx", type=int)
     parser.add_argument("--ollama-keep-alive", help="Ollama residency duration, e.g. 5m")
+    parser.add_argument("--diagnostic-variant", choices=[STAGED_INSPECTION],
+                        help="Opt-in staged custom-JSON prompt and raw provider body capture")
     parser.add_argument("--provider", choices=["vllm", "ollama"], default="vllm")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000/v1")
     parser.add_argument("--model")

@@ -1,6 +1,7 @@
 """Provider-response fixtures for the shared OpenAI-compatible adapter."""
 
 import json
+import hashlib
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -595,11 +596,14 @@ def test_stream_durations_ignore_wall_clock_adjustments(monkeypatch, ollama_adap
 
 
 @pytest.mark.parametrize('provider', ['ollama_adapter', 'openai_adapter'])
-def test_real_http_client_reads_local_fixture_stream(request, provider):
+@pytest.mark.parametrize('capture', [False, True])
+def test_real_http_client_reads_local_fixture_stream(request, provider, capture, tmp_path):
     """Exercise requests' real line iterator/headers, without a model or remote API."""
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from threading import Thread
     adapter = request.getfixturevalue(provider)
+    if capture:
+        adapter.model_config['response_capture_path'] = str(tmp_path / 'provider.body')
     seen = []
     if provider == 'ollama_adapter':
         body = b'\n'.join(encoded_lines(
@@ -635,3 +639,205 @@ def test_real_http_client_reads_local_fixture_stream(request, provider):
     assert result['status'] == 'ok'
     assert result['content'] == 'hello'
     assert result['tokens'] == {'prompt': 2, 'completion': 1, 'total': 3}
+    if capture:
+        saved = (tmp_path / 'provider.body').read_bytes()
+        assert saved == body
+        assert result['provider_response'] == dict(body_complete=True, bytes_received=len(body),
+                                                   sha256=hashlib.sha256(body).hexdigest())
+    else:
+        assert 'provider_response' not in result
+
+
+class ByteBodyResponse(requests.Response):
+    def __init__(self, body, *, fail=False, **kwargs):
+        super().__init__()
+        self.status_code = 200
+        self.headers = requests.structures.CaseInsensitiveDict(kwargs.get('headers', {}))
+        self.encoding = requests.utils.get_encoding_from_headers(self.headers)
+        self.closed = False
+        self.body, self.fail = body, fail
+
+    def close(self):
+        self.closed = True
+
+    def iter_content(self, chunk_size):
+        # Deliberately split UTF-8 characters, CRLF separators and JSON tokens.
+        for offset in range(0, len(self.body), 3):
+            yield self.body[offset:offset + 3]
+        if self.fail:
+            raise requests.ConnectionError('fixture interrupted body')
+
+
+@pytest.mark.parametrize('stream', [True, False])
+def test_capture_keeps_exact_body_and_native_fields_without_headers(monkeypatch, ollama_adapter, tmp_path, stream):
+    chunk = {'message': {'content': 'h\u00e9', 'tool_calls': [{'function': {'name': 'inspect_asset', 'arguments': {}}}]},
+             'done': True, 'prompt_eval_count': 3, 'eval_count': 2, 'extra': 'retained'}
+    body = json.dumps(chunk, ensure_ascii=False).encode('utf-8')
+    if stream:
+        body = b'\r\n' + body + b'\r\n\r\nAFTER_DONE_TRAILER\n'
+    response = ByteBodyResponse(body, headers={'Content-Type': 'application/x-ndjson' if stream else 'application/json',
+                                             'Set-Cookie': 'fixture-cookie-secret'})
+    path = tmp_path / 'raw.body'
+    ollama_adapter.model_config.update(response_capture_path=str(path), stream=stream)
+    ollama_adapter._api_key = 'fixture-credential-secret'
+    # Ollama normally omits authorization; inject a header to test capture's
+    # exclusion independently of provider authentication policy.
+    monkeypatch.setattr(ollama_adapter, '_build_headers', lambda: {
+        'Authorization': 'Bearer fixture-credential-secret'})
+    sent = []
+    def post(*args, **kwargs):
+        sent.append(kwargs)
+        return response
+    monkeypatch.setattr(requests, 'post', post)
+    result = ollama_adapter.call('request-only-sensitive-text', 0)
+    assert result['status'] == 'ok' and result['content'] == 'h\u00e9'
+    assert len(sent) == 1 and sent[0]['headers']['Authorization'].endswith('fixture-credential-secret')
+    assert path.read_bytes() == body
+    assert b'inspect_asset' in body and b'fixture-credential-secret' not in body
+    assert b'fixture-cookie-secret' not in body and b'request-only-sensitive-text' not in body
+    assert result['provider_response'] == dict(body_complete=True, bytes_received=len(body),
+                                               sha256=hashlib.sha256(body).hexdigest())
+    assert response.closed
+
+
+@pytest.mark.parametrize('failure', ['transport', 'malformed', 'http'])
+def test_capture_preserves_failed_body_without_retry_or_fabricated_completion(monkeypatch, ollama_adapter, tmp_path, failure):
+    if failure == 'transport':
+        body = b'{"message":{"content":"partial"},"done":false}\n'
+    else:
+        body = b'invalid-provider-json\r\n'
+    response = ByteBodyResponse(body, fail=failure == 'transport')
+    if failure == 'http':
+        def raise_http_error():
+            raise requests.HTTPError('fixture 500')
+        response.raise_for_status = raise_http_error
+    path = tmp_path / 'failed.body'
+    ollama_adapter.model_config['response_capture_path'] = str(path)
+    sent = []
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: sent.append(k) or response)
+    result = ollama_adapter.call('inspect', 0)
+    assert result['status'] == 'error' and len(sent) == 1
+    assert path.read_bytes() == body
+    assert result['provider_response']['body_complete'] is (failure != 'transport')
+    assert result['provider_response']['sha256'] == hashlib.sha256(body).hexdigest()
+    assert result['tokens'] == {} and response.closed
+    if failure == 'transport':
+        assert result['partial_content'] == 'partial'
+    ollama_adapter.model_config.pop('response_capture_path')
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: StubResponse(lines=encoded_lines(
+        {'message': {'content': 'next'}, 'done': True, 'prompt_eval_count': 1, 'eval_count': 1})))
+    following = ollama_adapter.call('next', 0)
+    assert following['status'] == 'ok' and 'provider_response' not in following
+
+
+def test_capture_does_not_overwrite_existing_evidence(monkeypatch, ollama_adapter, tmp_path):
+    path = tmp_path / 'existing.body'
+    path.write_bytes(b'preserved evidence')
+    ollama_adapter.model_config['response_capture_path'] = str(path)
+    def forbidden_post(*args, **kwargs):
+        pytest.fail('HTTP must not start when capture evidence already exists')
+    monkeypatch.setattr(requests, 'post', forbidden_post)
+    result = ollama_adapter.call('inspect', 0)
+    assert result['status'] == 'error' and 'provider_response' not in result
+    assert path.read_bytes() == b'preserved evidence'
+
+
+def test_capture_deadline_retains_partial_bytes_and_never_claims_complete(monkeypatch, ollama_adapter, tmp_path):
+    import itertools
+    import core.execution.adapters.response_capture as capture_module
+    path = tmp_path / 'deadline.body'
+    response = ByteBodyResponse(b'partial received bytes')
+    ollama_adapter.model_config['response_capture_path'] = str(path)
+    # Exceed the existing request deadline on the first received chunk. This
+    # tests capture accounting, not a real wall-clock or hardware timeout.
+    ticks = itertools.count(step=10)
+    monkeypatch.setattr(capture_module.time, 'perf_counter_ns', lambda: next(ticks))
+    ollama_adapter.model_config['request_timeout_seconds'] = 1e-9
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: response)
+    result = ollama_adapter.call('inspect', 0)
+    assert result['status'] == 'error'
+    assert path.read_bytes() == b'par'
+    assert result['provider_response']['body_complete'] is False
+    assert result['provider_response']['sha256'] == hashlib.sha256(b'par').hexdigest()
+    assert response.closed
+
+
+@pytest.mark.parametrize('stream', [False, True], ids=['non_streaming', 'streaming_json_fallback'])
+def test_capture_json_matches_requests_declared_encoding_with_one_body_read(
+        monkeypatch, ollama_adapter, tmp_path, stream):
+    """Real localhost HTTP and Requests decoder; no model or GPU execution."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+
+    value = {'message': {'content': 'caf\u00e9'}, 'done': True,
+             'prompt_eval_count': 3, 'eval_count': 2}
+    body = json.dumps(value, ensure_ascii=False).encode('iso-8859-1')
+    content_type = 'application/json; charset=iso-8859-1'
+    # Establish the original decoder result without another HTTP request.
+    baseline = requests.Response()
+    baseline.headers['Content-Type'] = content_type
+    baseline.encoding = requests.utils.get_encoding_from_headers(baseline.headers)
+    baseline._content = body
+    baseline._content_consumed = True
+    expected = baseline.json()
+    assert expected['message']['content'] == 'caf\u00e9'
+
+    observed = dict(http_requests=0, post_calls=0, transport_reads=0,
+                    transport_bytes=0, json_calls=0, decoded=None)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            observed['http_requests'] += 1
+            self.rfile.read(int(self.headers['Content-Length']))
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    def observe_response(response, *args, **kwargs):
+        # The hook runs before Requests eagerly reads a non-streaming body.
+        original_stream, original_json = response.raw.stream, response.json
+
+        def read_once(*args, **kwargs):
+            observed['transport_reads'] += 1
+            for chunk in original_stream(*args, **kwargs):
+                observed['transport_bytes'] += len(chunk)
+                yield chunk
+
+        def decode_original(*args, **kwargs):
+            observed['json_calls'] += 1
+            observed['decoded'] = original_json(*args, **kwargs)
+            return observed['decoded']
+
+        response.raw.stream, response.json = read_once, decode_original
+
+    original_post = requests.post
+
+    def post_once(*args, **kwargs):
+        observed['post_calls'] += 1
+        assert kwargs['stream'] is stream
+        return original_post(*args, **kwargs, hooks={'response': observe_response})
+
+    path = tmp_path / 'latin1.body'
+    ollama_adapter.model_config.update(stream=stream, response_capture_path=str(path))
+    monkeypatch.setattr(requests, 'post', post_once)
+    with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        ollama_adapter._base_url = f'http://127.0.0.1:{server.server_port}'
+        try:
+            result = ollama_adapter.call('encoding diagnostic', 0)
+        finally:
+            server.shutdown()
+            thread.join(timeout=2)
+    assert result['status'] == 'ok' and result['content'] == expected['message']['content']
+    assert result['tokens'] == {'prompt': 3, 'completion': 2, 'total': 5}
+    assert observed == dict(http_requests=1, post_calls=1, transport_reads=1,
+                            transport_bytes=len(body), json_calls=1, decoded=expected)
+    assert path.read_bytes() == body and b'caf\xe9' in body
+    assert result['provider_response'] == dict(body_complete=True, bytes_received=len(body),
+                                               sha256=hashlib.sha256(body).hexdigest())
