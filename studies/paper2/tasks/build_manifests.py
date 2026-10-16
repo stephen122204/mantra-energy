@@ -1,6 +1,7 @@
 """Build task manifests (ids + metadata only, no problem text) and a seeded pilot selection.
 
 Usage: python3 -I build_manifests.py RAW_DIR OUT_DIR   (RAW_DIR from fetch_task_metadata.sh)
+"""
 import csv, glob, json, os, random, sys, tomllib, collections
 raw, out = sys.argv[1], sys.argv[2]
 os.makedirs(out, exist_ok=True)
