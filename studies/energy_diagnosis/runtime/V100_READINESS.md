@@ -5,6 +5,24 @@ not select the pilot model, qualify the native MoE backend, or authorize a campa
 Use the [integrated runtime guide](../RUN_LOCAL.md) and the
 [current handoff](../../../agent%20context%20md/CURRENT_HANDOFF.md).
 
+## Current result (16 October 2026)
+
+**One live `staged-inspection-v1` diagnostic passed end-to-end** at reviewed
+checkpoint `7acd9d78aa77b19a81aa181060936e7097c7efeb`. The model requested eight
+redundant `inspect_asset` calls; all executed sequentially and remain in the
+preserved evidence. Strict answer verification, raw-response completeness,
+telemetry/artifact checks, effective runner settings without reload, and owned
+cleanup passed. This was one attempt with two model responses and no retry.
+
+**Default-prompt success, reliability, and performance/energy comparability remain
+unestablished.** No pilot was launched. Earlier failed attempts remain unchanged.
+See [the implementation handoff](V100_HANDOFF.md) for the tested configuration,
+exact commands/evidence locations, test provenance, backup status and remaining
+work. The user reports successful off-node checksum verification of the successful
+diagnostic package and all preceding evidence packages; the agent did not access
+the destination. Historical results and procedures below retain their own revision
+and budget scope; none authorizes another run.
+
 ## Revision and isolated installation
 
 The 15 October 2026 inspection started at `ccfac59b9f177782b3d4b43b77947a2ba517bdb1`
@@ -98,7 +116,9 @@ make sysfs recursively writable or run the inference server as root.
    Stop if another measurement or workload conflicts. Recheck before each stage.
 4. Verify CPU counter permissions, device UUIDs and free disk. Preserve prior
    attempts; each new check uses a new output directory.
-5. Run the setup and portable runtime checks:
+5. Reuse the recorded setup and test evidence. Run the following checks only if
+   a changed environment or code revision creates a concrete need, with approval
+   for any generated outputs:
 
 ```sh
 "$V100_WORK/venv/bin/python" scripts/check_energy_diagnosis_setup.py
@@ -141,13 +161,14 @@ supervisor to stop the server and its workers within the same session budget.
 "$V100_WORK/venv/bin/python" -m studies.energy_diagnosis.local_run   --mode live --provider ollama --base-url http://127.0.0.1:11534   --model qwen2.5:3b-instruct-q4_K_M --model-sha256 "$V100_MODEL_MANIFEST_SHA256"   --allocation-id "$V100_ALLOCATION" --isolation "$V100_ISOLATION" --gpu-index 0   --task data-units-v2 --settings C00 --max-runs 1 --max-steps 4 --deadline 120   --max-tokens 512 --ollama-num-thread 8 --ollama-num-ctx 4096 --ollama-keep-alive 5m   --output "$V100_ATTEMPT/inference-1"
 ```
 
-Repeat once in a new directory only after checking the first attempt and cleanup.
+Repeat only if the separately approved budget explicitly includes another attempt,
+using a new directory after checking the first attempt and cleanup.
 Inspect independent verification, model token provenance, worker/device placement,
 raw energy samples, domain windows, ledger integrity and every artifact hash. A
 zero CLI exit alone is not a correct answer. Keep failed attempts and stop affected
 work if cleanup or record validity fails. Confirm no owned GPU processes remain.
 
-## Validation status
+## Original validation status (15 October; historical)
 
 The exact hardware-tested code is `ad2d97b639faafe093be45941df8d131326e940c`.
 The readiness-only session used allocation `CHI-261719`, a 1,200-second allowance,
@@ -188,9 +209,10 @@ The exact operator commands, session identity and source revision are retained i
 The external `run_readiness.py` records its own source hash and invokes the existing
 platform rather than another measurement implementation.
 
-### Limitations that affect the next session
+### Original limitations and current disposition
 
-- **Correct live task completion is unvalidated.** The Qwen smoke model returned
+- **Default-prompt task completion remains unvalidated.** One later opt-in
+  staged diagnostic passed (see the handoff). In this original session the model returned
   null totals without inspecting the asset, and the verifier rejected both
   responses. Keep these failed attempts. Stephen supplies the approved
   model/configuration; Aldric checks task/protocol suitability. Do not relax the
@@ -212,11 +234,11 @@ platform rather than another measurement implementation.
 - The second idle observations were higher after load. Keep warm-state/clock and
   thermal history explicit; these short tests establish sensor responsiveness,
   not a stable idle baseline or a performance comparison.
-- No exclusive reservation enforcement, off-node archive verification, real
-  timeout/failure cleanup under inference, or electrical calibration was tested.
-  Another user's login remained present; GPU monitoring alone does not isolate
-  shared CPU-package energy. Preserve the local evidence archive and arrange an
-  approved off-node destination before the node expires.
+- No exclusive reservation enforcement, real timeout/failure cleanup under
+  inference, or electrical calibration was tested. Another user's login remained
+  present; GPU monitoring alone does not isolate shared CPU-package energy.
+  Off-node archive checksum verification was subsequently confirmed by the user
+  (see the backup status below).
 
 This readiness work does not establish native MoE/model-reference agreement,
 expert-transfer activation, multi-GPU inference, electrical calibration, or
@@ -225,7 +247,7 @@ pilot configuration. Raw node records, user/session details and model files rema
 outside Git.
 
 
-## Follow-up implementation and proposed live check (not executed)
+## Follow-up implementation and historical live-check procedure
 
 The JSON prompt now gives complete task-specific tool-call and final-answer shapes.
 Totals (or repository fields), `task_id`, and `evidence` all belong inside `answer`.
@@ -300,16 +322,20 @@ Internal KV contents are not directly instrumented. Filesystem/page-cache and th
 history remain separate uncontrolled state unless Stephen supplies further rules;
 do not claim all caches are cold or compare these smoke timings as controlled effects.
 
-Proposed renewed budget: ten minutes total, two sequential GPU-0 attempts, at most
+The prior ten-minute authorization covered two sequential GPU-0 attempts, at most
 120 seconds per goal, four model steps and 512 tokens per response; allow 90 seconds
 per preparation and reserve at least 60 seconds for cleanup. An outer deadline must
 also respect the newly confirmed allocation cutoff. Recheck competing work before
 each attempt. Inspect attempt 1 before proceeding; stop on invalid records, unexpected
 reload or failed cleanup. Retain ordinary correctness failures without extra retries.
 Audit model/tool spans, independent correctness, all artifact hashes and counter
-windows, then terminate only owned processes. This proposal is not authorization.
-A clean reviewed source revision is required by live mode; current uncommitted
-follow-up edits must be approved and committed before that check.
+windows, then terminate only owned processes. That two-attempt batch ran at
+`44f4353`; both attempts failed strict verification after zero-total answers with
+no tool call. Evidence remains in
+`/home/alex/alems-data/v100-correctness-20261015T2040Z`. Its authorization is consumed.
+The later single staged diagnostic used the separate five-minute budget documented
+in [V100_HANDOFF.md](V100_HANDOFF.md). Neither historical budget authorizes a retry.
+Live mode requires a clean reviewed source revision and a new explicit budget.
 
 ### Collector diagnostic scope
 
@@ -325,15 +351,20 @@ explicit resource budget and no competing measurement, followed by Stephen's rev
 
 ### Evidence backup gate
 
-No verified off-node backup is recorded. Before further hardware testing, transfer
-`evidence-bundle.tar.gz`, `evidence-bundle.sha256` and `bundle-manifest.json` from
-`/home/alex/alems-data/v100-readiness-20261015` to an approved durable off-node location.
-Use an ordinary file transfer between measurements, not Git or a PR attachment.
-Verify SHA-256 on the destination against
-`f226cc9bfee37f2a94e596f015b0e184574d2074fac04b4ddb73e182923e03b1` and retain a receipt
-identifying the destination and verification time. Destination/access and transfer
-authorization are still needed. New follow-up outputs need their own preservation;
-do not overwrite the immutable original bundle.
+The user has confirmed destination checksum verification for the original readiness
+archive, the earlier follow-up archive, the two-failure correctness archive, the
+reviewed staged-inspection checkpoint package (including `decoding-fix/`), and the
+successful live diagnostic archive. Later session handoff/process-check files were
+also reported copied off-node. These are user-reported confirmations; the agent
+has no direct access to the destination. Do not repeat already confirmed checks.
+
+The latest evidence root is
+`/home/alex/alems-data/v100-staged-live-20261016T020452Z`; its archive, checksum and
+manifest are adjacent to that directory. Exact package names and hashes are in
+[V100_HANDOFF.md](V100_HANDOFF.md). Preserve all original evidence and failed runs.
+New outputs require their own transfer and destination verification; a second copy
+on the node is not an off-node backup. Use ordinary file transfer, not Git or PR
+attachments, for raw evidence.
 
 ### Optional staged-inspection diagnostic
 
