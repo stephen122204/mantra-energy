@@ -3,7 +3,9 @@
 1. forced decoding: a request with ``vllm_xargs.forced_tokens`` returns exactly those ids;
 2. batching: two concurrent requests are both running in the engine at the same time
    (``vllm:num_requests_running`` >= 2 observed while they are in flight);
-3. prefix cache: the same long prompt sent twice reports cached prompt tokens the second time.
+3. prefix cache: the same long prompt sent twice reports cached prompt tokens the second time;
+4. agent request: the exact streaming body agent sessions send (``client.completion_request``, sampled
+   decoding) returns tokens and a finish reason, with no error event.
 """
 from __future__ import annotations
 
@@ -12,6 +14,9 @@ import threading
 import time
 import urllib.request
 
+from urllib.parse import urlparse
+
+from .client import completion_request, stream_completion
 from .forcing import encode_forced
 from .telemetry import fetch_metrics, parse_prometheus
 
@@ -23,8 +28,16 @@ def _post(base_url: str, payload: dict, timeout: float = 600) -> dict:
         return json.loads(r.read())
 
 
-def run_checks(base_url: str, model: str, prompt_ids: list, forced_ids: list) -> dict:
+def run_checks(base_url: str, model: str, prompt_ids: list, forced_ids: list, sampling: dict = None) -> dict:
     out: dict = {}
+    sampling = sampling or dict(mode="sampled", temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0)
+    try:
+        u = urlparse(base_url)
+        _, ids, finish, usage, _ = stream_completion(u.hostname, u.port, completion_request(model, prompt_ids, 32, sampling), 600)
+        out["agent_request"] = dict(ok=bool(ids) and finish in ("stop", "length"), tokens=len(ids), finish=finish,
+                                    completion_tokens=usage.get("completion_tokens"))
+    except Exception as exc:
+        out["agent_request"] = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
     try:
         r = _post(base_url, dict(model=model, prompt=prompt_ids, max_tokens=len(forced_ids), temperature=0.0,
                                  ignore_eos=True, return_token_ids=True, vllm_xargs=dict(forced_tokens=encode_forced(forced_ids))))

@@ -3,7 +3,7 @@
 Streams token ids like vLLM 0.10.x with ``return_token_ids``; honours ``vllm_xargs.forced_tokens``
 (replay); serves /health, /v1/models and a Prometheus /metrics page; tracks peak concurrency.
 Behaviour per request is chosen by ``mode``: ``submit`` (submit_answer {}), ``text`` (no tool
-call), ``error`` (HTTP 500), ``slow`` (submit after ``delay_s``), ``tool`` (call the first task tool
+call), ``error`` (HTTP 500), ``stream_error`` (HTTP 200 with an error event, as vLLM 0.10.2 does), ``slow`` (submit after ``delay_s``), ``tool`` (call the first task tool
 listed in the prompt, then submit once a tool result is present).
 """
 from __future__ import annotations
@@ -87,6 +87,14 @@ class FakeVllm:
                 try:
                     if server.mode == "error":
                         return self._send(500, json.dumps(dict(error="fixture failure")))
+                    if server.mode == "stream_error" or body.get("skip_special_tokens") is False:
+                        # vLLM 0.10.2 + Mistral tokenizer: HTTP 200, then an error event and [DONE]
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/event-stream")
+                        self.end_headers()
+                        err = dict(error=dict(message="", type="BadRequestError", param=None, code=400))
+                        self.wfile.write(f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode())
+                        return
                     prompt = body["prompt"]
                     forced = parse_forced((body.get("vllm_xargs") or {}).get("forced_tokens"))
                     if forced is not None:

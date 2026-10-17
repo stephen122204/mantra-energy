@@ -183,8 +183,15 @@ def main(argv=None):
             from .engine_check import run_checks
             r = MistralRenderer(plan["tekken"][cfg.name])
             prompt = r.encode([dict(role="user", content="Engine check: count from one to twenty.")], [])
-            checks = run_checks(base_url, cfg.name, prompt, r.inner.encode(" one two three four five", bos=False, eos=False))
+            checks = run_checks(base_url, cfg.name, prompt, r.inner.encode(" one two three four five", bos=False, eos=False),
+                                sampling=plan["sampling"])
         log.append("engine_check", config=cfg.name, **checks)
+        if not checks.get("agent_request", {"ok": True}).get("ok"):  # agent sessions cannot get completions
+            log.append("block_skipped", config=cfg.name, pass_index=pass_index,
+                       reason=f"engine check: agent request failed ({checks['agent_request']})")
+            if not a.fixture_server:
+                log.append("server_stopped", config=cfg.name, returncode=server.stop())
+            continue
         server_dead = False
         try:
             for step in block["steps"]:

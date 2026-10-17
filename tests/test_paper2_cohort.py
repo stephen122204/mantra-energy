@@ -131,6 +131,13 @@ def test_failure_outcomes_are_explicit(prepared, tmp_path):
         s2 = run_cohort(_spec(prepared, ids, srv, cohort_id="c-err", admission_limit=2), tmp_path)
     assert s2["outcomes"] == {"infra_failed": 2} and s2["infra_invalid"]
     assert {s["verdict"] for s in s1["sessions"] + s2["sessions"]} == {"not_run"}
+    # vLLM 0.10.2 reports some failures as an error event inside an HTTP 200 stream: never an empty turn
+    with FakeVllm(r, mode="stream_error") as srv:
+        s3 = run_cohort(_spec(prepared, ids, srv, cohort_id="c-stream-err", admission_limit=2), tmp_path)
+        assert srv.requests == 2  # one request per session, not a turn budget of empty completions
+    assert s3["outcomes"] == {"infra_failed": 2}
+    req = json.loads((tmp_path / "c-stream-err" / "sessions").glob("*/requests.jsonl").__next__().read_text().splitlines()[0])
+    assert "server error in stream" in req["error"]
 
 
 @needs_renderer
@@ -461,7 +468,7 @@ def test_server_start_failure_and_death_are_configuration_outcomes(tmp_path, mon
     monkeypatch.setattr(pilot, "gpu_busy", lambda i: 0)
     monkeypatch.setattr(pilot, "make_measurement", lambda *a: None)
     monkeypatch.setattr(telemetry, "MetricsPoller", lambda *a, **k: None)
-    monkeypatch.setattr(engine_check, "run_checks", lambda *a: {"ok": True, "forced_decoding": {"ok": True}})
+    monkeypatch.setattr(engine_check, "run_checks", lambda *a, **k: {"ok": True, "forced_decoding": {"ok": True}})
     monkeypatch.setattr(pilot.subprocess, "check_output", lambda args, **k: "c0" if "rev-parse" in args else "")
     cfg = lambda n: dict(name=n, model=f"/nonexistent/{n}", revision="fixture", weight_precision="int4",
                          activation_precision="bf16", max_model_len=32768)
