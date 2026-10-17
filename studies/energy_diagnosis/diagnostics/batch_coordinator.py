@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shlex
 import subprocess
 import sys
@@ -112,7 +113,124 @@ def validate(spec):
             raise ValueError("invalid launch argv")
     if not names or len(set(names)) != len(names):
         raise ValueError("empty or duplicate batches")
+    if "maintenance" in spec:
+        m = spec["maintenance"]
+        if not {"anchor_utc", "period_seconds", "window_seconds"} <= set(m) <= {
+                "anchor_utc", "period_seconds", "window_seconds", "systemd_timer", "systemd_timers"}:
+            raise ValueError("maintenance needs anchor_utc, period_seconds, window_seconds (optional systemd_timer(s))")
+        if not isinstance(m.get("systemd_timers", []), list) or not all(
+                re.fullmatch(r"[A-Za-z0-9_.@-]+\.timer", str(u)) for u in _units(spec)):
+            raise ValueError("systemd_timer(s) must name .timer units")
+        anchor = dt.datetime.fromisoformat(m["anchor_utc"].replace("Z", "+00:00"))
+        if anchor.utcoffset() != dt.timedelta(0):
+            raise ValueError("UTC maintenance anchor required")
+        if not (type(m["window_seconds"]) is int and type(m["period_seconds"]) is int
+                and 300 <= m["window_seconds"] < m["period_seconds"] <= 86400):
+            raise ValueError("maintenance window must be 300 s or more and shorter than its period")
+        if spec["minimum_batch_seconds"] + WINDOW_MARGIN_SECONDS > m["period_seconds"] - m["window_seconds"]:
+            raise ValueError("a batch cannot fit between maintenance windows")
+    retained = spec.get("retained_invalid", [])
+    if not isinstance(retained, list) or not set(retained) <= set(names):
+        raise ValueError("retained_invalid must list batch ids of this specification")
     return cutoff.timestamp()
+
+
+# Batches never overlap a maintenance window; logins, status checks and backup transfers
+# happen only inside windows, so no new session can appear during measurement.
+WINDOW_MARGIN_SECONDS = 60
+
+
+def maintenance_windows(spec, now):
+    """(inside, current_or_next_start, its_end) for the spec's maintenance schedule, or None."""
+    if "maintenance" not in spec:
+        return None
+    m = spec["maintenance"]
+    anchor = dt.datetime.fromisoformat(m["anchor_utc"].replace("Z", "+00:00")).timestamp()
+    period, length = m["period_seconds"], m["window_seconds"]
+    k = (now - anchor) // period
+    start = anchor + k * period
+    if start <= now < start + length:
+        return True, start, start + length
+    if now < anchor:
+        start = anchor
+    elif now >= start + length:
+        start += period
+    return False, start, start + length
+
+
+def dispatch_wait(spec, now):
+    """Seconds to wait before a batch may start so that it cannot reach into a window."""
+    schedule = maintenance_windows(spec, now)
+    if schedule is None:
+        return 0
+    inside, start, end = schedule
+    if inside or now + spec["minimum_batch_seconds"] + WINDOW_MARGIN_SECONDS > start:
+        return end - now
+    return 0
+
+
+_UNITS = dict(us=1e-6, ms=0.001, s=1, min=60, h=3600, d=86400, w=604800)
+UPDATER_RECHECK_SECONDS = 30
+
+
+def parse_monotonic(raw):
+    """systemd monotonic timespan ('6d 11h 13min 54.330386s') -> seconds since boot. Fails closed."""
+    pattern = r"([0-9]+(?:\.[0-9]+)?)(us|ms|min|s|h|d|w)"
+    parts = re.findall(pattern, raw)
+    if not parts or re.sub(pattern, "", raw).strip():
+        raise ValueError(f"unparseable systemd monotonic time: {raw!r}")
+    return sum(float(value) * _UNITS[unit] for value, unit in parts)
+
+
+def _units(spec):
+    m = spec.get("maintenance", {})
+    return list(m.get("systemd_timers", [])) + ([m["systemd_timer"]] if m.get("systemd_timer") else [])
+
+
+def parse_realtime(raw):
+    """systemd realtime timestamp ('Mon 2026-09-28 03:36:03 UTC') -> POSIX seconds. Fails closed."""
+    try:
+        return dt.datetime.strptime(raw, "%a %Y-%m-%d %H:%M:%S %Z").replace(tzinfo=dt.timezone.utc).timestamp()
+    except ValueError as exc:
+        raise ValueError(f"unparseable systemd realtime: {raw!r}") from exc
+
+
+def timer_wait(spec, *, run=subprocess.run, monotonic=time.monotonic, now=time.time):
+    """Seconds to wait so that a batch cannot overlap any of the node's own periodic jobs.
+
+    Fixed windows (maintenance_windows) keep operator logins and transfers away from measurement. Host
+    timers (Chameleon cache-vendordata, hourly with drift; fwupd-refresh, hourly with a randomized delay;
+    apt, man-db, logrotate, ...) are not aligned with any fixed schedule, so admission reads each listed
+    unit's actual next elapse from systemd (randomized delays are already resolved there, monotonic or
+    realtime): a batch starts only if no listed service is running and no listed timer elapses within
+    minimum_batch_seconds + WINDOW_MARGIN_SECONDS. A stopped timer cannot elapse and does not hold.
+    Anything unreadable stops dispatch (fails closed)."""
+    hold = 0
+    for unit in _units(spec):
+        show = lambda prop: run(["systemctl", "show", unit, "--value", "-p", prop],
+                                capture_output=True, text=True, check=True).stdout.strip()
+        service = unit[: -len(".timer")] + ".service"
+        state = run(["systemctl", "is-active", service], capture_output=True, text=True).stdout.strip()
+        if state not in {"active", "activating", "inactive", "deactivating", "failed"}:
+            raise RuntimeError(f"unrecognized {service} state {state!r}")
+        if state in {"active", "activating", "deactivating"}:    # 'failed' = last run failed, nothing running
+            hold = UPDATER_RECHECK_SECONDS; continue
+        timer = run(["systemctl", "is-active", unit], capture_output=True, text=True).stdout.strip()
+        if timer != "active":
+            if timer in {"inactive", "failed"}:
+                continue                                         # stopped: cannot elapse
+            raise RuntimeError(f"{unit} is {timer!r}; its schedule cannot be trusted")
+        mono, real = show("NextElapseUSecMonotonic"), show("NextElapseUSecRealtime")
+        remaining = []
+        if mono and mono not in {"0", "infinity"}:
+            remaining.append(parse_monotonic(mono) - monotonic())
+        if real and real not in {"n/a", "0"}:
+            remaining.append(parse_realtime(real) - now())
+        if not remaining:
+            raise RuntimeError(f"{unit} is active but reports no next elapse")
+        if min(remaining) <= spec["minimum_batch_seconds"] + WINDOW_MARGIN_SECONDS:
+            hold = UPDATER_RECHECK_SECONDS
+    return hold
 
 
 class Coordinator:

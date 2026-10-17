@@ -12,6 +12,7 @@ import pytest
 from studies.energy_diagnosis.moe.backend import ProcessBackend
 from studies.energy_diagnosis.moe.control import Expert, Lifecycle, Policy
 from studies.energy_diagnosis.moe.summary import paired_interval
+from studies.energy_diagnosis.moe import event_log
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,8 +55,9 @@ def test_complete_tasks_controls_and_durable_resume(tmp_path):
     barrier_totals = Counter()
     barrier_counts = Counter()
     inner_totals = Counter()
-    for path in (output / "goals").glob("*/expert-events.json"):
-        events = json.loads(path.read_text())
+    from studies.energy_diagnosis.moe import event_log
+    for path in event_log.glob_goals(output):
+        events = event_log.read(path)
         policy = events[0]["policy"]["name"]
         assert events[0]["reset"]["method"] == "new_owned_process"
         transfers = [e for e in events if e["event"] == "expert_transfer"]
@@ -206,12 +208,12 @@ def test_failures_and_controls_are_not_silently_eligible(tmp_path, case):
         assert summary["energy"]["CPU_FIXTURE"]["total_attempt_joules"] is not None
     if case == "wrong_prediction":
         events = json.loads(
-            next((root / "goals").glob("*/expert-events.json")).read_text()
+            json.dumps(event_log.read(event_log.glob_goals(root)[0]))
         )
         assert any(e["event"] == "prepared_not_used_by_goal_end" for e in events)
     if case == "locked":
         events = json.loads(
-            next((root / "goals").glob("*/expert-events.json")).read_text()
+            json.dumps(event_log.read(event_log.glob_goals(root)[0]))
         )
         assert any(
             e["event"] == "preparation_admitted" and e["ack"]["rejected_bytes"]
@@ -406,7 +408,8 @@ def test_tool_timeout_still_drains_preparation(tmp_path):
     path = next((tmp_path / "goals").glob("*/record.json"))
     record = json.loads(path.read_text())
     assert record["execution_status"] == "timed_out"
-    events = json.loads(path.with_name("expert-events.json").read_text())
+    from studies.energy_diagnosis.moe import event_log
+    events = event_log.read(event_log.path_in(path.parent))
     assert events[-1]["event"] == "goal_end"
     assert any(e["event"] == "model_resume" for e in events)
 
@@ -542,6 +545,12 @@ def test_recovered_interrupted_attempt_resumes_summarizes_and_audits(tmp_path, p
     assert dispositions[lease.planned_run_id] != "pending"
     again = command(output, "--policies", "demand", "--max-runs", "5")
     assert again["executed"] == 0
+    # Reproduced on LIQID05: the campaign exit check re-read goal files and crashed (FileNotFoundError) on the
+    # recovered attempt's missing record.json, or read its preserved pre-recovery status. After recovery, a
+    # campaign-exit resume must exit 0 (the recovered attempt stays incomplete with unknown energy).
+    settled = command(output, "--policies", "demand", "--max-runs", "5", "--campaign-exit")
+    (row,) = settled["summary"]["settings"].values()
+    assert settled["executed"] == 0 and row["recovered_attempts"] == 1 and row["crashed_attempts"] == 0
     if partial_artifact:
         retained_path.write_text(retained_path.read_text() + " ")
         assert not audit(output)["audit_passed"]
@@ -655,10 +664,63 @@ def test_surviving_process_group_refuses_termination_claim(tmp_path, monkeypatch
     monkeypatch.setattr(psutil, "process_iter", lambda *args: [
         SimpleNamespace(pid=fake_pid, status=lambda: psutil.STATUS_RUNNING)])
     monkeypatch.setattr(os, "getpgid", lambda pid: group if pid == fake_pid else real_getpgid(pid))
+    backend.release_settle_seconds = 0.3
     with pytest.raises(RuntimeError, match="process group termination unverified"):
         backend.end_goal()
     assert backend.process is None
     assert not backend.owned_work_terminated
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group ownership")
+def test_group_member_still_exiting_after_leader_reap_is_awaited(tmp_path, monkeypatch):
+    # Reproduced on LIQID05 (r02-etl-etl-latest-v3-n1000000-s7-q8, Q8): release failed after verification
+    # while killed group members could still be exiting; a bounded wait now confirms termination.
+    import psutil
+    from types import SimpleNamespace
+    backend = ProcessBackend({}, python=sys.executable, mode="fixture",
+                             log_path=tmp_path / "exiting.log")
+    backend.reset_goal_state()
+    group = backend.process.pid
+    real_getpgid = os.getpgid
+    fake_pid = 2147483646
+    scans = []
+
+    def process_iter(*args):
+        scans.append(1)
+        return [SimpleNamespace(pid=fake_pid, status=lambda: psutil.STATUS_DISK_SLEEP)] if len(scans) < 4 else []
+
+    monkeypatch.setattr(psutil, "process_iter", process_iter)
+    monkeypatch.setattr(os, "getpgid", lambda pid: group if pid == fake_pid else real_getpgid(pid))
+    backend.end_goal()
+    assert len(scans) == 4
+    assert backend.process is None
+    assert backend.owned_work_terminated
+
+
+def test_release_failure_after_verification_is_recorded_not_passed(tmp_path, monkeypatch):
+    from studies.energy_diagnosis.moe import run as campaign
+    original = Lifecycle.end_goal
+    calls = []
+
+    def end_goal(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("backend process group termination unverified: [1]")
+
+    monkeypatch.setattr(Lifecycle, "end_goal", end_goal)
+    campaign.main(["--mode", "fixture", "--output", str(tmp_path),
+                   "--task", "joined-orders-v1", "--policies", "demand",
+                   "--max-runs", "1", "--deadline", "30"])
+    records = [json.loads(p.read_text()) for p in (tmp_path / "goals").glob("*/record.json")]
+    assert len(records) == 1
+    record = records[0]
+    assert record["execution_status"] == "crashed"
+    assert "expert release failed: backend process group termination unverified" in record["error"]
+    assert record["verifier"]["outcome"] == "unavailable"
+    assert "backend release failed after verification" in record["verifier"]["reason"]
+    goal = next((tmp_path / "goals").glob("*/"))
+    assert json.loads((goal / "verification.json").read_text())["status"] == "returned"
 
 
 
@@ -675,3 +737,166 @@ def test_explicit_longer_goal_budget_is_finite_and_pinned(tmp_path):
         assert rejected.returncode == 2
         assert "invalid bounded" in rejected.stderr
         assert not (tmp_path / ("bad-"+invalid)).exists()
+
+
+def test_cpu_affinity_is_parsed_applied_and_recorded(tmp_path):
+    from studies.energy_diagnosis.moe.run import parse_cpu_list
+    assert parse_cpu_list("64-67,70,66") == [64, 65, 66, 67, 70]
+    for invalid in ("", "5-3", "-1", "a"):
+        with pytest.raises(ValueError):
+            parse_cpu_list(invalid)
+    if not hasattr(os, "sched_getaffinity"):
+        rejected = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                                   "--output", str(tmp_path / "unsupported"), "--cpu-affinity", "0"],
+                                  cwd=ROOT, capture_output=True, text=True, timeout=30)
+        assert rejected.returncode == 2 and "not supported" in rejected.stderr
+        return
+    cpu = min(os.sched_getaffinity(0))
+    command(tmp_path / "pinned", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+            "--cpu-affinity", str(cpu))
+    manifest = json.loads((tmp_path / "pinned/moe-manifest.json").read_text())
+    assert manifest["cpu_affinity"] == dict(pinned=True, cpus=[cpu])
+    command(tmp_path / "unpinned", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1")
+    manifest = json.loads((tmp_path / "unpinned/moe-manifest.json").read_text())
+    assert manifest["cpu_affinity"]["pinned"] is False
+
+
+def test_cpu_power_state_groups_cpus_by_governor_and_idle_states(tmp_path):
+    from studies.energy_diagnosis.moe.run import cpu_power_state
+    for cpu, disabled in ((0, "0"), (1, "0"), (2, "1")):
+        base = tmp_path / f"cpu{cpu}"
+        (base / "cpufreq").mkdir(parents=True)
+        (base / "cpufreq/scaling_governor").write_text("schedutil\n")
+        for i, (name, latency) in enumerate((("POLL", "0"), ("C1", "1"), ("C2", "30"))):
+            state = base / f"cpuidle/state{i}"
+            state.mkdir(parents=True)
+            (state / "name").write_text(name + "\n")
+            (state / "latency").write_text(latency + "\n")
+            (state / "disable").write_text((disabled if name == "C2" else "0") + "\n")
+    groups = cpu_power_state([0, 1, 2], root=tmp_path)
+    assert sorted(g["cpus"] for g in groups) == [[0, 1], [2]]
+    deep = next(g for g in groups if g["cpus"] == [2])
+    assert deep["governor"] == "schedutil" and deep["min_khz"] is None
+    assert deep["idle"][2] == dict(name="C2", exit_latency_us="30", disabled="1")
+    assert cpu_power_state(None, root=tmp_path) is None
+    assert cpu_power_state([0], root=tmp_path / "missing") is None
+
+
+def test_keep_awake_is_owned_recorded_and_stopped(tmp_path):
+    if not hasattr(os, "sched_getaffinity"):
+        rejected = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                                   "--output", str(tmp_path / "unsupported"), "--keep-awake-cpus", "0"],
+                                  cwd=ROOT, capture_output=True, text=True, timeout=30)
+        assert rejected.returncode == 2 and "Linux" in rejected.stderr
+        return
+    import psutil
+    cpus = sorted(os.sched_getaffinity(0))
+    if len(cpus) < 2:
+        pytest.skip("needs two CPUs")
+    overlap = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                              "--output", str(tmp_path / "overlap"), "--cpu-affinity", str(cpus[0]),
+                              "--keep-awake-cpus", str(cpus[0])], cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert overlap.returncode == 2 and "must not overlap" in overlap.stderr
+    before = {p.pid for p in psutil.process_iter()}
+    command(tmp_path / "kept", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+            "--cpu-affinity", str(cpus[0]), "--keep-awake-cpus", str(cpus[1]))
+    manifest = json.loads((tmp_path / "kept/moe-manifest.json").read_text())
+    assert manifest["keep_awake"] == dict(cpus=[cpus[1]], method="owned python busy loop per CPU")
+    assert sorted(c for group in (manifest["cpu_power"] or []) for c in group["cpus"]) in ([cpus[0], cpus[1]], []) \
+        or manifest["cpu_power"] is None
+    leftover = [p for p in psutil.process_iter(["cmdline"]) if p.pid not in before
+                and "sched_setaffinity" in " ".join(p.info["cmdline"] or [])]
+    assert not leftover
+    # Resuming the same campaign directory must see an identical manifest.
+    command(tmp_path / "kept", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+            "--cpu-affinity", str(cpus[0]), "--keep-awake-cpus", str(cpus[1]))
+
+
+def test_tool_cpus_are_recorded_and_must_not_overlap(tmp_path):
+    command(tmp_path / "tools", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+            "--tool-cpus", "3,5")
+    assert json.loads((tmp_path / "tools/moe-manifest.json").read_text())["tool_cpus"] == [3, 5]
+    if hasattr(os, "sched_getaffinity"):
+        cpu = min(os.sched_getaffinity(0))
+        overlap = subprocess.run([sys.executable, "-m", "studies.energy_diagnosis.moe.run", "--mode", "fixture",
+                                  "--output", str(tmp_path / "overlap"), "--cpu-affinity", str(cpu), "--tool-cpus", str(cpu)],
+                                 cwd=ROOT, capture_output=True, text=True, timeout=30)
+        assert overlap.returncode == 2 and "must not overlap" in overlap.stderr
+
+
+def test_campaign_exit_keeps_model_failures_as_data_but_stops_on_crash(tmp_path, monkeypatch):
+    # A wrong/unfinished answer is campaign data: exit 0 with the failure recorded.
+    result = command(tmp_path / "failing", "--task", "joined-orders-v1", "--policies", "demand", "--max-runs", "1",
+                     "--fixture-case", "no_action", "--campaign-exit")
+    row = next(iter(result["summary"]["settings"].values()))
+    assert row["attempts"] == 1 and row["successful"] == 0
+    # An infrastructure crash stops the campaign for review (exit 3).
+    from studies.energy_diagnosis.moe import run as campaign
+    original = ProcessBackend.reset_goal_state
+
+    def reset(self):
+        self.timeout = 0.000001
+        return original(self)
+
+    monkeypatch.setattr(ProcessBackend, "reset_goal_state", reset)
+    with pytest.raises(SystemExit) as stopped:
+        campaign.main(["--mode", "fixture", "--output", str(tmp_path / "crash"), "--task", "joined-orders-v1",
+                       "--policies", "demand", "--max-runs", "1", "--deadline", "30", "--campaign-exit"])
+    assert stopped.value.code == 3
+
+
+def test_every_resume_reconciles_dispatcher_cache_accounting(tmp_path):
+    command(tmp_path / "rec", "--task", "joined-orders-v1", "--policies", "fixed", "--max-runs", "1")
+    from studies.energy_diagnosis.moe import event_log
+    events = event_log.read(event_log.glob_goals(tmp_path / "rec")[0])
+    kinds = [e["event"] for e in events]
+    resumes = [i for i, k in enumerate(kinds) if k == "model_resume"]
+    assert resumes, "fixture goal must include a tool pause"
+    for i in resumes:
+        # The drain that precedes each resume reports its reconciliation.
+        assert "cache_reconciled" in kinds[max(0, i - 50):i]
+    rec = next(e for e in events if e["event"] == "cache_reconciled")
+    assert set(rec) >= {"stale_removed", "adopted", "budget_before", "budget_after", "when"}
+    whens = [e["when"] for e in events if e["event"] == "cache_reconciled"]
+    assert whens[0] == "goal_start" and whens[-1] == "goal_end" and "resume" in whens
+
+
+def test_compact_artifact_keeps_content_and_hashes_written_bytes_legacy(tmp_path):
+    import hashlib
+    from studies.energy_diagnosis.local_run import write_artifact
+    value = [{"event": "expert_placement", "placement": {"layer": 3, "expert": 7, "bytes": 9437184}}] * 3
+    ref = write_artifact(tmp_path, Path("a/expert-events.json"), value, "expert-events", compact=True)
+    pretty = write_artifact(tmp_path, Path("b/expert-events.json"), value, "expert-events")
+    compact_bytes = (tmp_path / "a/expert-events.json").read_bytes()
+    assert json.loads(compact_bytes) == json.loads((tmp_path / "b/expert-events.json").read_bytes()) == value
+    assert ref.sha256 == hashlib.sha256(compact_bytes).hexdigest() and ref.sha256 != pretty.sha256
+    assert len(compact_bytes) < (tmp_path / "b/expert-events.json").stat().st_size
+
+
+def test_event_log_is_deterministic_gzip_and_both_formats_read(tmp_path):
+    import hashlib
+    from studies.energy_diagnosis.local_run import write_artifact
+    value = [{"event": "expert_placement", "placement": {"layer": 3, "expert": 7}}] * 50
+    assert event_log.encode(value) == event_log.encode(value)
+    ref = write_artifact(tmp_path, Path("g1/expert-events.json.gz"), value, "expert-events", encoded=event_log.encode(value))
+    raw = (tmp_path / "g1/expert-events.json.gz").read_bytes()
+    assert ref.sha256 == hashlib.sha256(raw).hexdigest()
+    (tmp_path / "goals/old").mkdir(parents=True)
+    (tmp_path / "goals/old/expert-events.json").write_text(json.dumps(value))
+    (tmp_path / "goals/new").mkdir(parents=True)
+    (tmp_path / "goals/new/expert-events.json.gz").write_bytes(raw)
+    paths = event_log.glob_goals(tmp_path)
+    assert [p.name for p in paths] == ["expert-events.json.gz", "expert-events.json"]
+    assert event_log.read(paths[0]) == event_log.read(paths[1]) == value
+
+
+def test_native_window_gate_excludes_explicitly_recovered_attempt():
+    """Reproduced on LIQID05 (real-GPU rehearsal, dcce6ac): the resumed native run exited 5 because the
+    operator-reconciled interrupted attempt has no complete window. Recovered attempts are audited separately."""
+    from studies.energy_diagnosis.moe.run import native_windows_acceptable
+    ok = dict(all_domains_measured=True, owned_work_terminated=True, simulated=False)
+    recovered = dict(all_domains_measured=False, owned_work_terminated=True, simulated=False, recovered=True)
+    assert native_windows_acceptable(dict(audit_passed=True, results=[recovered, ok]))
+    assert not native_windows_acceptable(dict(audit_passed=True, results=[dict(ok, all_domains_measured=False), ok]))
+    assert not native_windows_acceptable(dict(audit_passed=False, results=[ok]))
+    assert not native_windows_acceptable(dict(audit_passed=True, results=[dict(ok, simulated=True)]))

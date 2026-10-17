@@ -1,7 +1,9 @@
 """Verified compressed incremental result snapshots over SSH, between batches.
 
-Every snapshot retains its full manifest and only changed file bytes. Keep every
-bundle and receipt in the chain. This is not a live-measurement backup service.
+Every snapshot carries only changed file bytes. A v1 snapshot lists the full manifest; a v2
+snapshot lists only changed and deleted files plus the sha256 of the full manifest, which is
+rebuilt from the previous snapshot (bundle_files). Keep every bundle and receipt in the chain.
+This is not a live-measurement backup service.
 """
 import argparse
 import hashlib
@@ -55,6 +57,26 @@ def validate_hashes(files):
     return files
 
 
+def manifest_sha256(files):
+    return hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def bundle_files(header, previous):
+    """The full manifest after this snapshot: listed (v1) or rebuilt from the previous one and checked (v2)."""
+    if header.get("protocol") == "result-archive-v1":
+        return validate_hashes(header["files"])
+    if header.get("protocol") != "result-archive-v2":
+        raise ValueError("unsupported manifest protocol")
+    deleted = header["deleted"]
+    if not isinstance(deleted, list) or not set(deleted) <= set(previous):
+        raise ValueError("deleted-file manifest differs")
+    files = {n: h for n, h in previous.items() if n not in set(deleted)}
+    files.update(validate_hashes(header["changed"]))
+    if len(files) != header.get("file_count") or manifest_sha256(files) != header.get("files_sha256"):
+        raise ValueError("rebuilt manifest does not match its recorded digest")
+    return files
+
+
 def manifest(root):
     result = {}
     for path in sorted(root.rglob("*")):
@@ -69,19 +91,34 @@ def export_bundle(root, status_path, previous, output, max_bytes):
     root = Path(root).resolve()
     safe_name(status_path)
     validate_hashes(previous)
-    status = json.loads((root / status_path).read_text())
-    if status.get("status") not in TERMINAL:
+    status_bytes = (root / status_path).read_bytes()
+    status = json.loads(status_bytes)
+    recovery = (root / status_path).parent.parent / "recovery.json"
+    # A verified recovery record (nothing of the batch still running) makes an interrupted
+    # batch's partial artifacts safe to snapshot; they must be backed up, not lost.
+    record = json.loads(recovery.read_text()) if recovery.exists() else {}
+    recovered = (record.get("status") == "interrupted"
+                 and isinstance(record.get("partial_artifacts"), list)
+                 and record.get("status_sha256") == hashlib.sha256(status_bytes).hexdigest())
+    if status.get("status") not in TERMINAL and not recovered:
         raise ValueError("result job is not terminal; no live backup")
     files = manifest(root)
     changed = {
         name: value for name, value in files.items() if previous.get(name) != value
     }
+    # Listing only the increment keeps each snapshot bounded as the result tree grows
+    # (a full listing per snapshot exceeded 16 MiB on LIQID05 after ~160 batches).
     header = dict(
-        protocol="result-archive-v1",
-        files=files,
+        protocol="result-archive-v2",
+        files_sha256=manifest_sha256(files),
+        file_count=len(files),
         changed=changed,
         deleted=sorted(set(previous) - set(files)),
-        remote_job=status,
+        # A recovered batch is recorded as such, with its original (non-terminal) status.
+        remote_job=status if not recovered or status.get("status") in TERMINAL
+        else dict(status="interrupted_recovered", original_status=status.get("status"),
+                  recovery=dict(path=str(recovery.relative_to(root)),
+                                sha256=hashlib.sha256(recovery.read_bytes()).hexdigest())),
     )
     with tempfile.TemporaryFile() as archive:
         with tarfile.open(fileobj=archive, mode="w:gz") as tar:
@@ -112,12 +149,19 @@ def verify_bundle(path, previous):
         if len(encoded) > 16 * 1024 * 1024 or not encoded.endswith(b"\n"):
             raise ValueError("invalid manifest length")
         header = json.loads(encoded)
-        if header.get("protocol") != "result-archive-v1":
+        if header.get("protocol") not in {"result-archive-v1", "result-archive-v2"}:
             raise ValueError("unsupported manifest protocol")
-        if header.get("remote_job", {}).get("status") not in TERMINAL:
-            raise ValueError("snapshot does not record a terminal job")
-        files = validate_hashes(header["files"])
         changed = validate_hashes(header["changed"])
+        files = bundle_files(header, previous)
+        job = header.get("remote_job", {})
+        if job.get("status") == "interrupted_recovered":
+            # Only with the recovery record itself in this snapshot, for a genuinely non-terminal job.
+            rec = job.get("recovery") or {}
+            if (job.get("original_status") in TERMINAL or rec.get("path") not in files
+                    or files[rec["path"]] != rec.get("sha256")):
+                raise ValueError("recovered snapshot lacks its recovery record")
+        elif job.get("status") not in TERMINAL:
+            raise ValueError("snapshot does not record a terminal job")
         if changed != {n: h for n, h in files.items() if previous.get(n) != h}:
             raise ValueError("increment does not match prior manifest")
         if header["deleted"] != sorted(set(previous) - set(files)):
@@ -158,7 +202,8 @@ def previous_receipt(path, host, remote):
     bundle = path.parent / "snapshot.bundle"
     if digest(bundle) != receipt["bundle_sha256"]:
         raise ValueError("previous bundle changed")
-    return validate_hashes(receipt["manifest"]["files"]), dict(
+    _, files = verified_chain(path)
+    return files, dict(
         path=str(path), sha256=digest(path)
     )
 
@@ -194,7 +239,7 @@ def verified_chain(receipt_path):
         header = verify_bundle(bundle, prior)
         if header != receipt["manifest"]:
             raise ValueError("receipt differs from bundle")
-        prior = header["files"]
+        prior = bundle_files(header, prior)
     return chain, prior
 
 
@@ -331,7 +376,7 @@ def main():
             json.dumps(
                 dict(
                     status="verified",
-                    files=len(header["files"]),
+                    files=len(bundle_files(header, prior)),
                     changed=len(header["changed"]),
                     archive_bytes=header["archive_bytes"],
                     receipt=str(out / "receipt.json"),
