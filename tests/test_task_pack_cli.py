@@ -10,10 +10,26 @@ from studies.energy_diagnosis.moe.task_pack import MODULES
 ROOT=Path(__file__).resolve().parents[1]
 SPECS=[dict(kind=k,rows=128,seed=7) for k in ('numerical','business','etl')]
 
-def launch(output,spec,case='success',max_runs=10):
+def launch(output,spec,case='success',max_runs=10,prepared_assets=None):
     return subprocess.run([sys.executable,'-m','studies.energy_diagnosis.moe.run','--mode','fixture',
         '--output',str(output),'--task-pack',str(spec),'--policies','demand,fixed',
-        '--max-runs',str(max_runs),'--deadline','30','--fixture-case',case],cwd=ROOT,capture_output=True,text=True,timeout=90)
+        '--max-runs',str(max_runs),'--deadline','30','--fixture-case',case]
+        + (['--task-pack-assets',str(prepared_assets)] if prepared_assets is not None else []),
+        cwd=ROOT,capture_output=True,text=True,timeout=90)
+
+
+def test_cli_separate_runs_use_identical_private_checks(tmp_path):
+    from studies.energy_diagnosis.moe.task_pack import prepare
+    specs=[dict(kind='etl',rows=128,seed=7)]
+    source=tmp_path/'frozen';frozen=prepare(source,specs)
+    spec=tmp_path/'spec.json';spec.write_text(json.dumps(specs))
+    catalogs=[]
+    for arm in ('q4','q8'):
+        output=tmp_path/arm
+        run=launch(output,spec,max_runs=1,prepared_assets=source)
+        assert run.returncode==0,run.stdout+run.stderr
+        catalogs.append(json.loads((output/'moe-manifest.json').read_text())['task_catalog'])
+    assert catalogs[0]==catalogs[1]==frozen.catalog()
 
 @pytest.mark.parametrize('case',['success','wrong_answer','missing_telemetry'])
 def test_cli_pack_records_true_verifier_identity_and_resumes(tmp_path,case):
