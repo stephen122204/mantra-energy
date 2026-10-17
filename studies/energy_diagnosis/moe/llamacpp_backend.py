@@ -4,7 +4,9 @@ Selected with config key "engine": "llamacpp". The worker starts one ``llama-ser
 own process group (so goal teardown reaps it), bound to loopback, and waits for it to load. Prompts
 are rendered with the Hugging Face chat template of ``model_path`` by the same tokenizer as the other
 engines and sent as token IDs, so every engine receives the same prompt tokens; the GGUF vocabulary
-is checked against that tokenizer at boot. Placement is the stock server flags in
+is checked against that tokenizer at boot. ``tool_call_format`` (default "hermes"; "mistral" for
+tekken-v13 models such as Devstral Small 2) names the model's tool-call syntax; its markers must be
+single tokens of the tokenizer. Placement is the stock server flags in
 ``placement_args`` (e.g. ``["--n-cpu-moe", "48"]`` keeps every expert on the CPU). llama.cpp exposes
 no expert placement API, so the engine declares no expert controls. Timing is host availability of
 streamed tokens (same schema and clock as the other engines).
@@ -16,6 +18,22 @@ import socket
 import subprocess
 import time
 from pathlib import Path
+
+
+def check_tool_call_markers(tokenizer, tool_call_format):
+    """The configured tool-call syntax must be native to this tokenizer: every marker is one token.
+    Catches a model config that omits or misstates tool_call_format (a Mistral model parsed as
+    hermes would never produce a tool call)."""
+    from studies.energy_diagnosis.agent_protocol import TOOL_CALL_MARKERS
+
+    if tool_call_format not in TOOL_CALL_MARKERS:
+        raise ValueError(f"unknown tool-call format {tool_call_format!r}")
+    markers = TOOL_CALL_MARKERS[tool_call_format]
+    for marker in markers:
+        if len(tokenizer.encode(marker, add_special_tokens=False)) != 1:
+            raise ValueError(f"tokenizer has no single {marker!r} token; tool_call_format "
+                             f"{tool_call_format!r} does not match this model")
+    return markers
 
 
 def _free_port():
@@ -39,6 +57,8 @@ class LlamaCppDevice:
         integrity = stock_engine.verify([gguf], config)
         self.max_context = int(config["max_context"])
         self.tokenizer = AutoTokenizer.from_pretrained(str(Path(config["model_path"]).resolve(strict=True)))
+        tool_call_format = config.get("tool_call_format", "hermes")
+        markers = check_tool_call_markers(self.tokenizer, tool_call_format)
         placement = [str(x) for x in config.get("placement_args", [])]
         self.port = _free_port()
         cmd = [str(server), "-m", str(gguf), "--host", "127.0.0.1", "--port", str(self.port),
@@ -68,6 +88,12 @@ class LlamaCppDevice:
         server_ids = json.loads(body)["tokens"]
         if server_ids != self.tokenizer.encode(probe):
             raise ValueError("GGUF vocabulary disagrees with the Hugging Face tokenizer")
+        if tool_call_format != "hermes":
+            # The fixed probe above holds only hermes control tokens; check this format's markers too.
+            marker_probe = "".join(markers)
+            _, body = self._request("POST", "/tokenize", dict(content=marker_probe, add_special=False, parse_special=True))
+            if json.loads(body)["tokens"] != self.tokenizer.encode(marker_probe, add_special_tokens=False):
+                raise ValueError("GGUF tool-call markers disagree with the Hugging Face tokenizer")
         _, props = self._request("GET", "/props")
         props = json.loads(props)
         version = subprocess.run([str(server), "--version"], capture_output=True, text=True).stderr.strip().splitlines()
