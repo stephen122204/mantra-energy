@@ -3,6 +3,18 @@
 Tests for 4-bit vs 8-bit weight precision when many requests or agents share one GPU: energy per token split
 into prefill and decode, then energy per verified task completion at concurrency 1–16.
 
+## Question
+
+When many agents share one GPU, which weight precision (4-bit or 8-bit) completes a task with less energy, and
+what decides it?
+
+| factor | what we measure | where |
+|---|---|---|
+| Phase cost | energy per prompt token (prefill) and per generated token (decode) at each precision and load | `phase_bench/` |
+| Task shape | prompt vs generated tokens per call over a task (context growth, tool output, prefix-cache reuse) | C2 traces; task runs |
+| Agent behaviour | extra tokens, malformed calls and failures at each precision | C2 data; task runs |
+| Outcome | total energy of a concurrent run ÷ tasks that pass their verifier | task runs (`tasks/`) |
+
 ## Layout
 
 | path | contents |
