@@ -28,7 +28,10 @@ if ls /sys/class/powercap/intel-rapl:*/energy_uj >/dev/null 2>&1; then
 fi
 
 # 2. Python 3.11 environment
-command -v uv >/dev/null || python3 -m pip install -q --user uv
+if ! command -v uv >/dev/null; then
+  python3 -m pip --version >/dev/null 2>&1 || { sudo -n apt-get update -qq && sudo -n apt-get install -y -qq python3-pip; }
+  python3 -m pip install -q --user uv
+fi
 [ -x venv/bin/python ] || uv venv -q --python 3.11 venv
 VP="$W/venv/bin/python"
 uv pip install -q --python "$VP" "vllm==0.10.2" "mistral_common==1.8.5" "huggingface_hub>=0.34" \
@@ -65,7 +68,14 @@ git -C networkx-src rev-parse HEAD > manifests/networkx-commit.txt
 [ -x venv-swebench/bin/python ] || uv venv -q --python 3.11 venv-swebench
 uv pip install -q --python venv-swebench/bin/python "swebench==4.1.0"
 uv pip freeze --python venv-swebench/bin/python > manifests/swebench-freeze.txt
-command -v docker >/dev/null && docker version --format '{{.Server.Version}}' > manifests/docker-version.txt || echo "docker unavailable" > manifests/docker-version.txt
+# 6. Docker for the SWE-bench containers (CC images ship without it); cc joins the docker group,
+#    which takes effect in new ssh sessions (later steps run in their own sessions)
+if ! command -v docker >/dev/null; then
+  sudo -n apt-get update -qq && sudo -n apt-get install -y -qq docker.io
+  sudo -n systemctl enable --now docker
+fi
+id -nG "$USER" | grep -qw docker || sudo -n usermod -aG docker "$USER"
+sudo -n docker version --format '{{.Server.Version}}' > manifests/docker-version.txt || echo "docker unavailable" > manifests/docker-version.txt
 
 (cd manifests && sha256sum ./*.txt ./*.json > ../manifests.SHA256SUMS)
 echo SETUP_DONE | tee logs/SETUP_DONE
