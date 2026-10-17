@@ -12,5 +12,5 @@ git -C "$ROOT" bundle create "$TMP/repo.bundle" HEAD "$(git -C "$ROOT" rev-parse
 ssh -o StrictHostKeyChecking=accept-new "cc@$IP" 'mkdir -p ~/paper2/swev-raw'
 scp -q "$TMP/repo.bundle" "$ROOT/studies/paper2/cohort/node/setup_node.sh" "cc@$IP:paper2/"
 if [ -n "$RAW" ]; then scp -q "$RAW"/swev_*.json "cc@$IP:paper2/swev-raw/"; fi
-ssh "cc@$IP" "cd ~/paper2 && nohup bash setup_node.sh $COMMIT ~/paper2/repo.bundle > ~/paper2/setup.log 2>&1 &"
+ssh "cc@$IP" "cd ~/paper2 && nohup setsid bash setup_node.sh $COMMIT ~/paper2/repo.bundle > ~/paper2/setup.log 2>&1 < /dev/null &"
 echo "setup started for $COMMIT; follow: ssh cc@$IP tail -f ~/paper2/setup.log"
