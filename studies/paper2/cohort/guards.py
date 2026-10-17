@@ -14,6 +14,7 @@ removal of task containers left behind by forcibly terminated sessions.
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import time
 import urllib.request
@@ -33,7 +34,10 @@ def _post(base_url: str, path: str, body=None, timeout: float = 120):
 
 def _cached(base_url: str, model: str, probe_ids: list) -> int:
     _, out = _post(base_url, "/v1/completions", dict(model=model, prompt=probe_ids, max_tokens=1, temperature=0.0))
-    return ((out.get("usage") or {}).get("prompt_tokens_details") or {}).get("cached_tokens") or 0
+    cached = ((out.get("usage") or {}).get("prompt_tokens_details") or {}).get("cached_tokens")
+    if not isinstance(cached, (int, float)) or isinstance(cached, bool) or not math.isfinite(cached) or cached < 0:
+        raise ValueError("missing or invalid cached-token telemetry")
+    return cached
 
 
 def verified_cache_reset(base_url: str, model: str, probe_ids: list) -> dict:
@@ -56,7 +60,8 @@ def wait_drained(base_url: str, timeout_s: float = 120.0, poll_s: float = 0.25) 
         try:
             m = parse_prometheus(fetch_metrics(base_url))
             last = {k: m.get(k) for k in ("vllm:num_requests_running", "vllm:num_requests_waiting")}
-            if not (last["vllm:num_requests_running"] or 0) and not (last["vllm:num_requests_waiting"] or 0):
+            if all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v == 0
+                   for v in last.values()):
                 return dict(drained=True, drain_s=round(time.monotonic() - t0, 3), last=last)
         except Exception as exc:
             last = dict(error=f"{type(exc).__name__}: {exc}")
@@ -76,3 +81,12 @@ def leftover_containers(docker: str = "docker", prefix: str = "p2-", remove: boo
         r = subprocess.run([docker, "rm", "-f", *ids], capture_output=True, text=True, timeout=300)
         removed = r.stdout.split()
     return dict(checked=p.returncode == 0, leftover=ids, removed=removed)
+
+
+def require_clean_boundary(summary: dict) -> None:
+    """Do not carry unfinished server or tool work into another measured cell."""
+    if (summary.get("drain") or {}).get("drained") is not True:
+        raise RuntimeError("server drain was not established; stopping before another measurement")
+    cleanup = summary.get("container_cleanup")
+    if cleanup is not None and (not cleanup.get("checked") or cleanup.get("leftover")):
+        raise RuntimeError("task container boundary was not clean; stopping before another measurement")
