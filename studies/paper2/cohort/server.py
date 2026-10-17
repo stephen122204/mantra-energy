@@ -147,6 +147,7 @@ class VllmServer:
             env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # CUDA ordinals match NVML (PCI bus) order
             env["CUDA_VISIBLE_DEVICES"] = str(nvml_index(self.gpu_uuid))
         env.setdefault("VLLM_USE_V1", "1")
+        env["VLLM_SERVER_DEV_MODE"] = "1"  # exposes POST /reset_prefix_cache (verified cold start per cohort)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         log = open(self.log_path, "w")
         t0 = time.time()

@@ -4,7 +4,8 @@
 
 For each cohort: configuration, step, admission limit, offered tasks, outcomes, verified passes,
 energy interval, CPU-package / GPU-board / total joules, joules per verified pass (null without a
-pass), wall time per session, server token counts and prefix-cache hit rate over the interval
+pass), service time per session (admitted to ended), queue-inclusive latency (offered to ended:
+median, p90, makespan), server token counts and prefix-cache hit rate over the interval
 (differences of the 1 s /metrics samples), preemptions, peak KV-cache usage and peak running /
 waiting requests. A paired table lists each task's verdict per configuration for steps that ran on
 more than one configuration with the same task ids.
@@ -46,6 +47,7 @@ def cohort_rows(out: Path) -> list:
         labels = spec.get("labels", {})
         e = s.get("energy") or {}
         dur = [x["ended_s"] - x["admitted_s"] for x in s["sessions"] if x.get("ended_s") is not None and x.get("admitted_s") is not None]
+        lat = sorted(x["ended_s"] - x["offered_s"] for x in s["sessions"] if x.get("ended_s") is not None and x.get("offered_s") is not None)
         rows.append(dict(cohort=s["cohort_id"], config=labels.get("config"), step=labels.get("step"),
                          admission=s.get("admission_limit"), offered=s.get("offered"), outcomes=s.get("outcomes"),
                          verified_pass=s.get("verified_pass"), interval_s=round(e.get("interval_s") or 0, 1),
@@ -53,6 +55,9 @@ def cohort_rows(out: Path) -> list:
                          j_per_pass=_r(s.get("joules_per_verified_success")),
                          session_s_median=round(statistics.median(dur), 1) if dur else None,
                          session_s_max=round(max(dur), 1) if dur else None,
+                         latency_from_offer_s_median=round(statistics.median(lat), 1) if lat else None,
+                         latency_from_offer_s_p90=round(lat[min(len(lat) - 1, int(0.9 * len(lat)))], 1) if lat else None,
+                         makespan_s=round(max(lat), 1) if lat else None,
                          verdicts={x["task_id"]: x.get("verdict") for x in s["sessions"]},
                          **_metrics(summ.parent.parent / "metrics.jsonl")))
     for summ in sorted(out.glob("cohorts/*/replay-summary.json")) + sorted(out.glob("cohorts/*/*/replay-summary.json")):
@@ -78,7 +83,7 @@ def paired(rows: list) -> dict:
 
 def markdown(rows: list) -> str:
     cols = ["config", "step", "admission", "offered", "verified_pass", "interval_s", "cpu_j", "gpu_j", "total_j",
-            "j_per_pass", "session_s_median", "generation_tokens", "prefix_hit_rate", "preemptions", "peak_kv_usage",
+            "j_per_pass", "session_s_median", "latency_from_offer_s_p90", "makespan_s", "generation_tokens", "prefix_hit_rate", "preemptions", "peak_kv_usage",
             "peak_running", "peak_waiting"]
     lines = ["| " + " | ".join(cols + ["outcomes"]) + " |", "|" + "---|" * (len(cols) + 1)]
     for r in rows:

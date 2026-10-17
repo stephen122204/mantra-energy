@@ -76,6 +76,18 @@ def _order(configs, ps, seed, log, pass_index):
     return order
 
 
+def check_qualified(catalog_path: Path, rows: list) -> None:
+    """A prepared external catalogue (SWE-bench) is used only with a qualification report next to it in
+    which every instance qualified (gold resolves, no-op genuinely fails, both with valid harness reports)."""
+    q = catalog_path.parent / "qualification.json"
+    if not q.exists():
+        raise SystemExit(f"{catalog_path}: no qualification.json next to the catalogue")
+    status = {r["instance_id"]: r for r in json.loads(q.read_text())}
+    bad = [r["task_id"] for r in rows if not (status.get(r["task_id"]) or {}).get("qualified")]
+    if bad:
+        raise SystemExit(f"{catalog_path}: instances not qualified: {bad}")
+
+
 def _tail(path: Path, n: int = 40) -> list:
     try:
         return path.read_text(errors="replace").splitlines()[-n:]
@@ -110,11 +122,20 @@ def main(argv=None):
     if dirty and not a.fixture_server:
         raise SystemExit("refusing to measure from a dirty checkout")
 
-    # Task preparation happens before any server or energy interval.
-    catalog = prepare_tasks(plan["task_specs"], out / "prep")
+    # Task preparation happens before any server or energy interval. A frozen asset snapshot
+    # (plan.prepared_assets) makes identical task ids identical task instances across rounds and nodes;
+    # plan.expected_tasks (task id -> asset sha256) is checked either way.
+    catalog = prepare_tasks(plan["task_specs"], out / "prep", prepared_assets=plan.get("prepared_assets"))
     for extra in plan.get("extra_catalogs", []):  # e.g. SWE-bench instances prepared by swebench_workload
-        catalog += json.loads(Path(extra).read_text())
-    log.append("tasks_prepared", n=len(catalog))
+        rows = json.loads(Path(extra).read_text())
+        check_qualified(Path(extra), rows)
+        catalog += rows
+    expected = plan.get("expected_tasks") or {}
+    have = {c["task_id"]: c.get("asset_sha256") for c in catalog}
+    wrong = {t: (h, have.get(t)) for t, h in expected.items() if have.get(t) != h}
+    if wrong:
+        raise SystemExit(f"task assets differ from the frozen catalogue: {dict(list(wrong.items())[:5])}")
+    log.append("tasks_prepared", n=len(catalog), frozen=bool(plan.get("prepared_assets")), checked_against_expected=len(expected))
     configs = [ServerConfig(**c) for c in plan["configs"]]
     passes = plan.get("passes") or [dict(blocks=plan["blocks"])]
     measured: dict = {}
@@ -186,6 +207,9 @@ def main(argv=None):
             checks = run_checks(base_url, cfg.name, prompt, r.inner.encode(" one two three four five", bos=False, eos=False),
                                 sampling=plan["sampling"])
         log.append("engine_check", config=cfg.name, **checks)
+        from .client import MistralRenderer as _R
+        from .guards import PROBE_TEXT, verified_cache_reset
+        probe_ids = _R(plan["tekken"][cfg.name]).encode([dict(role="user", content=PROBE_TEXT)], [])
         bad = [k for k in ("agent_request", "long_context") if not checks.get(k, {"ok": True}).get("ok")]
         if bad:  # agent sessions would get errors or degenerate completions: not a measurement of the configuration
             log.append("block_skipped", config=cfg.name, pass_index=pass_index,
@@ -208,6 +232,12 @@ def main(argv=None):
                 if not ok:
                     log.append("step_skipped", step=name, reason=why)
                     continue
+                if kind in ("live", "replay") and plan.get("cache_start", "cold") == "cold":
+                    reset = verified_cache_reset(base_url, cfg.name, probe_ids)  # outside the interval
+                    log.append("cache_reset", step=name, **reset)
+                    if not reset.get("ok"):
+                        log.append("step_skipped", step=name, reason=f"cold prefix cache not verified: {reset}")
+                        continue
                 meas = None if a.fixture_server else make_measurement(gidx, revision, plan["allocation"], plan["isolation"])
                 poller = None
                 if not a.fixture_server:

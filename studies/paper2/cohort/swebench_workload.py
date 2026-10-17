@@ -225,8 +225,11 @@ def qualify_instance(row: dict, work: Path, **kw) -> dict:
     gold = evaluate_patch(row["instance_id"], row["patch"], Path(work) / "gold", **kw)
     noop = evaluate_patch(row["instance_id"], "diff --git a/README_P2 b/README_P2\nnew file mode 100644\n--- /dev/null\n"
                           "+++ b/README_P2\n@@ -0,0 +1 @@\n+noop\n", Path(work) / "noop", **kw)
+    # both controls need a completed harness report: a crashed no-op run is not a rejected solution
+    valid = not gold.get("infrastructure") and not noop.get("infrastructure") and noop.get("reason") == "not resolved"
     return dict(instance_id=row["instance_id"], gold_resolves=gold["passed"], noop_resolves=noop["passed"],
-                qualified=bool(gold["passed"] and not noop["passed"]), gold=gold, noop=noop, checked=time.time())
+                controls_valid=valid, qualified=bool(valid and gold["passed"] and not noop["passed"]),
+                gold=gold, noop=noop, checked=time.time())
 
 
 def _rows(raw_dir: Path, ids: list) -> list:

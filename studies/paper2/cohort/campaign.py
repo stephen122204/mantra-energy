@@ -19,7 +19,14 @@ without its own pilot, or a cell without a measured duration, stops the planner.
 may not contain task ids used by the pilot. Bound plans carry the energy metric the node can
 measure (``cpu_package+gpu_board`` or ``gpu_board``); results with different metrics are not pooled.
 
-MATRIX: {"campaign_id", "seed", "contingency": 0.25, "equal_kv": false,
+Launch gates enforced here: every live cell of a declared sweep (cells sharing "sweep") offers the
+same task ids, order, mode and seeds, so only the admission limit varies; estimates borrowed from
+another configuration, unbalanced block-order rotation and GPU-only energy need explicit opt-ins
+(allow_borrowed_estimates, allow_unbalanced_order, energy_metric="gpu_board"); a frozen catalogue
+("frozen_catalog": catalog.json of a reference preparation, "prepared_assets": its asset directory)
+pins every task id to its asset hash in each round.
+
+MATRIX: {"campaign_id", "seed", "contingency": 0.25, "equal_kv": false, "energy_metric": "cpu_package+gpu_board",
          "task_specs": [...], "extra_catalogs": [...],          # evaluation tasks, added to the base plan's
          "cells": [{"name": "n4", "kind": "live", "admission_limit": 4, "task_ids": [...], "repeats": 6,
                     "measure_as": "n4", "seed": 101, "mode": "fixed", "calibration": false},
@@ -165,6 +172,17 @@ def _shard_class(base: dict, matrix: dict, meas: dict, nodes: list, commit: str,
             provenance[f"{cfg['name']}-{c['name']}"] = how
             if v is None:
                 problems.append(f"cell {c['name']}: no measured duration for {cfg['name']}-{c['measure_as']}")
+            elif how != "measured" and not matrix.get("allow_borrowed_estimates"):
+                problems.append(f"cell {c['name']}: {cfg['name']}-{c['measure_as']} not measured on this configuration "
+                                f"({how}); qualify it or set allow_borrowed_estimates")
+    sweeps: dict = {}
+    for c in matrix["cells"]:
+        if c.get("kind", "live") == "live" and c.get("sweep"):
+            sweeps.setdefault(c["sweep"], []).append(c)
+    for name, members in sweeps.items():
+        keys = {json.dumps([m["task_ids"], m.get("seed", 0), m.get("mode", "fixed"), m.get("arrival_offsets_s")]) for m in members}
+        if len(keys) > 1:
+            problems.append(f"sweep {name}: cells {[m['name'] for m in members]} differ in tasks, order, seed or mode")
     if problems:
         raise SystemExit(f"cannot shard {gpu_class}:\n  " + "\n  ".join(problems))
 
@@ -190,6 +208,16 @@ def _shard_class(base: dict, matrix: dict, meas: dict, nodes: list, commit: str,
 
     common = {k: base[k] for k in ("isolation", "limits", "sampling", "task_options", "load_est_s", "export_reserve_s",
                                    "cohort_deadline_s", "port", "tool_cpus", "session_cpus") if k in base}
+    common["cache_start"] = matrix.get("cache_start", "cold")
+    if matrix.get("frozen_catalog"):
+        frozen = {r["task_id"]: r.get("asset_sha256") for r in json.loads(Path(matrix["frozen_catalog"]).read_text())}
+        used = {t for c in live for t in c["task_ids"]}
+        missing = sorted(used - set(frozen))
+        if missing:
+            raise SystemExit(f"cannot shard {gpu_class}: tasks not in the frozen catalogue: {missing[:5]}")
+        common["expected_tasks"] = {t: frozen[t] for t in sorted(used)}
+        if matrix.get("prepared_assets"):
+            common["prepared_assets"] = matrix["prepared_assets"]
     task_specs = list(base["task_specs"]) + list(matrix.get("task_specs", []))
     catalogs = list(base.get("extra_catalogs", [])) + list(matrix.get("extra_catalogs", []))
     out_nodes = {}
@@ -231,10 +259,17 @@ def _shard_class(base: dict, matrix: dict, meas: dict, nodes: list, commit: str,
                         campaign=dict(campaign_id=matrix["campaign_id"], node=node["name"], gpu_class=node["gpu_class"],
                                       round=j, units=[f"{cn}-r{k}" for cn, k in members], commit=commit))
             rounds.append(dict(plan=plan, est_h=round(est_s / 3600, 2)))
+        firsts = [r["plan"]["passes"][0]["order"][0] for r in rounds]
+        balanced = not rounds or (len(rounds) % len(names) == 0)
+        if not balanced and not matrix.get("allow_unbalanced_order"):
+            raise SystemExit(f"cannot shard {gpu_class}: node {node['name']} gets {len(rounds)} rounds for {len(names)} "
+                             "configurations, so block order cannot rotate fully; change repeats/nodes or set allow_unbalanced_order")
         total = round(sum(r["est_h"] for r in rounds) + matrix.get("export_h", 1.0), 2)
         out_nodes[node["name"]] = dict(gpu_class=node["gpu_class"], available_h=node["available_h"], rounds=rounds,
-                                       est_total_h=total, fits=total <= node["available_h"])
+                                       est_total_h=total, fits=total <= node["available_h"],
+                                       first_positions={n: firsts.count(n) for n in names})
     return dict(campaign_id=matrix["campaign_id"], commit=commit, matrix_sha256=canonical_sha(matrix),
+                energy_metric=matrix.get("energy_metric", "cpu_package+gpu_board"),
                 configs=[c["name"] for c in configs], estimate_provenance=provenance, contingency=contingency,
                 nodes=out_nodes)
 
@@ -291,11 +326,23 @@ def bind(manifest: dict, campaign: Path, node: str, report: dict, allocation: st
                          "pass --gpu-uuid on multi-GPU nodes")
     dev = match[0]
     verdict = report.get("verdict", {})
+    required = manifest.get("energy_metric", "cpu_package+gpu_board")
+    problems = []
     if not verdict.get("gpu_energy_counter"):
-        raise SystemExit(f"node {node}: GPU energy counter not advancing")
+        problems.append("GPU energy counter not advancing")
+    if not verdict.get("task_sandbox_landlock_abi4"):
+        problems.append("task sandbox not qualified (Landlock ABI >= 4 required; see node/prepare_kernel.sh)")
+    if dev.get("compute_procs"):
+        problems.append(f"GPU already has {dev['compute_procs']} compute processes (node not dedicated)")
     cpu = bool(verdict.get("cpu_package_counters"))
-    metric = "cpu_package+gpu_board" if cpu else "gpu_board"
-    warnings = [] if cpu else ["no readable CPU-package counters: results are labelled gpu_board energy"]
+    if required == "cpu_package+gpu_board" and not cpu:
+        problems.append("CPU-package counters not readable/advancing for every socket (campaign requires cpu_package+gpu_board)")
+    if problems:
+        raise SystemExit(f"node {node} not admitted: " + "; ".join(problems))
+    metric = "cpu_package+gpu_board" if cpu and required == "cpu_package+gpu_board" else "gpu_board"
+    warnings = [] if metric == required else [f"energy metric {metric} differs from the campaign's {required}"]
+    if metric != required:
+        raise SystemExit(f"node {node} not admitted: {warnings[0]}")
     report_sha = hashlib.sha256(json.dumps(report, sort_keys=True).encode()).hexdigest()
     bound = []
     for row in nd["rounds"]:
@@ -304,7 +351,11 @@ def bind(manifest: dict, campaign: Path, node: str, report: dict, allocation: st
             raise SystemExit(f"{row['file']} does not match the campaign manifest")
         plan["gpu_uuid"], plan["allocation"] = dev["uuid"], allocation
         plan["binding"] = dict(plan_sha256=row["plan_sha256"], node_report_sha256=report_sha, host=report.get("host"),
-                               gpu_name=dev.get("name"), energy_metric=metric, warnings=warnings)
+                               gpu_name=dev.get("name"), energy_metric=metric, warnings=warnings,
+                               hardware=dict(cpu_sockets=(report.get("cpu") or {}).get("sockets"),
+                                             cpu_model=(report.get("cpu") or {}).get("model"), memory_gib=report.get("memory_gib"),
+                                             kernel=report.get("kernel"), gpu_power_limit_w=dev.get("power_limit_w"),
+                                             driver=(report.get("gpus") or {}).get("driver")))
         bound.append((Path(row["file"]).name, plan))
     return bound, warnings
 
@@ -318,6 +369,56 @@ def cmd_bind(a) -> int:
     write_manifest(a.out)
     print(json.dumps(dict(node=a.node, rounds=len(bound), warnings=warnings, out=str(a.out))))
     return 0
+
+
+def expected_cells(plan: dict) -> dict:
+    """step name ("<config>-<step>") -> (kind, step spec) for every cell a round's plan schedules."""
+    passes = plan.get("passes") or [dict(blocks=plan["blocks"])]
+    cells = {}
+    for ps in passes:
+        for cfg, block in ps["blocks"].items():
+            for position_step in block["steps"]:
+                kind, st = next(iter(position_step.items()))
+                cells[f"{cfg}-{st['name']}"] = (kind, st, cfg)
+    return cells
+
+
+def cell_validity(d: Path, step: str, kind: str, st: dict, cfg: str, metric: str) -> list:
+    """Problems that make a completed cell unusable for analysis (not configuration outcomes)."""
+    problems = []
+    root = d / "cohorts" / step
+    if kind == "live":
+        summ = root / step / "cohort-summary.json"
+        if not summ.exists():
+            return [f"{step}: no cohort summary"]
+        s = json.loads(summ.read_text())
+        if s.get("infra_invalid"):
+            problems.append(f"{step}: infrastructure-failed sessions")
+        if not (s.get("reconciliation") or {}).get("reconciled"):
+            problems.append(f"{step}: attempts not reconciled")
+        if (s.get("drain") or {}).get("drained") is False:
+            problems.append(f"{step}: server did not drain before the interval closed")
+        if (s.get("container_cleanup") or {}).get("leftover"):
+            problems.append(f"{step}: task containers left after the cohort")
+        energy = s.get("energy") or {}
+    elif kind == "replay":
+        summ = root / "replay-summary.json"
+        if not summ.exists():
+            return [f"{step}: no replay summary"]
+        s = json.loads(summ.read_text())
+        if s.get("failed"):
+            problems.append(f"{step}: {s['failed']} replayed sessions failed")
+        src_cfg = st.get("source", "").split("/")[0] if "/" in st.get("source", "") else cfg
+        if src_cfg == cfg and s.get("mismatched_turns"):
+            problems.append(f"{step}: same-configuration replay fidelity failed ({s['mismatched_turns']} turns)")
+        energy = s.get("energy") or {}
+    else:
+        summ = root / "idle-summary.json"
+        energy = (json.loads(summ.read_text()).get("energy") or {}) if summ.exists() else {}
+    need = "cpu_plus_gpu_j" if metric == "cpu_package+gpu_board" else "gpu_board_j"
+    if energy.get(need) is None:
+        problems.append(f"{step}: no valid {need}")
+    return problems
 
 
 def collect(manifest: dict, results: list) -> dict:
@@ -345,6 +446,17 @@ def collect(manifest: dict, results: list) -> dict:
             rec["problems"].append("dirty checkout")
         if start.get("retry_of") and not str(start.get("retry_reason") or "").startswith("infra:"):
             rec["problems"].append("retry without an infrastructure reason")
+        cells = expected_cells(plan)
+        done = {e["step"] for e in ev if e["kind"] == "step_done"}
+        failed_cfgs = {e["config"] for e in ev if e["kind"] in ("server_start_failed", "server_died")}
+        died_steps = {e.get("step") for e in ev if e["kind"] == "server_died"}
+        config_outcome = sorted(c for c, (_, _, cfg) in cells.items()
+                                if (c not in done and cfg in failed_cfgs) or c in died_steps)
+        missing = sorted(c for c in cells if c not in done and c not in config_outcome)
+        invalid = [p for c in sorted((done & set(cells)) - died_steps) for p in
+                   cell_validity(d, c, cells[c][0], cells[c][1], cells[c][2], start.get("energy_metric") or "cpu_package+gpu_board")]
+        rec.update(expected=len(cells), completed=len(done & set(cells)), missing_cells=missing,
+                   configuration_outcome_cells=config_outcome, invalid_cells=invalid)
         rec.update(complete=any(e["kind"] == "driver_end" for e in ev), retry_of=start.get("retry_of"),
                    retry_reason=start.get("retry_reason"), energy_metric=start.get("energy_metric"),
                    configuration_failures=[dict(kind=e["kind"], config=e["config"], step=e.get("step"), error=e.get("error"),
@@ -357,17 +469,32 @@ def collect(manifest: dict, results: list) -> dict:
     rounds = []
     for sha, x in expected.items():
         good = [r for r in x["runs"] if r.get("complete") and not r["problems"]]
-        status = "missing" if not x["runs"] else "ok" if len(good) == 1 else "conflict" if len(good) > 1 else "incomplete"
-        if status == "ok" and (good[0]["skipped"] or good[0]["blocks_skipped"]):
-            status = "partial"
+        if not x["runs"]:
+            status = "missing"
+        elif len(good) > 1:
+            status = "conflict"
+        elif not good:
+            status = "incomplete"
+        else:
+            g = good[0]
+            if g["invalid_cells"]:
+                status = "invalid"           # completed but not usable: energy, drain, fidelity, infrastructure
+            elif g["missing_cells"]:
+                status = "partial"           # cells not run (budget, skipped passes, failed checks)
+            elif g["configuration_outcome_cells"]:
+                status = "complete_with_configuration_outcomes"   # e.g. a configuration that cannot start
+            else:
+                status = "complete"
         rounds.append(dict(x, plan_sha256=sha, status=status, counted=good[0]["dir"] if len(good) == 1 else None))
-    summary = {s: sum(r["status"] == s for r in rounds) for s in ("ok", "partial", "incomplete", "conflict", "missing")}
+    summary = {s: sum(r["status"] == s for r in rounds)
+               for s in ("complete", "complete_with_configuration_outcomes", "partial", "invalid", "incomplete", "conflict", "missing")}
     metrics: dict = {}
     for r in rounds:
-        if r["counted"]:
+        if r["counted"] and r["status"].startswith("complete"):
             run = next(x for x in r["runs"] if x["dir"] == r["counted"])
             metrics.setdefault(manifest["nodes"][r["node"]]["gpu_class"], set()).add(run["energy_metric"])
     return dict(campaign_id=manifest["campaign_id"], summary=summary, rounds=rounds, stray=stray,
+                analysable=summary["complete"] + summary["complete_with_configuration_outcomes"] == len(rounds),
                 energy_metric_by_class={k: sorted(v) for k, v in metrics.items()},
                 mixed_energy_metrics=[k for k, v in metrics.items() if len(v) > 1],
                 note="checksums establish integrity against the recorded manifests, not correctness of the experiment")
