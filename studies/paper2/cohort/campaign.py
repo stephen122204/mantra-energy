@@ -1,24 +1,29 @@
 """Main-run campaign across several nodes: shard a frozen matrix, bind shards to nodes, collect.
 
     python -m studies.paper2.cohort.campaign shard --base-plan PILOT_PLAN --matrix MATRIX.json \\
-        --pilot PILOT_OUT [--pilot ...] --nodes NODES.json --out CAMPAIGN
+        --pilot GPU_CLASS=PILOT_OUT [--pilot ...] --nodes NODES.json --out CAMPAIGN
     python -m studies.paper2.cohort.campaign bind --campaign CAMPAIGN --node NAME --node-report REPORT.json \\
         --allocation LEASE [--gpu-uuid UUID] --out BOUND
     python -m studies.paper2.cohort.campaign collect --campaign CAMPAIGN --results DIR [DIR ...] --out COVERAGE.json
 
 Every node runs every precision configuration on its own GPU (the core comparisons are within one
-GPU); nodes split the matrix by cell repeats, never by precision. A round is one driver run on one
-node: pass 0 = the round's live cohorts for every configuration (block order randomized), pass 1 =
-replay of those traces (diagonal and crossed) on every configuration. Paired repeats share task
-ids, sampling seeds and pair keys across configurations.
+GPU). Each GPU class (e.g. A100-SXM4-80GB, H100) gets the full matrix of repeats of its own; repeats
+are split only among nodes of the same class, never by precision and never across classes. A round
+is one driver run on one node: pass 0 = the round's live cohorts on every configuration, pass 1 =
+replay of those traces (diagonal and crossed) on every configuration. Block order rotates across a
+node's rounds (each configuration first equally often). Paired repeats share task ids, sampling
+seeds and pair keys across configurations.
 
-Step durations come only from measured pilot runs (``budget.measured``); a cell without a measured
-duration stops the planner. Evaluation cells may not contain task ids used by the pilot.
+Step durations come only from pilot runs on the same GPU class (``budget.measured``); a class
+without its own pilot, or a cell without a measured duration, stops the planner. Evaluation cells
+may not contain task ids used by the pilot. Bound plans carry the energy metric the node can
+measure (``cpu_package+gpu_board`` or ``gpu_board``); results with different metrics are not pooled.
 
 MATRIX: {"campaign_id", "seed", "contingency": 0.25, "equal_kv": false,
          "task_specs": [...], "extra_catalogs": [...],          # evaluation tasks, added to the base plan's
          "cells": [{"name": "n4", "kind": "live", "admission_limit": 4, "task_ids": [...], "repeats": 6,
                     "measure_as": "n4", "seed": 101, "mode": "fixed", "calibration": false},
+                   # optional per cell: "repeats_by_class": {"H100-PCIe": 4}
                    {"name": "xr4", "kind": "replay", "source_cell": "n4", "repeats": 2,
                     "admission_limit": 4, "measure_as": "replay-n4"}]}
 NODES: [{"name": "uc-a100-a", "gpu_class": "A100-SXM4-80GB", "available_h": 40}]
@@ -29,6 +34,7 @@ import argparse
 import copy
 import hashlib
 import json
+import random
 import subprocess
 import sys
 from pathlib import Path
@@ -100,7 +106,34 @@ def _estimate(meas: dict, config: str, measure_as: str, base_config: str):
     return None, "unmeasured"
 
 
-def shard(base: dict, matrix: dict, meas: dict, nodes: list, commit: str) -> dict:
+def _rotation(names: list, seed: int, j: int) -> list:
+    base = list(names)
+    random.Random(seed).shuffle(base)
+    k = j % len(base)
+    return base[k:] + base[:k]
+
+
+def shard(base: dict, matrix: dict, meas_by_class: dict, nodes: list, commit: str) -> dict:
+    classes = sorted({n["gpu_class"] for n in nodes})
+    missing = [c for c in classes if c not in meas_by_class]
+    if missing:
+        raise SystemExit(f"cannot shard: no pilot measured on GPU class {missing}; each class needs its own pilot")
+    out = None
+    for gpu_class in classes:
+        part = _shard_class(base, matrix, meas_by_class[gpu_class], [n for n in nodes if n["gpu_class"] == gpu_class],
+                            commit, gpu_class)
+        if out is None:
+            out = dict(part, estimate_provenance={}, configs_by_class={}, nodes={})
+            out.pop("configs")
+        out["estimate_provenance"][gpu_class] = part["estimate_provenance"]
+        out["configs_by_class"][gpu_class] = part["configs"]
+        out["nodes"].update(part["nodes"])
+    return out
+
+
+def _shard_class(base: dict, matrix: dict, meas: dict, nodes: list, commit: str, gpu_class: str) -> dict:
+    matrix = dict(matrix, cells=[dict(c, repeats=c.get("repeats_by_class", {}).get(gpu_class, c["repeats"]))
+                                 for c in matrix["cells"]])
     configs = [dict(c) for c in base["configs"]]
     if matrix.get("equal_kv"):
         names = [c["name"] for c in configs]
@@ -133,7 +166,7 @@ def shard(base: dict, matrix: dict, meas: dict, nodes: list, commit: str) -> dic
             if v is None:
                 problems.append(f"cell {c['name']}: no measured duration for {cfg['name']}-{c['measure_as']}")
     if problems:
-        raise SystemExit("cannot shard:\n  " + "\n  ".join(problems))
+        raise SystemExit(f"cannot shard {gpu_class}:\n  " + "\n  ".join(problems))
 
     def est(cfg_name, cell):
         return _estimate(meas, cfg_name, cell["measure_as"], base_of[cfg_name])[0] * (1 + contingency)
@@ -188,11 +221,11 @@ def shard(base: dict, matrix: dict, meas: dict, nodes: list, commit: str) -> dic
                                 name=f"{r['name']}-{src}-r{k}", source=f"{src}/{cn}-r{k}",
                                 admission_limit=r.get("admission_limit", c["admission_limit"]), est_s=round(est(target, r)))})
                             est_s += est(target, r)
-            passes = [dict(blocks={n: dict(steps=live_steps[n]) for n in names})]
+            seed = int(canonical_sha([matrix.get("seed", 0), node["name"]])[:8], 16)
+            passes = [dict(blocks={n: dict(steps=live_steps[n]) for n in names}, order=_rotation(names, seed, j))]
             if any(replay_steps.values()):
-                passes.append(dict(blocks={n: dict(steps=replay_steps[n]) for n in names}))
+                passes.append(dict(blocks={n: dict(steps=replay_steps[n]) for n in names}, order=_rotation(names, seed + 1, j)))
             est_s += sum(load_s.values()) * len(passes)
-            seed = int(canonical_sha([matrix.get("seed", 0), node["name"], j])[:8], 16)
             plan = dict(common, version="paper2-campaign-v1", gpu_uuid=UNBOUND, allocation=UNBOUND, block_seed=seed,
                         configs=configs, passes=passes, tekken=tekken, task_specs=task_specs, extra_catalogs=catalogs,
                         campaign=dict(campaign_id=matrix["campaign_id"], node=node["name"], gpu_class=node["gpu_class"],
@@ -210,7 +243,13 @@ def cmd_shard(a) -> int:
     base = json.loads(a.base_plan.read_text())
     matrix = json.loads(a.matrix.read_text())
     nodes = json.loads(a.nodes.read_text())
-    meas = _measurements(a.pilot)
+    by_class: dict = {}
+    for item in a.pilot:
+        gpu_class, _, d = item.partition("=")
+        if not d:
+            raise SystemExit(f"--pilot expects GPU_CLASS=DIR, got {item}")
+        by_class.setdefault(gpu_class, []).append(d)
+    meas = {c: _measurements(ds) for c, ds in by_class.items()}
     res = shard(base, matrix, meas, nodes, a.commit or _git_head())
     a.out.mkdir(parents=True, exist_ok=False)
     (a.out / "matrix.json").write_text(json.dumps(matrix, indent=1))
@@ -254,7 +293,9 @@ def bind(manifest: dict, campaign: Path, node: str, report: dict, allocation: st
     verdict = report.get("verdict", {})
     if not verdict.get("gpu_energy_counter"):
         raise SystemExit(f"node {node}: GPU energy counter not advancing")
-    warnings = [] if verdict.get("cpu_package_counters") else ["no readable CPU-package counters: GPU-board energy only"]
+    cpu = bool(verdict.get("cpu_package_counters"))
+    metric = "cpu_package+gpu_board" if cpu else "gpu_board"
+    warnings = [] if cpu else ["no readable CPU-package counters: results are labelled gpu_board energy"]
     report_sha = hashlib.sha256(json.dumps(report, sort_keys=True).encode()).hexdigest()
     bound = []
     for row in nd["rounds"]:
@@ -263,7 +304,7 @@ def bind(manifest: dict, campaign: Path, node: str, report: dict, allocation: st
             raise SystemExit(f"{row['file']} does not match the campaign manifest")
         plan["gpu_uuid"], plan["allocation"] = dev["uuid"], allocation
         plan["binding"] = dict(plan_sha256=row["plan_sha256"], node_report_sha256=report_sha, host=report.get("host"),
-                               gpu_name=dev.get("name"), warnings=warnings)
+                               gpu_name=dev.get("name"), energy_metric=metric, warnings=warnings)
         bound.append((Path(row["file"]).name, plan))
     return bound, warnings
 
@@ -302,7 +343,13 @@ def collect(manifest: dict, results: list) -> dict:
             rec["problems"].append(f"ran commit {start.get('revision')}, campaign frozen at {manifest['commit']}")
         if start.get("dirty"):
             rec["problems"].append("dirty checkout")
+        if start.get("retry_of") and not str(start.get("retry_reason") or "").startswith("infra:"):
+            rec["problems"].append("retry without an infrastructure reason")
         rec.update(complete=any(e["kind"] == "driver_end" for e in ev), retry_of=start.get("retry_of"),
+                   retry_reason=start.get("retry_reason"), energy_metric=start.get("energy_metric"),
+                   configuration_failures=[dict(kind=e["kind"], config=e["config"], step=e.get("step"), error=e.get("error"),
+                                                returncode=e.get("returncode"))
+                                           for e in ev if e["kind"] in ("server_start_failed", "server_died")],
                    done=sorted(e["step"] for e in ev if e["kind"] == "step_done"),
                    skipped=[dict(step=e["step"], reason=e["reason"]) for e in ev if e["kind"] == "step_skipped"],
                    blocks_skipped=[e["config"] for e in ev if e["kind"] == "block_skipped"])
@@ -315,7 +362,15 @@ def collect(manifest: dict, results: list) -> dict:
             status = "partial"
         rounds.append(dict(x, plan_sha256=sha, status=status, counted=good[0]["dir"] if len(good) == 1 else None))
     summary = {s: sum(r["status"] == s for r in rounds) for s in ("ok", "partial", "incomplete", "conflict", "missing")}
-    return dict(campaign_id=manifest["campaign_id"], summary=summary, rounds=rounds, stray=stray)
+    metrics: dict = {}
+    for r in rounds:
+        if r["counted"]:
+            run = next(x for x in r["runs"] if x["dir"] == r["counted"])
+            metrics.setdefault(manifest["nodes"][r["node"]]["gpu_class"], set()).add(run["energy_metric"])
+    return dict(campaign_id=manifest["campaign_id"], summary=summary, rounds=rounds, stray=stray,
+                energy_metric_by_class={k: sorted(v) for k, v in metrics.items()},
+                mixed_energy_metrics=[k for k, v in metrics.items() if len(v) > 1],
+                note="checksums establish integrity against the recorded manifests, not correctness of the experiment")
 
 
 def cmd_collect(a) -> int:
@@ -332,7 +387,7 @@ def main(argv=None) -> int:
     s = sub.add_parser("shard")
     s.add_argument("--base-plan", type=Path, required=True)
     s.add_argument("--matrix", type=Path, required=True)
-    s.add_argument("--pilot", type=Path, action="append", required=True)
+    s.add_argument("--pilot", action="append", required=True, help="GPU_CLASS=PILOT_OUT (repeatable)")
     s.add_argument("--nodes", type=Path, required=True)
     s.add_argument("--out", type=Path, required=True)
     s.add_argument("--commit", help="commit the nodes will run (default: this checkout's HEAD)")
