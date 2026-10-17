@@ -54,16 +54,23 @@ def task_ids() -> dict:
                           "python-conditional-dedup-v2-n8192-s7", "repo-bfs-layers-visited-v4"])
 
 
-def build(work: Path, gpu_uuid: str, allocation: str) -> dict:
+def build(work: Path, gpu_uuid: str, allocation: str, swebench_catalog: Path = None) -> dict:
+    swebench_ids = [c["task_id"] for c in json.loads(swebench_catalog.read_text())] if swebench_catalog else []
     ids = task_ids()
     configs = [dict(name=name, model=str(work / "models" / name), max_model_len=65536, gpu_memory_utilization=0.90,
                     max_num_seqs=64, **arm) for name, arm in ARMS.items()]
+    # Priority order inside each precision block; the driver skips (and logs) steps that no longer fit.
     steps = [
         {"idle": dict(name="idle60", seconds=60, est_s=70)},
         {"live": dict(name="n4", admission_limit=4, task_ids=ids["all"], seed=11, est_s=1200)},
         {"live": dict(name="n1", admission_limit=1, task_ids=ids["isolated"], seed=12, est_s=900)},
+    ]
+    if swebench_ids:
+        steps.append({"live": dict(name="swe-n5", admission_limit=len(swebench_ids), task_ids=swebench_ids, seed=14,
+                                   est_s=1600, cohort_deadline_s=1500)})
+    steps += [
         {"live": dict(name="n16", admission_limit=16, task_ids=ids["all"], seed=13, est_s=900)},
-        {"replay": dict(name="replay-n4", source="n4", admission_limit=4, est_s=1200)},
+        {"replay": dict(name="replay-n4", source="n4", admission_limit=4, est_s=1200, first_block_only=True)},
     ]
     return dict(
         version="paper2-pilot-v1", gpu_uuid=gpu_uuid, allocation=allocation,
@@ -75,6 +82,8 @@ def build(work: Path, gpu_uuid: str, allocation: str) -> dict:
                     verify_timeout_s=900),
         sampling=dict(mode="sampled", temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0),  # C2: T=0.15, full vocab
         load_est_s=600, export_reserve_s=900, cohort_deadline_s=3000,
+        extra_catalogs=[str(swebench_catalog)] if swebench_catalog else [],
+        task_options=dict(swebench=dict(cpus="4", memory="16g", harness_python=str(work / "venv-swebench" / "bin" / "python"))),
     )
 
 
@@ -84,8 +93,9 @@ def main(argv=None):
     ap.add_argument("--gpu-uuid", required=True)
     ap.add_argument("--allocation", required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--swebench-catalog", type=Path)
     a = ap.parse_args(argv)
-    a.out.write_text(json.dumps(build(a.work.resolve(), a.gpu_uuid, a.allocation), indent=1))
+    a.out.write_text(json.dumps(build(a.work.resolve(), a.gpu_uuid, a.allocation, a.swebench_catalog), indent=1))
     print(a.out)
 
 

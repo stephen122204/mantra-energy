@@ -55,5 +55,11 @@ if [ ! -d networkx-src/.git ]; then git clone -q https://github.com/networkx/net
 git -C networkx-src checkout -q --detach 2acf1590f82757c01a57b81b8c5dfb79e60aa416
 git -C networkx-src rev-parse HEAD > manifests/networkx-commit.txt
 
+# 5. SWE-bench harness in its own environment (grading only; never imported by the runner)
+[ -x venv-swebench/bin/python ] || uv venv -q --python 3.11 venv-swebench
+uv pip install -q --python venv-swebench/bin/python "swebench==4.1.0"
+uv pip freeze --python venv-swebench/bin/python > manifests/swebench-freeze.txt
+command -v docker >/dev/null && docker version --format '{{.Server.Version}}' > manifests/docker-version.txt || echo "docker unavailable" > manifests/docker-version.txt
+
 (cd manifests && sha256sum ./*.txt ./*.json > ../manifests.SHA256SUMS)
 echo SETUP_DONE | tee logs/SETUP_DONE

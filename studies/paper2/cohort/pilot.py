@@ -80,6 +80,8 @@ def main(argv=None):
 
     # Task preparation happens before any server or energy interval.
     catalog = prepare_tasks(plan["task_specs"], out / "prep")
+    for extra in plan.get("extra_catalogs", []):  # e.g. SWE-bench instances prepared by swebench_workload
+        catalog += json.loads(Path(extra).read_text())
     log.append("tasks_prepared", n=len(catalog))
     configs = [ServerConfig(**c) for c in plan["configs"]]
     order = list(range(len(configs)))
@@ -95,7 +97,7 @@ def main(argv=None):
         return True, ""
 
     results = []
-    for bi in order:
+    for position, bi in enumerate(order):
         cfg = configs[bi]
         block = plan["blocks"][cfg.name]
         if not fits(f"load-{cfg.name}", plan.get("load_est_s", 600))[0]:
@@ -118,11 +120,25 @@ def main(argv=None):
             started = server.start()
             base_url = server.base_url
         log.append("server_started", config=cfg.to_dict(), started=started)
+        checks = {"ok": True, "fixture": True}
+        if not a.fixture_server:
+            from .client import MistralRenderer
+            from .engine_check import run_checks
+            r = MistralRenderer(plan["tekken"][cfg.name])
+            prompt = r.encode([dict(role="user", content="Engine check: count from one to twenty.")], [])
+            checks = run_checks(base_url, cfg.name, prompt, r.inner.encode(" one two three four five", bos=False, eos=False))
+        log.append("engine_check", config=cfg.name, **checks)
         try:
             live_dirs = {}
             for step in block["steps"]:
                 kind, s = next(iter(step.items()))
                 name = f"{cfg.name}-{s['name']}"
+                if s.get("first_block_only") and position > 0:
+                    log.append("step_skipped", step=name, reason="first block only")
+                    continue
+                if kind == "replay" and not checks.get("forced_decoding", {"ok": True}).get("ok"):
+                    log.append("step_skipped", step=name, reason="forced decoding failed the engine check")
+                    continue
                 ok, why = fits(s["name"], s.get("est_s", 0))
                 if not ok:
                     log.append("step_skipped", step=name, reason=why)
@@ -153,7 +169,7 @@ def main(argv=None):
                                       sampling=dict(plan["sampling"], seed=s.get("seed", plan["sampling"].get("seed", 0))),
                                       cohort_deadline_s=s.get("cohort_deadline_s", plan.get("cohort_deadline_s", 3600)),
                                       tool_cpus=plan.get("tool_cpus"), session_cpus=plan.get("session_cpus"),
-                                      labels=dict(config=cfg.name, step=s["name"]))
+                                      labels=dict(config=cfg.name, step=s["name"]), task_options=plan.get("task_options", {}))
                     res = run_cohort(spec, out / "cohorts" / name, measurement=meas, poller=poller)
                     live_dirs[s["name"]] = out / "cohorts" / name / name
                 elif kind == "replay":

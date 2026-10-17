@@ -35,7 +35,7 @@ def _load_task(spec):
     import cloudpickle
     from studies.energy_diagnosis.moe import task_pack
     task = cloudpickle.loads(Path(spec["task_pickle"]).read_bytes())
-    modules = {task.task_id: task_pack.MODULES[spec["task_kind"]]}
+    modules = {} if spec["task_kind"] == "swebench" else {task.task_id: task_pack.MODULES[spec["task_kind"]]}
     return task, modules
 
 
@@ -60,7 +60,11 @@ def execute(spec_path: Path) -> int:
     adapter = SharedServerAdapter(srv["base_url"], srv["served_model"], MistralRenderer(spec["tekken"]),
                                   max_tokens=lim["max_tokens"], max_model_len=srv["max_model_len"],
                                   record=record, session_id=spec["session_id"])
-    runtime = PackRuntime(modules, root)
+    if spec["task_kind"] == "swebench":
+        from studies.paper2.cohort.swebench_workload import SweBenchRuntime
+        runtime = SweBenchRuntime(root, **spec.get("swebench", {}))
+    else:
+        runtime = PackRuntime(modules, root)
     executor = GoalExecutor({task.task_id: task}, adapter, None, root, max_steps=lim["max_turns"],
                             timeout_seconds=lim["deadline_s"], simulated=False, workload_runtime=runtime,
                             protocol=spec.get("protocol", "chat-tools-v2"), sampling=spec["sampling"],
@@ -84,6 +88,13 @@ def execute(spec_path: Path) -> int:
     except Exception as exc:  # infrastructure failure inside the session: preserved, never retried here
         status, error = "crashed", f"{type(exc).__name__}: {exc}"
         trace["exception"] = traceback.format_exc()
+    finalize = getattr(runtime.active, "finalize", None) if runtime.active is not None else None
+    if finalize:  # e.g. SWE-bench: store the working-tree diff and remove the container (part of the attempt)
+        try:
+            finalize(task)
+        except Exception as exc:
+            trace["finalize_error"] = f"{type(exc).__name__}: {exc}"
+            status, error = "crashed", trace["finalize_error"]
     ended_wall = time.time()
     req_log.close()
     _dump(root / "model-calls.json", model_calls)

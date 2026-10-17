@@ -53,6 +53,7 @@ class CohortSpec:
     session_cpus: Optional[str] = None
     retry_of: Optional[str] = None
     labels: dict = field(default_factory=dict)
+    task_options: dict = field(default_factory=dict)   # e.g. {"swebench": {"cpus": "4", "memory": "16g"}}
 
     def validate(self):
         if self.mode not in ("fixed", "arrivals"):
@@ -81,7 +82,7 @@ class _Session:
             task_id=item["task_id"], task_pickle=item["task_pickle"], task_kind=item["task_kind"], pair_key=item["pair_key"],
             server=dict(base_url=spec.base_url, served_model=spec.served_model, max_model_len=spec.max_model_len),
             tekken=spec.tekken, limits=spec.limits, sampling=spec.sampling, tool_cpus=spec.tool_cpus,
-            protocol="chat-tools-v2", tool_call_format="mistral"), indent=1))
+            protocol="chat-tools-v2", tool_call_format="mistral", **spec.task_options), indent=1))
         self.proc: Optional[subprocess.Popen] = None
         self.offered = self.admitted = self.ended = None
         self.outcome: Optional[str] = None

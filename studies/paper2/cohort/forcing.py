@@ -17,10 +17,12 @@ from typing import Optional
 try:  # vLLM is only present on the inference node.
     import torch
     from vllm.v1.sample.logits_processor import BatchUpdate, LogitsProcessor
+    from vllm.v1.sample.logits_processor.builtin import process_dict_updates
 except ImportError:  # pragma: no cover - lets the parser below be tested without vLLM
     torch = None
     BatchUpdate = object  # type: ignore[assignment,misc]
     LogitsProcessor = object  # type: ignore[assignment,misc]
+    process_dict_updates = None
 
 XARG = "forced_tokens"
 
@@ -55,6 +57,13 @@ class ForcedTokens(LogitsProcessor):  # type: ignore[misc]
 
     def update_state(self, batch_update: Optional["BatchUpdate"]) -> None:
         if not batch_update:
+            return
+        if process_dict_updates is not None:
+            # The engine's own helper: identical add/remove/move semantics to the built-in processors.
+            def state(params, _prompt_ids, output_ids):
+                forced = parse_forced((params.extra_args or {}).get(XARG)) if params else None
+                return None if forced is None else (forced, output_ids)
+            process_dict_updates(self.rows, batch_update, state)
             return
         for index in batch_update.removed:
             self.rows.pop(index, None)
