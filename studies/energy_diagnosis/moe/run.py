@@ -23,6 +23,7 @@ from studies.energy_diagnosis.runtime.node_measurement import (
     FixtureCounterReader,
     environment_identity,
 )
+from studies.energy_diagnosis.agent_protocol import TOOL_CALL_FORMATS
 from .backend import ProcessBackend, BackendAdapter
 from .control import PAUSE_POLICIES, Lifecycle, Policy
 from .workloads import create_tasks, WorkloadRuntime, VERSION
@@ -155,6 +156,8 @@ def run(args):
     )
     if not simulated and (not args.config or not args.allocation_id):
         raise ValueError("native execution needs config and assigned allocation ID")
+    if config.get("tool_call_format", "hermes") not in TOOL_CALL_FORMATS:
+        raise ValueError("config tool_call_format must be one of " + ", ".join(TOOL_CALL_FORMATS))
     if (
         not simulated
         and subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
@@ -354,6 +357,7 @@ def run(args):
                     sampling=_agent_settings(args)["sampling"],
                     max_tool_calls=args.max_tool_calls,
                     max_output_tokens=args.max_total_output_tokens,
+                    tool_call_format=config.get("tool_call_format", "hermes"),
                     initialized_model_window=True,
                     workload_runtime=pack.runtime(root) if pack is not None else QueryRuntime(args.fixture_case if simulated else None, args.query_engine) if query_assets else WorkloadRuntime(
                         root, args.fixture_case if simulated else None

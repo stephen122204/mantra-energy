@@ -26,8 +26,9 @@ from studies.energy_diagnosis.agent_protocol import (
     PROTOCOL_V2,
     Conversation,
     function_tools,
+    TOOL_CALL_FORMATS,
     outcome_class,
-    parse_response,
+    parse_tool_response,
     turn_seed,
 )
 from studies.energy_diagnosis.campaign import ArtifactRef, PlannedRun, RunLedger
@@ -195,6 +196,7 @@ class GoalExecutor:
         sampling=None,
         max_tool_calls=None,
         max_output_tokens=None,
+        tool_call_format="hermes",
     ):
         self.tasks = tasks
         self.adapter = adapter
@@ -212,6 +214,10 @@ class GoalExecutor:
             raise ValueError("unknown agent protocol")
         if protocol in CHAT_PROTOCOLS and workload_runtime is None:
             raise ValueError("the chat protocol requires a workload runtime")
+        if tool_call_format not in TOOL_CALL_FORMATS:
+            raise ValueError(f"unknown tool-call format {tool_call_format!r}")
+        # Syntax of the model's native tool calls (chat protocols only); set by the model config.
+        self.tool_call_format = tool_call_format
         # legacy-json-v1 reproduces V6: one user message per step holding a
         # static instruction and tool results. chat-tools-v1 is the native
         # multi-turn protocol (agent_protocol.py).
@@ -246,7 +252,8 @@ class GoalExecutor:
         limits end the attempt. The reason is recorded in trace["terminal"].
         """
         deadline_ns = lease.started_ns + int(self.timeout_seconds * 1e9)
-        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps, protocol=self.protocol)
+        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps, protocol=self.protocol,
+                                    tool_call_format=self.tool_call_format)
         meta = dict(task_id=task.task_id, family=task.family, asset_sha256=task.asset_sha256)
         suffix = "-" + plan.setting_id
         pair_key = plan.planned_run_id[: -len(suffix)] if plan.planned_run_id.endswith(suffix) else plan.planned_run_id
@@ -339,7 +346,8 @@ class GoalExecutor:
             if finish == "length":
                 kind = "output_budget_exhausted" if remaining_output is not None and output_used >= self.max_output_tokens else "output_truncated"
                 return stop(kind, f"response reached {call_budget} output tokens")
-            decision = parse_response(raw.get("content"), accept_unclosed_final=self.protocol == PROTOCOL_V2)
+            decision = parse_tool_response(raw.get("content"), self.tool_call_format,
+                                           accept_unclosed_final=self.protocol == PROTOCOL_V2)
             turn.update(kind=decision.kind, reason=decision.reason)
             if decision.repaired:
                 turn["repaired"] = decision.repaired
