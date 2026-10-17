@@ -82,6 +82,58 @@ def sampling_payload(sampling: dict) -> dict:
                 min_p=sampling["min_p"], seed=sampling["seed"])
 
 
+def completion_request(served_model: str, prompt: list, max_tokens: int, sampling: dict, extra: Optional[dict] = None) -> dict:
+    """The exact streaming /v1/completions body agent sessions send (also used by the engine check).
+
+    Output text is decoded client-side from the returned token ids (special tokens kept), so the
+    server's own detokenization keeps its default; vLLM 0.10.2 with the Mistral tokenizer fails
+    every request that sets skip_special_tokens=False."""
+    return dict(model=served_model, prompt=prompt, max_tokens=max_tokens, stream=True,
+                stream_options=dict(include_usage=True), return_token_ids=True,
+                **sampling_payload(sampling), **(extra or {}))
+
+
+def stream_completion(host: str, port: int, payload: dict, timeout: float):
+    """POST a streaming completion; returns (first_token_ns, ids, finish, usage, server_text).
+    An error event in the stream raises (it is never read as an empty completion)."""
+    conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    try:
+        conn.request("POST", "/v1/completions", body=json.dumps(payload),
+                     headers={"Content-Type": "application/json", "Accept": "text/event-stream"})
+        r = conn.getresponse()
+        if r.status != 200:
+            raise RuntimeError(f"HTTP {r.status}: {r.read()[:500]!r}")
+        first_ns, ids, finish, usage, text = None, [], None, {}, []
+        done = False
+        for raw in r:
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                done = True
+                break
+            chunk = json.loads(data)
+            if chunk.get("error") is not None:
+                raise RuntimeError(f"server error in stream: {json.dumps(chunk['error'])[:500]}")
+            if chunk.get("usage"):
+                usage = chunk["usage"]
+            for ch in chunk.get("choices") or []:
+                got = ch.get("token_ids") or []
+                if got and first_ns is None:
+                    first_ns = time.monotonic_ns()
+                ids.extend(got)
+                text.append(ch.get("text") or "")
+                finish = ch.get("finish_reason") or finish
+        if not done or finish is None:
+            raise RuntimeError("incomplete completion stream: missing terminal event or finish reason")
+        if usage.get("completion_tokens", 0) and not ids:
+            raise RuntimeError("completion stream reported generated tokens without token IDs")
+        return first_ns, ids, finish, usage, "".join(text)
+    finally:
+        conn.close()
+
+
 class SharedServerAdapter:
     def __init__(self, base_url: str, served_model: str, renderer, *, max_tokens: int, max_model_len: int,
                  record: Callable[[dict], None], session_id: str, extra_body: Optional[dict] = None):
@@ -104,42 +156,7 @@ class SharedServerAdapter:
         return n, ids[n:]
 
     def _stream(self, payload, timeout):
-        conn = http.client.HTTPConnection(self.base.hostname, self.base.port, timeout=timeout)
-        try:
-            conn.request("POST", "/v1/completions", body=json.dumps(payload),
-                         headers={"Content-Type": "application/json", "Accept": "text/event-stream"})
-            r = conn.getresponse()
-            if r.status != 200:
-                raise RuntimeError(f"HTTP {r.status}: {r.read()[:500]!r}")
-            first_ns, ids, finish, usage, text = None, [], None, {}, []
-            done = False
-            for raw in r:
-                line = raw.decode("utf-8", "replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    done = True
-                    break
-                chunk = json.loads(data)
-                if chunk.get("error") is not None:
-                    raise RuntimeError(f"stream error: {json.dumps(chunk['error'])}")
-                if chunk.get("usage"):
-                    usage = chunk["usage"]
-                for ch in chunk.get("choices") or []:
-                    got = ch.get("token_ids") or []
-                    if got and first_ns is None:
-                        first_ns = time.monotonic_ns()
-                    ids.extend(got)
-                    text.append(ch.get("text") or "")
-                    finish = ch.get("finish_reason") or finish
-            if not done or finish is None:
-                raise RuntimeError("incomplete completion stream: missing terminal event or finish reason")
-            if usage.get("completion_tokens", 0) and not ids:
-                raise RuntimeError("completion stream reported generated tokens without token IDs")
-            return first_ns, ids, finish, usage, "".join(text)
-        finally:
-            conn.close()
+        return stream_completion(self.base.hostname, self.base.port, payload, timeout)
 
     def chat(self, request, sampling, meta):
         self.turn += 1
@@ -157,18 +174,14 @@ class SharedServerAdapter:
                 self._prev_prompt = prompt
                 return dict(status="ok", content="", finish_reason="context_exhausted",
                             tokens=dict(prompt=len(prompt), completion=0), token_provenance="tokenizer", backend=rec)
-            payload = dict(model=self.served_model, prompt=prompt, max_tokens=max_tokens, stream=True,
-                           stream_options=dict(include_usage=True), return_token_ids=True,
-                           **sampling_payload(sampling), **self.extra_body)
-            # Mistral's server tokenizer requires its default skip_special_tokens=True.
-            # Control tokens are retained by our local decode of the returned IDs.
+            payload = completion_request(self.served_model, prompt, max_tokens, sampling, self.extra_body)
             first_ns, ids, finish, usage, server_text = self._stream(payload, float(self.model_config["request_timeout_seconds"]))
             done_ns = time.monotonic_ns()
             content = self.renderer.decode(ids)
             details = usage.get("prompt_tokens_details") or {}
             rec.update(t_first_ns=first_ns, t_done_ns=done_ns, output_ids=ids, completion_tokens=len(ids),
                        usage=usage, cached_tokens=details.get("cached_tokens"), finish_reason=finish,
-                       server_text_matches=(server_text == content) if server_text else None)
+                       server_text_chars=len(server_text))
             self.record(rec)
             self._prev_prompt = prompt
             if usage.get("prompt_tokens") not in (None, len(prompt)):

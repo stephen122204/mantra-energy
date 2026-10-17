@@ -125,8 +125,15 @@ def main():
         cutoff = dt.datetime.fromisoformat(a.cutoff_utc.replace("Z", "+00:00"))
         report["hours_to_cutoff"] = round((cutoff - now).total_seconds() / 3600, 2)
     pkg = [v for v in report["rapl"].values() if str(v.get("name", "")).startswith("package")]
+    lscpu = report["cpu"].get("lscpu") or ""
+    field = lambda k: next((l.split(":", 1)[1].strip() for l in lscpu.splitlines() if l.startswith(k + ":")), None)
+    sockets = field("Socket(s)")
+    report["cpu"].update(sockets=int(sockets) if sockets and sockets.isdigit() else None, model=field("Model name"),
+                         package_domains=len(pkg))
     gpu_ok = isinstance(report["gpus"], dict) and any(d.get("energy_counter", {}).get("advancing") for d in report["gpus"].get("devices", []))
-    report["verdict"] = {"cpu_package_counters": bool(pkg) and all(v["readable"] and v["advancing"] for v in pkg),
+    # every physical package must be covered, not merely one readable domain
+    report["verdict"] = {"cpu_package_counters": bool(pkg) and all(v["readable"] and v["advancing"] for v in pkg)
+                         and report["cpu"]["sockets"] is not None and len(pkg) == report["cpu"]["sockets"],
                          "gpu_energy_counter": gpu_ok,
                          "task_sandbox_landlock_abi4": report["landlock_abi"] >= 4}
     Path(a.out).write_text(json.dumps(report, indent=1))

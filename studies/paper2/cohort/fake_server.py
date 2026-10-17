@@ -3,7 +3,7 @@
 Streams token ids like vLLM 0.10.x with ``return_token_ids``; honours ``vllm_xargs.forced_tokens``
 (replay); serves /health, /v1/models and a Prometheus /metrics page; tracks peak concurrency.
 Behaviour per request is chosen by ``mode``: ``submit`` (submit_answer {}), ``text`` (no tool
-call), ``error`` (HTTP 500), ``slow`` (submit after ``delay_s``), ``tool`` (call the first task tool
+call), ``error`` (HTTP 500), ``stream_error`` (HTTP 200 with an error event, as vLLM 0.10.2 does), ``slow`` (submit after ``delay_s``), ``tool`` (call the first task tool
 listed in the prompt, then submit once a tool result is present).
 """
 from __future__ import annotations
@@ -28,6 +28,7 @@ class FakeVllm:
         self.prompt_tokens = self.generation_tokens = 0
         self.seen_prefixes: set = set()
         self.cached = 0
+        self.resets = 0
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.port = self.httpd.server_address[1]
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
@@ -43,6 +44,21 @@ class FakeVllm:
     def __exit__(self, *exc):
         self.httpd.shutdown()
         self.httpd.server_close()
+
+    def cache_lookup(self, prompt: list, n_out: int) -> int:
+        """Block-granular (16) prefix cache: cached prompt tokens for this request, then remember it."""
+        with self.lock:
+            cached = 0
+            for n in range(len(prompt) // 16 * 16, 0, -16):  # full 16-token blocks only
+                if tuple(prompt[:n]) in self.seen_prefixes:
+                    cached = n
+                    break
+            for n in range(16, len(prompt) + 1, 16):
+                self.seen_prefixes.add(tuple(prompt[:n]))
+            self.prompt_tokens += len(prompt)
+            self.generation_tokens += n_out
+            self.cached += cached
+        return cached
 
     def answer_ids(self):
         r = self.renderer
@@ -63,6 +79,16 @@ class FakeVllm:
                 self.end_headers()
                 self.wfile.write(data)
 
+            def _plain_completion(self, body):
+                prompt = body["prompt"]
+                forced = parse_forced((body.get("vllm_xargs") or {}).get("forced_tokens"))
+                ids = (forced if forced is not None else server.answer_ids())[: body["max_tokens"]]
+                cached = server.cache_lookup(prompt, len(ids))
+                out = dict(choices=[dict(index=0, text="", token_ids=ids, finish_reason="length")],
+                           usage=dict(prompt_tokens=len(prompt), completion_tokens=len(ids),
+                                      prompt_tokens_details=dict(cached_tokens=cached)))
+                return self._send(200, json.dumps(out))
+
             def do_GET(self):
                 if self.path == "/health":
                     return self._send(200, "")
@@ -79,7 +105,15 @@ class FakeVllm:
                 self._send(404, "")
 
             def do_POST(self):
-                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if self.path.startswith("/reset_prefix_cache"):
+                    with server.lock:
+                        server.seen_prefixes.clear()
+                        server.resets += 1
+                    return self._send(200, "")
+                n = int(self.headers.get("Content-Length") or 0)
+                body = json.loads(self.rfile.read(n))
+                if self.path == "/v1/completions" and not body.get("stream"):
+                    return self._plain_completion(body)
                 with server.lock:
                     server.inflight += 1
                     server.requests += 1
@@ -87,6 +121,14 @@ class FakeVllm:
                 try:
                     if server.mode == "error":
                         return self._send(500, json.dumps(dict(error="fixture failure")))
+                    if server.mode == "stream_error" or body.get("skip_special_tokens") is False:
+                        # vLLM 0.10.2 + Mistral tokenizer: HTTP 200, then an error event and [DONE]
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/event-stream")
+                        self.end_headers()
+                        err = dict(error=dict(message="", type="BadRequestError", param=None, code=400))
+                        self.wfile.write(f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode())
+                        return
                     prompt = body["prompt"]
                     forced = parse_forced((body.get("vllm_xargs") or {}).get("forced_tokens"))
                     if forced is not None:
@@ -104,17 +146,7 @@ class FakeVllm:
                         ids = server.answer_ids()
                     if server.mode == "slow" or server.delay_s:
                         time.sleep(server.delay_s)
-                    with server.lock:
-                        cached = 0
-                        for n in range(len(prompt), 0, -16):
-                            if tuple(prompt[:n]) in server.seen_prefixes:
-                                cached = n
-                                break
-                        for n in range(16, len(prompt) + 1, 16):
-                            server.seen_prefixes.add(tuple(prompt[:n]))
-                        server.prompt_tokens += len(prompt)
-                        server.generation_tokens += len(ids)
-                        server.cached += cached
+                    cached = server.cache_lookup(prompt, len(ids))
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
                     self.end_headers()
