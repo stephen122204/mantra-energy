@@ -5,7 +5,9 @@
    (``vllm:num_requests_running`` >= 2 observed while they are in flight);
 3. prefix cache: the same long prompt sent twice reports cached prompt tokens the second time;
 4. agent request: the exact streaming body agent sessions send (``client.completion_request``, sampled
-   decoding) returns tokens and a finish reason, with no error event.
+   decoding) returns tokens and a finish reason, with no error event;
+5. long context: a ~1300-token passage with one fact, greedy, must answer it. Catches silent model-config
+   misreads (e.g. vLLM 0.10.2 under transformers 5 drops rope_theta and positions degrade with length).
 """
 from __future__ import annotations
 
@@ -28,8 +30,28 @@ def _post(base_url: str, payload: dict, timeout: float = 600) -> dict:
         return json.loads(r.read())
 
 
+LONG_PASSAGE = ("The city library opened a new reading room this spring. Volunteers sorted donated books by subject, "
+                "repaired worn covers, and built shelves along the east wall. Children's story hours now run on Saturday "
+                "mornings, and a small cafe serves tea near the entrance. ")
+
+
+def long_context_check(base_url: str, model: str, reps: int = 25) -> dict:
+    q = LONG_PASSAGE * reps + "\n\nQuestion: on which day do the children's story hours run? Answer in one short sentence."
+    req = urllib.request.Request(f"{base_url}/v1/chat/completions", headers={"Content-Type": "application/json"},
+                                 data=json.dumps(dict(model=model, messages=[{"role": "user", "content": q}],
+                                                      temperature=0.0, max_tokens=40)).encode())
+    with urllib.request.urlopen(req, timeout=600) as r:
+        out = json.loads(r.read())
+    answer = out["choices"][0]["message"]["content"] or ""
+    return dict(ok="saturday" in answer.lower(), prompt_tokens=out["usage"]["prompt_tokens"], answer=answer[:120])
+
+
 def run_checks(base_url: str, model: str, prompt_ids: list, forced_ids: list, sampling: dict = None) -> dict:
     out: dict = {}
+    try:
+        out["long_context"] = long_context_check(base_url, model)
+    except Exception as exc:
+        out["long_context"] = dict(ok=False, error=f"{type(exc).__name__}: {exc}")
     sampling = sampling or dict(mode="sampled", temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0)
     try:
         u = urlparse(base_url)
