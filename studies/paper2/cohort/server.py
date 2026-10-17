@@ -103,6 +103,19 @@ def parse_startup_log(text: str) -> dict:
     return out
 
 
+def nvml_index(uuid: str) -> int:
+    import pynvml
+    pynvml.nvmlInit()
+    try:
+        for i in range(pynvml.nvmlDeviceGetCount()):
+            u = pynvml.nvmlDeviceGetUUID(pynvml.nvmlDeviceGetHandleByIndex(i))
+            if (u.decode() if isinstance(u, bytes) else u) == uuid:
+                return i
+    finally:
+        pynvml.nvmlShutdown()
+    raise ValueError(f"GPU {uuid} not found")
+
+
 def checkpoint_quantization(model: str) -> dict:
     """What the checkpoint itself declares (dtype + quantization_config, e.g. weights/input_activations/kv)."""
     p = Path(model) / "config.json"
@@ -130,8 +143,9 @@ class VllmServer:
     def start(self, timeout_s: float = 1800) -> dict:
         env = dict(os.environ)
         env["PYTHONPATH"] = f"{REPO_ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}"
-        if self.gpu_uuid:
-            env["CUDA_VISIBLE_DEVICES"] = self.gpu_uuid
+        if self.gpu_uuid:  # vLLM 0.10.2 parses CUDA_VISIBLE_DEVICES as integers: pass the NVML index of the UUID
+            env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # CUDA ordinals match NVML (PCI bus) order
+            env["CUDA_VISIBLE_DEVICES"] = str(nvml_index(self.gpu_uuid))
         env.setdefault("VLLM_USE_V1", "1")
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         log = open(self.log_path, "w")
@@ -162,6 +176,7 @@ class VllmServer:
             raise
         self.started = {"load_s": round(time.time() - t0, 1), "pid": self.proc.pid,
                         "served": served, "checkpoint": checkpoint_quantization(self.cfg.model),
+                        "cuda_visible_devices": env.get("CUDA_VISIBLE_DEVICES"), "gpu_uuid": self.gpu_uuid,
                         **parse_startup_log(self.log_path.read_text(errors="replace"))}
         return self.started
 
