@@ -104,15 +104,17 @@ def stream_completion(host: str, port: int, payload: dict, timeout: float):
         if r.status != 200:
             raise RuntimeError(f"HTTP {r.status}: {r.read()[:500]!r}")
         first_ns, ids, finish, usage, text = None, [], None, {}, []
+        done = False
         for raw in r:
             line = raw.decode("utf-8", "replace").strip()
             if not line.startswith("data:"):
                 continue
             data = line[5:].strip()
             if data == "[DONE]":
+                done = True
                 break
             chunk = json.loads(data)
-            if chunk.get("error"):
+            if chunk.get("error") is not None:
                 raise RuntimeError(f"server error in stream: {json.dumps(chunk['error'])[:500]}")
             if chunk.get("usage"):
                 usage = chunk["usage"]
@@ -123,8 +125,10 @@ def stream_completion(host: str, port: int, payload: dict, timeout: float):
                 ids.extend(got)
                 text.append(ch.get("text") or "")
                 finish = ch.get("finish_reason") or finish
-        if finish is None:
-            raise RuntimeError(f"stream ended without a finish reason ({len(ids)} tokens)")
+        if not done or finish is None:
+            raise RuntimeError("incomplete completion stream: missing terminal event or finish reason")
+        if usage.get("completion_tokens", 0) and not ids:
+            raise RuntimeError("completion stream reported generated tokens without token IDs")
         return first_ns, ids, finish, usage, "".join(text)
     finally:
         conn.close()

@@ -215,8 +215,15 @@ def evaluate_patch(instance_id: str, patch: str, work: Path, *, run: Runner = ru
     if not reports:
         return dict(passed=False, reason=f"harness produced no report (rc={rc}): {(out + err)[-400:]}", run_id=run_id,
                     infrastructure=True)
-    rep = json.loads(reports[0].read_text()).get(instance_id, {})
-    return dict(passed=bool(rep.get("resolved")), reason="resolved" if rep.get("resolved") else "not resolved",
+    try:
+        report = json.loads(reports[0].read_text())
+        rep = report.get(instance_id) if isinstance(report, dict) else None
+    except (OSError, ValueError):
+        rep = None
+    if rc != 0 or not isinstance(rep, dict) or not isinstance(rep.get("resolved"), bool):
+        return dict(passed=False, reason=f"invalid harness report or unsuccessful exit (rc={rc})", run_id=run_id,
+                    infrastructure=True)
+    return dict(passed=rep["resolved"], reason="resolved" if rep["resolved"] else "not resolved",
                 run_id=run_id, tests_status=rep.get("tests_status"))
 
 

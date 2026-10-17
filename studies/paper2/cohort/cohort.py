@@ -254,10 +254,12 @@ def summarize(spec: CohortSpec, done, verdicts, energy, events) -> dict:
                      verdict=verdicts.get(s.attempt_id, {}).get("verdict"), offered_s=s.offered, admitted_s=s.admitted,
                      ended_s=s.ended) for s in done]
     infra = sum(1 for s in done if s.outcome == "infra_failed")
+    verification_invalid = any(v.get("verdict") == "unavailable" or (v.get("detail") or {}).get("infrastructure")
+                               for v in verdicts.values())
     return dict(cohort_id=spec.cohort_id, config_id=spec.config_id, mode=spec.mode, admission_limit=spec.admission_limit,
                 offered=len(done), outcomes=rec["outcomes"], verified_pass=passed, reconciliation=rec,
                 energy=energy, joules_per_verified_success=(joules / passed) if (joules is not None and passed) else None,
-                infra_invalid=infra > 0, sessions=sessions,
+                infra_invalid=infra > 0 or verification_invalid, sessions=sessions,
                 drain=next(({k: e.get(k) for k in ("drained", "drain_s", "last")} for e in events if e.get("kind") == "drained"), None),
                 container_cleanup=next(({k: e.get(k) for k in ("checked", "leftover", "removed")} for e in events
                                         if e.get("kind") == "container_cleanup"), None),

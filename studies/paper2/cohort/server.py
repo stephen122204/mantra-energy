@@ -24,6 +24,20 @@ from typing import Optional
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
+def gpu_device_index(gpu_uuid: str) -> int:
+    """Resolve the recorded UUID for vLLM 0.10.2's integer-only device lookup."""
+    import pynvml
+    pynvml.nvmlInit()
+    try:
+        for index in range(pynvml.nvmlDeviceGetCount()):
+            value = pynvml.nvmlDeviceGetUUID(pynvml.nvmlDeviceGetHandleByIndex(index))
+            if (value.decode() if isinstance(value, bytes) else value) == gpu_uuid:
+                return index
+    finally:
+        pynvml.nvmlShutdown()
+    raise ValueError(f"GPU UUID {gpu_uuid!r} was not found; refusing to select another device")
+
+
 @dataclass(frozen=True)
 class ServerConfig:
     name: str                      # e.g. "devstral-w4a16"
@@ -103,19 +117,6 @@ def parse_startup_log(text: str) -> dict:
     return out
 
 
-def nvml_index(uuid: str) -> int:
-    import pynvml
-    pynvml.nvmlInit()
-    try:
-        for i in range(pynvml.nvmlDeviceGetCount()):
-            u = pynvml.nvmlDeviceGetUUID(pynvml.nvmlDeviceGetHandleByIndex(i))
-            if (u.decode() if isinstance(u, bytes) else u) == uuid:
-                return i
-    finally:
-        pynvml.nvmlShutdown()
-    raise ValueError(f"GPU {uuid} not found")
-
-
 def checkpoint_quantization(model: str) -> dict:
     """What the checkpoint itself declares (dtype + quantization_config, e.g. weights/input_activations/kv)."""
     p = Path(model) / "config.json"
@@ -124,6 +125,21 @@ def checkpoint_quantization(model: str) -> dict:
     c = json.loads(p.read_text())
     return {"torch_dtype": c.get("torch_dtype") or (c.get("text_config") or {}).get("torch_dtype"),
             "quantization_config": c.get("quantization_config"), "config_sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+
+
+def validate_model_rope(model: str) -> None:
+    """Reject configuration-library drift before vLLM can apply a silent default."""
+    path = Path(model) / "config.json"
+    if not path.exists():
+        return
+    expected = json.loads(path.read_text()).get("rope_theta")
+    if expected is None:
+        return
+    from transformers import AutoConfig
+    actual = getattr(AutoConfig.from_pretrained(model), "rope_theta", None)
+    if actual != expected:
+        raise ValueError(f"vLLM 0.10.2 requires config.rope_theta={expected}, got {actual}; "
+                         "use the pinned Transformers version before running")
 
 
 @dataclass
@@ -141,11 +157,12 @@ class VllmServer:
         return f"http://127.0.0.1:{self.port}"
 
     def start(self, timeout_s: float = 1800) -> dict:
+        validate_model_rope(self.cfg.model)
         env = dict(os.environ)
         env["PYTHONPATH"] = f"{REPO_ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}"
-        if self.gpu_uuid:  # vLLM 0.10.2 parses CUDA_VISIBLE_DEVICES as integers: pass the NVML index of the UUID
-            env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # CUDA ordinals match NVML (PCI bus) order
-            env["CUDA_VISIBLE_DEVICES"] = str(nvml_index(self.gpu_uuid))
+        if self.gpu_uuid:
+            env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            env["CUDA_VISIBLE_DEVICES"] = str(gpu_device_index(self.gpu_uuid))
         env.setdefault("VLLM_USE_V1", "1")
         env["VLLM_SERVER_DEV_MODE"] = "1"  # exposes POST /reset_prefix_cache (verified cold start per cohort)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
