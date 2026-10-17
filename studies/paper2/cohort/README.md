@@ -40,7 +40,8 @@ Equal total memory budget (`--gpu-memory-utilization 0.90`), prefix caching on, 
 # Mac: copy the tested commit (team repo is private) and start setup on the node
 bash studies/paper2/cohort/node/launch.sh <node-ip>                 # writes a git bundle, scp, ssh
 
-# node (cc), once:
+# node (cc), once. The repository-task sandbox needs Landlock ABI 4 (kernel >= 6.7); on the 5.15
+# kernel of CC-Ubuntu22.04-CUDA run node/prepare_kernel.sh first (HWE 6.8 + gcc-12, reboots).
 bash ~/paper2/setup_node.sh <commit> ~/paper2/repo.bundle
 ~/paper2/venv/bin/python ~/paper2/repo/studies/paper2/cohort/qualify_node.py --out ~/paper2/node-report.json \
     --cutoff-utc <lease-end>

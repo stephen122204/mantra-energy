@@ -86,6 +86,15 @@ def gpus(wait_s=1.0):
         pynvml.nvmlShutdown()
 
 
+def landlock_abi():
+    """Landlock ABI version (landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)); task sandbox needs >= 4."""
+    import ctypes
+    try:
+        return int(ctypes.CDLL(None, use_errno=True).syscall(444, None, 0, 1))
+    except Exception:
+        return -1
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -109,6 +118,7 @@ def main():
                      "nvcc": run(["nvcc", "--version"]).get("out", "")[-200:] if shutil.which("nvcc") else None,
                      "docker": run(["docker", "version", "--format", "{{.Server.Version}}"]) if shutil.which("docker") else None,
                      "git": run(["git", "--version"]).get("out")},
+        "landlock_abi": landlock_abi(),
         "other_users_procs": run(["bash", "-c", "ps -eo user= | sort | uniq -c"])["out"],
     }
     if a.cutoff_utc:
@@ -117,7 +127,8 @@ def main():
     pkg = [v for v in report["rapl"].values() if str(v.get("name", "")).startswith("package")]
     gpu_ok = isinstance(report["gpus"], dict) and any(d.get("energy_counter", {}).get("advancing") for d in report["gpus"].get("devices", []))
     report["verdict"] = {"cpu_package_counters": bool(pkg) and all(v["readable"] and v["advancing"] for v in pkg),
-                         "gpu_energy_counter": gpu_ok}
+                         "gpu_energy_counter": gpu_ok,
+                         "task_sandbox_landlock_abi4": report["landlock_abi"] >= 4}
     Path(a.out).write_text(json.dumps(report, indent=1))
     print(json.dumps(report["verdict"]))
 
