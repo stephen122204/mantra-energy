@@ -22,6 +22,8 @@ import uuid
 from core.execution.adapters.openai_compat import OpenAICompatAdapter
 from studies.energy_diagnosis.agent_protocol import (
     PROTOCOL_VERSION as CHAT_PROTOCOL,
+    CHAT_PROTOCOLS,
+    PROTOCOL_V2,
     Conversation,
     function_tools,
     outcome_class,
@@ -60,6 +62,7 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
     _hash as asset_hash,
 )
 from studies.energy_diagnosis.workloads.pilot_tools import PilotAssetTool
+from studies.energy_diagnosis.moe import event_log
 
 SETTINGS = {"C00": (False, 1), "C01": (False, 4), "C10": (True, 1), "C11": (True, 4)}
 
@@ -81,16 +84,18 @@ def digest(value):
     ).hexdigest()
 
 
-def write_artifact(root, relative, value, role):
+def write_artifact(root, relative, value, role, compact=False, encoded=None):
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + "\n"
+    # compact: identical JSON content without indentation; encoded: caller-supplied bytes (e.g. the
+    # gzip event log). The recorded hash always covers the exact bytes written.
+    if encoded is None:
+        encoded = (json.dumps(value, sort_keys=True, allow_nan=False,
+                              **(dict(separators=(",", ":")) if compact else dict(indent=2))) + "\n").encode()
     # Attempt identities are unique; replacing an artifact would break auditability.
-    with path.open("x", encoding="utf-8", newline="\n") as handle:
-        handle.write(content)
-    return ArtifactRef(
-        relative.as_posix(), role, hashlib.sha256(content.encode()).hexdigest()
-    )
+    with path.open("xb") as handle:
+        handle.write(encoded)
+    return ArtifactRef(relative.as_posix(), role, hashlib.sha256(encoded).hexdigest())
 
 
 class FixtureAPI:
@@ -203,9 +208,9 @@ class GoalExecutor:
         self.initialized_model_window = initialized_model_window
         if initialized_model_window and lifecycle is None:
             raise ValueError("initialized-model measurement requires an owned lifecycle")
-        if protocol not in {"legacy-json-v1", CHAT_PROTOCOL}:
+        if protocol not in {"legacy-json-v1", *CHAT_PROTOCOLS}:
             raise ValueError("unknown agent protocol")
-        if protocol == CHAT_PROTOCOL and workload_runtime is None:
+        if protocol in CHAT_PROTOCOLS and workload_runtime is None:
             raise ValueError("the chat protocol requires a workload runtime")
         # legacy-json-v1 reproduces V6: one user message per step holding a
         # static instruction and tool results. chat-tools-v1 is the native
@@ -241,7 +246,7 @@ class GoalExecutor:
         limits end the attempt. The reason is recorded in trace["terminal"].
         """
         deadline_ns = lease.started_ns + int(self.timeout_seconds * 1e9)
-        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps)
+        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps, protocol=self.protocol)
         meta = dict(task_id=task.task_id, family=task.family, asset_sha256=task.asset_sha256)
         suffix = "-" + plan.setting_id
         pair_key = plan.planned_run_id[: -len(suffix)] if plan.planned_run_id.endswith(suffix) else plan.planned_run_id
@@ -334,8 +339,10 @@ class GoalExecutor:
             if finish == "length":
                 kind = "output_budget_exhausted" if remaining_output is not None and output_used >= self.max_output_tokens else "output_truncated"
                 return stop(kind, f"response reached {call_budget} output tokens")
-            decision = parse_response(raw.get("content"))
+            decision = parse_response(raw.get("content"), accept_unclosed_final=self.protocol == PROTOCOL_V2)
             turn.update(kind=decision.kind, reason=decision.reason)
+            if decision.repaired:
+                turn["repaired"] = decision.repaired
             if decision.kind == "answer":
                 conversation.record_turn(decision)
                 return "completed", "", decision.answer, response, True
@@ -474,11 +481,11 @@ class GoalExecutor:
             if self.workload_runtime:
                 self.workload_runtime.begin(task, lease)
                 context.update(self.workload_runtime.context(task))
-            if self.protocol == CHAT_PROTOCOL:
+            if self.protocol in CHAT_PROTOCOLS:
                 status, error, answer, response, owned_terminated = self._chat(
                     task, lease, plan, context, model_calls, tool_results, spans, events, trace, artifacts, request.checkpoint
                 )
-            for step in range(self.max_steps if self.protocol != CHAT_PROTOCOL else 0):
+            for step in range(self.max_steps if self.protocol not in CHAT_PROTOCOLS else 0):
                 if (
                     time.monotonic_ns() - lease.started_ns
                 ) / 1e9 >= self.timeout_seconds:
@@ -703,6 +710,15 @@ class GoalExecutor:
             owned_terminated = (
                 owned_terminated and self.lifecycle.backend.owned_work_terminated
             )
+        task_end_captured = False
+        if self.initialized_model_window and inner_settled:
+            # Task work is drained and the model is still resident: the loaded-model task window
+            # (the upstream EpG window) ends here, before the verifier runs.
+            try:
+                self.measurement.checkpoint("task_end")
+                task_end_captured = True
+            except Exception as exc:
+                inner_window["task_window_reason"] = f"task_end checkpoint failed: {exc}"
         verification_detail = dict(status="not_run", reason=error or "execution did not complete")
         verify_start = time.monotonic_ns()
         if status == "completed" and verify_start >= deadline_ns:
@@ -783,13 +799,28 @@ class GoalExecutor:
                         reason="" if inner_valid else "missing or invalid counter data",
                         measurements=[m.to_dict() for m in inner_measurements],
                     )
+                    if task_end_captured:
+                        for name, begin, end in (
+                            ("task_window", "initialized_model_start", "task_end"),
+                            ("verifier_window", "task_end", "initialized_model_end"),
+                        ):
+                            portion = self.measurement.measure_between(begin, end)
+                            inner_window[name] = dict(measurements=[m.to_dict() for m in portion])
             except Exception as exc:
                 inner_window.update(status="unavailable", reason=f"checkpoint failed: {exc}")
             finally:
                 try:
                     self.lifecycle.end_goal()
                 except Exception as exc:
-                    status, error = "crashed", f"{error}; expert release failed: {exc}"
+                    status, error = "crashed", f"{error}; expert release failed: {exc}".lstrip("; ")
+                    if verifier.outcome in {"pass", "fail"}:
+                        # The verifier result stays in verification.json for audit; an attempt whose
+                        # backend release failed is not a completed run, so it is not a pass or fail.
+                        verifier = VerifierResult(
+                            plan.verifier_version, "unavailable",
+                            f"backend release failed after verification: {exc}",
+                            evidence=((prefix / "verification.json").as_posix(),),
+                        )
                 owned_terminated = owned_terminated and self.lifecycle.backend.owned_work_terminated
             invalid_reason = self._termination_invalidity(owned_terminated)
             if invalid_reason:
@@ -798,6 +829,11 @@ class GoalExecutor:
                     dict(m, status="invalid", energy_j=None, coverage=None, reason=invalid_reason)
                     for m in inner_window["measurements"]
                 ]
+                for name in ("task_window", "verifier_window"):
+                    if name in inner_window:
+                        inner_window[name] = dict(measurements=[
+                            dict(m, status="invalid", energy_j=None, coverage=None, reason=invalid_reason)
+                            for m in inner_window[name]["measurements"]])
         measured = self.measurement.finish_goal()
         if self.initialized_model_window:
             for name, begin, end in (
@@ -858,8 +894,9 @@ class GoalExecutor:
             ("answer.json", answer, "answer"),
             ("verification.json", verification_detail, "verification-detail"),
             ("record.json", record.to_dict(), "execution-record"),
-        ] + ([("agent-trace.json", dict(trace, outcome=outcome_class(status, verifier.outcome, trace["terminal"])),
-               "agent-trace")] if self.protocol == CHAT_PROTOCOL else []):
+        ] + ([("agent-trace.json", dict(trace, outcome=outcome_class(
+            status, verifier.outcome, trace["terminal"], ((verification_detail or {}).get("result") or {}).get("failure"))),
+               "agent-trace")] if self.protocol in CHAT_PROTOCOLS else []):
             artifacts.append(
                 write_artifact(self.artifact_root, prefix / name, payload, role)
             )
@@ -872,9 +909,10 @@ class GoalExecutor:
             artifacts.append(
                 write_artifact(
                     self.artifact_root,
-                    prefix / "expert-events.json",
+                    prefix / "expert-events.json.gz",
                     self.lifecycle.events,
                     "expert-events",
+                    encoded=event_log.encode(self.lifecycle.events),
                 )
             )
         if self.initialized_model_window:
