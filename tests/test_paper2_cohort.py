@@ -486,3 +486,31 @@ def test_server_start_failure_and_death_are_configuration_outcomes(tmp_path, mon
     assert [(e["config"], e["step"]) for e in died] == [("arm-b", "arm-b-idle1")]
     assert any(e["kind"] == "step_skipped" and e["step"] == "arm-b-n1" and "configuration outcome" in e["reason"] for e in ev)
     assert any(e["kind"] == "driver_end" for e in ev) and records.verify_manifest(out) == []
+
+
+@needs_renderer
+def test_atomic_pass_runs_on_all_precisions_or_none(tmp_path):
+    from studies.paper2.cohort import make_plan, pilot
+    built = make_plan.build(tmp_path, "GPU-x", "lease", None)
+    assert [sorted(p["blocks"]) for p in built["passes"]][:2] == [sorted(make_plan.ARMS)] * 2 and all(p["atomic"] for p in built["passes"])
+    ids = make_plan.task_ids()
+    assert set(ids["isolated"]) <= set(ids["moderate"]) <= set(ids["all"]) and len(ids["moderate"]) == 12
+    cfg = lambda n: dict(name=n, model=f"/nonexistent/{n}", revision="fixture", weight_precision="int4",
+                         activation_precision="bf16", max_model_len=32768)
+    small = [{"live": dict(name="n1", admission_limit=1, task_ids=["business-segments-v2-n64-s7"], est_s=60)}]
+    huge = [{"live": dict(name="n9", admission_limit=1, task_ids=["business-segments-v2-n64-s7"], est_s=2000)}]
+    plan = dict(gpu_uuid="fixture", allocation="fixture", isolation="fixture", block_seed=1, configs=[cfg("a"), cfg("b")],
+                passes=[dict(atomic=True, blocks={"a": dict(steps=small), "b": dict(steps=small)}),
+                        dict(atomic=True, blocks={"a": dict(steps=huge), "b": dict(steps=huge)})],  # 2 x 2000 s > budget
+                tekken={"a": TEKKEN, "b": TEKKEN}, task_specs=[dict(kind="business", rows=64, seed=7)],
+                limits=dict(max_turns=3, max_tool_calls=10, max_total_output_tokens=2048, max_tokens=256, deadline_s=60,
+                            verify_timeout_s=120),
+                sampling=dict(mode="sampled", temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0),
+                load_est_s=1, export_reserve_s=0)
+    (tmp_path / "plan.json").write_text(json.dumps(plan))
+    out = tmp_path / "out"
+    pilot.main(["--plan", str(tmp_path / "plan.json"), "--out", str(out), "--budget-s", "3000",
+                "--cutoff-utc", "2099-01-01T00:00:00Z", "--fixture-server"])
+    ev = [json.loads(l) for l in (out / "driver-events.jsonl").read_text().splitlines()]
+    assert sorted(e["step"] for e in ev if e["kind"] == "step_done") == ["a-n1", "b-n1"]
+    assert [e["pass_index"] for e in ev if e["kind"] == "pass_skipped"] == [1]
