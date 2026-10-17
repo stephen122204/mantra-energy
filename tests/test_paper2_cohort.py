@@ -222,6 +222,13 @@ def test_pilot_driver_fixture_end_to_end(tmp_path):
     b = budget.budget(m, dict(cells=[dict(config="arm-a", step="n2", repeats=4), dict(config="arm-a", step="n9", repeats=1)]),
                       available_h=10)
     assert b["unmeasured"] == ["arm-a-n9"] and b["fits"] is False and b["cells"][0]["repeats"] == 4
+    from studies.paper2.cohort import report
+    report.main([str(out), "--json", str(tmp_path / "rep.json"), "--md", str(tmp_path / "rep.md")])
+    rep = json.loads((tmp_path / "rep.json").read_text())
+    live = [r for r in rep["cohorts"] if r.get("kind") != "replay"]
+    assert sorted(r["cohort"] for r in live) == ["arm-a-n2", "arm-b-n2"]
+    assert len([r for r in rep["cohorts"] if r.get("kind") == "replay"]) == 2
+    assert set(rep["paired"]["n2"]) == {"business-segments-v2-n64-s7", "grouped-fit-v1-n64-s7"}
 
 
 FAKE_DOCKER = r'''#!/bin/sh
