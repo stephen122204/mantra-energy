@@ -10,7 +10,9 @@ specifications, and per-block steps:
 ``"blocks"`` is one pass over the precision blocks; ``"passes": [{"blocks": ...}, ...]`` runs several
 (e.g. live cohorts first, then crossed replay of any precision's traces on every precision, all on
 this GPU). A replay source without a config prefix is the same block's live step. Each pass runs its
-blocks in an order drawn from ``block_seed`` + pass index (recorded). A step starts only if its
+blocks in an order drawn from ``block_seed`` + pass index (recorded). A pass marked ``"atomic": true``
+starts only if all of its blocks (server loads + step estimates, raised to measured durations) fit
+the remaining budget; otherwise the whole pass is skipped, so its comparison stays paired. A step starts only if its
 declared ``est_s`` (or the slowest measured comparable step, if larger) fits in the remaining
 budget and before the cutoff; otherwise it is recorded as skipped with the reason. Nothing else
 may use the GPU: the driver refuses to start a server if the device already has compute processes.
@@ -128,8 +130,26 @@ def main(argv=None):
     live_dirs = {}  # "<config>/<step>" -> cohort dir, across passes and blocks of this run
     blocks_run = [(pi, position, configs[bi]) for pi, ps in enumerate(passes)
                   for position, bi in enumerate(_order(configs, ps, plan["block_seed"] + pi, log, pi))]
+    skipped_passes = set()
+    started_passes = set()
     for pass_index, position, cfg in blocks_run:
-        block = passes[pass_index]["blocks"][cfg.name]
+        if pass_index in skipped_passes:
+            continue
+        ps = passes[pass_index]
+        if pass_index not in started_passes:
+            started_passes.add(pass_index)
+            if ps.get("atomic"):
+                # measured durations replace estimates once a step (or a server load) has run
+                need = sum(measured.get("server-load", plan.get("load_est_s", 600)) +
+                           sum(measured.get(next(iter(st.values()))["name"], next(iter(st.values())).get("est_s", 0))
+                               for st in b["steps"])
+                           for b in ps["blocks"].values())
+                ok, why = fits(f"pass-{pass_index}", need)
+                if not ok:
+                    log.append("pass_skipped", pass_index=pass_index, reason=why, need_s=round(need))
+                    skipped_passes.add(pass_index)
+                    continue
+        block = ps["blocks"][cfg.name]
         if not fits(f"load-{cfg.name}", plan.get("load_est_s", 600))[0]:
             log.append("block_skipped", config=cfg.name, reason="no budget for server load")
             continue
@@ -155,6 +175,8 @@ def main(argv=None):
                 continue
             base_url = server.base_url
         log.append("server_started", config=cfg.to_dict(), started=started)
+        if started.get("load_s"):
+            measured["server-load"] = max(measured.get("server-load", 0), started["load_s"])
         checks = {"ok": True, "fixture": True}
         if not a.fixture_server:
             from .client import MistralRenderer
