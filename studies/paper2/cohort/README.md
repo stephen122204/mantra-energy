@@ -20,6 +20,7 @@ cohort supervisor, replay, telemetry and a bounded pilot driver.
 | `engine_check.py` | after each server start: forced decoding exact, ≥ 2 requests batched, prefix-cache hits reported |
 | `swebench_workload.py` | SWE-bench Verified runtime: sanitized image (no refs beyond the base commit), `--network none` container, `bash` tool, diff as patch, official harness grading, gold/no-op qualification |
 | `taskprep.py`, `make_plan.py`, `pilot.py` | task preparation outside intervals, frozen plan, bounded driver (budget + reservation cutoff, randomized precision-block order, logged skips) |
+| `campaign.py`, `node/run_campaign.sh` | main run across nodes: shard a frozen matrix by repeats (all precisions per node), bind a shard to a qualified node, resumable round loop, checksum/plan/commit coverage check |
 | `qualify_node.py`, `node/setup_node.sh` | node report (GPUs, VRAM, counters, disk, software) and environment setup |
 
 ## Treatments (Devstral-Small-2507, A100, vLLM 0.10.2)
@@ -59,6 +60,52 @@ cd ~/paper2/repo && ../venv/bin/python -m pytest -q -rs tests/test_sandbox_linux
 nohup ../venv/bin/python -m studies.paper2.cohort.pilot --plan ~/paper2/pilot-plan.json --out ~/paper2/pilot-<date> \
     --budget-s 10800 --cutoff-utc <lease-end> > ~/paper2/pilot.log 2>&1 &
 ```
+
+## Multi-node campaign
+
+Each node runs **every** precision configuration on its own GPU; nodes split the matrix by cell
+repeats, never by precision. Results from different GPU models are separate blocks. A round is one
+driver run: pass 0 runs the round's live cohorts on every configuration, pass 1 replays those
+traces (diagonal and crossed) on every configuration. Durations come only from measured pilot
+runs; the planner stops on any unmeasured cell or on an evaluation cell that reuses pilot task ids.
+
+Coordinator (after the pilot, at the frozen commit):
+
+```bash
+python -m studies.paper2.cohort.campaign shard --base-plan ~/paper2/pilot-plan.json --matrix matrix.json \
+    --pilot ~/paper2/pilot-<date> --nodes nodes.json --out campaign-<id>   # exit 2 = a node's shard does not fit
+# hand each node operator: campaign-<id>/ (whole directory) and the commit in campaign-manifest.json
+```
+
+Node operator (bare-metal GPU node, user `cc`, all accounts given sudo as for every team node):
+
+```bash
+# own machine, fresh clone of the team repo at the campaign commit
+bash studies/paper2/tasks/fetch_task_metadata.sh ~/swev-raw        # public SWE-bench Verified rows (pinned revision)
+bash studies/paper2/cohort/node/launch.sh <node-ip> ~/swev-raw       # bundle + setup; ~1 h (checkpoints, venvs)
+scp -r campaign-<id> cc@<node-ip>:paper2/
+
+# node: same qualification and tests as the pilot node (see Run), then the SWE-bench instances the
+# matrix names (prepare + qualify into ~/paper2/swe-eval), then:
+cd ~/paper2/repo
+../venv/bin/python -m studies.paper2.cohort.campaign bind --campaign ~/paper2/campaign-<id> --node <node-name> \
+    --node-report ~/paper2/node-report.json --allocation <lease-id> --out ~/paper2/bound
+nohup bash studies/paper2/cohort/node/run_campaign.sh ~/paper2/bound <lease-end-utc> > ~/paper2/campaign.log 2>&1 &
+```
+
+`bind` refuses a node without exactly one GPU of the shard's class or without an advancing GPU
+energy counter, and records a warning when CPU-package counters are unreadable (GPU-board energy
+only, e.g. in a VM). `run_campaign.sh` is resumable: finished rounds are skipped, an interrupted
+round reruns into a new directory linked by `--retry-of`. Nothing else may run on the node while
+it works. Copy `~/paper2/campaign-results/` off the node before the lease ends; the coordinator checks
+every copy with
+
+```bash
+python -m studies.paper2.cohort.campaign collect --campaign campaign-<id> --results <copied round dirs...> --out coverage.json
+```
+
+which verifies each round's checksums, plan hash and commit, and reports rounds as ok / partial /
+incomplete / conflict / missing.
 
 ## Records (per cohort)
 

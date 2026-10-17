@@ -275,3 +275,137 @@ def test_swebench_evaluate_parses_harness_report_and_rejects_empty(tmp_path):
     assert res["passed"] is True
     res = sw.evaluate_patch("a__b-1", "diff --git a/x b/x\n", tmp_path / "e2", run=lambda a, t, cwd=None: (1, "", "boom"))
     assert res["passed"] is False and res["infrastructure"] is True
+
+
+def _campaign_inputs(tmp_path):
+    cfg = lambda n: dict(name=n, model=f"/nonexistent/{n}", revision="fixture", weight_precision="int4",
+                         activation_precision="bf16", max_model_len=32768)
+    calib = ["business-segments-v2-n64-s7", "grouped-fit-v1-n64-s7"]
+    pilot_steps = [{"live": dict(name="n2", admission_limit=2, task_ids=calib, seed=3, est_s=60)},
+                   {"replay": dict(name="replay-n2", source="n2", admission_limit=2, est_s=60)}]
+    base = dict(gpu_uuid="GPU-pilot", allocation="pilot", isolation="fixture", block_seed=1,
+                configs=[cfg("arm-a"), cfg("arm-b")], blocks={"arm-a": dict(steps=pilot_steps), "arm-b": dict(steps=pilot_steps)},
+                tekken={"arm-a": TEKKEN or "tekken.json", "arm-b": TEKKEN or "tekken.json"},
+                task_specs=[dict(kind="business", rows=64, seed=7), dict(kind="numerical", rows=64, seed=7)],
+                limits=dict(max_turns=3, max_tool_calls=10, max_total_output_tokens=2048, max_tokens=256, deadline_s=60,
+                            verify_timeout_s=120),
+                sampling=dict(mode="sampled", temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0),
+                load_est_s=1, export_reserve_s=0)
+    pilot_out = tmp_path / "pilot"
+    pilot_out.mkdir()
+    ev = [dict(kind="server_started", config=dict(name="arm-a"), started=dict(load_s=30, kv_cache_tokens=16000)),
+          dict(kind="server_started", config=dict(name="arm-b"), started=dict(load_s=40, gpu_blocks=900)),
+          dict(kind="step_done", step="arm-a-n2", seconds=100), dict(kind="step_done", step="arm-b-n2", seconds=120),
+          dict(kind="step_done", step="arm-a-replay-n2", seconds=50)]
+    (pilot_out / "driver-events.jsonl").write_text("\n".join(json.dumps(e) for e in ev) + "\n")
+    evals = ["business-segments-v2-n64-s9", "grouped-fit-v1-n64-s9"]
+    matrix = dict(campaign_id="fixture-campaign", seed=5, contingency=0.0, export_h=0.0,
+                  task_specs=[dict(kind="business", rows=64, seed=9), dict(kind="numerical", rows=64, seed=9)],
+                  cells=[dict(name="n2", kind="live", admission_limit=2, task_ids=evals, repeats=3, measure_as="n2", seed=7),
+                         dict(name="xr", kind="replay", source_cell="n2", repeats=1, admission_limit=2, measure_as="replay-n2")])
+    nodes = [dict(name="node-x", gpu_class="A100-SXM4-80GB", available_h=10),
+             dict(name="node-y", gpu_class="A100-SXM4-80GB", available_h=10)]
+    return base, matrix, nodes, pilot_out
+
+
+def _node_report(uuid="GPU-x", cpu=False):
+    return dict(host="fixture-host", gpus=dict(devices=[dict(name="NVIDIA A100-SXM4-80GB", uuid=uuid)]),
+                verdict=dict(gpu_energy_counter=True, cpu_package_counters=cpu))
+
+
+def test_campaign_shard_keeps_every_precision_on_each_node(tmp_path):
+    from studies.paper2.cohort import campaign
+    base, matrix, nodes, pilot_out = _campaign_inputs(tmp_path)
+    meas = campaign._measurements([pilot_out])
+    assert meas["kv_blocks"] == {"arm-a": 1000, "arm-b": 900}
+    res = campaign.shard(base, matrix, meas, nodes, commit="c0")
+    units = [u for nd in res["nodes"].values() for r in nd["rounds"] for u in r["plan"]["campaign"]["units"]]
+    assert sorted(units) == ["n2-r0", "n2-r1", "n2-r2"]
+    assert all(len(nd["rounds"]) >= 1 for nd in res["nodes"].values())
+    for nd in res["nodes"].values():
+        for r in nd["rounds"]:
+            p = r["plan"]
+            live = p["passes"][0]["blocks"]
+            assert set(live) == {"arm-a", "arm-b"}
+            a_steps, b_steps = (next(iter(s.values())) for s in (live["arm-a"]["steps"][0], live["arm-b"]["steps"][0]))
+            assert (a_steps["name"], a_steps["seed"], a_steps["task_ids"]) == (b_steps["name"], b_steps["seed"], b_steps["task_ids"])
+            if "n2-r0" in p["campaign"]["units"]:  # crossed replay incl. diagonal, on every configuration
+                rep = {t: sorted(next(iter(s.values()))["source"] for s in b["steps"]) for t, b in p["passes"][1]["blocks"].items()}
+                assert rep == {"arm-a": ["arm-a/n2-r0", "arm-b/n2-r0"], "arm-b": ["arm-a/n2-r0", "arm-b/n2-r0"]}
+            else:
+                assert len(p["passes"]) == 1
+    assert res["estimate_provenance"]["arm-b-xr"] == "slowest measured on another config"
+    eq = campaign.shard(base, dict(matrix, equal_kv=True), meas, nodes, commit="c0")
+    assert {c["name"]: c.get("num_gpu_blocks_override") for c in eq["nodes"]["node-x"]["rounds"][0]["plan"]["configs"]} == \
+        {"arm-a": None, "arm-b": None, "arm-a-eqkv": 900, "arm-b-eqkv": 900}
+    with pytest.raises(SystemExit, match="pilot task ids"):
+        campaign.shard(base, dict(matrix, cells=[dict(matrix["cells"][0], task_ids=["business-segments-v2-n64-s7"])]),
+                       meas, nodes, commit="c0")
+    with pytest.raises(SystemExit, match="no measured duration"):
+        campaign.shard(base, dict(matrix, cells=[dict(matrix["cells"][0], measure_as="n16")]), meas, nodes, commit="c0")
+
+
+def test_campaign_bind_checks_node_and_campaign_integrity(tmp_path):
+    from studies.paper2.cohort import campaign
+    base, matrix, nodes, pilot_out = _campaign_inputs(tmp_path)
+    for name, obj in (("base.json", base), ("matrix.json", matrix), ("nodes.json", nodes)):
+        (tmp_path / name).write_text(json.dumps(obj))
+    camp = tmp_path / "campaign"
+    assert campaign.main(["shard", "--base-plan", str(tmp_path / "base.json"), "--matrix", str(tmp_path / "matrix.json"),
+                          "--pilot", str(pilot_out), "--nodes", str(tmp_path / "nodes.json"), "--out", str(camp),
+                          "--commit", "c0"]) == 0
+    manifest = campaign._load_campaign(camp)
+    bound, warnings = campaign.bind(manifest, camp, "node-x", _node_report(), "lease-x")
+    assert warnings and all(p["gpu_uuid"] == "GPU-x" and p["allocation"] == "lease-x" for _, p in bound)
+    assert all(campaign.canonical_sha(campaign.unbound(p)) == p["binding"]["plan_sha256"] for _, p in bound)
+    with pytest.raises(SystemExit, match="exactly one"):
+        campaign.bind(manifest, camp, "node-x", dict(_node_report(), gpus=dict(devices=[dict(name="Tesla V100", uuid="u")])), "l")
+    with pytest.raises(SystemExit, match="energy counter"):
+        campaign.bind(manifest, camp, "node-x", dict(_node_report(), verdict=dict(gpu_energy_counter=False)), "l")
+    f = camp / manifest["nodes"]["node-x"]["rounds"][0]["file"]
+    tampered = json.loads(f.read_text())
+    tampered["limits"]["max_turns"] += 1
+    f.write_text(json.dumps(tampered, indent=1))
+    with pytest.raises(SystemExit, match="altered"):
+        campaign._load_campaign(camp)
+
+
+@needs_renderer
+def test_campaign_round_runs_and_collects(tmp_path):
+    import subprocess
+    from studies.paper2.cohort import campaign, pilot
+    base, matrix, nodes, pilot_out = _campaign_inputs(tmp_path)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    res = campaign.shard(base, matrix, campaign._measurements([pilot_out]), nodes, commit=head)
+    camp = tmp_path / "campaign"
+    camp.mkdir()
+    rows = {}
+    for node, nd in res["nodes"].items():
+        (camp / node).mkdir()
+        rows[node] = []
+        for r in nd["rounds"]:
+            f = f"{node}/round-{r['plan']['campaign']['round']:02d}.json"
+            (camp / f).write_text(json.dumps(r["plan"]))
+            rows[node].append(dict(file=f, plan_sha256=campaign.canonical_sha(r["plan"])))
+    manifest = dict(campaign_id=res["campaign_id"], commit=head,
+                    nodes={n: dict(gpu_class=nd["gpu_class"], rounds=rows[n]) for n, nd in res["nodes"].items()})
+    node = next(n for n, nd in res["nodes"].items() if "n2-r0" in nd["rounds"][0]["plan"]["campaign"]["units"])
+    bound, _ = campaign.bind(manifest, camp, node, _node_report(), "lease")
+    plan_file = tmp_path / "bound-round.json"
+    plan_file.write_text(json.dumps(bound[0][1]))
+    out = tmp_path / "run"
+    pilot.main(["--plan", str(plan_file), "--out", str(out), "--budget-s", "36000", "--cutoff-utc", "2099-01-01T00:00:00Z",
+                "--fixture-server"])
+    results = json.loads((out / "pilot-results.json").read_text())
+    replays = [r for r in results if r["kind"] == "replay"]
+    assert len(replays) == 4 and {r["pass_index"] for r in replays} == {1}
+    assert all(r["mismatched_turns"] == 0 for r in replays)
+    cov = campaign.collect(manifest, [out])
+    counted = [r for r in cov["rounds"] if r["runs"]]
+    assert len(counted) == 1 and counted[0]["runs"][0]["complete"]
+    assert set(counted[0]["runs"][0]["problems"]) <= {"dirty checkout"}
+    assert cov["summary"]["missing"] == len(cov["rounds"]) - 1
+    victim = next(p for p in (out / "cohorts").rglob("requests.jsonl"))
+    victim.write_text(victim.read_text() + "\n")
+    run = next(x for r in campaign.collect(manifest, [out])["rounds"] for x in r["runs"])
+    assert any(p.startswith("mismatch") for p in run["problems"])

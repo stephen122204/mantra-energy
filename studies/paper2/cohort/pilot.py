@@ -5,9 +5,12 @@
 The plan names server configurations (one persistent server per precision block), the task
 specifications, and per-block steps:
   {"live": {"name", "admission_limit", "task_ids", "mode", "arrival_offsets_s"?, "est_s"}}
-  {"replay": {"name", "source": "<live step name>", "admission_limit", "est_s"}}  # same server, same GPU
+  {"replay": {"name", "source": "<live step>" | "<config>/<live step>", "admission_limit", "est_s"}}
   {"idle": {"name", "seconds"}}                                                   # loaded, no requests
-Precision blocks run in an order drawn from ``block_seed`` (recorded). A step starts only if its
+``"blocks"`` is one pass over the precision blocks; ``"passes": [{"blocks": ...}, ...]`` runs several
+(e.g. live cohorts first, then crossed replay of any precision's traces on every precision, all on
+this GPU). A replay source without a config prefix is the same block's live step. Each pass runs its
+blocks in an order drawn from ``block_seed`` + pass index (recorded). A step starts only if its
 declared ``est_s`` (or the slowest measured comparable step, if larger) fits in the remaining
 budget and before the cutoff; otherwise it is recorded as skipped with the reason. Nothing else
 may use the GPU: the driver refuses to start a server if the device already has compute processes.
@@ -57,12 +60,21 @@ def make_measurement(gpu_index: int, revision: str, allocation: str, isolation: 
     return NodeMeasurement(reader, environment_identity(revision, allocation, isolation))
 
 
+def _order(configs, ps, seed, log, pass_index):
+    names = [c.name for c in configs]
+    order = [i for i in range(len(configs)) if names[i] in ps["blocks"]]
+    random.Random(seed).shuffle(order)
+    log.append("block_order", order=[names[i] for i in order], seed=seed, pass_index=pass_index)
+    return order
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--plan", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--budget-s", type=float, required=True)
     ap.add_argument("--cutoff-utc", required=True)
+    ap.add_argument("--retry-of", help="output directory of the interrupted run this one replaces")
     ap.add_argument("--fixture-server", action="store_true", help="tests only: no vLLM, no counters")
     a = ap.parse_args(argv)
     plan = json.loads(a.plan.read_text())
@@ -74,7 +86,8 @@ def main(argv=None):
     cutoff = dt.datetime.fromisoformat(a.cutoff_utc.replace("Z", "+00:00")).timestamp()
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
-    log.append("driver_start", revision=revision, dirty=bool(dirty), budget_s=a.budget_s, cutoff_utc=a.cutoff_utc)
+    log.append("driver_start", revision=revision, dirty=bool(dirty), budget_s=a.budget_s, cutoff_utc=a.cutoff_utc,
+               retry_of=a.retry_of, campaign=plan.get("campaign"))
     if dirty and not a.fixture_server:
         raise SystemExit("refusing to measure from a dirty checkout")
 
@@ -84,9 +97,7 @@ def main(argv=None):
         catalog += json.loads(Path(extra).read_text())
     log.append("tasks_prepared", n=len(catalog))
     configs = [ServerConfig(**c) for c in plan["configs"]]
-    order = list(range(len(configs)))
-    random.Random(plan["block_seed"]).shuffle(order)
-    log.append("block_order", order=[configs[i].name for i in order], seed=plan["block_seed"])
+    passes = plan.get("passes") or [dict(blocks=plan["blocks"])]
     measured: dict = {}
 
     def fits(step_name, est):
@@ -97,9 +108,11 @@ def main(argv=None):
         return True, ""
 
     results = []
-    for position, bi in enumerate(order):
-        cfg = configs[bi]
-        block = plan["blocks"][cfg.name]
+    live_dirs = {}  # "<config>/<step>" -> cohort dir, across passes and blocks of this run
+    blocks_run = [(pi, position, configs[bi]) for pi, ps in enumerate(passes)
+                  for position, bi in enumerate(_order(configs, ps, plan["block_seed"] + pi, log, pi))]
+    for pass_index, position, cfg in blocks_run:
+        block = passes[pass_index]["blocks"][cfg.name]
         if not fits(f"load-{cfg.name}", plan.get("load_est_s", 600))[0]:
             log.append("block_skipped", config=cfg.name, reason="no budget for server load")
             continue
@@ -129,7 +142,6 @@ def main(argv=None):
             checks = run_checks(base_url, cfg.name, prompt, r.inner.encode(" one two three four five", bos=False, eos=False))
         log.append("engine_check", config=cfg.name, **checks)
         try:
-            live_dirs = {}
             for step in block["steps"]:
                 kind, s = next(iter(step.items()))
                 name = f"{cfg.name}-{s['name']}"
@@ -171,24 +183,25 @@ def main(argv=None):
                                       tool_cpus=plan.get("tool_cpus"), session_cpus=plan.get("session_cpus"),
                                       labels=dict(config=cfg.name, step=s["name"]), task_options=plan.get("task_options", {}))
                     res = run_cohort(spec, out / "cohorts" / name, measurement=meas, poller=poller)
-                    live_dirs[s["name"]] = out / "cohorts" / name / name
+                    live_dirs[f"{cfg.name}/{s['name']}"] = out / "cohorts" / name / name
                 elif kind == "replay":
                     from .replay import load_live_session, run_replay
-                    src = live_dirs.get(s["source"])
+                    src = live_dirs.get(s["source"] if "/" in s["source"] else f"{cfg.name}/{s['source']}")
                     if src is None:
                         log.append("step_skipped", step=name, reason=f"source {s['source']} not run")
                         continue
                     sessions = [load_live_session(p) for p in sorted((src / "sessions").iterdir())]
                     res = run_replay(name, sessions, base_url, cfg.name, out / "cohorts", admission_limit=s["admission_limit"],
                                      measurement=meas, poller=poller, labels=dict(config=cfg.name, source=s["source"]))
+                    res["source"] = s["source"]
                 else:
                     raise ValueError(f"unknown step kind {kind}")
                 took = time.monotonic() - t0
                 measured[s["name"]] = max(measured.get(s["name"], 0), took)
                 log.append("step_done", step=name, step_kind=kind, seconds=round(took, 1))
-                results.append(dict(step=name, kind=kind, seconds=round(took, 1),
+                results.append(dict(step=name, kind=kind, pass_index=pass_index, seconds=round(took, 1),
                                     **{k: res.get(k) for k in ("outcomes", "verified_pass", "joules_per_verified_success",
-                                                               "interval_s", "mismatched_turns", "failed") if k in res},
+                                                               "interval_s", "mismatched_turns", "failed", "source") if k in res},
                                     energy_j=(res.get("energy") or {}).get("cpu_plus_gpu_j")))
         finally:
             if a.fixture_server:
