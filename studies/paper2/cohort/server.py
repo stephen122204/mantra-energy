@@ -24,6 +24,20 @@ from typing import Optional
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
+def gpu_device_index(gpu_uuid: str) -> int:
+    """Resolve the recorded UUID for vLLM 0.10.2's integer-only device lookup."""
+    import pynvml
+    pynvml.nvmlInit()
+    try:
+        for index in range(pynvml.nvmlDeviceGetCount()):
+            value = pynvml.nvmlDeviceGetUUID(pynvml.nvmlDeviceGetHandleByIndex(index))
+            if (value.decode() if isinstance(value, bytes) else value) == gpu_uuid:
+                return index
+    finally:
+        pynvml.nvmlShutdown()
+    raise ValueError(f"GPU UUID {gpu_uuid!r} was not found; refusing to select another device")
+
+
 @dataclass(frozen=True)
 class ServerConfig:
     name: str                      # e.g. "devstral-w4a16"
@@ -131,7 +145,8 @@ class VllmServer:
         env = dict(os.environ)
         env["PYTHONPATH"] = f"{REPO_ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}"
         if self.gpu_uuid:
-            env["CUDA_VISIBLE_DEVICES"] = self.gpu_uuid
+            env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            env["CUDA_VISIBLE_DEVICES"] = str(gpu_device_index(self.gpu_uuid))
         env.setdefault("VLLM_USE_V1", "1")
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         log = open(self.log_path, "w")
