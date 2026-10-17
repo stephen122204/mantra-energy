@@ -209,6 +209,12 @@ def test_pilot_driver_fixture_end_to_end(tmp_path):
     res = json.loads((out / "pilot-results.json").read_text())
     assert all(r.get("mismatched_turns", 0) == 0 for r in res if r["kind"] == "replay")
     assert records.verify_manifest(out) == []
+    from studies.paper2.cohort import budget
+    m = budget.measured(out)
+    assert set(m["steps"]) == set(done) and {x["step"] for x in m["skipped"]} == {"arm-a-too-long", "arm-b-too-long"}
+    b = budget.budget(m, dict(cells=[dict(config="arm-a", step="n2", repeats=4), dict(config="arm-a", step="n9", repeats=1)]),
+                      available_h=10)
+    assert b["unmeasured"] == ["arm-a-n9"] and b["fits"] is False and b["cells"][0]["repeats"] == 4
 
 
 FAKE_DOCKER = r'''#!/bin/sh
