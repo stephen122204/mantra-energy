@@ -34,7 +34,7 @@ if ! command -v uv >/dev/null; then
 fi
 [ -x venv/bin/python ] || uv venv -q --python 3.11 venv
 VP="$W/venv/bin/python"
-uv pip install -q --python "$VP" "vllm==0.10.2" "mistral_common==1.8.5" "huggingface_hub>=0.34" \
+uv pip install -q --python "$VP" pip "vllm==0.10.2" "mistral_common==1.8.5" "huggingface_hub>=0.34" \
   -r repo/requirements-study.txt -r repo/requirements-task-screen.txt
 uv pip freeze --python "$VP" > manifests/pip-freeze.txt
 "$VP" -c "import vllm, torch, mistral_common; print('vllm', vllm.__version__, 'torch', torch.__version__, 'cuda', torch.version.cuda, 'mistral_common', mistral_common.__version__)" \
