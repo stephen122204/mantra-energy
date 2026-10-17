@@ -53,6 +53,7 @@ class CohortSpec:
     session_cpus: Optional[str] = None
     retry_of: Optional[str] = None
     labels: dict = field(default_factory=dict)
+    drain_timeout_s: float = 120.0
     task_options: dict = field(default_factory=dict)   # e.g. {"swebench": {"cpus": "4", "memory": "16g"}}
 
     def validate(self):
@@ -205,11 +206,18 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
         events.append("cohort_aborted", reason=f"{type(exc).__name__}: {exc}")
         raise
     finally:
+        # engine work left by stopped sessions stays inside the interval: wait for the server to drain
+        from .guards import wait_drained
+        drain = wait_drained(spec.base_url, timeout_s=spec.drain_timeout_s)
+        events.append("drained", **drain)
         t1 = clock()
         artifacts = measurement.finish_goal() if measurement else None
         if poller:
             poller.stop()
         events.append("interval_end", t1_mono=t1, interval_s=round(t1 - t0, 3))
+    if any(item.get("task_kind") == "swebench" for item in spec.tasks):
+        from .guards import leftover_containers
+        events.append("container_cleanup", **leftover_containers())
     energy = None
     if artifacts is not None:
         from .energy import cohort_energy_summary
@@ -250,6 +258,9 @@ def summarize(spec: CohortSpec, done, verdicts, energy, events) -> dict:
                 offered=len(done), outcomes=rec["outcomes"], verified_pass=passed, reconciliation=rec,
                 energy=energy, joules_per_verified_success=(joules / passed) if (joules is not None and passed) else None,
                 infra_invalid=infra > 0, sessions=sessions,
+                drain=next(({k: e.get(k) for k in ("drained", "drain_s", "last")} for e in events if e.get("kind") == "drained"), None),
+                container_cleanup=next(({k: e.get(k) for k in ("checked", "leftover", "removed")} for e in events
+                                        if e.get("kind") == "container_cleanup"), None),
                 note="joules_per_verified_success is undefined (None) with zero passes or missing energy")
 
 
