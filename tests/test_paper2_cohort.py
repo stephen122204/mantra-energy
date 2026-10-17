@@ -314,6 +314,7 @@ def _campaign_inputs(tmp_path):
     (pilot_out / "driver-events.jsonl").write_text("\n".join(json.dumps(e) for e in ev) + "\n")
     evals = ["business-segments-v2-n64-s9", "grouped-fit-v1-n64-s9"]
     matrix = dict(campaign_id="fixture-campaign", seed=5, contingency=0.0, export_h=0.0,
+                  allow_borrowed_estimates=True, allow_unbalanced_order=True,
                   task_specs=[dict(kind="business", rows=64, seed=9), dict(kind="numerical", rows=64, seed=9)],
                   cells=[dict(name="n2", kind="live", admission_limit=2, task_ids=evals, repeats=3, measure_as="n2", seed=7),
                          dict(name="xr", kind="replay", source_cell="n2", repeats=1, admission_limit=2, measure_as="replay-n2")])
@@ -322,9 +323,10 @@ def _campaign_inputs(tmp_path):
     return base, matrix, nodes, pilot_out
 
 
-def _node_report(uuid="GPU-x", cpu=False):
-    return dict(host="fixture-host", gpus=dict(devices=[dict(name="NVIDIA A100-SXM4-80GB", uuid=uuid)]),
-                verdict=dict(gpu_energy_counter=True, cpu_package_counters=cpu))
+def _node_report(uuid="GPU-x", cpu=True, sandbox=True, busy=0):
+    return dict(host="fixture-host", cpu=dict(sockets=2, model="fixture CPU"), memory_gib=503,
+                gpus=dict(driver="fixture", devices=[dict(name="NVIDIA A100-SXM4-80GB", uuid=uuid, compute_procs=busy)]),
+                verdict=dict(gpu_energy_counter=True, cpu_package_counters=cpu, task_sandbox_landlock_abi4=sandbox))
 
 
 def test_campaign_shard_keeps_every_precision_on_each_node(tmp_path):
@@ -369,6 +371,20 @@ def test_campaign_shard_keeps_every_precision_on_each_node(tmp_path):
                        meas, nodes, commit="c0")
     with pytest.raises(SystemExit, match="no measured duration"):
         campaign.shard(base, dict(matrix, cells=[dict(matrix["cells"][0], measure_as="n16")]), meas, nodes, commit="c0")
+    # audit I: a duration borrowed from another configuration is not that configuration's measurement
+    with pytest.raises(SystemExit, match="not measured on this configuration"):
+        campaign.shard(base, dict(matrix, allow_borrowed_estimates=False), meas, nodes, commit="c0")
+    # audit I: rounds that cannot rotate block order through every configuration need an explicit opt-in
+    with pytest.raises(SystemExit, match="cannot rotate fully"):
+        campaign.shard(base, dict(matrix, allow_unbalanced_order=False), meas, nodes, commit="c0")
+    # audit D: cells of one sweep must offer the same tasks, order and seeds (only admission varies)
+    sweep = [dict(matrix["cells"][0], name="s1", admission_limit=1, sweep="main"),
+             dict(matrix["cells"][0], name="s2", admission_limit=2, sweep="main",
+                  task_ids=list(reversed(matrix["cells"][0]["task_ids"])))]
+    with pytest.raises(SystemExit, match="differ in tasks"):
+        campaign.shard(base, dict(matrix, cells=sweep), meas, nodes, commit="c0")
+    ok_sweep = [sweep[0], dict(sweep[1], task_ids=sweep[0]["task_ids"])]
+    assert campaign.shard(base, dict(matrix, cells=ok_sweep), meas, nodes, commit="c0")["nodes"]
 
 
 def test_campaign_bind_checks_node_and_campaign_integrity(tmp_path):
@@ -382,10 +398,17 @@ def test_campaign_bind_checks_node_and_campaign_integrity(tmp_path):
                           "--commit", "c0"]) == 0
     manifest = campaign._load_campaign(camp)
     bound, warnings = campaign.bind(manifest, camp, "node-x", _node_report(), "lease-x")
-    assert warnings and all(p["gpu_uuid"] == "GPU-x" and p["allocation"] == "lease-x" for _, p in bound)
-    assert {p["binding"]["energy_metric"] for _, p in bound} == {"gpu_board"}
-    assert {p["binding"]["energy_metric"] for _, p in campaign.bind(manifest, camp, "node-x", _node_report(cpu=True), "l")[0]} \
-        == {"cpu_package+gpu_board"}
+    assert not warnings and all(p["gpu_uuid"] == "GPU-x" and p["allocation"] == "lease-x" for _, p in bound)
+    assert {p["binding"]["energy_metric"] for _, p in bound} == {"cpu_package+gpu_board"}
+    assert bound[0][1]["binding"]["hardware"]["cpu_sockets"] == 2
+    # audit A: the CPU-plus-GPU campaign refuses nodes without every CPU package, the task sandbox, or a free GPU
+    for bad, why in ((_node_report(cpu=False), "CPU-package"), (_node_report(sandbox=False), "sandbox"),
+                     (_node_report(busy=1), "compute processes")):
+        with pytest.raises(SystemExit, match=why):
+            campaign.bind(manifest, camp, "node-x", bad, "l")
+    gpu_only = dict(manifest, energy_metric="gpu_board")  # explicit GPU-only campaign
+    assert {p["binding"]["energy_metric"] for _, p in campaign.bind(gpu_only, camp, "node-x", _node_report(cpu=False), "l")[0]} \
+        == {"gpu_board"}
     assert all(campaign.canonical_sha(campaign.unbound(p)) == p["binding"]["plan_sha256"] for _, p in bound)
     with pytest.raises(SystemExit, match="exactly one"):
         campaign.bind(manifest, camp, "node-x", dict(_node_report(), gpus=dict(devices=[dict(name="Tesla V100", uuid="u")])), "l")
@@ -431,10 +454,18 @@ def test_campaign_round_runs_and_collects(tmp_path):
     assert all(r["mismatched_turns"] == 0 for r in replays)
     cov = campaign.collect(manifest, [out])
     counted = [r for r in cov["rounds"] if r["runs"]]
-    assert len(counted) == 1 and counted[0]["runs"][0]["complete"]
-    assert set(counted[0]["runs"][0]["problems"]) <= {"dirty checkout"}
-    assert cov["summary"]["missing"] == len(cov["rounds"]) - 1
-    assert counted[0]["runs"][0]["energy_metric"] == "gpu_board" and not cov["mixed_energy_metrics"]
+    run = counted[0]["runs"][0]
+    assert len(counted) == 1 and run["complete"] and set(run["problems"]) <= {"dirty checkout"}
+    assert run["expected"] == run["completed"] == 6 and not run["missing_cells"]
+    # fixture runs have no energy counters: every cell is flagged, so the round is never "complete"
+    assert any("no valid cpu_plus_gpu_j" in p for p in run["invalid_cells"])
+    assert cov["summary"]["missing"] == len(cov["rounds"]) - 1 and not cov["analysable"]
+    ev = [json.loads(l) for l in (out / "driver-events.jsonl").read_text().splitlines()]
+    resets = [e for e in ev if e["kind"] == "cache_reset"]  # audit E: verified cold start before each cohort
+    assert len(resets) == 6 and all(e["ok"] and e["cached_before_reset"] > 0 and e["cached_after_reset"] == 0 for e in resets)
+    summ = json.loads(next((out / "cohorts").glob("*/*/cohort-summary.json")).read_text())
+    assert summ["drain"]["drained"] is True  # audit F: interval closes after the server is idle
+    assert counted[0]["runs"][0]["energy_metric"] == "cpu_package+gpu_board" and not cov["mixed_energy_metrics"]
     with pytest.raises(SystemExit, match="infra"):  # a rerun must name an infrastructure cause
         pilot.main(["--plan", str(plan_file), "--out", str(tmp_path / "rerun"), "--budget-s", "60",
                     "--cutoff-utc", "2099-01-01T00:00:00Z", "--fixture-server", "--retry-of", str(out)])
@@ -528,3 +559,69 @@ def test_atomic_pass_runs_on_all_precisions_or_none(tmp_path):
     ev = [json.loads(l) for l in (out / "driver-events.jsonl").read_text().splitlines()]
     assert sorted(e["step"] for e in ev if e["kind"] == "step_done") == ["a-n1", "b-n1"]
     assert [e["pass_index"] for e in ev if e["kind"] == "pass_skipped"] == [1]
+
+
+def test_collect_never_calls_failed_or_missing_rounds_complete(tmp_path):
+    """audit B: a finished, checksummed round whose configurations all failed to start is a configuration
+    outcome; a round with cells that never ran is partial; neither is 'complete'."""
+    from studies.paper2.cohort import campaign
+    base, matrix, nodes, pilot_out = _campaign_inputs(tmp_path)
+    res = campaign.shard(base, matrix, {"A100-SXM4-80GB": campaign._measurements([pilot_out])}, nodes[:1], commit="c0")
+    plan = res["nodes"]["node-x"]["rounds"][0]["plan"]
+    sha = campaign.canonical_sha(plan)
+    manifest = dict(campaign_id="f", commit="c0", nodes={"node-x": dict(gpu_class="A100-SXM4-80GB",
+                                                                         rounds=[dict(file="r.json", plan_sha256=sha)])})
+    bound = dict(plan, gpu_uuid="GPU-x", allocation="l", binding=dict(plan_sha256=sha, energy_metric="cpu_package+gpu_board"))
+
+    def run_dir(name, events):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "plan.json").write_text(json.dumps(bound))
+        start = dict(kind="driver_start", revision="c0", dirty=False, energy_metric="cpu_package+gpu_board")
+        (d / "driver-events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in [start] + events + [dict(kind="driver_end")]))
+        records.write_manifest(d)
+        return d
+    failed = run_dir("all-failed", [dict(kind="server_start_failed", config=c["name"], error="OOM") for c in plan["configs"]])
+    cov = campaign.collect(manifest, [failed])
+    assert cov["rounds"][0]["status"] == "complete_with_configuration_outcomes"
+    assert cov["rounds"][0]["runs"][0]["completed"] == 0
+    nothing = run_dir("nothing-ran", [])
+    assert campaign.collect(manifest, [nothing])["rounds"][0]["status"] == "partial"
+
+
+def test_swebench_noop_harness_crash_does_not_qualify(tmp_path, monkeypatch):
+    """audit C: a crashed no-op run is not a rejected solution; catalogues need a passing qualification."""
+    from studies.paper2.cohort import pilot, swebench_workload as sw
+    results = iter([dict(passed=True, reason="resolved"),
+                    dict(passed=False, reason="harness produced no report (rc=1)", infrastructure=True)])
+    monkeypatch.setattr(sw, "evaluate_patch", lambda *a, **k: next(results))
+    q = sw.qualify_instance(dict(instance_id="x__y-1", patch="diff"), tmp_path)
+    assert q["gold_resolves"] and not q["controls_valid"] and not q["qualified"]
+    cat = tmp_path / "catalog.json"
+    rows = [dict(task_id="x__y-1")]
+    cat.write_text(json.dumps(rows))
+    with pytest.raises(SystemExit, match="no qualification.json"):
+        pilot.check_qualified(cat, rows)
+    (tmp_path / "qualification.json").write_text(json.dumps([q]))
+    with pytest.raises(SystemExit, match="not qualified"):
+        pilot.check_qualified(cat, rows)
+
+
+@needs_renderer
+def test_frozen_task_assets_are_enforced(tmp_path):
+    """audit G: a round whose prepared task assets differ from the frozen catalogue does not run."""
+    from studies.paper2.cohort import pilot
+    cfg = dict(name="a", model="/nonexistent/a", revision="fixture", weight_precision="int4", activation_precision="bf16",
+               max_model_len=32768)
+    plan = dict(gpu_uuid="fixture", allocation="fixture", isolation="fixture", block_seed=1, configs=[cfg],
+                blocks={"a": dict(steps=[{"live": dict(name="n1", admission_limit=1, task_ids=["business-segments-v2-n64-s7"])}])},
+                tekken={"a": TEKKEN}, task_specs=[dict(kind="business", rows=64, seed=7)],
+                expected_tasks={"business-segments-v2-n64-s7": "0" * 64},
+                limits=dict(max_turns=3, max_tool_calls=10, max_total_output_tokens=2048, max_tokens=256, deadline_s=60,
+                            verify_timeout_s=120),
+                sampling=dict(mode="sampled", temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0),
+                load_est_s=1, export_reserve_s=0)
+    (tmp_path / "plan.json").write_text(json.dumps(plan))
+    with pytest.raises(SystemExit, match="differ from the frozen catalogue"):
+        pilot.main(["--plan", str(tmp_path / "plan.json"), "--out", str(tmp_path / "out"), "--budget-s", "600",
+                    "--cutoff-utc", "2099-01-01T00:00:00Z", "--fixture-server"])

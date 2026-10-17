@@ -118,6 +118,20 @@ configuration failures and retries with their reasons, and reports rounds as ok 
 incomplete / conflict / missing. Checksums establish integrity against the recorded manifests,
 not that the experiment was correct.
 
+## Launch gates (main campaign)
+
+| gate | enforced by |
+|---|---|
+| node: advancing counters for every CPU package and the GPU, Landlock ABI 4 sandbox, idle GPU | `campaign bind` (GPU-only energy only if the matrix sets `energy_metric: gpu_board`) |
+| same workload across agent counts | `shard`: live cells sharing `sweep` must have identical task ids, order, seeds, mode |
+| measured durations per configuration, full block-order rotation | `shard` (opt-outs: `allow_borrowed_estimates`, `allow_unbalanced_order`) |
+| frozen task instances | matrix `frozen_catalog` (+ `prepared_assets`): every round checks asset hashes before running |
+| cold prefix cache per cohort | driver: probe cached, `POST /reset_prefix_cache`, probe must report 0 cached tokens (`cache_reset` event); `cache_start: warm` opts out |
+| interval closes after engine drain; no leftover task containers | `run_cohort`: `drained` event, `container_cleanup` after SWE-bench cohorts |
+| SWE-bench controls | `qualify`: gold resolves and the no-op patch fails with valid harness reports; catalogues need `qualification.json` |
+| completeness | `collect`: expected vs completed cells; `complete`, `complete_with_configuration_outcomes`, `partial`, `invalid`, `incomplete`, `conflict`, `missing`; `analysable` only when every round is complete |
+| engine | after every server start: long-context answer, exact agent request, forced decoding, batching, prefix cache |
+
 ## Records (per cohort)
 
 `events.jsonl` (offered / admitted / terminal / verified, fsync'd), `sessions/<id>/` (spec,
