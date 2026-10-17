@@ -129,7 +129,8 @@ def verify(spec_path: Path) -> int:
         checked = ex.execute([ToolCall("verify", "verify", {})])["verify"]
         if checked.status == "completed":
             res = checked.result
-            result.update(verdict="pass" if res["passed"] else "fail", reason=res.get("reason", ""),
+            result.update(verdict="unavailable" if res.get("infrastructure") else ("pass" if res["passed"] else "fail"),
+                          reason=res.get("reason", ""),
                           detail=json.loads(json.dumps(res, default=str)))
         else:
             result.update(verdict="unavailable", reason=checked.error or checked.status)

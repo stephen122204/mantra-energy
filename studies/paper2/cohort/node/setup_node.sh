@@ -43,6 +43,8 @@ uv pip install -q --python "$VP" "vllm==0.10.2" "transformers==4.56.2" "mistral_
 uv pip freeze --python "$VP" > manifests/pip-freeze.txt
 "$VP" -c "import vllm, torch, mistral_common; print('vllm', vllm.__version__, 'torch', torch.__version__, 'cuda', torch.version.cuda, 'mistral_common', mistral_common.__version__)" \
   | tee manifests/engine-versions.txt
+# vLLM 0.10.2 reads config.rope_theta directly. Transformers 5 relocates it,
+# causing this server to silently use its 10000 fallback instead of the model's value.
 
 # 3. pinned checkpoints (HF-format shards only; the BF16 repo also ships a duplicate consolidated file)
 "$VP" - <<'EOF'

@@ -41,6 +41,7 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 import random
 import subprocess
 import sys
@@ -180,9 +181,10 @@ def _shard_class(base: dict, matrix: dict, meas: dict, nodes: list, commit: str,
         if c.get("kind", "live") == "live" and c.get("sweep"):
             sweeps.setdefault(c["sweep"], []).append(c)
     for name, members in sweeps.items():
-        keys = {json.dumps([m["task_ids"], m.get("seed", 0), m.get("mode", "fixed"), m.get("arrival_offsets_s")]) for m in members}
+        keys = {json.dumps([m["task_ids"], m.get("seed", 0), m.get("mode", "fixed"), m.get("arrival_offsets_s"),
+                           m.get("cohort_deadline_s", base.get("cohort_deadline_s", 3600)), m["repeats"]]) for m in members}
         if len(keys) > 1:
-            problems.append(f"sweep {name}: cells {[m['name'] for m in members]} differ in tasks, order, seed or mode")
+            problems.append(f"sweep {name}: cells {[m['name'] for m in members]} differ in tasks, order, seed, mode, deadline or repeats")
     if problems:
         raise SystemExit(f"cannot shard {gpu_class}:\n  " + "\n  ".join(problems))
 
@@ -328,7 +330,7 @@ def bind(manifest: dict, campaign: Path, node: str, report: dict, allocation: st
     verdict = report.get("verdict", {})
     required = manifest.get("energy_metric", "cpu_package+gpu_board")
     problems = []
-    if not verdict.get("gpu_energy_counter"):
+    if not verdict.get("gpu_energy_counter") or not (dev.get("energy_counter") or {}).get("advancing"):
         problems.append("GPU energy counter not advancing")
     if not verdict.get("task_sandbox_landlock_abi4"):
         problems.append("task sandbox not qualified (Landlock ABI >= 4 required; see node/prepare_kernel.sh)")
@@ -392,13 +394,21 @@ def cell_validity(d: Path, step: str, kind: str, st: dict, cfg: str, metric: str
         if not summ.exists():
             return [f"{step}: no cohort summary"]
         s = json.loads(summ.read_text())
+        if any(x.get("outcome") == "completed" and x.get("verdict") not in ("pass", "fail")
+               for x in s.get("sessions", [])):
+            problems.append(f"{step}: completed attempt has no valid verification")
+        if sorted(x.get("task_id", "") for x in s.get("sessions", [])) != sorted(st.get("task_ids", [])):
+            problems.append(f"{step}: task attempts differ from the planned cohort")
         if s.get("infra_invalid"):
             problems.append(f"{step}: infrastructure-failed sessions")
         if not (s.get("reconciliation") or {}).get("reconciled"):
             problems.append(f"{step}: attempts not reconciled")
-        if (s.get("drain") or {}).get("drained") is False:
+        if (s.get("drain") or {}).get("drained") is not True:
             problems.append(f"{step}: server did not drain before the interval closed")
-        if (s.get("container_cleanup") or {}).get("leftover"):
+        cleanup = s.get("container_cleanup")
+        if cleanup is not None and not cleanup.get("checked"):
+            problems.append(f"{step}: container cleanup could not be checked")
+        if (cleanup or {}).get("leftover"):
             problems.append(f"{step}: task containers left after the cohort")
         energy = s.get("energy") or {}
     elif kind == "replay":
@@ -406,17 +416,19 @@ def cell_validity(d: Path, step: str, kind: str, st: dict, cfg: str, metric: str
         if not summ.exists():
             return [f"{step}: no replay summary"]
         s = json.loads(summ.read_text())
+        if (s.get("drain") or {}).get("drained") is not True:
+            problems.append(f"{step}: replay server did not drain before the interval closed")
         if s.get("failed"):
             problems.append(f"{step}: {s['failed']} replayed sessions failed")
-        src_cfg = st.get("source", "").split("/")[0] if "/" in st.get("source", "") else cfg
-        if src_cfg == cfg and s.get("mismatched_turns"):
-            problems.append(f"{step}: same-configuration replay fidelity failed ({s['mismatched_turns']} turns)")
+        if s.get("mismatched_turns"):
+            problems.append(f"{step}: replay fidelity failed ({s['mismatched_turns']} turns)")
         energy = s.get("energy") or {}
     else:
         summ = root / "idle-summary.json"
         energy = (json.loads(summ.read_text()).get("energy") or {}) if summ.exists() else {}
     need = "cpu_plus_gpu_j" if metric == "cpu_package+gpu_board" else "gpu_board_j"
-    if energy.get(need) is None:
+    value = energy.get(need)
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value < 0:
         problems.append(f"{step}: no valid {need}")
     return problems
 
@@ -446,15 +458,30 @@ def collect(manifest: dict, results: list) -> dict:
             rec["problems"].append("dirty checkout")
         if start.get("retry_of") and not str(start.get("retry_reason") or "").startswith("infra:"):
             rec["problems"].append("retry without an infrastructure reason")
+        required_metric = manifest.get("energy_metric", "cpu_package+gpu_board")
+        if start.get("energy_metric") != required_metric or (plan.get("binding") or {}).get("energy_metric") != required_metric:
+            rec["problems"].append("energy metric differs from the frozen campaign")
         cells = expected_cells(plan)
         done = {e["step"] for e in ev if e["kind"] == "step_done"}
-        failed_cfgs = {e["config"] for e in ev if e["kind"] in ("server_start_failed", "server_died")}
+        # A failure in one pass must not excuse missing cells in another pass of that configuration.
+        failed_cells = set()
+        passes = plan.get("passes") or [dict(blocks=plan["blocks"])]
+        for e in ev:
+            if e["kind"] not in ("server_start_failed", "server_died"):
+                continue
+            matching = [(i, ps["blocks"][e["config"]]) for i, ps in enumerate(passes) if e["config"] in ps["blocks"]]
+            if e.get("pass_index") is not None:
+                matching = [(i, b) for i, b in matching if i == e["pass_index"]]
+            elif len(matching) != 1:
+                continue  # legacy failure without a pass identity cannot excuse ambiguous omissions
+            for _, block in matching:
+                failed_cells.update(f"{e['config']}-{next(iter(st.values()))['name']}" for st in block["steps"])
         died_steps = {e.get("step") for e in ev if e["kind"] == "server_died"}
         config_outcome = sorted(c for c, (_, _, cfg) in cells.items()
-                                if (c not in done and cfg in failed_cfgs) or c in died_steps)
+                                if (c not in done and c in failed_cells) or c in died_steps)
         missing = sorted(c for c in cells if c not in done and c not in config_outcome)
         invalid = [p for c in sorted((done & set(cells)) - died_steps) for p in
-                   cell_validity(d, c, cells[c][0], cells[c][1], cells[c][2], start.get("energy_metric") or "cpu_package+gpu_board")]
+                   cell_validity(d, c, cells[c][0], cells[c][1], cells[c][2], required_metric)]
         rec.update(expected=len(cells), completed=len(done & set(cells)), missing_cells=missing,
                    configuration_outcome_cells=config_outcome, invalid_cells=invalid)
         rec.update(complete=any(e["kind"] == "driver_end" for e in ev), retry_of=start.get("retry_of"),
@@ -494,7 +521,7 @@ def collect(manifest: dict, results: list) -> dict:
             run = next(x for x in r["runs"] if x["dir"] == r["counted"])
             metrics.setdefault(manifest["nodes"][r["node"]]["gpu_class"], set()).add(run["energy_metric"])
     return dict(campaign_id=manifest["campaign_id"], summary=summary, rounds=rounds, stray=stray,
-                analysable=summary["complete"] + summary["complete_with_configuration_outcomes"] == len(rounds),
+                analysable=bool(rounds) and not stray and summary["complete"] == len(rounds),
                 energy_metric_by_class={k: sorted(v) for k, v in metrics.items()},
                 mixed_energy_metrics=[k for k, v in metrics.items() if len(v) > 1],
                 note="checksums establish integrity against the recorded manifests, not correctness of the experiment")
@@ -505,7 +532,7 @@ def cmd_collect(a) -> int:
     cov = collect(manifest, a.results)
     a.out.write_text(json.dumps(cov, indent=1))
     print(json.dumps(cov["summary"]))
-    return 0
+    return 0 if cov["analysable"] else 2
 
 
 def main(argv=None) -> int:

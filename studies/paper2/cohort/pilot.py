@@ -83,7 +83,13 @@ def check_qualified(catalog_path: Path, rows: list) -> None:
     if not q.exists():
         raise SystemExit(f"{catalog_path}: no qualification.json next to the catalogue")
     status = {r["instance_id"]: r for r in json.loads(q.read_text())}
-    bad = [r["task_id"] for r in rows if not (status.get(r["task_id"]) or {}).get("qualified")]
+    def valid(q):
+        gold, noop = q.get("gold") or {}, q.get("noop") or {}
+        return (q.get("qualified") is True and q.get("controls_valid") is True
+                and gold.get("passed") is True and gold.get("reason") == "resolved"
+                and noop.get("passed") is False and noop.get("reason") == "not resolved"
+                and not gold.get("infrastructure") and not noop.get("infrastructure"))
+    bad = [r["task_id"] for r in rows if not valid(status.get(r["task_id"]) or {})]
     if bad:
         raise SystemExit(f"{catalog_path}: instances not qualified: {bad}")
 
@@ -119,6 +125,8 @@ def main(argv=None):
     log.append("driver_start", revision=revision, dirty=bool(dirty), budget_s=a.budget_s, cutoff_utc=a.cutoff_utc,
                retry_of=a.retry_of, retry_reason=a.retry_reason, campaign=plan.get("campaign"),
                energy_metric=(plan.get("binding") or {}).get("energy_metric", "cpu_package+gpu_board"))
+    if plan.get("campaign", {}).get("commit") not in (None, revision):
+        raise SystemExit("checkout does not match the campaign execution commit")
     if dirty and not a.fixture_server:
         raise SystemExit("refusing to measure from a dirty checkout")
 
@@ -282,7 +290,7 @@ def main(argv=None):
                 took = time.monotonic() - t0
                 server_dead = (not a.fixture_server) and server.proc.poll() is not None
                 if server_dead:
-                    log.append("server_died", config=cfg.name, step=name, returncode=server.proc.returncode,
+                    log.append("server_died", config=cfg.name, pass_index=pass_index, step=name, returncode=server.proc.returncode,
                                outcome="configuration", log_tail=_tail(server.log_path))
                 measured[s["name"]] = max(measured.get(s["name"], 0), took)
                 log.append("step_done", step=name, step_kind=kind, seconds=round(took, 1))
@@ -294,6 +302,13 @@ def main(argv=None):
                                     server_died=server_dead))
                 if server_dead:
                     break  # remaining steps of this block are not run on a dead server (recorded below)
+                if kind in ("live", "replay"):
+                    from .guards import require_clean_boundary
+                    try:
+                        require_clean_boundary(res)
+                    except RuntimeError as exc:
+                        log.append("infrastructure_abort", step=name, reason=str(exc))
+                        raise
             if server_dead:
                 for rest in block["steps"][block["steps"].index(step) + 1:]:
                     log.append("step_skipped", step=f"{cfg.name}-{next(iter(rest.values()))['name']}",
