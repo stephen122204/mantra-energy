@@ -186,9 +186,10 @@ def main(argv=None):
             checks = run_checks(base_url, cfg.name, prompt, r.inner.encode(" one two three four five", bos=False, eos=False),
                                 sampling=plan["sampling"])
         log.append("engine_check", config=cfg.name, **checks)
-        if not checks.get("agent_request", {"ok": True}).get("ok"):  # agent sessions cannot get completions
+        bad = [k for k in ("agent_request", "long_context") if not checks.get(k, {"ok": True}).get("ok")]
+        if bad:  # agent sessions would get errors or degenerate completions: not a measurement of the configuration
             log.append("block_skipped", config=cfg.name, pass_index=pass_index,
-                       reason=f"engine check: agent request failed ({checks['agent_request']})")
+                       reason=f"engine check failed: {', '.join(bad)} ({ {k: checks[k] for k in bad} })")
             if not a.fixture_server:
                 log.append("server_stopped", config=cfg.name, returncode=server.stop())
             continue
