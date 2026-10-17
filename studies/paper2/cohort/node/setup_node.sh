@@ -34,6 +34,7 @@ if ! command -v uv >/dev/null; then
 fi
 [ -x venv/bin/python ] || uv venv -q --python 3.11 venv
 VP="$W/venv/bin/python"
+uv pip install -q --python "$VP" pip  # repo tasks record `python -m pip freeze` as tool identity; uv venvs omit pip
 uv pip install -q --python "$VP" "vllm==0.10.2" "mistral_common==1.8.5" "huggingface_hub>=0.34" \
   -r repo/requirements-study.txt -r repo/requirements-task-screen.txt
 uv pip freeze --python "$VP" > manifests/pip-freeze.txt
