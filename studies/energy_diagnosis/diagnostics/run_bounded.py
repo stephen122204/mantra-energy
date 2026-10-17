@@ -88,6 +88,18 @@ def stop_group(child,grace=20,extra_owned=()):
     return [pid for pid in owned if alive(pid)]
 
 
+def cpu_list(text):
+    """Linux cpu-list syntax ("8-15,20") -> sorted unique CPU ids."""
+    cpus = set()
+    for part in text.split(','):
+        lo, _, hi = part.strip().partition('-')
+        lo, hi = int(lo), int(hi or lo)
+        if lo < 0 or hi < lo:
+            raise ValueError(f'invalid CPU range: {part!r}')
+        cpus.update(range(lo, hi + 1))
+    return sorted(cpus)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output',required=True)
@@ -97,10 +109,22 @@ def main():
     p.add_argument('--lock',required=True)
     p.add_argument('--grace-seconds',type=float,default=20,help='SIGTERM grace before SIGKILL; model release can take seconds')
     p.add_argument('--process-baseline', help='Reviewed Linux process snapshot; abort on unrelated new processes or background load')
+    p.add_argument('--capture-process-baseline', action='store_true',
+                   help='Unattended batches: snapshot the process table after acquiring the lock, immediately before '
+                        'launching the child, and guard against it (saved as process-baseline.json)')
+    p.add_argument('--supervisor-cpus', type=cpu_list, metavar='CPULIST',
+                   help='Pin this supervisor (and its polling guard) to declared CPUs, away from the measured worker. '
+                        'The child inherits them unless it sets its own affinity (moe.run --cpu-affinity).')
     p.add_argument('command',nargs=argparse.REMAINDER)
     a = p.parse_args()
     if os.name != 'posix':
         p.error('requires POSIX')
+    if a.supervisor_cpus:
+        if not hasattr(os, 'sched_setaffinity'):
+            p.error('supervisor CPU affinity is not supported on this platform')
+        os.sched_setaffinity(0, a.supervisor_cpus)
+        if sorted(os.sched_getaffinity(0)) != a.supervisor_cpus:
+            p.error('supervisor CPU affinity was not applied')
     import fcntl
     command = a.command[1:] if a.command[:1] == ['--'] else a.command
     try:
@@ -111,12 +135,15 @@ def main():
         p.error(str(e))
     if not command or not math.isfinite(a.seconds) or not 0 < a.seconds <= cutoff.timestamp()-time.time()-60:
         p.error('invalid command/budget or insufficient time before cutoff and cleanup')
+    if a.process_baseline and a.capture_process_baseline:
+        p.error('use either a reviewed --process-baseline or --capture-process-baseline')
     if not math.isfinite(a.grace_seconds) or not 0 < a.grace_seconds <= 300:
         p.error('grace must be within (0, 300] seconds')
     out = Path(a.output)
     out.mkdir(parents=True,exist_ok=False)
     state = dict(command=command,cwd=a.cwd,started_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
-                 max_seconds=a.seconds,cutoff_utc=a.cutoff_utc,status='starting',supervisor_pid=os.getpid(),cleanup_complete=False)
+                 max_seconds=a.seconds,cutoff_utc=a.cutoff_utc,status='starting',supervisor_pid=os.getpid(),cleanup_complete=False,
+                 supervisor_cpus=sorted(os.sched_getaffinity(0)) if hasattr(os,'sched_getaffinity') else None)
     def save():
         tmp = out/'status.tmp'
         tmp.write_text(json.dumps(state,indent=2)+'\n')
@@ -136,8 +163,9 @@ def main():
                 state.update(status='blocked_by_other_job',returncode=75)
             else:
                 try:
-                    if a.process_baseline:
-                        baseline = json.loads(Path(a.process_baseline).read_text())
+                    if a.process_baseline or a.capture_process_baseline:
+                        from .process_guard import snapshot
+                        baseline = snapshot() if a.capture_process_baseline else json.loads(Path(a.process_baseline).read_text())
                         (out/'process-baseline.json').write_text(json.dumps(baseline, indent=2)+'\n')
                         guard = ProcessGuard(baseline, out/'process-observations.jsonl', os.getpid())
                     child = subprocess.Popen(command,cwd=a.cwd,stdout=log,stderr=subprocess.STDOUT,

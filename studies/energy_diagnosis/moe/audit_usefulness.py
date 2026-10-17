@@ -19,6 +19,7 @@ import argparse
 from collections import Counter, defaultdict
 import json
 from pathlib import Path
+from studies.energy_diagnosis.moe import event_log
 
 CLASSES = ("used_resident", "evicted_before_use", "replaced_unused", "unused_at_goal_end")
 
@@ -103,8 +104,8 @@ def goal(events):
 def audit_campaign(campaign):
     root = Path(campaign)
     rows = []
-    for path in sorted(root.glob("goals/*/expert-events.json")):
-        events = json.loads(path.read_text())
+    for path in event_log.glob_goals(root):
+        events = event_log.read(path)
         record = json.loads(path.with_name("record.json").read_text()) if path.with_name("record.json").exists() else {}
         policy = events[0].get("policy", {}).get("name") if events else None
         rows.append(dict(goal=path.parent.name, task_id=record.get("task_id"),
