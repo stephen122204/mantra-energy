@@ -112,14 +112,18 @@ class SharedServerAdapter:
             if r.status != 200:
                 raise RuntimeError(f"HTTP {r.status}: {r.read()[:500]!r}")
             first_ns, ids, finish, usage, text = None, [], None, {}, []
+            done = False
             for raw in r:
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):
                     continue
                 data = line[5:].strip()
                 if data == "[DONE]":
+                    done = True
                     break
                 chunk = json.loads(data)
+                if chunk.get("error") is not None:
+                    raise RuntimeError(f"stream error: {json.dumps(chunk['error'])}")
                 if chunk.get("usage"):
                     usage = chunk["usage"]
                 for ch in chunk.get("choices") or []:
@@ -129,6 +133,10 @@ class SharedServerAdapter:
                     ids.extend(got)
                     text.append(ch.get("text") or "")
                     finish = ch.get("finish_reason") or finish
+            if not done or finish is None:
+                raise RuntimeError("incomplete completion stream: missing terminal event or finish reason")
+            if usage.get("completion_tokens", 0) and not ids:
+                raise RuntimeError("completion stream reported generated tokens without token IDs")
             return first_ns, ids, finish, usage, "".join(text)
         finally:
             conn.close()
@@ -151,7 +159,9 @@ class SharedServerAdapter:
                             tokens=dict(prompt=len(prompt), completion=0), token_provenance="tokenizer", backend=rec)
             payload = dict(model=self.served_model, prompt=prompt, max_tokens=max_tokens, stream=True,
                            stream_options=dict(include_usage=True), return_token_ids=True,
-                           skip_special_tokens=False, **sampling_payload(sampling), **self.extra_body)
+                           **sampling_payload(sampling), **self.extra_body)
+            # Mistral's server tokenizer requires its default skip_special_tokens=True.
+            # Control tokens are retained by our local decode of the returned IDs.
             first_ns, ids, finish, usage, server_text = self._stream(payload, float(self.model_config["request_timeout_seconds"]))
             done_ns = time.monotonic_ns()
             content = self.renderer.decode(ids)
