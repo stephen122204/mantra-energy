@@ -1,12 +1,12 @@
 # Paper 2: precision under concurrent agent serving — tests and task suite
 
-Tests for 4-bit vs 8-bit weight precision when many requests or agents share one GPU: energy per token split
+Tests for 4-bit vs 8-bit vs 16-bit weight precision when many requests or agents share one GPU: energy per token split
 into prefill and decode, then energy per verified task completion at concurrency 1–16.
 
 ## Question
 
-When many agents share one GPU, which weight precision (4-bit or 8-bit) completes a task with less energy, and
-what decides it?
+When many agents share one GPU, which weight precision (4-bit, 8-bit or 16-bit) completes a task with the least
+energy, and what decides it?
 
 | factor | what we measure | where |
 |---|---|---|
@@ -56,17 +56,18 @@ The C2 task code is not copied here; use the branch above. Calibration rule and 
 
 | model | precision arms | used for |
 |---|---|---|
-| Qwen3-8B (dense) | GGUF Q4_K_M / Q8_0 | prefill/decode energy tests only |
-| Qwen3-30B-A3B-Instruct-2507 (MoE) | 4-bit / 8-bit | τ²-bench, Aider polyglot, AIME/HMMT, C2 tasks |
-| Devstral Small 1.1 (24B dense) | 4-bit / 8-bit | SWE-bench Verified, C2 tasks |
+| Qwen3-8B (dense) | GGUF Q4_K_M / Q8_0 / F16; vLLM INT4 / INT8 or FP8 / BF16 | prefill/decode energy tests only |
+| Qwen3-30B-A3B-Instruct-2507 (MoE) | 4-bit / 8-bit / BF16 | τ²-bench, Aider polyglot, AIME/HMMT, C2 tasks |
+| Devstral Small 1.1 (24B dense) | 4-bit / 8-bit / BF16 | SWE-bench Verified, C2 tasks |
 
-## Next tests (A100-80GB lease `mantra-a100-80gb-20261017`, 17–24 Oct)
+## Next tests (A100-80GB lease `mantra-a100-80gb-20261017`, 17–24 Oct; H100 to be booked)
 
-1. Repeat p0c and p0d on A100 with llama.cpp and stock vLLM (INT4 AWQ/Marlin vs INT8/FP8 weights), for Qwen3-8B
-   and Qwen3-30B-A3B. Check whether the prefill ratio stays above 1.
+1. Repeat p0c and p0d on A100 with llama.cpp and stock vLLM (INT4 AWQ/Marlin, INT8, BF16), for Qwen3-8B
+   and Qwen3-30B-A3B; same on H100 with FP8 (W8A8) as the 8-bit arm. Record sessions that fit in GPU memory
+   per precision (BF16 holds far fewer long sessions for the 24B and 30B models).
 2. Context-length and load grid: prompts of 2k/8k/32k/64k tokens; concurrency 1, 2, 4, 8, 16, 32.
 3. Prompt vs completion tokens per call and prefix-cache hits from existing C2 traces.
-4. Calibration pilot at 8-bit on `pilot_selection.json`; then the selected tasks at both precisions under
+4. Calibration pilot at 8-bit on `pilot_selection.json`; then the selected tasks at all three precisions under
    concurrency 1/4/16 in the ALEMS harness (CPU package + GPU board; counters from PR #77), energy per verified
    completion.
 
