@@ -316,8 +316,9 @@ def _node_report(uuid="GPU-x", cpu=False):
 def test_campaign_shard_keeps_every_precision_on_each_node(tmp_path):
     from studies.paper2.cohort import campaign
     base, matrix, nodes, pilot_out = _campaign_inputs(tmp_path)
-    meas = campaign._measurements([pilot_out])
-    assert meas["kv_blocks"] == {"arm-a": 1000, "arm-b": 900}
+    m = campaign._measurements([pilot_out])
+    assert m["kv_blocks"] == {"arm-a": 1000, "arm-b": 900}
+    meas = {"A100-SXM4-80GB": m}
     res = campaign.shard(base, matrix, meas, nodes, commit="c0")
     units = [u for nd in res["nodes"].values() for r in nd["rounds"] for u in r["plan"]["campaign"]["units"]]
     assert sorted(units) == ["n2-r0", "n2-r1", "n2-r2"]
@@ -334,7 +335,18 @@ def test_campaign_shard_keeps_every_precision_on_each_node(tmp_path):
                 assert rep == {"arm-a": ["arm-a/n2-r0", "arm-b/n2-r0"], "arm-b": ["arm-a/n2-r0", "arm-b/n2-r0"]}
             else:
                 assert len(p["passes"]) == 1
-    assert res["estimate_provenance"]["arm-b-xr"] == "slowest measured on another config"
+    assert res["estimate_provenance"]["A100-SXM4-80GB"]["arm-b-xr"] == "slowest measured on another config"
+    # a second GPU class needs its own pilot, then gets its own full set of repeats (never pooled)
+    h100 = [dict(name="node-h", gpu_class="H100", available_h=10)]
+    with pytest.raises(SystemExit, match="each class needs its own pilot"):
+        campaign.shard(base, matrix, meas, nodes + h100, commit="c0")
+    both = campaign.shard(base, matrix, dict(meas, H100=m), nodes + h100, commit="c0")
+    assert sorted(u for r in both["nodes"]["node-h"]["rounds"] for u in r["plan"]["campaign"]["units"]) == \
+        ["n2-r0", "n2-r1", "n2-r2"]
+    # block order rotates: over a node's rounds each configuration is first equally often
+    one = campaign.shard(base, matrix, meas, nodes[:1], commit="c0")["nodes"]["node-x"]["rounds"]
+    firsts = [r["plan"]["passes"][0]["order"][0] for r in one]
+    assert len(one) == 3 and firsts.count("arm-a") in (1, 2) and set(firsts) == {"arm-a", "arm-b"}
     eq = campaign.shard(base, dict(matrix, equal_kv=True), meas, nodes, commit="c0")
     assert {c["name"]: c.get("num_gpu_blocks_override") for c in eq["nodes"]["node-x"]["rounds"][0]["plan"]["configs"]} == \
         {"arm-a": None, "arm-b": None, "arm-a-eqkv": 900, "arm-b-eqkv": 900}
@@ -352,11 +364,14 @@ def test_campaign_bind_checks_node_and_campaign_integrity(tmp_path):
         (tmp_path / name).write_text(json.dumps(obj))
     camp = tmp_path / "campaign"
     assert campaign.main(["shard", "--base-plan", str(tmp_path / "base.json"), "--matrix", str(tmp_path / "matrix.json"),
-                          "--pilot", str(pilot_out), "--nodes", str(tmp_path / "nodes.json"), "--out", str(camp),
+                          "--pilot", f"A100-SXM4-80GB={pilot_out}", "--nodes", str(tmp_path / "nodes.json"), "--out", str(camp),
                           "--commit", "c0"]) == 0
     manifest = campaign._load_campaign(camp)
     bound, warnings = campaign.bind(manifest, camp, "node-x", _node_report(), "lease-x")
     assert warnings and all(p["gpu_uuid"] == "GPU-x" and p["allocation"] == "lease-x" for _, p in bound)
+    assert {p["binding"]["energy_metric"] for _, p in bound} == {"gpu_board"}
+    assert {p["binding"]["energy_metric"] for _, p in campaign.bind(manifest, camp, "node-x", _node_report(cpu=True), "l")[0]} \
+        == {"cpu_package+gpu_board"}
     assert all(campaign.canonical_sha(campaign.unbound(p)) == p["binding"]["plan_sha256"] for _, p in bound)
     with pytest.raises(SystemExit, match="exactly one"):
         campaign.bind(manifest, camp, "node-x", dict(_node_report(), gpus=dict(devices=[dict(name="Tesla V100", uuid="u")])), "l")
@@ -376,7 +391,7 @@ def test_campaign_round_runs_and_collects(tmp_path):
     from studies.paper2.cohort import campaign, pilot
     base, matrix, nodes, pilot_out = _campaign_inputs(tmp_path)
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    res = campaign.shard(base, matrix, campaign._measurements([pilot_out]), nodes, commit=head)
+    res = campaign.shard(base, matrix, {"A100-SXM4-80GB": campaign._measurements([pilot_out])}, nodes, commit=head)
     camp = tmp_path / "campaign"
     camp.mkdir()
     rows = {}
@@ -405,7 +420,69 @@ def test_campaign_round_runs_and_collects(tmp_path):
     assert len(counted) == 1 and counted[0]["runs"][0]["complete"]
     assert set(counted[0]["runs"][0]["problems"]) <= {"dirty checkout"}
     assert cov["summary"]["missing"] == len(cov["rounds"]) - 1
+    assert counted[0]["runs"][0]["energy_metric"] == "gpu_board" and not cov["mixed_energy_metrics"]
+    with pytest.raises(SystemExit, match="infra"):  # a rerun must name an infrastructure cause
+        pilot.main(["--plan", str(plan_file), "--out", str(tmp_path / "rerun"), "--budget-s", "60",
+                    "--cutoff-utc", "2099-01-01T00:00:00Z", "--fixture-server", "--retry-of", str(out)])
     victim = next(p for p in (out / "cohorts").rglob("requests.jsonl"))
     victim.write_text(victim.read_text() + "\n")
     run = next(x for r in campaign.collect(manifest, [out])["rounds"] for x in r["runs"])
     assert any(p.startswith("mismatch") for p in run["problems"])
+
+
+@needs_renderer
+def test_server_start_failure_and_death_are_configuration_outcomes(tmp_path, monkeypatch):
+    from studies.paper2.cohort import engine_check, pilot, telemetry
+    from studies.paper2.cohort.client import MistralRenderer
+    from studies.paper2.cohort.fake_server import FakeVllm
+
+    class StandIn:  # arm-a cannot start (e.g. does not fit); arm-b serves one step, then its process is gone
+        def __init__(self, cfg, port, log_path, gpu_uuid):
+            self.cfg, self.log_path = cfg, log_path
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text("stand-in log\nCUDA out of memory\n")
+            self.fake = None
+
+        def start(self):
+            if self.cfg.name == "arm-a":
+                raise RuntimeError("vLLM exited with 1")
+            self.fake = FakeVllm(MistralRenderer(TEKKEN), served_model=self.cfg.name, delay_s=0.05).__enter__()
+            self.base_url = self.fake.base_url
+            self.proc = SimpleNamespace(poll=lambda: -9, returncode=-9)
+            return {"load_s": 1}
+
+        def stop(self):
+            if self.fake:
+                self.fake.__exit__(None, None, None)
+            return -9
+
+    monkeypatch.setattr(pilot, "VllmServer", StandIn)
+    monkeypatch.setattr(pilot, "gpu_index_for", lambda uuid: 0)
+    monkeypatch.setattr(pilot, "gpu_busy", lambda i: 0)
+    monkeypatch.setattr(pilot, "make_measurement", lambda *a: None)
+    monkeypatch.setattr(telemetry, "MetricsPoller", lambda *a, **k: None)
+    monkeypatch.setattr(engine_check, "run_checks", lambda *a: {"ok": True, "forced_decoding": {"ok": True}})
+    monkeypatch.setattr(pilot.subprocess, "check_output", lambda args, **k: "c0" if "rev-parse" in args else "")
+    cfg = lambda n: dict(name=n, model=f"/nonexistent/{n}", revision="fixture", weight_precision="int4",
+                         activation_precision="bf16", max_model_len=32768)
+    steps = [{"idle": dict(name="idle1", seconds=0.1, est_s=1)},
+             {"live": dict(name="n1", admission_limit=1, task_ids=["business-segments-v2-n64-s7"], est_s=60)}]
+    plan = dict(gpu_uuid="GPU-x", allocation="fixture", isolation="fixture", block_seed=1,
+                configs=[cfg("arm-a"), cfg("arm-b")], blocks={"arm-a": dict(steps=steps), "arm-b": dict(steps=steps)},
+                tekken={"arm-a": TEKKEN, "arm-b": TEKKEN}, task_specs=[dict(kind="business", rows=64, seed=7)],
+                limits=dict(max_turns=3, max_tool_calls=10, max_total_output_tokens=2048, max_tokens=256, deadline_s=60,
+                            verify_timeout_s=120),
+                sampling=dict(mode="sampled", temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0),
+                load_est_s=1, export_reserve_s=0)
+    (tmp_path / "plan.json").write_text(json.dumps(plan))
+    out = tmp_path / "out"
+    pilot.main(["--plan", str(tmp_path / "plan.json"), "--out", str(out), "--budget-s", "3600",
+                "--cutoff-utc", "2099-01-01T00:00:00Z"])
+    ev = [json.loads(l) for l in (out / "driver-events.jsonl").read_text().splitlines()]
+    failed = [e for e in ev if e["kind"] == "server_start_failed"]
+    died = [e for e in ev if e["kind"] == "server_died"]
+    assert [e["config"] for e in failed] == ["arm-a"] and failed[0]["outcome"] == "configuration"
+    assert "CUDA out of memory" in failed[0]["log_tail"]
+    assert [(e["config"], e["step"]) for e in died] == [("arm-b", "arm-b-idle1")]
+    assert any(e["kind"] == "step_skipped" and e["step"] == "arm-b-n1" and "configuration outcome" in e["reason"] for e in ev)
+    assert any(e["kind"] == "driver_end" for e in ev) and records.verify_manifest(out) == []

@@ -62,10 +62,23 @@ def make_measurement(gpu_index: int, revision: str, allocation: str, isolation: 
 
 def _order(configs, ps, seed, log, pass_index):
     names = [c.name for c in configs]
+    if ps.get("order"):  # planner-assigned (balanced rotation across rounds)
+        if sorted(ps["order"]) != sorted(ps["blocks"]):
+            raise ValueError(f"pass {pass_index} order {ps['order']} does not match its blocks")
+        order = [names.index(n) for n in ps["order"]]
+        log.append("block_order", order=list(ps["order"]), seed=None, pass_index=pass_index, assigned=True)
+        return order
     order = [i for i in range(len(configs)) if names[i] in ps["blocks"]]
     random.Random(seed).shuffle(order)
     log.append("block_order", order=[names[i] for i in order], seed=seed, pass_index=pass_index)
     return order
+
+
+def _tail(path: Path, n: int = 40) -> list:
+    try:
+        return path.read_text(errors="replace").splitlines()[-n:]
+    except OSError:
+        return []
 
 
 def main(argv=None):
@@ -75,9 +88,12 @@ def main(argv=None):
     ap.add_argument("--budget-s", type=float, required=True)
     ap.add_argument("--cutoff-utc", required=True)
     ap.add_argument("--retry-of", help="output directory of the interrupted run this one replaces")
+    ap.add_argument("--retry-reason", help="required with --retry-of: the infrastructure cause (e.g. 'infra: ssh lost')")
     ap.add_argument("--fixture-server", action="store_true", help="tests only: no vLLM, no counters")
     a = ap.parse_args(argv)
     plan = json.loads(a.plan.read_text())
+    if a.retry_of and not (a.retry_reason or "").startswith("infra:"):
+        raise SystemExit("--retry-of needs --retry-reason 'infra: <cause>'; configuration failures are outcomes, not retried")
     out = a.out
     out.mkdir(parents=True, exist_ok=False)
     (out / "plan.json").write_text(json.dumps(plan, indent=1))
@@ -87,7 +103,8 @@ def main(argv=None):
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
     log.append("driver_start", revision=revision, dirty=bool(dirty), budget_s=a.budget_s, cutoff_utc=a.cutoff_utc,
-               retry_of=a.retry_of, campaign=plan.get("campaign"))
+               retry_of=a.retry_of, retry_reason=a.retry_reason, campaign=plan.get("campaign"),
+               energy_metric=(plan.get("binding") or {}).get("energy_metric", "cpu_package+gpu_board"))
     if dirty and not a.fixture_server:
         raise SystemExit("refusing to measure from a dirty checkout")
 
@@ -128,9 +145,14 @@ def main(argv=None):
             gidx = gpu_index_for(gpu_uuid)
             if gpu_busy(gidx):
                 raise SystemExit(f"GPU {gpu_uuid} already has compute processes")
-            server = VllmServer(cfg, port=plan.get("port", 8100), log_path=out / "servers" / f"{cfg.name}.log",
+            server = VllmServer(cfg, port=plan.get("port", 8100), log_path=out / "servers" / f"{cfg.name}-p{pass_index}.log",
                                 gpu_uuid=gpu_uuid)
-            started = server.start()
+            try:
+                started = server.start()
+            except Exception as exc:  # e.g. the configuration does not fit: an outcome of that configuration
+                log.append("server_start_failed", config=cfg.name, pass_index=pass_index, outcome="configuration",
+                           error=f"{type(exc).__name__}: {exc}", log_tail=_tail(server.log_path))
+                continue
             base_url = server.base_url
         log.append("server_started", config=cfg.to_dict(), started=started)
         checks = {"ok": True, "fixture": True}
@@ -141,6 +163,7 @@ def main(argv=None):
             prompt = r.encode([dict(role="user", content="Engine check: count from one to twenty.")], [])
             checks = run_checks(base_url, cfg.name, prompt, r.inner.encode(" one two three four five", bos=False, eos=False))
         log.append("engine_check", config=cfg.name, **checks)
+        server_dead = False
         try:
             for step in block["steps"]:
                 kind, s = next(iter(step.items()))
@@ -197,12 +220,24 @@ def main(argv=None):
                 else:
                     raise ValueError(f"unknown step kind {kind}")
                 took = time.monotonic() - t0
+                server_dead = (not a.fixture_server) and server.proc.poll() is not None
+                if server_dead:
+                    log.append("server_died", config=cfg.name, step=name, returncode=server.proc.returncode,
+                               outcome="configuration", log_tail=_tail(server.log_path))
                 measured[s["name"]] = max(measured.get(s["name"], 0), took)
                 log.append("step_done", step=name, step_kind=kind, seconds=round(took, 1))
                 results.append(dict(step=name, kind=kind, pass_index=pass_index, seconds=round(took, 1),
                                     **{k: res.get(k) for k in ("outcomes", "verified_pass", "joules_per_verified_success",
                                                                "interval_s", "mismatched_turns", "failed", "source") if k in res},
-                                    energy_j=(res.get("energy") or {}).get("cpu_plus_gpu_j")))
+                                    energy_j=(res.get("energy") or {}).get("cpu_plus_gpu_j"),
+                                    gpu_board_j=(res.get("energy") or {}).get("gpu_board_j"),
+                                    server_died=server_dead))
+                if server_dead:
+                    break  # remaining steps of this block are not run on a dead server (recorded below)
+            if server_dead:
+                for rest in block["steps"][block["steps"].index(step) + 1:]:
+                    log.append("step_skipped", step=f"{cfg.name}-{next(iter(rest.values()))['name']}",
+                               reason="server died during this block (configuration outcome)")
         finally:
             if a.fixture_server:
                 server.__exit__(None, None, None)

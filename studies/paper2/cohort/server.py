@@ -103,6 +103,16 @@ def parse_startup_log(text: str) -> dict:
     return out
 
 
+def checkpoint_quantization(model: str) -> dict:
+    """What the checkpoint itself declares (dtype + quantization_config, e.g. weights/input_activations/kv)."""
+    p = Path(model) / "config.json"
+    if not p.exists():
+        return {"config": "not local"}
+    c = json.loads(p.read_text())
+    return {"torch_dtype": c.get("torch_dtype") or (c.get("text_config") or {}).get("torch_dtype"),
+            "quantization_config": c.get("quantization_config"), "config_sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+
+
 @dataclass
 class VllmServer:
     cfg: ServerConfig
@@ -151,7 +161,8 @@ class VllmServer:
             self.stop()
             raise
         self.started = {"load_s": round(time.time() - t0, 1), "pid": self.proc.pid,
-                        "served": served, **parse_startup_log(self.log_path.read_text(errors="replace"))}
+                        "served": served, "checkpoint": checkpoint_quantization(self.cfg.model),
+                        **parse_startup_log(self.log_path.read_text(errors="replace"))}
         return self.started
 
     def stop(self, grace_s: float = 60) -> Optional[int]:

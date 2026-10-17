@@ -63,17 +63,21 @@ nohup ../venv/bin/python -m studies.paper2.cohort.pilot --plan ~/paper2/pilot-pl
 
 ## Multi-node campaign
 
-Each node runs **every** precision configuration on its own GPU; nodes split the matrix by cell
-repeats, never by precision. Results from different GPU models are separate blocks. A round is one
-driver run: pass 0 runs the round's live cohorts on every configuration, pass 1 replays those
-traces (diagonal and crossed) on every configuration. Durations come only from measured pilot
-runs; the planner stops on any unmeasured cell or on an evaluation cell that reuses pilot task ids.
+Each node runs **every** precision configuration on its own GPU. Each GPU class gets its own full
+set of repeats and needs its own pilot; repeats are split only among nodes of the same class, never
+by precision and never across classes. A round is one driver run: pass 0 runs the round's live
+cohorts on every configuration, pass 1 replays those traces (diagonal and crossed) on every
+configuration; block order rotates across a node's rounds. Durations come only from pilot runs on
+the same GPU class; the planner stops on a class without a pilot, an unmeasured cell, or an
+evaluation cell that reuses pilot task ids. Task selection, success criteria, time limits and the
+configuration-selection rule are fixed in the matrix before any evaluation round runs.
 
 Coordinator (after the pilot, at the frozen commit):
 
 ```bash
 python -m studies.paper2.cohort.campaign shard --base-plan ~/paper2/pilot-plan.json --matrix matrix.json \
-    --pilot ~/paper2/pilot-<date> --nodes nodes.json --out campaign-<id>   # exit 2 = a node's shard does not fit
+    --pilot A100-SXM4-80GB=~/paper2/pilot-<date> [--pilot H100=...] --nodes nodes.json \
+    --out campaign-<id>                                                   # exit 2 = a node's shard does not fit
 # hand each node operator: campaign-<id>/ (whole directory) and the commit in campaign-manifest.json
 ```
 
@@ -93,19 +97,25 @@ cd ~/paper2/repo
 nohup bash studies/paper2/cohort/node/run_campaign.sh ~/paper2/bound <lease-end-utc> > ~/paper2/campaign.log 2>&1 &
 ```
 
-`bind` refuses a node without exactly one GPU of the shard's class or without an advancing GPU
-energy counter, and records a warning when CPU-package counters are unreadable (GPU-board energy
-only, e.g. in a VM). `run_campaign.sh` is resumable: finished rounds are skipped, an interrupted
-round reruns into a new directory linked by `--retry-of`. Nothing else may run on the node while
-it works. Copy `~/paper2/campaign-results/` off the node before the lease ends; the coordinator checks
+`bind` refuses a node without exactly one GPU of the shard's class or without an advancing NVML
+energy counter. Results carry the energy metric the node can measure and attribute:
+`cpu_package+gpu_board` where CPU-package counters are readable, otherwise `gpu_board`; neither is
+whole-machine energy, and different metrics are never pooled. `run_campaign.sh` skips finished
+rounds. An interrupted round (lost node, ssh, lease) is rerun only with
+`RETRY_REASON='infra: <cause>'`, into a new directory linked by `--retry-of`; the interrupted one
+is kept. A server that fails to start or dies, out-of-memory, timeouts and failed tasks are
+outcomes of the configuration: they are recorded in the round (`server_start_failed`,
+`server_died`, session outcomes) and never rerun. Nothing else may run on the node while it works. Copy `~/paper2/campaign-results/` off the node before the lease ends; the coordinator checks
 every copy with
 
 ```bash
 python -m studies.paper2.cohort.campaign collect --campaign campaign-<id> --results <copied round dirs...> --out coverage.json
 ```
 
-which verifies each round's checksums, plan hash and commit, and reports rounds as ok / partial /
-incomplete / conflict / missing.
+which checks each round against its recorded checksums, plan hash and commit, lists
+configuration failures and retries with their reasons, and reports rounds as ok / partial /
+incomplete / conflict / missing. Checksums establish integrity against the recorded manifests,
+not that the experiment was correct.
 
 ## Records (per cohort)
 
