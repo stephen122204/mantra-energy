@@ -127,6 +127,21 @@ def checkpoint_quantization(model: str) -> dict:
             "quantization_config": c.get("quantization_config"), "config_sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
 
 
+def validate_model_rope(model: str) -> None:
+    """Reject configuration-library drift before vLLM can apply a silent default."""
+    path = Path(model) / "config.json"
+    if not path.exists():
+        return
+    expected = json.loads(path.read_text()).get("rope_theta")
+    if expected is None:
+        return
+    from transformers import AutoConfig
+    actual = getattr(AutoConfig.from_pretrained(model), "rope_theta", None)
+    if actual != expected:
+        raise ValueError(f"vLLM 0.10.2 requires config.rope_theta={expected}, got {actual}; "
+                         "use the pinned Transformers version before running")
+
+
 @dataclass
 class VllmServer:
     cfg: ServerConfig
@@ -142,6 +157,7 @@ class VllmServer:
         return f"http://127.0.0.1:{self.port}"
 
     def start(self, timeout_s: float = 1800) -> dict:
+        validate_model_rope(self.cfg.model)
         env = dict(os.environ)
         env["PYTHONPATH"] = f"{REPO_ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}"
         if self.gpu_uuid:
