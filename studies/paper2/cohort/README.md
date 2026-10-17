@@ -98,9 +98,10 @@ cd ~/paper2/repo
 nohup bash studies/paper2/cohort/node/run_campaign.sh ~/paper2/bound <lease-end-utc> > ~/paper2/campaign.log 2>&1 &
 ```
 
-`bind` refuses a node without exactly one GPU of the shard's class or without an advancing NVML
-energy counter. Results carry the energy metric the node can measure and attribute:
-`cpu_package+gpu_board` where CPU-package counters are readable, otherwise `gpu_board`; neither is
+`bind` requires one selected GPU of the shard's class with its own advancing NVML energy counter
+(use `--gpu-uuid` to select on multi-GPU nodes). The default campaign requires readable, advancing
+CPU-package counters on every socket plus GPU-board energy. GPU-only measurements are admitted
+only when the frozen matrix explicitly sets `energy_metric: gpu_board`. Neither metric is
 whole-machine energy, and different metrics are never pooled. `run_campaign.sh` skips finished
 rounds. An interrupted round (lost node, ssh, lease) is rerun only with
 `RETRY_REASON='infra: <cause>'`, into a new directory linked by `--retry-of`; the interrupted one
@@ -116,19 +117,21 @@ python -m studies.paper2.cohort.campaign collect --campaign campaign-<id> --resu
 which checks each round against its recorded checksums, plan hash and commit, lists
 configuration failures and retries with their reasons, and reports rounds as ok / partial /
 incomplete / conflict / missing. Checksums establish integrity against the recorded manifests,
-not that the experiment was correct.
+not that the experiment was correct. Collection exits with code 2 unless a nonempty campaign has
+every round complete and valid, with no stray results. Configuration failures remain recorded
+outcomes, but do not by themselves establish a complete set of measurements.
 
 ## Launch gates (main campaign)
 
 | gate | enforced by |
 |---|---|
 | node: advancing counters for every CPU package and the GPU, Landlock ABI 4 sandbox, idle GPU | `campaign bind` (GPU-only energy only if the matrix sets `energy_metric: gpu_board`) |
-| same workload across agent counts | `shard`: live cells sharing `sweep` must have identical task ids, order, seeds, mode |
+| same workload across agent counts | `shard`: live cells sharing `sweep` must have identical task ids, order, seeds, mode, arrival schedule, deadline and repeat count |
 | measured durations per configuration, full block-order rotation | `shard` (opt-outs: `allow_borrowed_estimates`, `allow_unbalanced_order`) |
 | frozen task instances | matrix `frozen_catalog` (+ `prepared_assets`): every round checks asset hashes before running |
 | cold prefix cache per cohort | driver: probe cached, `POST /reset_prefix_cache`, probe must report 0 cached tokens (`cache_reset` event); `cache_start: warm` opts out |
-| interval closes after engine drain; no leftover task containers | `run_cohort`: `drained` event, `container_cleanup` after SWE-bench cohorts |
-| SWE-bench controls | `qualify`: gold resolves and the no-op patch fails with valid harness reports; catalogues need `qualification.json` |
+| interval closes after engine drain; no leftover task containers | live and replay require explicit zero running/waiting metrics; failed drain or container cleanup stops the driver before another measurement |
+| SWE-bench controls | `qualify`: gold resolves and the no-op patch fails with valid harness reports; admission requires both control results and `controls_valid` in `qualification.json`; regenerate older qualification files |
 | completeness | `collect`: expected vs completed cells; `complete`, `complete_with_configuration_outcomes`, `partial`, `invalid`, `incomplete`, `conflict`, `missing`; `analysable` only when every round is complete |
 | engine | after every server start: long-context answer, exact agent request, forced decoding, batching, prefix cache |
 
@@ -149,3 +152,10 @@ outcome paths, arrivals queueing, cohort cancellation, verification after the in
 prompt reconstruction and forced outputs, gap/wrap/reset handling, manifest tampering, SWE-bench
 container lifecycle and harness report parsing, pilot driver. Linux-only isolation tests
 (`test_sandbox_linux.py`, Linux cases of `test_repo_verification_boundary.py`) must run on the node.
+
+`tests/test_paper2_acceptance.py` checks missing telemetry, incomplete qualification evidence,
+malformed harness reports, invalid energy, verifier failures, crossed-replay fidelity, server
+drain inside replay measurement, and incomplete campaign coverage. Stream, GPU-selection and
+model-configuration regressions live in the corresponding `test_paper2_*` files. Local fixture
+passes do not replace node qualification, real-server engine checks, or SWE-bench Docker controls
+at the final campaign commit.

@@ -325,7 +325,7 @@ def _campaign_inputs(tmp_path):
 
 def _node_report(uuid="GPU-x", cpu=True, sandbox=True, busy=0):
     return dict(host="fixture-host", cpu=dict(sockets=2, model="fixture CPU"), memory_gib=503,
-                gpus=dict(driver="fixture", devices=[dict(name="NVIDIA A100-SXM4-80GB", uuid=uuid, compute_procs=busy)]),
+                gpus=dict(driver="fixture", devices=[dict(name="NVIDIA A100-SXM4-80GB", uuid=uuid, compute_procs=busy, energy_counter=dict(advancing=True))]),
                 verdict=dict(gpu_energy_counter=True, cpu_package_counters=cpu, task_sandbox_landlock_abi4=sandbox))
 
 
@@ -581,7 +581,8 @@ def test_collect_never_calls_failed_or_missing_rounds_complete(tmp_path):
         (d / "driver-events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in [start] + events + [dict(kind="driver_end")]))
         records.write_manifest(d)
         return d
-    failed = run_dir("all-failed", [dict(kind="server_start_failed", config=c["name"], error="OOM") for c in plan["configs"]])
+    failed = run_dir("all-failed", [dict(kind="server_start_failed", config=c, pass_index=i, error="OOM")
+                                  for i, ps in enumerate(plan["passes"]) for c in ps["blocks"]])
     cov = campaign.collect(manifest, [failed])
     assert cov["rounds"][0]["status"] == "complete_with_configuration_outcomes"
     assert cov["rounds"][0]["runs"][0]["completed"] == 0

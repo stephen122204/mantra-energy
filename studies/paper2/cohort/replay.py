@@ -12,7 +12,6 @@ about whether the executing precision would have produced that work or succeeded
 """
 from __future__ import annotations
 
-import http.client
 import json
 import threading
 import time
@@ -73,34 +72,17 @@ class _Client:
         payload = dict(model=self.model, prompt=prompt_ids, max_tokens=len(output_ids), temperature=0.0,
                        ignore_eos=True, stream=True, stream_options=dict(include_usage=True), return_token_ids=True,
                        vllm_xargs=dict(forced_tokens=encode_forced(output_ids)))
-        conn = http.client.HTTPConnection(self.u.hostname, self.u.port, timeout=timeout)
+        from .client import stream_completion
         t_submit = time.monotonic_ns()
-        first, ids, usage = None, [], {}
-        try:
-            conn.request("POST", "/v1/completions", body=json.dumps(payload), headers={"Content-Type": "application/json"})
-            r = conn.getresponse()
-            if r.status != 200:
-                raise RuntimeError(f"HTTP {r.status}: {r.read()[:300]!r}")
-            for raw in r:
-                line = raw.decode("utf-8", "replace").strip()
-                if not line.startswith("data:") or line[5:].strip() == "[DONE]":
-                    continue
-                chunk = json.loads(line[5:])
-                usage = chunk.get("usage") or usage
-                for ch in chunk.get("choices") or []:
-                    got = ch.get("token_ids") or []
-                    if got and first is None:
-                        first = time.monotonic_ns()
-                    ids.extend(got)
-        finally:
-            conn.close()
+        first, ids, _, usage, _ = stream_completion(self.u.hostname, self.u.port, payload, timeout)
         return dict(t_submit_ns=t_submit, t_first_ns=first, t_done_ns=time.monotonic_ns(), output_ids_match=ids == list(output_ids),
                     completion_tokens=len(ids), cached_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
                     prompt_tokens=usage.get("prompt_tokens"))
 
 
 def run_replay(cohort_id: str, sessions: list, base_url: str, served_model: str, out_root: Path, *, admission_limit: int,
-               measurement=None, poller=None, delay_scale: float = 1.0, labels: Optional[dict] = None) -> dict:
+               measurement=None, poller=None, delay_scale: float = 1.0, labels: Optional[dict] = None,
+               drain_timeout_s: float = 120.0) -> dict:
     """Closed-loop replay cohort; same admission semantics as the live fixed mode."""
     root = Path(out_root) / cohort_id
     root.mkdir(parents=True, exist_ok=False)
@@ -143,6 +125,9 @@ def run_replay(cohort_id: str, sessions: list, base_url: str, served_model: str,
         for th in threads:
             th.join()
     finally:
+        from .guards import wait_drained
+        drain = wait_drained(base_url, timeout_s=drain_timeout_s)
+        events.append("drained", **drain)
         t1 = time.monotonic()
         artifacts = measurement.finish_goal() if measurement else None
         if poller:
@@ -153,7 +138,7 @@ def run_replay(cohort_id: str, sessions: list, base_url: str, served_model: str,
         energy = cohort_energy_summary(artifacts)
         (root / "measurement.json").write_text(json.dumps(artifacts.to_dict(), default=str))
     (root / "replay-results.json").write_text(json.dumps(results, indent=1))
-    summary = dict(cohort_id=cohort_id, interval_s=round(t1 - t0, 3), energy=energy, sessions=len(sessions),
+    summary = dict(cohort_id=cohort_id, interval_s=round(t1 - t0, 3), energy=energy, sessions=len(sessions), drain=drain,
                    failed=sum(1 for r in results.values() if r["error"]),
                    mismatched_turns=sum(1 for r in results.values() for t in r["turns"] if not t["output_ids_match"]),
                    prompt_tokens=sum((t.get("prompt_tokens") or 0) for r in results.values() for t in r["turns"]),
