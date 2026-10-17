@@ -209,3 +209,63 @@ def test_pilot_driver_fixture_end_to_end(tmp_path):
     res = json.loads((out / "pilot-results.json").read_text())
     assert all(r.get("mismatched_turns", 0) == 0 for r in res if r["kind"] == "replay")
     assert records.verify_manifest(out) == []
+
+
+FAKE_DOCKER = r'''#!/bin/sh
+# fixture docker: logs argv; "exec ... git diff" prints a patch; "exec ... bash -c CMD" echoes CMD
+echo "$@" >> "$FAKE_DOCKER_LOG"
+case "$*" in
+  "image inspect --format"*) echo sha256:fixture ;;
+  "image inspect"*) exit 1 ;;
+  *"git diff --cached"*) printf 'diff --git a/x.py b/x.py\n+fixed\n' ;;
+  *"exec"*) echo "ran: $*" ;;
+  run*) echo cid123 ;;
+esac
+'''
+
+
+def test_swebench_runtime_container_lifecycle_and_schema(tmp_path, monkeypatch):
+    pytest.importorskip("cloudpickle")
+    from studies.paper2.cohort import swebench_workload as sw
+    docker = tmp_path / "docker"
+    docker.write_text(FAKE_DOCKER)
+    docker.chmod(0o755)
+    log = tmp_path / "docker.log"
+    monkeypatch.setenv("FAKE_DOCKER_LOG", str(log))
+    row = dict(instance_id="astropy__astropy-12907", repo="astropy/astropy", base_commit="d16bfe05a744909de4b27f5875fe0d4ed41ce607",
+               problem_statement="Separability matrix wrong for nested models", difficulty="15 min - 1 hour")
+    cat = sw.prepare_instances([row], tmp_path / "prep", docker=str(docker))
+    calls = log.read_text()
+    assert "--network none" in calls and "git update-ref -d" in calls and "commit" in calls
+    assert sw.official_image(row["instance_id"]) == "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest"
+    import cloudpickle
+    from types import SimpleNamespace
+    task = cloudpickle.loads(Path(cat[0]["task_pickle"]).read_bytes())
+    assert "Separability" in task.prompt and "/testbed" in task.prompt
+    assert not any(k in json.loads((task.asset_path / "instance.json").read_text()) for k in ("patch", "test_patch", "FAIL_TO_PASS"))
+    rt = sw.SweBenchRuntime(tmp_path / "sess", docker=str(docker))
+    rt.begin(task, SimpleNamespace(execution_id="s1"))
+    assert set(rt.context(task)["tools"]) == {"bash"}
+    with pytest.raises(ValueError):
+        rt.tool(task, dict(tool="bash", args=dict(command="ls", extra=1)))
+    out = rt.tool(task, dict(tool="bash", args=dict(command="ls -la"))).execute()
+    assert out["exit_code"] == 0 and "ls -la" in out["output"]
+    patch = rt.finalize(task)
+    assert patch.read_text().startswith("diff --git") and "rm -f p2-s1" in log.read_text()
+    assert rt.container is None
+
+
+def test_swebench_evaluate_parses_harness_report_and_rejects_empty(tmp_path):
+    from studies.paper2.cohort import swebench_workload as sw
+    assert sw.evaluate_patch("a__b-1", "  ", tmp_path / "e0")["passed"] is False
+
+    def fake_run(argv, timeout, cwd=None):
+        rid = argv[argv.index("--run_id") + 1]
+        d = Path(cwd) / "logs" / "run_evaluation" / rid / "paper2" / "a__b-1"
+        d.mkdir(parents=True)
+        (d / "report.json").write_text(json.dumps({"a__b-1": {"resolved": True, "tests_status": {}}}))
+        return 0, "", ""
+    res = sw.evaluate_patch("a__b-1", "diff --git a/x b/x\n", tmp_path / "e1", run=fake_run)
+    assert res["passed"] is True
+    res = sw.evaluate_patch("a__b-1", "diff --git a/x b/x\n", tmp_path / "e2", run=lambda a, t, cwd=None: (1, "", "boom"))
+    assert res["passed"] is False and res["infrastructure"] is True
