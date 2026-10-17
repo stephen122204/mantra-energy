@@ -14,12 +14,18 @@ cd "$W"
 export PATH="$HOME/.local/bin:$PATH"
 
 # 1. repository at the exact tested commit
-git bundle verify -q "$BUNDLE"
 if [ ! -d repo/.git ]; then git clone -q "$BUNDLE" repo; fi
+git -C repo bundle verify -q "$BUNDLE"   # older git needs a repository to verify a bundle
 git -C repo fetch -q "$BUNDLE" "+refs/heads/*:refs/remotes/bundle/*"
 git -C repo checkout -q --detach "$COMMIT"
 test -z "$(git -C repo status --porcelain)"
 git -C repo rev-parse HEAD > manifests/repo-commit.txt
+
+# 1b. CPU-package energy counters: root-only by default on CC images; make them readable (lost on reboot)
+if ls /sys/class/powercap/intel-rapl:*/energy_uj >/dev/null 2>&1; then
+  sudo -n chmod a+r /sys/class/powercap/intel-rapl:*/energy_uj /sys/class/powercap/intel-rapl:*:*/energy_uj 2>/dev/null || true
+  for f in /sys/class/powercap/intel-rapl:*/energy_uj; do printf '%s %s\n' "$f" "$(cat "$f" 2>&1)"; done > manifests/rapl-readable.txt
+fi
 
 # 2. Python 3.11 environment
 command -v uv >/dev/null || python3 -m pip install -q --user uv
