@@ -158,6 +158,12 @@ def test_arrivals_queue_and_cohort_deadline_cancel(prepared, tmp_path):
         s = run_cohort(_spec(prepared, ids, srv, cohort_id="c-cut", admission_limit=1, cohort_deadline_s=2.0), tmp_path)
     assert s["reconciliation"]["reconciled"]
     assert s["outcomes"].get("cancelled", 0) == 3
+    # several sessions running at the deadline: those that exit from SIGTERM before they are polled are
+    # still cancellations, never infrastructure failures that invalidate the cohort
+    with FakeVllm(r, delay_s=30) as srv:
+        s = run_cohort(_spec(prepared, ids, srv, cohort_id="c-cut-many", admission_limit=3, cohort_deadline_s=2.0),
+                       tmp_path)
+    assert s["outcomes"] == {"cancelled": 3} and not s["infra_invalid"]
 
 
 @needs_renderer
@@ -626,3 +632,24 @@ def test_frozen_task_assets_are_enforced(tmp_path):
     with pytest.raises(SystemExit, match="differ from the frozen catalogue"):
         pilot.main(["--plan", str(tmp_path / "plan.json"), "--out", str(tmp_path / "out"), "--budget-s", "600",
                     "--cutoff-utc", "2099-01-01T00:00:00Z", "--fixture-server"])
+
+
+def test_sweep_plan_varies_only_admission_and_rotates_blocks(tmp_path):
+    from collections import Counter
+    from studies.paper2.cohort.make_plan import SWEEP_N, build_sweep, sweep_bound_s
+    plan = build_sweep(tmp_path, "GPU-x", "lease", 7505, repeat_n=(4, 16), repeats=2)
+    names = [c["name"] for c in plan["configs"]]
+    lives = []
+    for ps in plan["passes"]:
+        assert ps["atomic"] and sorted(ps["order"]) == sorted(names)
+        orders = {json.dumps(b["steps"]) for b in ps["blocks"].values()}
+        assert len(orders) == 1, "every precision runs the same steps in the same order within a round"
+        lives += [s["live"] for s in next(iter(ps["blocks"].values()))["steps"] if "live" in s]
+    assert Counter(ps["order"][0] for ps in plan["passes"]) == Counter(names), "each precision first once"
+    assert len({(l["name"]) for l in lives}) == len(lives), "cohort directories never collide across rounds"
+    assert {l["admission_limit"] for l in lives if l["round"] == 0} == set(SWEEP_N)
+    assert len({(tuple(l["task_ids"]), l["seed"], l["mode"], l["cohort_deadline_s"]) for l in lives}) == 1
+    assert len(lives[0]["task_ids"]) == 23
+    for l in lives:
+        assert l["est_s"] >= sweep_bound_s(l["admission_limit"], 7505, plan["limits"]["deadline_s"])
+        assert l["cohort_deadline_s"] >= l["est_s"] - plan["sweep"]["grading_s"]
