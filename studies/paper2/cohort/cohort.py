@@ -87,6 +87,7 @@ class _Session:
         self.proc: Optional[subprocess.Popen] = None
         self.offered = self.admitted = self.ended = None
         self.outcome: Optional[str] = None
+        self.stopped: Optional[str] = None  # outcome we imposed by signalling the session (deadline / cancel)
 
     def start(self, python: str, session_cpus: Optional[str]):
         cmd = [python, "-m", "studies.paper2.cohort.session", "--spec", str(self.spec_path)]
@@ -150,6 +151,7 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
             if now >= spec.cohort_deadline_s and not cohort_cancelled:
                 cohort_cancelled = True
                 for s in running:
+                    s.stopped = "cancelled"
                     s.kill()
             while waiting and len(running) < spec.admission_limit and not cohort_cancelled:
                 s = waiting.pop(0)
@@ -172,27 +174,27 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
                 pending.clear()
             for s in list(running):
                 age = clock() - t0 - s.admitted
-                forced = None
                 if s.proc.poll() is None:
                     if age > spec.limits["deadline_s"] + spec.grace_s:
+                        s.stopped = "timed_out"
                         s.kill()
                         try:
                             s.proc.wait(timeout=15)
                         except subprocess.TimeoutExpired:
                             s.kill(signal.SIGKILL)
                             s.proc.wait(timeout=15)
-                        forced = "timed_out"
                     elif cohort_cancelled and age > 0:
                         try:
                             s.proc.wait(timeout=15)
                         except subprocess.TimeoutExpired:
                             s.kill(signal.SIGKILL)
                             s.proc.wait(timeout=15)
-                        forced = "cancelled"
                     else:
                         continue
                 s.ended = clock() - t0
-                s.outcome = s.finish(forced if forced else (None if s.proc.returncode == 0 else "infra_failed"))
+                # a session that exits from our signal before it is polled is still ours to label, not infra
+                forced = None if s.proc.returncode == 0 else (s.stopped or "infra_failed")
+                s.outcome = s.finish(forced)
                 s.log.close()
                 running.remove(s)
                 done.append(s)
