@@ -653,3 +653,17 @@ def test_sweep_plan_varies_only_admission_and_rotates_blocks(tmp_path):
     for l in lives:
         assert l["est_s"] >= sweep_bound_s(l["admission_limit"], 7505, plan["limits"]["deadline_s"])
         assert l["cohort_deadline_s"] >= l["est_s"] - plan["sweep"]["grading_s"]
+
+
+def test_sweep_plan_pins_a_frozen_preparation(tmp_path):
+    from studies.paper2.cohort.make_plan import build_sweep, task_ids
+    prep = tmp_path / "prep"
+    (prep / "assets").mkdir(parents=True)
+    rows = [dict(task_id=t, asset_sha256=f"h-{t}") for t in task_ids()["all"]]
+    (prep / "catalog.json").write_text(json.dumps(rows))
+    plan = build_sweep(tmp_path, "GPU-x", "lease", 7505, frozen_prep=prep)
+    assert plan["prepared_assets"] == str((prep / "assets").resolve())
+    assert plan["expected_tasks"] == {r["task_id"]: r["asset_sha256"] for r in rows}
+    (prep / "catalog.json").write_text(json.dumps(rows[1:]))
+    with pytest.raises(SystemExit, match="lacks"):
+        build_sweep(tmp_path, "GPU-x", "lease", 7505, frozen_prep=prep)

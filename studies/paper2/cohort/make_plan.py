@@ -13,7 +13,9 @@ N = 1, 2, 4, 8, 16; later rounds repeat the N given by ``--repeat-n`` to measure
 Each round is one atomic pass; block order rotates so each precision runs first equally often, and
 the N order inside a round is shuffled once (seeded) and shared by all precisions. ``S`` is the
 largest total per-session service time measured for this task set on this GPU class; step estimates
-use the list-scheduling bound S/N + session deadline, plus grading.
+use the list-scheduling bound S/N + session deadline, plus grading. ``--frozen-prep DIR`` pins every
+task to a reference preparation (DIR/assets, hashes from DIR/catalog.json): private grading seeds are
+drawn per preparation, so rounds and nodes are only paired when they share one snapshot.
 
 Tasks: the 23 C2 task definitions that need no external benchmark bundle (business, ETL,
 numerical, program, repository repair) as calibration instances. Evaluation instances are NOT
@@ -118,7 +120,7 @@ def sweep_bound_s(n: int, total_service_s: float, session_deadline_s: float, rou
 
 
 def build_sweep(work: Path, gpu_uuid: str, allocation: str, total_service_s: float, *, repeat_n=(4, 16),
-                repeats: int = 2, grading_s: int = 600, seed: int = 20261018) -> dict:
+                repeats: int = 2, grading_s: int = 600, seed: int = 20261018, frozen_prep: Path = None) -> dict:
     plan = build(work, gpu_uuid, allocation)
     ids = task_ids()["all"]
     names = [c["name"] for c in plan["configs"]]
@@ -144,6 +146,13 @@ def build_sweep(work: Path, gpu_uuid: str, allocation: str, total_service_s: flo
                 sweep=dict(levels=list(SWEEP_N), repeat_n=list(repeat_n), repeats=repeats, seed=seed,
                            total_service_s=total_service_s, grading_s=grading_s))
     plan.pop("extra_catalogs", None)
+    if frozen_prep:
+        have = {r["task_id"]: r["asset_sha256"] for r in json.loads((Path(frozen_prep) / "catalog.json").read_text())}
+        missing = sorted(set(ids) - set(have))
+        if missing:
+            raise SystemExit(f"{frozen_prep}: frozen preparation lacks {missing}")
+        plan.update(prepared_assets=str(Path(frozen_prep).resolve() / "assets"),
+                    expected_tasks={t: have[t] for t in sorted(ids)})
     return plan
 
 
@@ -158,12 +167,13 @@ def main(argv=None):
     ap.add_argument("--total-service-s", type=float, help="--sweep: largest measured total session service time")
     ap.add_argument("--repeat-n", type=int, nargs="+", default=[4, 16])
     ap.add_argument("--repeats", type=int, default=2)
+    ap.add_argument("--frozen-prep", type=Path, help="--sweep: reference preparation (catalog.json + assets/)")
     a = ap.parse_args(argv)
     if a.sweep:
         if not a.total_service_s:
             ap.error("--sweep needs --total-service-s from a pilot on this GPU class")
         plan = build_sweep(a.work.resolve(), a.gpu_uuid, a.allocation, a.total_service_s, repeat_n=a.repeat_n,
-                           repeats=a.repeats)
+                           repeats=a.repeats, frozen_prep=a.frozen_prep)
     else:
         plan = build(a.work.resolve(), a.gpu_uuid, a.allocation, a.swebench_catalog)
     a.out.write_text(json.dumps(plan, indent=1))
