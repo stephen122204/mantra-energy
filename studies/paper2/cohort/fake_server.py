@@ -28,6 +28,7 @@ class FakeVllm:
         self.prompt_tokens = self.generation_tokens = 0
         self.seen_prefixes: set = set()
         self.cached = 0
+        self.cache_queries = 0
         self.resets = 0
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.port = self.httpd.server_address[1]
@@ -55,6 +56,7 @@ class FakeVllm:
                     break
             for n in range(16, len(prompt) + 1, 16):
                 self.seen_prefixes.add(tuple(prompt[:n]))
+            self.cache_queries += len(prompt)
             self.prompt_tokens += len(prompt)
             self.generation_tokens += n_out
             self.cached += cached
@@ -85,8 +87,9 @@ class FakeVllm:
                 ids = (forced if forced is not None else server.answer_ids())[: body["max_tokens"]]
                 cached = server.cache_lookup(prompt, len(ids))
                 out = dict(choices=[dict(index=0, text="", token_ids=ids, finish_reason="length")],
-                           usage=dict(prompt_tokens=len(prompt), completion_tokens=len(ids),
-                                      prompt_tokens_details=dict(cached_tokens=cached)))
+                           usage=dict(prompt_tokens=len(prompt), completion_tokens=len(ids)))
+                if cached:
+                    out["usage"]["prompt_tokens_details"] = dict(cached_tokens=cached)
                 return self._send(200, json.dumps(out))
 
             def do_GET(self):
@@ -100,6 +103,7 @@ class FakeVllm:
                                 f"vllm:num_requests_waiting{{model_name=\"x\"}} 0\n"
                                 f"vllm:prompt_tokens_total{{model_name=\"x\"}} {server.prompt_tokens}\n"
                                 f"vllm:generation_tokens_total{{model_name=\"x\"}} {server.generation_tokens}\n"
+                                f"vllm:prefix_cache_queries_total{{model_name=\"x\"}} {server.cache_queries}\n"
                                 f"vllm:prefix_cache_hits_total{{model_name=\"x\"}} {server.cached}\n")
                     return self._send(200, text, "text/plain")
                 self._send(404, "")
@@ -156,8 +160,9 @@ class FakeVllm:
                         chunk = dict(choices=[dict(index=0, text="", token_ids=part,
                                                    finish_reason=("length" if len(ids) >= body["max_tokens"] else "stop") if last else None)])
                         self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
-                    usage = dict(prompt_tokens=len(prompt), completion_tokens=len(ids),
-                                 prompt_tokens_details=dict(cached_tokens=cached))
+                    usage = dict(prompt_tokens=len(prompt), completion_tokens=len(ids))
+                    if cached:
+                        usage["prompt_tokens_details"] = dict(cached_tokens=cached)
                     self.wfile.write(f"data: {json.dumps(dict(choices=[], usage=usage))}\n\n".encode())
                     self.wfile.write(b"data: [DONE]\n\n")
                 finally:

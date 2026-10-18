@@ -32,25 +32,96 @@ def _post(base_url: str, path: str, body=None, timeout: float = 120):
         return r.status, (json.loads(raw) if raw else None)
 
 
-def _cached(base_url: str, model: str, probe_ids: list) -> int:
-    _, out = _post(base_url, "/v1/completions", dict(model=model, prompt=probe_ids, max_tokens=1, temperature=0.0))
-    cached = ((out.get("usage") or {}).get("prompt_tokens_details") or {}).get("cached_tokens")
-    if not isinstance(cached, (int, float)) or isinstance(cached, bool) or not math.isfinite(cached) or cached < 0:
-        raise ValueError("missing or invalid cached-token telemetry")
-    return cached
+COUNTER_TIMEOUT_S = 10.0
+CACHE_BLOCK_SIZE = 16  # pinned vLLM configuration; do not infer this from usage omission
+CACHE_COUNTERS = ("vllm:prefix_cache_queries_total", "vllm:prefix_cache_hits_total")
+
+
+def _cache_counters(base_url):
+    metrics = parse_prometheus(fetch_metrics(base_url))
+    values = {k: metrics.get(k) for k in CACHE_COUNTERS}
+    if any(not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) or v < 0
+           for v in values.values()):
+        raise ValueError("missing or invalid prefix-cache counters")
+    return values
+
+
+def cache_probe(base_url: str, model: str, probe_ids: list, *, expected=None) -> dict:
+    """Prove an isolated lookup from cumulative counters, including servers omitting zero usage.
+
+    No other client may submit during the probe. A drained boundary plus an observed query
+    increment is required; missing usage alone never establishes a cold cache. Metrics may
+    lag responses, so wait boundedly for this lookup's query count to become visible.
+    """
+    rec = dict(ok=False, probe_tokens=len(probe_ids), full_block_tokens=len(probe_ids)//CACHE_BLOCK_SIZE*CACHE_BLOCK_SIZE,
+               cached_tokens=None, before=None, after=None, delta_q=None, delta_h=None)
+    try:
+        if rec["full_block_tokens"] < CACHE_BLOCK_SIZE:
+            raise ValueError("cache probe must contain at least one full block")
+        rec["drain_before"] = wait_drained(base_url)
+        if rec["drain_before"].get("drained") is not True:
+            raise ValueError("server not drained before cache probe")
+        before = rec["before"] = _cache_counters(base_url)
+        status, response = _post(base_url, "/v1/completions", dict(model=model, prompt=probe_ids, max_tokens=1, temperature=0.0))
+        if status != 200:
+            raise ValueError("cache probe request failed")
+        usage = ((response or {}).get("usage") or {}).get("prompt_tokens_details") or {}
+        cached = rec["cached_tokens"] = usage.get("cached_tokens")
+        if "cached_tokens" in usage and (not isinstance(cached, (int, float)) or isinstance(cached, bool)
+                                  or not math.isfinite(cached) or cached < 0):
+            raise ValueError("invalid cached-token usage")
+        rec["drain_after"] = wait_drained(base_url)
+        if rec["drain_after"].get("drained") is not True:
+            raise ValueError("server not drained after cache probe")
+        deadline = time.monotonic() + COUNTER_TIMEOUT_S
+        previous = before
+        while True:
+            after = rec["after"] = _cache_counters(base_url)
+            if any(after[k] < previous[k] for k in CACHE_COUNTERS):
+                raise ValueError("prefix-cache counter decreased")
+            previous = after
+            dq, dh = (after[k] - before[k] for k in CACHE_COUNTERS)
+            rec.update(delta_q=dq, delta_h=dh)
+            if dq >= rec["full_block_tokens"]:
+                break
+            if time.monotonic() >= deadline:
+                raise ValueError("prefix-cache counters did not prove the lookup")
+            time.sleep(0.1)
+        if dh > dq:
+            raise ValueError("cache hits exceed cache queries")
+        if cached is not None and cached != dh:
+            raise ValueError("cached-token usage disagrees with counter delta")
+        if expected == "warm" and dh < CACHE_BLOCK_SIZE:
+            raise ValueError("warm probe did not reuse a full cache block")
+        if expected == "cold" and dh != 0:
+            raise ValueError("cold probe reused cached tokens")
+        rec["ok"] = True
+    except Exception as exc:
+        rec["error"] = f"{type(exc).__name__}: {exc}"
+    return rec
 
 
 def verified_cache_reset(base_url: str, model: str, probe_ids: list) -> dict:
+    rec = dict(ok=False, probe_tokens=len(probe_ids), probes={})
     try:
-        _cached(base_url, model, probe_ids)
-        warm = _cached(base_url, model, probe_ids)
+        for name, expected in (("priming", None), ("warm", "warm"), ("cold", "cold")):
+            if name == "cold":
+                status, _ = _post(base_url, "/reset_prefix_cache")
+                rec["reset_status"] = status
+                if status != 200:
+                    raise ValueError("first cache reset failed")
+            probe = rec["probes"][name] = cache_probe(base_url, model, probe_ids, expected=expected)
+            if not probe["ok"]:
+                raise ValueError(f"{name}: {probe.get('error')}")
         status, _ = _post(base_url, "/reset_prefix_cache")
-        cold = _cached(base_url, model, probe_ids)
-        status2, _ = _post(base_url, "/reset_prefix_cache")
-        ok = status == 200 and status2 == 200 and warm >= 16 and cold == 0
-        return dict(ok=ok, probe_tokens=len(probe_ids), cached_before_reset=warm, cached_after_reset=cold)
+        rec["final_reset_status"] = status
+        if status != 200:
+            raise ValueError("final cache reset failed")
+        rec.update(ok=True, cached_before_reset=rec["probes"]["warm"]["delta_h"],
+                   cached_after_reset=rec["probes"]["cold"]["delta_h"])
     except Exception as exc:
-        return dict(ok=False, error=f"{type(exc).__name__}: {exc}")
+        rec["error"] = f"{type(exc).__name__}: {exc}"
+    return rec
 
 
 def wait_drained(base_url: str, timeout_s: float = 120.0, poll_s: float = 0.25) -> dict:
