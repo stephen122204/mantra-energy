@@ -25,6 +25,13 @@ def test_missing_cached_tokens_does_not_establish_cold_cache(monkeypatch):
                     (200, {'usage': {'prompt_tokens_details': {'cached_tokens': 64}}}),
                     (200, None), (200, {'usage': {}})])
     monkeypatch.setattr(guards, '_post', lambda *a, **k: next(results))
+    counters = iter([(0, 0), (64, 0), (64, 0), (128, 64), (128, 64), (128, 64)])
+    def metrics(_):
+        q, h = next(counters)
+        return f'vllm:prefix_cache_queries_total {q}\nvllm:prefix_cache_hits_total {h}\n'
+    monkeypatch.setattr(guards, 'wait_drained', lambda *a, **k: {'drained': True})
+    monkeypatch.setattr(guards, 'fetch_metrics', metrics)
+    monkeypatch.setattr(guards, 'COUNTER_TIMEOUT_S', 0)
     assert guards.verified_cache_reset('fixture', 'm', list(range(64)))['ok'] is False
 
 
