@@ -64,6 +64,24 @@ nohup ../venv/bin/python -m studies.paper2.cohort.pilot --plan ~/paper2/pilot-pl
 
 ## Multi-node campaign
 
+Before any measured run, validate the frozen plan with `pilot --dry-run` (the other required
+arguments, including budget and cutoff, still apply). This prepares tasks, checks their expected
+hashes and external qualification files, records every pass as skipped, and never starts a server
+or measurement, even with a large budget. Set `campaign.commit` to the approved execution commit.
+An insufficient budget alone is not the dry-run interface.
+
+SWE-bench admission reads `qualification.json` beside the catalogue named in `extra_catalogs`.
+When reusing a prepared catalogue with newer control results, copy both files into a new versioned
+directory, validate it with `pilot.check_qualified`, and point the plan at that directory's
+`catalog.json`. Retain the source files and their hashes. A qualification file in another directory
+does not qualify the old catalogue automatically.
+
+`budget.py` counts each recorded step's wall time once. Verification is already included in that
+time and is reported as a subset. Measured intervals come from energy summaries; missing interval
+evidence is reported as null instead of substituting wall time. Session terminal events record the
+scheduler's stop reason and actual signal separately from the process exit status; an independently
+crashed process remains an infrastructure failure at the cohort deadline.
+
 Each node runs **every** precision configuration on its own GPU. Each GPU class gets its own full
 set of repeats and needs its own pilot; repeats are split only among nodes of the same class, never
 by precision and never across classes. A round is one driver run: pass 0 runs the round's live
