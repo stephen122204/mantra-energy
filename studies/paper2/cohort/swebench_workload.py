@@ -120,7 +120,12 @@ class BashTool:
     timeout_s: float = 180.0
     max_chars: int = 10000
 
-    def execute(self, workers=1):
+    def execute(self, command: Optional[str] = None, workers=1):
+        # The bounded executor forwards the schema's command argument. Keep the
+        # direct-call form for preparation checks, but never execute a different
+        # command from the one validated and bound by SweBenchRuntime.tool.
+        if command is not None and command != self.command:
+            raise ValueError("tool arguments differ from the bound command")
         rc, out, err = run_cmd([self.docker, "exec", "-w", "/testbed", self.container, "bash", "-lc",
                                 f"timeout {int(self.timeout_s)} bash -c {shlex.quote(self.command)}"], self.timeout_s + 30)
         text = (out or "") + (("\n[stderr]\n" + err) if err and err != "timeout" else "")
