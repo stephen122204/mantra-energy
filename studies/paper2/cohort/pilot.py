@@ -110,6 +110,7 @@ def main(argv=None):
     ap.add_argument("--retry-of", help="output directory of the interrupted run this one replaces")
     ap.add_argument("--retry-reason", help="required with --retry-of: the infrastructure cause (e.g. 'infra: ssh lost')")
     ap.add_argument("--fixture-server", action="store_true", help="tests only: no vLLM, no counters")
+    ap.add_argument("--dry-run", action="store_true", help="validate and prepare tasks; never start a server or measurement")
     a = ap.parse_args(argv)
     plan = json.loads(a.plan.read_text())
     if a.retry_of and not (a.retry_reason or "").startswith("infra:"):
@@ -167,13 +168,13 @@ def main(argv=None):
         ps = passes[pass_index]
         if pass_index not in started_passes:
             started_passes.add(pass_index)
-            if ps.get("atomic"):
+            if ps.get("atomic") or a.dry_run:
                 # measured durations replace estimates once a step (or a server load) has run
                 need = sum(measured.get("server-load", plan.get("load_est_s", 600)) +
                            sum(measured.get(next(iter(st.values()))["name"], next(iter(st.values())).get("est_s", 0))
                                for st in b["steps"])
                            for b in ps["blocks"].values())
-                ok, why = fits(f"pass-{pass_index}", need)
+                ok, why = (False, "dry run: no servers or measurements") if a.dry_run else fits(f"pass-{pass_index}", need)
                 if not ok:
                     log.append("pass_skipped", pass_index=pass_index, reason=why, need_s=round(need))
                     skipped_passes.add(pass_index)
