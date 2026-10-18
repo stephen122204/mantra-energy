@@ -189,4 +189,10 @@ def _snapshot_prepared(root, source, envelope):
         shutil.copytree(source, snapshot)
         if fingerprint(snapshot) != before or fingerprint(source) != before:
             raise ValueError('prepared assets changed while copying')
+        # Linux needs write permission on a moved directory when its parent changes.
+        # copytree preserves the frozen source's read-only mode. Only the run's
+        # pack root needs owner write access for rename and factory staging;
+        # frozen source and copied task files retain their original permissions.
+        mode = snapshot.stat().st_mode & 0o7777
+        snapshot.chmod(mode | 0o200)
         snapshot.rename(root)
