@@ -87,6 +87,8 @@ class _Session:
         self.proc: Optional[subprocess.Popen] = None
         self.offered = self.admitted = self.ended = None
         self.outcome: Optional[str] = None
+        self.stopped: Optional[str] = None  # outcome we imposed by signalling the session (deadline / cancel)
+        self.stop_signal: Optional[int] = None
 
     def start(self, python: str, session_cpus: Optional[str]):
         cmd = [python, "-m", "studies.paper2.cohort.session", "--spec", str(self.spec_path)]
@@ -97,12 +99,17 @@ class _Session:
         self.proc = subprocess.Popen(cmd, cwd=REPO_ROOT, env=env, stdout=self.log, stderr=subprocess.STDOUT,
                                      start_new_session=True)
 
-    def kill(self, sig=signal.SIGTERM):
+    def kill(self, sig=signal.SIGTERM, *, outcome=None):
         if self.proc and self.proc.poll() is None:
             try:
                 os.killpg(self.proc.pid, sig)
             except ProcessLookupError:
-                pass
+                return False
+            self.stop_signal = int(sig)
+            if outcome is not None:
+                self.stopped = outcome
+            return True
+        return False
 
     def finish(self, forced: Optional[str]) -> str:
         if forced:
@@ -150,7 +157,7 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
             if now >= spec.cohort_deadline_s and not cohort_cancelled:
                 cohort_cancelled = True
                 for s in running:
-                    s.kill()
+                    s.kill(outcome="cancelled")
             while waiting and len(running) < spec.admission_limit and not cohort_cancelled:
                 s = waiting.pop(0)
                 s.admitted = clock() - t0
@@ -172,32 +179,33 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
                 pending.clear()
             for s in list(running):
                 age = clock() - t0 - s.admitted
-                forced = None
                 if s.proc.poll() is None:
                     if age > spec.limits["deadline_s"] + spec.grace_s:
-                        s.kill()
+                        s.kill(outcome="timed_out")
                         try:
                             s.proc.wait(timeout=15)
                         except subprocess.TimeoutExpired:
                             s.kill(signal.SIGKILL)
                             s.proc.wait(timeout=15)
-                        forced = "timed_out"
                     elif cohort_cancelled and age > 0:
                         try:
                             s.proc.wait(timeout=15)
                         except subprocess.TimeoutExpired:
                             s.kill(signal.SIGKILL)
                             s.proc.wait(timeout=15)
-                        forced = "cancelled"
                     else:
                         continue
                 s.ended = clock() - t0
-                s.outcome = s.finish(forced if forced else (None if s.proc.returncode == 0 else "infra_failed"))
+                # a session that exits from our signal before it is polled is still ours to label, not infra
+                imposed = s.stopped if s.stop_signal and s.proc.returncode == -s.stop_signal else None
+                forced = None if s.proc.returncode == 0 else (imposed or "infra_failed")
+                s.outcome = s.finish(forced)
                 s.log.close()
                 running.remove(s)
                 done.append(s)
                 events.append("terminal", attempt_id=s.attempt_id, task_id=s.item["task_id"], outcome=s.outcome,
-                              returncode=s.proc.returncode, latency_from_offer_s=round(s.ended - s.offered, 3),
+                              returncode=s.proc.returncode, scheduler_stop=s.stopped, stop_signal=s.stop_signal,
+                              latency_from_offer_s=round(s.ended - s.offered, 3),
                               service_s=round(s.ended - s.admitted, 3), active_after=len(running))
             time.sleep(poll_s)
     except BaseException as exc:

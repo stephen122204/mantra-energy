@@ -5,6 +5,17 @@ Passes in priority order, each atomic (all its precisions or none): (0) idle, 1 
 replay of the 4-agent cohort on 4-bit and the SWE-bench calibration cohort on 4-bit and 8-bit.
 
     python -m studies.paper2.cohort.make_plan --work ~/paper2 --gpu-uuid GPU-... --allocation LEASE --out plan.json
+    python -m studies.paper2.cohort.make_plan ... --sweep --total-service-s S --out sweep-plan.json
+
+``--sweep`` writes the same-task calibration sweep instead: every live cohort offers all 23 tasks with
+the same seed, mode and cohort deadline, so only the admission limit N changes. Round 0 covers
+N = 1, 2, 4, 8, 16; later rounds repeat the N given by ``--repeat-n`` to measure run-to-run spread.
+Each round is one atomic pass; block order rotates so each precision runs first equally often, and
+the N order inside a round is shuffled once (seeded) and shared by all precisions. ``S`` is the
+largest total per-session service time measured for this task set on this GPU class; step estimates
+use the list-scheduling bound S/N + session deadline, plus grading. ``--frozen-prep DIR`` pins every
+task to a reference preparation (DIR/assets, hashes from DIR/catalog.json): private grading seeds are
+drawn per preparation, so rounds and nodes are only paired when they share one snapshot.
 
 Tasks: the 23 C2 task definitions that need no external benchmark bundle (business, ETL,
 numerical, program, repository repair) as calibration instances. Evaluation instances are NOT
@@ -16,6 +27,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import random
 from pathlib import Path
 
 REPO_CASES = ["bfs-layers-visited", "connected-components-bfs", "core-number-comparison", "dag-longest-path-multigraph",
@@ -98,6 +111,51 @@ def build(work: Path, gpu_uuid: str, allocation: str, swebench_catalog: Path = N
     )
 
 
+SWEEP_N = (1, 2, 4, 8, 16)
+
+
+def sweep_bound_s(n: int, total_service_s: float, session_deadline_s: float, round_to: int = 300) -> int:
+    """Upper bound on a closed cohort of N agents: total service / N + the longest session, rounded up."""
+    return int(math.ceil((total_service_s / n + session_deadline_s) / round_to) * round_to)
+
+
+def build_sweep(work: Path, gpu_uuid: str, allocation: str, total_service_s: float, *, repeat_n=(4, 16),
+                repeats: int = 2, grading_s: int = 600, seed: int = 20261018, frozen_prep: Path = None) -> dict:
+    plan = build(work, gpu_uuid, allocation)
+    ids = task_ids()["all"]
+    names = [c["name"] for c in plan["configs"]]
+    session_deadline = plan["limits"]["deadline_s"]
+    # one backstop deadline for every cohort of the sweep (the campaign sweep gate requires it); the
+    # per-session deadline is the limit that normally ends a straggler
+    deadline = sweep_bound_s(1, total_service_s, session_deadline)
+    rng = random.Random(seed)
+    rotation = list(names)
+    rng.shuffle(rotation)
+    passes = []
+    for r, ns in enumerate([list(SWEEP_N)] + [list(repeat_n)] * repeats):
+        ns = list(ns)
+        rng.shuffle(ns)
+        tag = f"-r{r}" if r else ""
+        steps = [{"idle": dict(name=f"idle60{tag}", seconds=60, est_s=70)}]
+        steps += [{"live": dict(name=f"n{n}{tag}", admission_limit=n, task_ids=ids, seed=13, mode="fixed",
+                                sweep="same-task", round=r, cohort_deadline_s=deadline,
+                                est_s=sweep_bound_s(n, total_service_s, session_deadline) + grading_s)} for n in ns]
+        k = r % len(rotation)
+        passes.append(dict(atomic=True, order=rotation[k:] + rotation[:k], blocks={n: dict(steps=steps) for n in names}))
+    plan.update(version="paper2-sweep-v1", passes=passes, cohort_deadline_s=deadline,
+                sweep=dict(levels=list(SWEEP_N), repeat_n=list(repeat_n), repeats=repeats, seed=seed,
+                           total_service_s=total_service_s, grading_s=grading_s))
+    plan.pop("extra_catalogs", None)
+    if frozen_prep:
+        have = {r["task_id"]: r["asset_sha256"] for r in json.loads((Path(frozen_prep) / "catalog.json").read_text())}
+        missing = sorted(set(ids) - set(have))
+        if missing:
+            raise SystemExit(f"{frozen_prep}: frozen preparation lacks {missing}")
+        plan.update(prepared_assets=str(Path(frozen_prep).resolve() / "assets"),
+                    expected_tasks={t: have[t] for t in sorted(ids)})
+    return plan
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--work", type=Path, required=True)
@@ -105,8 +163,20 @@ def main(argv=None):
     ap.add_argument("--allocation", required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--swebench-catalog", type=Path)
+    ap.add_argument("--sweep", action="store_true", help="same-task calibration sweep over N")
+    ap.add_argument("--total-service-s", type=float, help="--sweep: largest measured total session service time")
+    ap.add_argument("--repeat-n", type=int, nargs="+", default=[4, 16])
+    ap.add_argument("--repeats", type=int, default=2)
+    ap.add_argument("--frozen-prep", type=Path, help="--sweep: reference preparation (catalog.json + assets/)")
     a = ap.parse_args(argv)
-    a.out.write_text(json.dumps(build(a.work.resolve(), a.gpu_uuid, a.allocation, a.swebench_catalog), indent=1))
+    if a.sweep:
+        if not a.total_service_s:
+            ap.error("--sweep needs --total-service-s from a pilot on this GPU class")
+        plan = build_sweep(a.work.resolve(), a.gpu_uuid, a.allocation, a.total_service_s, repeat_n=a.repeat_n,
+                           repeats=a.repeats, frozen_prep=a.frozen_prep)
+    else:
+        plan = build(a.work.resolve(), a.gpu_uuid, a.allocation, a.swebench_catalog)
+    a.out.write_text(json.dumps(plan, indent=1))
     print(a.out)
 
 
