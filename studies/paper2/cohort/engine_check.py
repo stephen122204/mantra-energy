@@ -89,10 +89,12 @@ def run_checks(base_url: str, model: str, prompt_ids: list, forced_ids: list, sa
     w.join()
     out["batching"] = dict(ok=peak[0] >= 2, peak_running=peak[0])
     long_prompt = (prompt_ids * max(1, 2048 // max(1, len(prompt_ids))))[:2048]
-    first = _post(base_url, dict(model=model, prompt=long_prompt, max_tokens=1, temperature=0.0))
-    second = _post(base_url, dict(model=model, prompt=long_prompt, max_tokens=1, temperature=0.0))
-    cached = ((second.get("usage") or {}).get("prompt_tokens_details") or {}).get("cached_tokens")
-    out["prefix_cache"] = dict(ok=bool(cached and cached >= 1024), cached_tokens=cached,
-                               first_cached=((first.get("usage") or {}).get("prompt_tokens_details") or {}).get("cached_tokens"))
+    from .guards import cache_probe
+    first = cache_probe(base_url, model, long_prompt)
+    second = cache_probe(base_url, model, long_prompt, expected="warm") if first["ok"] else None
+    out["prefix_cache"] = dict(ok=bool(first["ok"] and second and second["ok"]),
+                               priming=first, warm=second,
+                               cached_tokens=second.get("delta_h") if second else None,
+                               first_cached=first.get("cached_tokens"))
     out["ok"] = all(v.get("ok") for v in out.values() if isinstance(v, dict))
     return out

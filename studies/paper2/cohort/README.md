@@ -147,7 +147,7 @@ outcomes, but do not by themselves establish a complete set of measurements.
 | same workload across agent counts | `shard`: live cells sharing `sweep` must have identical task ids, order, seeds, mode, arrival schedule, deadline and repeat count |
 | measured durations per configuration, full block-order rotation | `shard` (opt-outs: `allow_borrowed_estimates`, `allow_unbalanced_order`) |
 | frozen task instances | matrix `frozen_catalog` (+ `prepared_assets`): every round checks asset hashes before running |
-| cold prefix cache per cohort | driver: probe cached, `POST /reset_prefix_cache`, probe must report 0 cached tokens (`cache_reset` event); `cache_start: warm` opts out |
+| cold prefix cache per cohort | driver: probe cached, `POST /reset_prefix_cache`, isolated counter deltas must prove a lookup with zero cache hits (`cache_reset` event); `cache_start: warm` opts out |
 | interval closes after engine drain; no leftover task containers | live and replay require explicit zero running/waiting metrics; failed drain or container cleanup stops the driver before another measurement |
 | SWE-bench controls | `qualify`: gold resolves and the no-op patch fails with valid harness reports; admission requires both control results and `controls_valid` in `qualification.json`; regenerate older qualification files |
 | completeness | `collect`: expected vs completed cells; `complete`, `complete_with_configuration_outcomes`, `partial`, `invalid`, `incomplete`, `conflict`, `missing`; `analysable` only when every round is complete |
@@ -177,3 +177,12 @@ drain inside replay measurement, and incomplete campaign coverage. Stream, GPU-s
 model-configuration regressions live in the corresponding `test_paper2_*` files. Local fixture
 passes do not replace node qualification, real-server engine checks, or SWE-bench Docker controls
 at the final campaign commit.
+
+Cache evidence uses the pinned 16-token block size. Before and after each probe the engine
+must drain; both prefix-cache counters must be finite and non-decreasing, with the query
+increase covering at least the probe's full blocks. The warm probe must reuse at least one
+block and the cold probe must reuse none. Present usage counts must agree with the hit
+increase. vLLM 0.10.2 may omit zero-hit usage; omission is accepted only with the counter
+evidence. Probe records retain usage, before/after counters, deltas and drain evidence.
+The counter check waits at most ten seconds for delayed telemetry. Probes require an
+exclusive server. Replay summaries preserve incomplete request cache usage as null.

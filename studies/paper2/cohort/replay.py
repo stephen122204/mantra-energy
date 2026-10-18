@@ -138,11 +138,13 @@ def run_replay(cohort_id: str, sessions: list, base_url: str, served_model: str,
         energy = cohort_energy_summary(artifacts)
         (root / "measurement.json").write_text(json.dumps(artifacts.to_dict(), default=str))
     (root / "replay-results.json").write_text(json.dumps(results, indent=1))
+    usage_cache = [t.get("cached_tokens") for r in results.values() for t in r["turns"]]
     summary = dict(cohort_id=cohort_id, interval_s=round(t1 - t0, 3), energy=energy, sessions=len(sessions), drain=drain,
                    failed=sum(1 for r in results.values() if r["error"]),
                    mismatched_turns=sum(1 for r in results.values() for t in r["turns"] if not t["output_ids_match"]),
                    prompt_tokens=sum((t.get("prompt_tokens") or 0) for r in results.values() for t in r["turns"]),
-                   cached_tokens=sum((t.get("cached_tokens") or 0) for r in results.values() for t in r["turns"]))
+                   cached_tokens=sum(usage_cache) if usage_cache and all(v is not None for v in usage_cache) else None,
+                   cached_tokens_source="request_usage" if usage_cache and all(v is not None for v in usage_cache) else "incomplete request usage; use interval counter evidence")
     (root / "replay-summary.json").write_text(json.dumps(summary, indent=1))
     events.append("replay_end", **{k: v for k, v in summary.items() if k != "energy"})
     events.close()
