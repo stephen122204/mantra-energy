@@ -276,6 +276,16 @@ def test_swebench_runtime_container_lifecycle_and_schema(tmp_path, monkeypatch):
         rt.tool(task, dict(tool="bash", args=dict(command="ls", extra=1)))
     out = rt.tool(task, dict(tool="bash", args=dict(command="ls -la"))).execute()
     assert out["exit_code"] == 0 and "ls -la" in out["output"]
+    # Model calls go through this executor, which forwards the advertised args.
+    # Calling execute() directly does not check that integration contract.
+    from studies.energy_diagnosis.workloads.bounded_executor import BoundedToolExecutor, ToolCall
+    args = {"command": "printf '%s' 'a b; literal'"}
+    tool = rt.tool(task, dict(tool="bash", args=args))
+    result = BoundedToolExecutor({"bash": tool}).execute([ToolCall("shell", "bash", args)])["shell"]
+    assert result.status == "completed", result.error
+    assert result.result["exit_code"] == 0 and "literal" in result.result["output"]
+    with pytest.raises(ValueError, match="bound command"):
+        tool.execute(command="a different command")
     patch = rt.finalize(task)
     assert patch.read_text().startswith("diff --git") and "rm -f p2-s1" in log.read_text()
     assert rt.container is None
