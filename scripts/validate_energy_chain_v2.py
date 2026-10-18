@@ -32,7 +32,6 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # All imports from flat energy_chain directory
-import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

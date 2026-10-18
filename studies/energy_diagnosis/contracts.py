@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 

@@ -5,7 +5,6 @@ remain unavailable; sampled-power experiments use the separate GPUCollector
 path and require its coverage validation before claiming a total.
 """
 
-from dataclasses import asdict
 import os
 from pathlib import Path
 import socket
