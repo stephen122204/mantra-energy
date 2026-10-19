@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace, workspace_write
 from .tool_contracts import action_contract, validate_action
 from . import private_challenges
 
@@ -174,7 +174,7 @@ class ProgramTool:
         validate_action(args,ACTIONS)
         path=self.root/'solution.py'
         if action=='write':
-            validate_source(content);path.write_text(content);return {'written':True}
+            validate_source(content);workspace_write(path,content);return {'written':True}
         meta=json.loads((self.root/'source.json').read_text());data=json.loads((self.root/'input.json').read_text())
         if action=='read':
             sample=data[:8] if isinstance(data,list) else dict(records=data['records'][:8],bins=data['bins'])

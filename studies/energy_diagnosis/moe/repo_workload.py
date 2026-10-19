@@ -22,7 +22,7 @@ import subprocess
 import sys
 import tempfile
 
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace, workspace_write
 from . import repo_oracle, repo_test_process
 
 VERSION = "repo-repair-networkx-v4"  # Parent-owned graph oracle and confined public regression tests.
@@ -527,7 +527,7 @@ class RepoTool:
             count = text.count(old)
             if count != 1:
                 raise ValueError(f"old text must occur exactly once in the file (found {count})")
-            path.write_text(text.replace(old, new))
+            workspace_write(path, text.replace(old, new))
             return dict(replaced=args["path"])
         if action == "test":
             target = args["target"]

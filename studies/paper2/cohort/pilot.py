@@ -303,6 +303,10 @@ def main(argv=None):
                                     server_died=server_dead))
                 if server_dead:
                     break  # remaining steps of this block are not run on a dead server (recorded below)
+                if res.get("infrastructure_fault"):
+                    log.append("infrastructure_abort", step=name, reason="agent workspace fault",
+                               **res["infrastructure_fault"])
+                    raise RuntimeError(f"{name}: agent workspace fault; stopping before another measurement")
                 if kind in ("live", "replay"):
                     from .guards import require_clean_boundary
                     try:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -51,15 +52,35 @@ def _hash(path: Path) -> str:
     return digest.hexdigest()
 
 
+class WorkspaceFault(RuntimeError):
+    """The agent's own workspace cannot be written: an infrastructure fault, never an agent error."""
+
+
 def copy_workspace(source: Path, workspace: Path, ignore=None) -> None:
     """Copy task inputs into a workspace the agent can edit.
 
     copytree keeps the source's modes, and frozen preparations are read-only;
-    the copy gets owner write access while the source stays untouched."""
+    the copy gets owner write access while the source stays untouched. The copy
+    is checked before the agent starts, so a broken workspace fails as
+    infrastructure before the first model request."""
     shutil.copytree(source, workspace, ignore=ignore)
-    for item in (workspace, *workspace.rglob("*")):
-        if not item.is_symlink():
-            item.chmod(item.stat().st_mode | 0o200)
+    items = [item for item in (workspace, *workspace.rglob("*")) if not item.is_symlink()]
+    for item in items:
+        item.chmod(item.stat().st_mode | 0o200)
+    blocked = [str(item.relative_to(workspace)) for item in items if not os.access(item, os.W_OK)]
+    if blocked:
+        raise WorkspaceFault(f"workspace not writable after copy: {blocked[:3]}")
+
+
+def workspace_write(path: Path, text: str, **kwargs) -> None:
+    """Write a file the tool contract lets the agent edit.
+
+    The tools reject disallowed paths before calling this (as ValueError, which
+    the agent sees). An OS refusal here means the workspace itself is broken."""
+    try:
+        Path(path).write_text(text, **kwargs)
+    except OSError as exc:
+        raise WorkspaceFault(f"permitted workspace write failed: {type(exc).__name__}: {exc}") from exc
 
 
 def _data_reference(path: Path) -> dict[str, Decimal]:

@@ -18,6 +18,7 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
     _hash as asset_hash,
     asset_files,
     copy_workspace,
+    workspace_write,
 )
 from studies.energy_diagnosis.workloads.bounded_executor import (
     BoundedToolExecutor,
@@ -272,7 +273,7 @@ class RepositoryTool:
             and isinstance(content, str)
             and len(content.encode()) <= 32768
         ):
-            (path / "pricing.py").write_text(content, encoding="utf-8", newline="\n")
+            workspace_write(path / "pricing.py", content, encoding="utf-8", newline="\n")
             return {"written": "pricing.py"}
         if action == "test" and content is None:
             result = subprocess.run(
@@ -303,7 +304,7 @@ class ETLRepositoryTool:
         if action == "read" and content is None:
             return {name: (path / name).read_text() for name in ("etl.py", "visible_checks.py")}
         if action == "write" and isinstance(content, str) and len(content.encode()) <= 32768:
-            (path / "etl.py").write_text(content, encoding="utf-8", newline="\n")
+            workspace_write(path / "etl.py", content, encoding="utf-8", newline="\n")
             return {"written": "etl.py"}
         if action == "test" and content is None:
             result = subprocess.run(
