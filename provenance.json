@@ -1,0 +1,202 @@
+{
+  "schema": "paper1-multirevision-source-release-v1",
+  "version": "v1.0.0-paper1",
+  "paper_title": "Characterizing the Task-Level Energy Trade-offs of Model Quantization in Locally Hosted AI Agents",
+  "paper_status": "Submitted to SIGMETRICS, as reported by the author; no acceptance/publication claim",
+  "release_type": "multi-revision source-code archive and available processed artifacts; not a validated reproduction of submitted results",
+  "primary_experimental_snapshot": null,
+  "release_tag_target_role": "documentation/provenance index commit, not an experimental execution revision",
+  "preserved_original_source_revisions": {
+    "qwen_external": "187c227417475d2e20632b7237ea930217237538",
+    "devstral": "7dfd892f829e9e5c791449a63659c8d97fc989b9"
+  },
+  "source_roles": "Designated by author; available campaign plans independently name these as expected revisions. Per-run execution identity is not verified.",
+  "campaigns": [
+    {
+      "campaign": "c2-l0-liqid05",
+      "machine": "LIQID05 (A100 40GB)",
+      "model": "Qwen3-30B-A3B-Instruct-2507",
+      "level": "L0",
+      "attempts": 638,
+      "valid": 636,
+      "passed": 454,
+      "recorded_revision": null,
+      "record_kind": "unknown: original plan unavailable",
+      "actual_execution_revision_independently_verified": false,
+      "submitted_paper_table_or_figure_mapping": null,
+      "available_processed_csv": "data/c2-precision-energy/campaigns/c2-l0-liqid05/attempts.csv",
+      "original_plan_available": false,
+      "original_node_spec_available": false,
+      "original_preflight_available": false,
+      "raw_campaign_archive_available_in_release": false
+    },
+    {
+      "campaign": "repo-r-liqid05",
+      "machine": "LIQID05 (A100 40GB)",
+      "model": "Qwen3-30B-A3B-Instruct-2507",
+      "level": "R",
+      "attempts": 198,
+      "valid": 196,
+      "passed": 76,
+      "recorded_revision": null,
+      "record_kind": "unknown: original plan unavailable",
+      "actual_execution_revision_independently_verified": false,
+      "submitted_paper_table_or_figure_mapping": null,
+      "available_processed_csv": "data/c2-precision-energy/campaigns/repo-r-liqid05/attempts.csv",
+      "original_plan_available": false,
+      "original_node_spec_available": false,
+      "original_preflight_available": false,
+      "raw_campaign_archive_available_in_release": false
+    },
+    {
+      "campaign": "qwen-r-3arm-gigaio08",
+      "machine": "gigaio-08 (A100 80GB)",
+      "model": "Qwen3-30B-A3B-Instruct-2507",
+      "level": "R",
+      "attempts": 681,
+      "valid": 681,
+      "passed": 513,
+      "recorded_revision": "187c227417475d2e20632b7237ea930217237538",
+      "record_kind": "plan.expected.repository_revision",
+      "actual_execution_revision_independently_verified": false,
+      "submitted_paper_table_or_figure_mapping": null,
+      "available_processed_csv": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/attempts.csv",
+      "original_plan_available": true,
+      "original_node_spec_available": true,
+      "original_preflight_available": true,
+      "raw_campaign_archive_available_in_release": false
+    },
+    {
+      "campaign": "qwen-r-r07-gigaio07",
+      "machine": "gigaio-07 (A100 80GB)",
+      "model": "Qwen3-30B-A3B-Instruct-2507",
+      "level": "R",
+      "attempts": 15,
+      "valid": 15,
+      "passed": 4,
+      "recorded_revision": "187c227417475d2e20632b7237ea930217237538",
+      "record_kind": "plan.expected.repository_revision",
+      "actual_execution_revision_independently_verified": false,
+      "submitted_paper_table_or_figure_mapping": null,
+      "available_processed_csv": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/attempts.csv",
+      "original_plan_available": true,
+      "original_node_spec_available": true,
+      "original_preflight_available": true,
+      "raw_campaign_archive_available_in_release": false
+    },
+    {
+      "campaign": "devstral-r-liqid06",
+      "machine": "LIQID06 (A100 40GB)",
+      "model": "Devstral-Small-2",
+      "level": "R",
+      "attempts": 638,
+      "valid": 637,
+      "passed": 561,
+      "recorded_revision": "7dfd892f829e9e5c791449a63659c8d97fc989b9",
+      "record_kind": "plan.expected.repository_revision",
+      "actual_execution_revision_independently_verified": false,
+      "submitted_paper_table_or_figure_mapping": null,
+      "available_processed_csv": "data/c2-precision-energy/campaigns/devstral-r-liqid06/attempts.csv",
+      "original_plan_available": true,
+      "original_node_spec_available": true,
+      "original_preflight_available": true,
+      "raw_campaign_archive_available_in_release": false
+    },
+    {
+      "campaign": "external-l0-liqid05",
+      "machine": "LIQID05 (A100 40GB)",
+      "model": "Qwen3-30B-A3B-Instruct-2507",
+      "level": "L0",
+      "attempts": 269,
+      "valid": 269,
+      "passed": 206,
+      "recorded_revision": "187c227417475d2e20632b7237ea930217237538",
+      "record_kind": "plan.expected.repository_revision",
+      "actual_execution_revision_independently_verified": false,
+      "submitted_paper_table_or_figure_mapping": null,
+      "available_processed_csv": "data/c2-precision-energy/campaigns/external-l0-liqid05/attempts.csv",
+      "original_plan_available": true,
+      "original_node_spec_available": true,
+      "original_preflight_available": true,
+      "raw_campaign_archive_available_in_release": false
+    },
+    {
+      "campaign": "external-l0-liqid04",
+      "machine": "liqid04 (A100 40GB)",
+      "model": "Qwen3-30B-A3B-Instruct-2507",
+      "level": "L0",
+      "attempts": 308,
+      "valid": 308,
+      "passed": 234,
+      "recorded_revision": "187c227417475d2e20632b7237ea930217237538",
+      "record_kind": "plan.expected.repository_revision",
+      "actual_execution_revision_independently_verified": false,
+      "submitted_paper_table_or_figure_mapping": null,
+      "available_processed_csv": "data/c2-precision-energy/campaigns/external-l0-liqid04/attempts.csv",
+      "original_plan_available": true,
+      "original_node_spec_available": true,
+      "original_preflight_available": true,
+      "raw_campaign_archive_available_in_release": false
+    }
+  ],
+  "artifact_source_commit": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+  "assets": [
+    {
+      "id": "qwen-external",
+      "file": "paper1-qwen-external-187c227.tar.gz",
+      "git_commit": "187c227417475d2e20632b7237ea930217237538",
+      "git_tree": "98489feee7df481bbda8d5cdb0d9fef5388c4c7c",
+      "verified_blob_count": 2468,
+      "sha256": "09c9dae49dd08b636ff3c2c5ab3d5b0b2813ea1e75c6d5a14335189efd607a58",
+      "bytes": 17849272
+    },
+    {
+      "id": "devstral",
+      "file": "paper1-devstral-7dfd892.tar.gz",
+      "git_commit": "7dfd892f829e9e5c791449a63659c8d97fc989b9",
+      "git_tree": "03ee8af0cb1836a73f649b04eb0ed5daeace03b5",
+      "verified_blob_count": 2469,
+      "sha256": "b1407e81aa63b7d397af123ff983c6cc6213d686538a94911ca0d5479fb5c0ae",
+      "bytes": 17854417
+    },
+    {
+      "id": "processed-artifacts",
+      "file": "paper1-processed-artifacts-9e564de.tar.gz",
+      "git_commit": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "git_tree": "a7665081670a5f4c07c84dcb140028f6eb0733fc",
+      "verified_blob_count": 47,
+      "sha256": "f331fc39f534da317a8dd79ed689ac695bdca2d059a198849e37673ee46f10b4",
+      "bytes": 57018201
+    },
+    {
+      "id": "source-revisions-bundle",
+      "file": "paper1-source-revisions.bundle",
+      "refs": {
+        "refs/heads/qwen-external": "187c227417475d2e20632b7237ea930217237538",
+        "refs/heads/devstral": "7dfd892f829e9e5c791449a63659c8d97fc989b9"
+      },
+      "sha256": "fcf5a101d46282d1b0a70db591b972f9c74c48c382b9d012222214edbd443585",
+      "bytes": 16508462,
+      "self_contained": true
+    }
+  ],
+  "available_additional_records": {
+    "older_pilot_release": "https://github.com/stephen122204/alems-energy-diagnosis/releases/tag/saved-run-review-20260925",
+    "scope": "53 older September24\u201325 pilot core records; not established as submitted Paper1 results; large expert-event files excluded"
+  },
+  "missing_or_unverified": [
+    "Original C2 raw archives (~36GB) and complete independent restore chains",
+    "Original plans/specs/preflights for c2-l0-liqid05 and repo-r-liqid05",
+    "C2 attempt extraction, aggregation and plotting code with exact inputs/exclusions",
+    "Submitted manuscript table/figure-to-campaign mapping",
+    "Original resolved environment, engine build, model/tokenizer/quantization bytes/manifests and some external task assets",
+    "Actual per-run source identities; saved plans are expectations, not execution proof"
+  ],
+  "reproduction_classes": {
+    "verified": "Exact source snapshot preservation, Git recovery, package hashes and available metadata identity",
+    "resource_dependent_not_executed": "Historical environment/model/task acquisition; Linux A100/RAPL/NVML hardware measurements",
+    "not_currently_independently_verifiable": "Full C2 raw-to-processed-to-submitted-paper results"
+  },
+  "paper2_exclusion": "Exact preserved pre-October candidate trees; no studies/paper2 paths or October Paper2 cohort implementations. No cleanup02d814e or currentPaper2 source merged. Shared platform code retained.",
+  "privacy": "Private repository; no visibility/settings change or public distribution authorized/performed"
+}
