@@ -237,6 +237,41 @@ def test_pilot_driver_fixture_end_to_end(tmp_path):
     assert set(rep["paired"]["n2"]) == {"business-segments-v2-n64-s7", "grouped-fit-v1-n64-s7"}
 
 
+@needs_renderer
+def test_pilot_stops_after_infrastructure_invalid_cohort(tmp_path, monkeypatch):
+    """An infrastructure failure without a WorkspaceFault marker must still stop the sweep."""
+    from studies.paper2.cohort import pilot
+    calls = []
+
+    def invalid_cohort(spec, *args, **kwargs):
+        calls.append(spec.cohort_id)
+        return dict(infra_invalid=True, infrastructure_fault=None, drain={'drained': True},
+                    outcomes={'infra_failed': 1}, verified_pass=0)
+
+    monkeypatch.setattr(pilot, 'run_cohort', invalid_cohort)
+    task_id = 'business-segments-v2-n64-s7'
+    plan = dict(gpu_uuid='fixture', allocation='fixture', isolation='fixture', block_seed=1,
+                configs=[dict(name='arm', model='/nonexistent/arm', revision='fixture', weight_precision='int4',
+                              activation_precision='bf16', max_model_len=32768)],
+                blocks={'arm': dict(steps=[{'live': dict(name=name, admission_limit=1, task_ids=[task_id],
+                                                       seed=3, est_s=60)} for name in ('first', 'must-not-run')])},
+                tekken={'arm': TEKKEN}, task_specs=[dict(kind='business', rows=64, seed=7)],
+                limits=dict(max_turns=3, max_tool_calls=10, max_total_output_tokens=2048, max_tokens=256,
+                            deadline_s=60, verify_timeout_s=120),
+                sampling=dict(mode='sampled', temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0),
+                load_est_s=1, export_reserve_s=0)
+    path = tmp_path/'plan.json'; path.write_text(json.dumps(plan))
+    out = tmp_path/'out'
+    with pytest.raises(RuntimeError, match='cohort infrastructure invalid'):
+        pilot.main(['--plan', str(path), '--out', str(out), '--budget-s', '3600',
+                    '--cutoff-utc', '2099-01-01T00:00:00Z', '--fixture-server'])
+    assert calls == ['arm-first']
+    events = [json.loads(line) for line in (out/'driver-events.jsonl').read_text().splitlines()]
+    assert any(e['kind'] == 'infrastructure_abort' and e['step'] == 'arm-first' for e in events)
+    assert not any(e['kind'] == 'driver_end' for e in events)
+    assert not (out/'pilot-results.json').exists()
+
+
 FAKE_DOCKER = r'''#!/bin/sh
 # fixture docker: logs argv; "exec ... git diff" prints a patch; "exec ... bash -c CMD" echoes CMD
 echo "$@" >> "$FAKE_DOCKER_LOG"
@@ -677,3 +712,10 @@ def test_sweep_plan_pins_a_frozen_preparation(tmp_path):
     (prep / "catalog.json").write_text(json.dumps(rows[1:]))
     with pytest.raises(SystemExit, match="lacks"):
         build_sweep(tmp_path, "GPU-x", "lease", 7505, frozen_prep=prep)
+
+
+def test_sweep_plan_context_length_applies_to_every_precision(tmp_path):
+    from studies.paper2.cohort.make_plan import build_sweep
+    assert {c["max_model_len"] for c in build_sweep(tmp_path, "GPU-x", "lease", 7505)["configs"]} == {65536}
+    plan = build_sweep(tmp_path, "GPU-x", "lease", 7505, max_model_len=131072)
+    assert {c["max_model_len"] for c in plan["configs"]} == {131072}
