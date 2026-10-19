@@ -195,3 +195,20 @@ def test_every_accepted_call_renders_into_the_next_prompt():
     c.tool_result("t00c0", "program}", "ok", {"x": 1})
     with pytest.raises(Exception, match="Function name"):
         renderer.encode(c.messages, tools)
+
+
+@pytest.mark.skipif(not (TEKKEN and __import__('pathlib').Path(TEKKEN).exists()), reason='PAPER2_TEKKEN not set')
+@pytest.mark.parametrize('bad_turn', [STRAY_BRACE, "[TOOL_CALLS]program{'action': 'read'}"])
+def test_rejected_turn_feedback_renders_and_agent_can_continue(tmp_path, bad_turn):
+    """Reject malformed model output without poisoning the next prompt or repairing invalid JSON."""
+    from studies.paper2.cohort.client import MistralRenderer
+    status, trace, model = run(tmp_path, 'chat-tools-v3', [bad_turn, *REPLIES])
+    assert status == 'completed'
+    assert [turn['kind'] for turn in trace['turns']] == ['malformed', 'tool_calls', 'answer']
+    assert len(model.requests) == 3
+    feedback = model.requests[1]['messages'][-1]
+    assert feedback['role'] == 'user'
+    assert json.loads(feedback['content'])['status'] == 'error'
+    renderer = MistralRenderer(TEKKEN)
+    for request in model.requests:
+        assert renderer.encode(request['messages'], request['tools'])
