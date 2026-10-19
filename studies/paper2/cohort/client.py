@@ -135,11 +135,15 @@ def stream_completion(host: str, port: int, payload: dict, timeout: float):
 
 
 class SharedServerAdapter:
-    def __init__(self, base_url: str, served_model: str, renderer, *, max_tokens: int, max_model_len: int,
+    """max_tokens=None sets no per-response cap: each request may use the context left after its prompt,
+    further bounded only by an explicit allowance the turn loop sets (a total output budget)."""
+
+    def __init__(self, base_url: str, served_model: str, renderer, *, max_tokens: Optional[int], max_model_len: int,
                  record: Callable[[dict], None], session_id: str, extra_body: Optional[dict] = None):
         self.base = urlparse(base_url)
         self.served_model, self.renderer = served_model, renderer
         self.max_model_len = max_model_len
+        self.fit_to_context = max_tokens is None
         self.model_config = {"request_timeout_seconds": 600, "max_tokens": max_tokens}
         self.record, self.session_id = record, session_id
         self.extra_body = extra_body or {}
@@ -164,15 +168,23 @@ class SharedServerAdapter:
                    t_submit_wall=time.time(), t_submit_ns=time.monotonic_ns())
         try:
             prompt = self.renderer.encode(request["messages"], request["tools"])
-            max_tokens = int(self.model_config["max_tokens"])
+            allowance = self.model_config["max_tokens"]
+            if self.fit_to_context:
+                room = self.max_model_len - len(prompt)
+                max_tokens = room if allowance is None else min(int(allowance), room)
+                exhausted = max_tokens < 1
+            else:
+                max_tokens = int(allowance)
+                exhausted = len(prompt) + max_tokens > self.max_model_len
             same, suffix = self._delta(prompt)
             rec.update(prompt_len=len(prompt), prompt_sha256=_ids_sha(prompt), prefix_same_as_prev=same,
-                       prompt_suffix_ids=suffix, max_tokens=max_tokens, sampling=sampling)
-            if len(prompt) + max_tokens > self.max_model_len:
+                       prompt_suffix_ids=suffix, max_tokens=max_tokens, sampling=sampling,
+                       max_tokens_policy="remaining_context" if self.fit_to_context else "fixed")
+            if exhausted:
                 rec.update(finish_reason="context_exhausted", completion_tokens=0, t_done_ns=time.monotonic_ns())
                 self.record(rec)
                 self._prev_prompt = prompt
-                return dict(status="ok", content="", finish_reason="context_exhausted",
+                return dict(status="ok", content="", finish_reason="context_exhausted", allowance=max(0, max_tokens),
                             tokens=dict(prompt=len(prompt), completion=0), token_provenance="tokenizer", backend=rec)
             payload = completion_request(self.served_model, prompt, max_tokens, sampling, self.extra_body)
             first_ns, ids, finish, usage, server_text = self._stream(payload, float(self.model_config["request_timeout_seconds"]))
@@ -187,7 +199,7 @@ class SharedServerAdapter:
             if usage.get("prompt_tokens") not in (None, len(prompt)):
                 raise RuntimeError(f"server counted {usage.get('prompt_tokens')} prompt tokens, sent {len(prompt)}")
             reason = "length" if finish == "length" else "stop"
-            return dict(status="ok", content=content, finish_reason=reason,
+            return dict(status="ok", content=content, finish_reason=reason, allowance=max_tokens,
                         tokens=dict(prompt=len(prompt), completion=len(ids)), token_provenance="tokenizer",
                         backend=dict(t_first_ns=first_ns, t_done_ns=done_ns, cached_tokens=rec["cached_tokens"]))
         except Exception as exc:
