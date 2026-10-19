@@ -22,7 +22,7 @@ import subprocess
 import sys
 import tempfile
 
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace
 from . import repo_oracle, repo_test_process
 
 VERSION = "repo-repair-networkx-v4"  # Parent-owned graph oracle and confined public regression tests.
@@ -579,7 +579,7 @@ class RepoRuntime:
             raise ValueError("tool Python environment changed since task preparation")
         self.meta = meta
         self.workspace = self.root / "workspaces" / lease.execution_id
-        shutil.copytree(task.asset_path / "visible", self.workspace)
+        copy_workspace(task.asset_path / "visible", self.workspace)
 
     def context(self, task):
         return dict(family=task.family, tools={"repo": {
@@ -640,7 +640,7 @@ def verify_workspace(assets, workspace, python):
     with tempfile.TemporaryDirectory() as directory:
         # Only public tests enter the child. Private references stay in the parent.
         tree = Path(directory) / "tree"
-        shutil.copytree(visible, tree)
+        copy_workspace(visible, tree)
         for path in sorted((Path(workspace) / PACKAGE).rglob("*.py")):
             relative = path.relative_to(workspace)
             if "__pycache__" not in relative.parts and not _is_test_file(relative):

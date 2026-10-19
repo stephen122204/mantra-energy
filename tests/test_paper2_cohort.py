@@ -677,3 +677,10 @@ def test_sweep_plan_pins_a_frozen_preparation(tmp_path):
     (prep / "catalog.json").write_text(json.dumps(rows[1:]))
     with pytest.raises(SystemExit, match="lacks"):
         build_sweep(tmp_path, "GPU-x", "lease", 7505, frozen_prep=prep)
+
+
+def test_sweep_plan_context_length_applies_to_every_precision(tmp_path):
+    from studies.paper2.cohort.make_plan import build_sweep
+    assert {c["max_model_len"] for c in build_sweep(tmp_path, "GPU-x", "lease", 7505)["configs"]} == {65536}
+    plan = build_sweep(tmp_path, "GPU-x", "lease", 7505, max_model_len=131072)
+    assert {c["max_model_len"] for c in plan["configs"]} == {131072}

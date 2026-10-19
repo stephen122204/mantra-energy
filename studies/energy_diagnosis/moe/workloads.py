@@ -17,6 +17,7 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
     PilotTask,
     _hash as asset_hash,
     asset_files,
+    copy_workspace,
 )
 from studies.energy_diagnosis.workloads.bounded_executor import (
     BoundedToolExecutor,
@@ -576,7 +577,7 @@ class WorkloadRuntime:
             raise RuntimeError(
                 "goal workspace already exists; reset would be ambiguous"
             )
-        shutil.copytree(task.asset_path, self.workspace)
+        copy_workspace(task.asset_path, self.workspace)
         if asset_hash(self.workspace) != task.asset_sha256:
             raise RuntimeError("workspace reset does not reproduce task input")
 
