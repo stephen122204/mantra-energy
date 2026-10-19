@@ -11,7 +11,7 @@ import random
 import shutil
 import sqlite3
 import tempfile
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace
 from .query_workload import QueryTool
 from .tool_contracts import ETL_ACTIONS, action_contract, validate_action
 from . import private_challenges
@@ -200,7 +200,7 @@ class ETLRuntime:
     def begin(self,task,lease):
         if _hash(task.asset_path)!=task.asset_sha256:raise ValueError('ETL inputs changed')
         self.workspace=self.root/'workspaces'/lease.execution_id
-        shutil.copytree(task.asset_path,self.workspace,ignore=shutil.ignore_patterns('private'))
+        copy_workspace(task.asset_path,self.workspace,ignore=shutil.ignore_patterns('private'))
     def context(self,task):
         return dict(family=task.family,tools={'etl':{
             'description':'The action argument is mandatory on every call. action="read" takes no content and returns the current SQL and table schema. '

@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import shutil
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -48,6 +49,17 @@ def _hash(path: Path) -> str:
             digest.update(b"\0")
             digest.update(child.read_bytes())
     return digest.hexdigest()
+
+
+def copy_workspace(source: Path, workspace: Path, ignore=None) -> None:
+    """Copy task inputs into a workspace the agent can edit.
+
+    copytree keeps the source's modes, and frozen preparations are read-only;
+    the copy gets owner write access while the source stays untouched."""
+    shutil.copytree(source, workspace, ignore=ignore)
+    for item in (workspace, *workspace.rglob("*")):
+        if not item.is_symlink():
+            item.chmod(item.stat().st_mode | 0o200)
 
 
 def _data_reference(path: Path) -> dict[str, Decimal]:

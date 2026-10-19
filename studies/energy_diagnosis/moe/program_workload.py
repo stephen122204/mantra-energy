@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace
 from .tool_contracts import action_contract, validate_action
 from . import private_challenges
 
@@ -190,7 +190,7 @@ class ProgramRuntime:
     def begin(self,task,lease):
         if _hash(task.asset_path)!=task.asset_sha256:raise ValueError('program inputs changed')
         self.workspace=self.root/'workspaces'/lease.execution_id
-        shutil.copytree(task.asset_path,self.workspace,ignore=shutil.ignore_patterns('private'))
+        copy_workspace(task.asset_path,self.workspace,ignore=shutil.ignore_patterns('private'))
     def context(self,task):
         return dict(family=task.family,tools={'program':dict(description=
             'read returns source, input sample and metadata; write replaces solution.py; test executes it on full visible input and checks output. '

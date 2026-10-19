@@ -75,10 +75,10 @@ def task_ids() -> dict:
                 isolated=["business-segments-v2-n8192-s7", "grouped-fit-v1-n8192-s7", "repo-bfs-layers-visited-v4"])
 
 
-def build(work: Path, gpu_uuid: str, allocation: str, swebench_catalog: Path = None) -> dict:
+def build(work: Path, gpu_uuid: str, allocation: str, swebench_catalog: Path = None, max_model_len: int = 65536) -> dict:
     swebench_ids = [c["task_id"] for c in json.loads(swebench_catalog.read_text())] if swebench_catalog else []
     ids = task_ids()
-    configs = [dict(name=name, model=str(work / "models" / name), max_model_len=65536, gpu_memory_utilization=0.90,
+    configs = [dict(name=name, model=str(work / "models" / name), max_model_len=max_model_len, gpu_memory_utilization=0.90,
                     max_num_seqs=64, **arm) for name, arm in ARMS.items()]
     names = [c["name"] for c in configs]
     # Passes in priority order; each pass is atomic (runs on all its precisions or not at all) so every
@@ -120,8 +120,9 @@ def sweep_bound_s(n: int, total_service_s: float, session_deadline_s: float, rou
 
 
 def build_sweep(work: Path, gpu_uuid: str, allocation: str, total_service_s: float, *, repeat_n=(4, 16),
-                repeats: int = 2, grading_s: int = 600, seed: int = 20261018, frozen_prep: Path = None) -> dict:
-    plan = build(work, gpu_uuid, allocation)
+                repeats: int = 2, grading_s: int = 600, seed: int = 20261018, frozen_prep: Path = None,
+                max_model_len: int = 65536) -> dict:
+    plan = build(work, gpu_uuid, allocation, max_model_len=max_model_len)
     ids = task_ids()["all"]
     names = [c["name"] for c in plan["configs"]]
     session_deadline = plan["limits"]["deadline_s"]
@@ -168,14 +169,15 @@ def main(argv=None):
     ap.add_argument("--repeat-n", type=int, nargs="+", default=[4, 16])
     ap.add_argument("--repeats", type=int, default=2)
     ap.add_argument("--frozen-prep", type=Path, help="--sweep: reference preparation (catalog.json + assets/)")
+    ap.add_argument("--max-model-len", type=int, default=65536, help="serving context for every precision")
     a = ap.parse_args(argv)
     if a.sweep:
         if not a.total_service_s:
             ap.error("--sweep needs --total-service-s from a pilot on this GPU class")
         plan = build_sweep(a.work.resolve(), a.gpu_uuid, a.allocation, a.total_service_s, repeat_n=a.repeat_n,
-                           repeats=a.repeats, frozen_prep=a.frozen_prep)
+                           repeats=a.repeats, frozen_prep=a.frozen_prep, max_model_len=a.max_model_len)
     else:
-        plan = build(a.work.resolve(), a.gpu_uuid, a.allocation, a.swebench_catalog)
+        plan = build(a.work.resolve(), a.gpu_uuid, a.allocation, a.swebench_catalog, max_model_len=a.max_model_len)
     a.out.write_text(json.dumps(plan, indent=1))
     print(a.out)
 
