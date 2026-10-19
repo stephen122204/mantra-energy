@@ -56,10 +56,24 @@ def gpu_busy(index: int) -> int:
         pynvml.nvmlShutdown()
 
 
-def make_measurement(gpu_index: int, revision: str, allocation: str, isolation: str):
+# Counter samples must stay closer together than the energy integrator's gap limit (energy.integrate_samples).
+MAX_SAMPLE_PERIOD_S = 20.0
+
+
+def measurement_mode(plan: dict, step: dict) -> dict:
+    """Counter sampling period and server-telemetry polling for one step (defaults: 0.1 s, on)."""
+    period = float(step.get("sample_period_s", plan.get("sample_period_s", 0.1)))
+    telemetry = step.get("telemetry", plan.get("telemetry", True))
+    if not 0 < period <= MAX_SAMPLE_PERIOD_S or not isinstance(telemetry, bool):
+        raise ValueError(f"step {step.get('name')}: sample_period_s must be in (0, {MAX_SAMPLE_PERIOD_S}] "
+                         "and telemetry a boolean")
+    return dict(sample_period_s=period, telemetry=telemetry)
+
+
+def make_measurement(gpu_index: int, revision: str, allocation: str, isolation: str, sample_period_s: float = 0.1):
     from studies.energy_diagnosis.runtime.node_measurement import NodeCounterReader, NodeMeasurement, environment_identity
     reader = NodeCounterReader(gpu_index=gpu_index)
-    return NodeMeasurement(reader, environment_identity(revision, allocation, isolation))
+    return NodeMeasurement(reader, environment_identity(revision, allocation, isolation), sample_period_s=sample_period_s)
 
 
 def _order(configs, ps, seed, log, pass_index):
@@ -113,6 +127,11 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true", help="validate and prepare tasks; never start a server or measurement")
     a = ap.parse_args(argv)
     plan = json.loads(a.plan.read_text())
+    for ps in plan.get("passes", []):
+        for block in ps.get("blocks", {}).values():
+            for step in block.get("steps", []):
+                for body in step.values():
+                    measurement_mode(plan, body)  # reject an invalid measurement mode before anything runs
     if a.retry_of and not (a.retry_reason or "").startswith("infra:"):
         raise SystemExit("--retry-of needs --retry-reason 'infra: <cause>'; configuration failures are outcomes, not retried")
     out = a.out
@@ -247,9 +266,12 @@ def main(argv=None):
                     if not reset.get("ok"):
                         log.append("step_skipped", step=name, reason=f"cold prefix cache not verified: {reset}")
                         continue
-                meas = None if a.fixture_server else make_measurement(gidx, revision, plan["allocation"], plan["isolation"])
+                mode = measurement_mode(plan, s)
+                log.append("measurement_mode", step=name, **mode)
+                meas = None if a.fixture_server else make_measurement(gidx, revision, plan["allocation"], plan["isolation"],
+                                                                      mode["sample_period_s"])
                 poller = None
-                if not a.fixture_server:
+                if not a.fixture_server and mode["telemetry"]:
                     from .telemetry import MetricsPoller
                     poller = MetricsPoller(base_url, out / "cohorts" / name / "metrics.jsonl")
                 t0 = time.monotonic()
@@ -295,7 +317,7 @@ def main(argv=None):
                                outcome="configuration", log_tail=_tail(server.log_path))
                 measured[s["name"]] = max(measured.get(s["name"], 0), took)
                 log.append("step_done", step=name, step_kind=kind, seconds=round(took, 1))
-                results.append(dict(step=name, kind=kind, pass_index=pass_index, seconds=round(took, 1),
+                results.append(dict(step=name, kind=kind, pass_index=pass_index, seconds=round(took, 1), measurement=mode,
                                     **{k: res.get(k) for k in ("outcomes", "verified_pass", "joules_per_verified_success",
                                                                "interval_s", "mismatched_turns", "failed", "source") if k in res},
                                     energy_j=(res.get("energy") or {}).get("cpu_plus_gpu_j"),
