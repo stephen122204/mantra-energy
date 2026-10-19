@@ -17,6 +17,18 @@ import math
 import re
 
 PROTOCOL_VERSION = "chat-tools-v1"
+# chat-tools-v2 differs from v1 only in two model-visible details, both opt-in:
+# an unclosed final <tool_call> is parsed to the end of the response (as the
+# vLLM hermes parser does), and feedback after an unusable turn names the fix.
+PROTOCOL_V2 = "chat-tools-v2"
+CHAT_PROTOCOLS = (PROTOCOL_VERSION, PROTOCOL_V2)
+FEEDBACK_HINTS = {
+    "unbalanced tool_call tags": 'write each call as <tool_call>{"name": ..., "arguments": {...}}</tool_call>, '
+                                 "including the closing tag",
+    "no tool call": 'text outside <tool_call> tags is not acted on; wrap the call as '
+                    '<tool_call>{"name": "TOOL_NAME", "arguments": {...}}</tool_call>. '
+                    'To finish, use name "submit_answer" and arguments {"answer": <your task answer>}',
+}
 SUBMIT = "submit_answer"
 MAX_CALLS_PER_TURN = 8
 # Keys that describe execution cost rather than task semantics. They stay in
@@ -26,6 +38,9 @@ HIDDEN_KEYS = frozenset({"tool_accounting", "elapsed_ns", "cpu_ns", "workers_obs
 OUTCOMES = (
     "passed",
     "wrong_answer",
+    "performance_budget_exceeded",
+    "program_error",
+    "program_timeout",
     "output_truncated",
     "turn_budget_exhausted",
     "tool_call_budget_exhausted",
@@ -101,16 +116,28 @@ class Decision:
     answer: object = None
     reason: str = ""
     content: str = ""              # visible text outside tool-call blocks
+    repaired: str = ""             # accepted deviation from the strict format (chat-tools-v2 only)
 
 
 _BLOCK = re.compile(r"<tool_call>(.*?)</tool_call>", re.S)
 
 
-def parse_response(text, max_calls=MAX_CALLS_PER_TURN):
-    """Parse a Qwen-format response. Never guesses: anything ambiguous is malformed."""
+def parse_response(text, max_calls=MAX_CALLS_PER_TURN, *, accept_unclosed_final=False):
+    """Parse a Qwen-format response. Never guesses: anything ambiguous is malformed.
+
+    accept_unclosed_final (chat-tools-v2): a last <tool_call> with no closing tag
+    runs to the end of the response, like vLLM's hermes parser
+    (<tool_call>(.*?)</tool_call>|<tool_call>(.*)). Its JSON is still parsed strictly.
+    """
     if not isinstance(text, str):
         return Decision("malformed", reason="response text missing")
-    blocks = _BLOCK.findall(text)
+    tail, repaired = None, ""
+    if accept_unclosed_final:
+        start = text.rfind("<tool_call>")
+        if start >= 0 and "</tool_call>" not in text[start:]:
+            text, tail = text[:start], text[start + len("<tool_call>"):]
+            repaired = "unclosed final tool_call accepted"
+    blocks = _BLOCK.findall(text) + ([tail] if tail is not None else [])
     content = _BLOCK.sub("", text).strip()
     if "<tool_call>" in content or "</tool_call>" in content:
         return Decision("malformed", reason="unbalanced tool_call tags", content=content)
@@ -134,8 +161,8 @@ def parse_response(text, max_calls=MAX_CALLS_PER_TURN):
         arguments = calls[0][1]
         if set(arguments) != {"answer"}:
             return Decision("malformed", reason="submit_answer takes exactly {answer}", content=content)
-        return Decision("answer", answer=arguments["answer"], content=content)
-    return Decision("tool_calls", calls=tuple(calls), content=content)
+        return Decision("answer", answer=arguments["answer"], content=content, repaired=repaired)
+    return Decision("tool_calls", calls=tuple(calls), content=content, repaired=repaired)
 
 
 @dataclass
@@ -144,6 +171,7 @@ class Conversation:
     goal: str
     tools: list
     max_turns: int
+    protocol: str = PROTOCOL_VERSION
     messages: list = field(default_factory=list)
     turns_used: int = 0
 
@@ -173,9 +201,10 @@ class Conversation:
 
     def feedback(self, reason):
         # No tool result exists to carry the notice, so it is a user message.
+        hint = FEEDBACK_HINTS.get(reason) if self.protocol == PROTOCOL_V2 else None
+        error = f"{reason}: {hint}. Call a tool or submit_answer." if hint else f"{reason}. Call a tool or submit_answer."
         self.messages.append(dict(role="user", content=json.dumps(
-            dict(status="error", error=f"{reason}. Call a tool or submit_answer.", turns_remaining=self.remaining()),
-            sort_keys=True)))
+            dict(status="error", error=error, turns_remaining=self.remaining()), sort_keys=True)))
 
 
 def to_native_text(decision):
@@ -200,12 +229,26 @@ def legacy_context(request, meta):
     return dict(meta, tool_results=results)
 
 
-def outcome_class(execution_status, verifier_outcome, terminal):
+# Verifier failure labels (verification.json result["failure"]) -> attempt outcome. A correct-but-slow program,
+# a crashing program and a worker/sandbox fault are not wrong answers; unknown or absent labels stay wrong_answer.
+FAILURE_OUTCOMES = {
+    "budget": "performance_budget_exceeded",
+    "budget_exceeded": "performance_budget_exceeded",
+    "error": "program_error",
+    "runtime_error": "program_error",
+    "hidden_timeout": "program_timeout",
+    "worker_error": "infrastructure_failure",
+}
+
+
+def outcome_class(execution_status, verifier_outcome, terminal, failure=None):
     """One reason per attempt. Every class is still an attempt with its energy."""
     if terminal:
         return terminal
     if execution_status == "completed":
-        return {"pass": "passed", "fail": "wrong_answer"}.get(verifier_outcome, "infrastructure_failure")
+        if verifier_outcome == "fail":
+            return FAILURE_OUTCOMES.get(failure, "wrong_answer")
+        return {"pass": "passed"}.get(verifier_outcome, "infrastructure_failure")
     if execution_status == "timed_out":
         return "deadline_exceeded"
     return "infrastructure_failure"

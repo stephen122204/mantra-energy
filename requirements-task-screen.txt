@@ -1,0 +1,6 @@
+# Optional test dependencies for the pinned NetworkX repository task source.
+# Main harness dependencies remain in requirements-study.txt.
+numpy>=1.24
+scipy>=1.10,!=1.11.0,!=1.11.1
+pytest-cov>=4.0
+networkx==3.4.2

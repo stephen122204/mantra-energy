@@ -6,9 +6,22 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
-from . import numerical_workload, business_workload, etl_workload
+from . import numerical_workload, business_workload, etl_workload, repo_workload, program_workload, impl_workload
+from . import sandbox, repo_oracle, repo_test_process, private_challenges
 
-MODULES = {'numerical':numerical_workload, 'business':business_workload, 'etl':etl_workload}
+MODULES = {'numerical':numerical_workload, 'business':business_workload, 'etl':etl_workload, 'repo':repo_workload, 'program':program_workload, 'impl':impl_workload}
+
+
+def support_components(kinds):
+    modules = set()
+    if 'repo' in kinds:
+        modules.update((sandbox, repo_oracle, repo_test_process))
+    if 'impl' in kinds:
+        modules.add(sandbox)
+    if {'etl','program'} & set(kinds):
+        modules.add(private_challenges)
+    return {m.__name__.rsplit('.', 1)[-1]: hashlib.sha256(Path(m.__file__).read_bytes()).hexdigest()
+            for m in sorted(modules, key=lambda m: m.__name__)}
 
 
 @dataclass
@@ -32,7 +45,7 @@ class PackRuntime:
         self.modules=modules;self.output=output;self.active=None;self.task_id=None
     def begin(self,task,lease):
         module=self.modules[task.task_id]
-        cls={numerical_workload:numerical_workload.RegressionRuntime, business_workload:business_workload.BusinessRuntime, etl_workload:etl_workload.ETLRuntime}[module]
+        cls={numerical_workload:numerical_workload.RegressionRuntime, business_workload:business_workload.BusinessRuntime, etl_workload:etl_workload.ETLRuntime, repo_workload:repo_workload.RepoRuntime, program_workload:program_workload.ProgramRuntime, impl_workload:impl_workload.ImplRuntime}[module]
         self.active=cls(self.output);self.task_id=task.task_id
         self.active.begin(task,lease)
     def _runtime(self,task):
@@ -47,7 +60,7 @@ class PackRuntime:
         return self._runtime(task).verify
 
 
-def prepare(root, specifications):
+def prepare(root, specifications, *, prepared_assets=None):
     """Each specification has kind, rows, seed; sizes are explicit, not inferred."""
     if not isinstance(specifications,list) or not 1<=len(specifications)<=64:
         raise ValueError('provide 1..64 task specifications')
@@ -62,18 +75,40 @@ def prepare(root, specifications):
             external[index]=numerical_workload.load_task(spec['assets'],task_id=spec['task_id'],
                 lineage=spec['lineage'],asset_sha256=spec['asset_sha256'])
             key=('prepared',spec['task_id'])
+        elif spec.get('kind')=='program':
+            if set(spec)!={'kind','case','rows','seed'} or spec['case'] not in program_workload.CASES or type(spec['rows']) is not int or not 32<=spec['rows']<=program_workload.MAX_ROWS or type(spec['seed']) is not int or not 0<=spec['seed']<2**31:
+                raise ValueError('program specification requires a supported case, rows and seed')
+            key=('program',spec['case'],spec['rows'],spec['seed'])
+        elif spec.get('kind')=='impl':
+            # Python implementation problem from a prepared bundle (impl_prepare.py).
+            # Optional prompt version (impl_workload.PROMPTS); v2 is the default.
+            if not {'kind','problem','bundle'}<=set(spec)<={'kind','problem','bundle','prompt'} or not isinstance(spec['problem'],str) \
+                    or not isinstance(spec['bundle'],str) or not Path(spec['bundle']).is_absolute() \
+                    or spec.get('prompt','v2') not in impl_workload.PROMPTS:
+                raise ValueError('impl specification requires problem and absolute bundle')
+            key=('impl',spec['problem'],spec.get('prompt','v2'))
+        elif spec.get('kind')=='repo':
+            # Repository repair: an explicit case over a pinned source checkout and tool Python.
+            if set(spec)!={'kind','case','source','python'} or spec['case'] not in repo_workload.CASES \
+                    or not all(isinstance(spec[k],str) and Path(spec[k]).is_absolute() for k in ('source','python')):
+                raise ValueError('repo specification requires case, absolute source and absolute python')
+            key=('repo',spec['case'])
         else:
-            if set(spec)!={'kind','rows','seed'}:
+            if not (set(spec)=={'kind','rows','seed'} or (set(spec)=={'kind','rows','seed','variant'} and spec.get('kind')=='etl')):
                 raise ValueError('task specification requires generated or prepared fields')
+            if 'variant' in spec:etl_workload.validate_variant(spec['variant'])
             if not isinstance(spec['kind'],str) or spec['kind'] not in MODULES or type(spec['rows']) is not int or not 32<=spec['rows']<=1_000_000 or type(spec['seed']) is not int or not 0<=spec['seed']<2**31:
                 raise ValueError('invalid task specification')
-            key=(spec['kind'],spec['rows'],spec['seed'])
+            key=(spec['kind'],spec['rows'],spec['seed'],json.dumps(spec.get('variant'),sort_keys=True))
         if key in seen:raise ValueError('duplicate task specification')
         seen.add(key)
     root=Path(root)
     manifest=root/'task-pack.json'
     envelope={'version':'task-pack-v1','specifications':specifications,
-              'components':{k:hashlib.sha256(Path(MODULES[k].__file__).read_bytes()).hexdigest() for k in sorted({s['kind'] for s in specifications})}}
+              'components':{k:hashlib.sha256(Path(MODULES[k].__file__).read_bytes()).hexdigest() for k in sorted({s['kind'] for s in specifications})},
+              'support_components':support_components({s['kind'] for s in specifications})}
+    if prepared_assets is not None:
+        _snapshot_prepared(root, Path(prepared_assets), envelope)
     if manifest.exists() and json.loads(manifest.read_text())!=envelope:
         raise ValueError('task pack changed; use a new directory')
     root.mkdir(parents=True,exist_ok=True)
@@ -91,9 +126,21 @@ def prepare(root, specifications):
                     numerical_workload.load_task(snapshot,task_id=spec['task_id'],lineage=spec['lineage'],asset_sha256=spec['asset_sha256'])
                     snapshot.rename(path)
             created=(numerical_workload.load_task(path,task_id=spec['task_id'],lineage=spec['lineage'],asset_sha256=spec['asset_sha256']),)
+        elif spec['kind']=='program':
+            path=root/f"program-{spec['case']}-n{spec['rows']}-s{spec['seed']}"
+            created=(program_workload.create_task(path,case=spec['case'],rows=spec['rows'],seed=spec['seed']),)
+        elif spec['kind']=='impl':
+            path=root/f"impl-{spec['problem'].lower().replace('/','-')}"
+            created=(impl_workload.create_task(path,problem=spec['problem'],bundle=spec['bundle'],prompt=spec.get('prompt','v2')),)
+        elif spec['kind']=='repo':
+            path=root/f"repo-{spec['case']}"
+            created=(repo_workload.create_task(path,case=spec['case'],source=spec['source'],python=spec['python']),)
         else:
             path=root/f"{spec['kind']}-n{spec['rows']}-s{spec['seed']}"
-            if module in (numerical_workload,etl_workload):
+            if spec.get('variant') is not None:
+                path=root/(path.name+etl_workload.variant_suffix(spec['variant']))
+                created=(etl_workload.create_task(path,rows=spec['rows'],seed=spec['seed'],variant=spec['variant']),)
+            elif module in (numerical_workload,etl_workload):
                 created=(module.create_task(path,rows=spec['rows'],seed=spec['seed']),)
             else:created=module.create_tasks(path,rows=spec['rows'],seed=spec['seed'])
         for task in created:
@@ -104,3 +151,31 @@ def prepare(root, specifications):
         temporary.write_text(json.dumps(envelope,indent=2,sort_keys=True)+'\n')
         temporary.replace(manifest)
     return TaskPack(tuple(tasks),modules,root)
+
+
+def _snapshot_prepared(root, source, envelope):
+    """Reuse frozen private challenges across separately launched model arms."""
+    import shutil
+    import tempfile
+    from studies.energy_diagnosis.workloads.pilot_tasks import _hash
+    root, source = root.absolute(), source.absolute()
+    if root.resolve() == source.resolve() or root.resolve() in source.resolve().parents or source.resolve() in root.resolve().parents:
+        raise ValueError('prepared assets and run assets must be disjoint')
+    def fingerprint(path):
+        if path.is_symlink() or not path.is_dir() or any(p.is_symlink() or not (p.is_file() or p.is_dir()) for p in path.rglob('*')):
+            raise ValueError('prepared assets require ordinary files and directories without symlinks')
+        if json.loads((path/'task-pack.json').read_text()) != envelope:
+            raise ValueError('prepared task pack differs from specifications or verifier code')
+        return _hash(path)
+    before = fingerprint(source)
+    if root.exists():
+        if fingerprint(root) != before:
+            raise ValueError('run assets differ from frozen prepared assets')
+        return
+    root.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='prepared-pack-', dir=root.parent) as temp:
+        snapshot=Path(temp)/'assets'
+        shutil.copytree(source, snapshot)
+        if fingerprint(snapshot) != before or fingerprint(source) != before:
+            raise ValueError('prepared assets changed while copying')
+        snapshot.rename(root)

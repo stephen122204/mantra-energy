@@ -12,7 +12,7 @@ def setup(tmp_path,rows=128,seed=7):
 @pytest.mark.parametrize('rows,seed',[(32,0),(8192,7),(65536,29)])
 def test_repair_with_real_query_and_csv_reference(tmp_path,rows,seed):
     task,runtime,tool=setup(tmp_path,rows,seed)
-    assert task.task_id.startswith('etl-latest-v2-')
+    assert task.task_id.startswith('etl-latest-v3-')
     assert task.lineage == 'synthetic-versioned-events-v2'
     assert not runtime.verify(task,{'done':True})['passed']
     tool.execute('write',CORRECT)
@@ -101,3 +101,21 @@ def test_hand_built_hidden_reference_and_sql_agree(tmp_path):
         assert tool.execute('query', query)['rows'] == expected
     for query in SHORTCUTS:
         assert tool.execute('query', query)['rows'] != expected
+
+
+CORRELATED="SELECT region, COUNT(*) AS event_count, SUM(gross_cents - tax_cents) AS net_cents FROM raw r1 WHERE seq = (SELECT MAX(seq) FROM raw r2 WHERE r2.event_id = r1.event_id) AND status = 'paid' GROUP BY region ORDER BY region ASC"
+
+def test_correct_but_slow_query_is_labelled_budget_not_wrong(tmp_path,monkeypatch):
+    from studies.energy_diagnosis.moe import etl_workload
+    task,runtime,tool=setup(tmp_path,rows=4096,seed=3)
+    tool.execute('write',CORRELATED)
+    assert runtime.verify(task,{'done':True})['passed']      # correct logic within the normal budget on small input
+    monkeypatch.setattr(etl_workload,'QUERY_SECONDS',0.0)
+    result=runtime.verify(task,{'done':True})
+    assert not result['passed'] and result['failure']=='budget' and 'execution budget' in result['reason']
+
+def test_wrong_query_is_labelled_mismatch(tmp_path):
+    task,runtime,tool=setup(tmp_path)
+    tool.execute('write',CORRECT.replace('MAX(seq)','MIN(seq)'))
+    result=runtime.verify(task,{'done':True})
+    assert not result['passed'] and result['failure']=='mismatch'

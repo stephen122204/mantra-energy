@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import random
 import statistics
+from studies.energy_diagnosis.moe import event_log
 
 
 def paired_interval(pairs, *, seed=7, draws=2000):
@@ -76,6 +77,7 @@ def summarize(root):
     root = Path(root)
     groups = defaultdict(list)
     registered_windows = set()
+    recovered = set()   # attempts classified by explicit recovery (reconcile): expected unknown energy
     attempts_path = root / "exports" / "attempts.jsonl"
     if attempts_path.exists():
         for line in attempts_path.read_text().splitlines():
@@ -83,6 +85,8 @@ def summarize(root):
             attempt = row["attempt"]
             path = root / "goals" / attempt["execution_id"] / "record.json"
             record = attempt.get("execution_record")
+            if "recovery" in (attempt.get("outcome_metadata") or {}):
+                recovered.add(attempt["execution_id"])
             if record is None:
                 record = dict(
                     setting_id=row["plan"]["setting_id"],
@@ -181,9 +185,9 @@ def summarize(root):
             startup_ns
         ) = routing_hook_ns = transfer_bracket_ns = unused_bytes = 0
         for path, _ in entries:
-            events_path = path.with_name("expert-events.json")
-            if events_path.exists():
-                events = json.loads(events_path.read_text())
+            events_path = event_log.path_in(path.parent)
+            if events_path is not None:
+                events = event_log.read(events_path)
                 finishes = {}
                 for event in events:
                     kind = event["event"]
@@ -214,7 +218,7 @@ def summarize(root):
                 )
         components_complete = all(
             r["execution_status"] == "completed"
-            and path.with_name("expert-events.json").exists()
+            and event_log.path_in(path.parent) is not None
             and path.with_name("model-calls.json").exists()
             for path, r in entries
         )
@@ -235,6 +239,10 @@ def summarize(root):
             attempts=len(entries),
             successful=successes,
             invalid_energy_attempts=invalid,
+            # From the ledger export, never from goal files: a recovered attempt may have no record.json, and a
+            # preserved pre-recovery observation is not its terminal status.
+            crashed_attempts=sum(r["execution_status"] == "crashed" for _, r in entries),
+            recovered_attempts=sum(p.parent.name in recovered for p, _ in entries),
             total_seconds=sum(
                 (r["ended_ns"] - r["started_ns"]) / 1e9 for _, r in entries
             )

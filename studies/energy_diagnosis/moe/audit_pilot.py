@@ -17,7 +17,16 @@ def call_checks(calls, prefix_mode, require_timing=False):
         return dict(model_calls_present=False)
     checks = dict(model_calls_present=True, token_accounting=True, prefix_mode=True)
     reused = 0
-    for call in calls:
+    # A turn refused before generation (context budget) is a recorded model outcome, not an
+    # executed call: it carries no prefill/decode or timing. It must be the goal's final call.
+    refused = [i for i, c in enumerate(calls)
+               if c.get("adapter", {}).get("backend", {}).get("finish_reason") == "context_exhausted"]
+    checks["refused_calls_terminal"] = all(
+        i == len(calls) - 1 and calls[i]["adapter"]["backend"].get("tokens", {}).get("completion") == 0
+        and not calls[i]["adapter"]["backend"].get("text") for i in refused)
+    for index, call in enumerate(calls):
+        if index in refused:
+            continue
         backend = call.get("adapter", {}).get("backend", {})
         p, t = backend.get("prefix_cache", {}), backend.get("tokens", {})
         checks["prefix_mode"] &= p.get("mode") == prefix_mode
@@ -38,13 +47,16 @@ def call_checks(calls, prefix_mode, require_timing=False):
                 and timing.get("subsequent_tokens_ns") == stamps[2] - stamps[1])
             checks["token_timing"] = checks.get("token_timing", True) and valid_timing
     if prefix_mode == "exact_prefix":
-        checks["prefix_reuse_exercised"] = len(calls) > 1 and reused > 0
+        checks["prefix_reuse_exercised"] = len(calls) - len(refused) > 1 and reused > 0
     return checks
 
 
 def compare_calls(calls, reference):
     return dict(same_requests=[x["request"] for x in calls] == [x["request"] for x in reference],
                 same_outputs=[x["adapter"]["content"] for x in calls] == [x["adapter"]["content"] for x in reference])
+
+
+OUTCOME_CHECKS = ("native_correct_completion", "prefix_reuse_exercised")
 
 
 def audit(stage, *, prefix_mode, reference=None, required_domains=(), require_timing=False):
@@ -65,6 +77,8 @@ def audit(stage, *, prefix_mode, reference=None, required_domains=(), require_ti
         checks["transfer_audit"] = t["observed_records_consistent"] and t["every_attempt_checked"]
         goals = sorted((root / "goals").glob("*/record.json"))
         checks["exactly_one_goal"] = len(goals) == 1 and w["attempts"] == 1
+        manifest = root / "moe-manifest.json"
+        checks["not_diagnostic"] = not (manifest.exists() and json.loads(manifest.read_text()).get("diagnostic"))
         if len(goals) != 1:
             raise ValueError("one goal is required for a development stage")
         g = goals[0].parent
@@ -78,16 +92,23 @@ def audit(stage, *, prefix_mode, reference=None, required_domains=(), require_ti
         checks.update(call_checks(calls, prefix_mode, require_timing))
         if require_timing and checks.get("token_timing"):
             spans = [s for s in record["spans"] if s["kind"] == "model"]
-            stamps = [x["adapter"]["backend"]["generation_timing"] for x in calls]
-            checks["timing_inside_model_spans"] = len(spans) == len(stamps) and all(
-                s["start_ns"] <= t["started_ns"] <= t["stream_end_ns"] <= s["end_ns"] for s, t in zip(spans, stamps))
+            # Pair every call with its span; a refused (context-exhausted) call has a span but no
+            # generation timing, and call_checks has already required it to be the final call.
+            pairs = [(s, x["adapter"]["backend"].get("generation_timing")) for s, x in zip(spans, calls)
+                     if x["adapter"]["backend"].get("finish_reason") != "context_exhausted"]
+            checks["timing_inside_model_spans"] = len(spans) == len(calls) and all(
+                t is not None and s["start_ns"] <= t["started_ns"] <= t["stream_end_ns"] <= s["end_ns"] for s, t in pairs)
         if reference is not None:
             ref = json.loads(Path(reference).read_text())
             checks.update(compare_calls(calls, ref))
         details["model_work"] = [x["adapter"].get("backend", {}).get("prefix_cache") for x in calls]
     except (OSError, ValueError, KeyError, TypeError) as exc:
         errors.append(f"{type(exc).__name__}: {exc}")
+    protocol = {k: v for k, v in checks.items() if k not in OUTCOME_CHECKS}
     return dict(smoke_passed=bool(checks) and all(checks.values()) and not errors,
+                # Validity never depends on the task outcome: failed goals are data.
+                protocol_valid=bool(protocol) and all(protocol.values()) and not errors,
+                outcome={k: checks[k] for k in OUTCOME_CHECKS if k in checks},
                 checks=checks, errors=errors, details=details,
                 scope="Development smoke only. Residency is not saved copy bytes; host overlap is not DMA overlap. "
                       "No energy benefit or general model fidelity is inferred. Genuine task failures remain recorded.")
@@ -101,11 +122,13 @@ def main(argv=None):
     p.add_argument("--required-domain", action="append", default=[])
     p.add_argument("--require-token-timing", action="store_true")
     p.add_argument("--output", required=True)
+    p.add_argument("--campaign", action="store_true",
+                   help="Exit status reflects protocol validity only; task outcome is recorded, never gating")
     a = p.parse_args(argv)
     result = audit(a.stage, prefix_mode=a.prefix_mode, reference=a.reference, required_domains=a.required_domain, require_timing=a.require_token_timing)
     Path(a.output).write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
     print(json.dumps({k: v for k, v in result.items() if k != "details"}))
-    return 0 if result["smoke_passed"] else 2
+    return 0 if result["protocol_valid" if a.campaign else "smoke_passed"] else 2
 
 
 if __name__ == "__main__":
