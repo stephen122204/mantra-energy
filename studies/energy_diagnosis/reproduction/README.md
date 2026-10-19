@@ -13,6 +13,14 @@ runtime, [MoE README](../moe/README.md) for native inference and expert preparat
 and [campaign documentation](../campaign/README.md) for records, retries and
 recovery. Task verification and measurement validity are separate checks.
 
+## Consolidation note
+
+The cleanup branch now includes source changes from PRs #62–74 except #68,
+plus #77. The baseline and unmerged-status descriptions below record the
+8 October audit snapshot; they do not describe the current cleanup tree.
+PR #68 host-power work and PR #75 datasets remain separately archived. The
+historical artifact hashes and missing-archive limitations below are unchanged.
+
 ## Evidence and source boundaries
 
 The [artifact manifest](artifact-manifest.json) is a release-preparation inventory,
