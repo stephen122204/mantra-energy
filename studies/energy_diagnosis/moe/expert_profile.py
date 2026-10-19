@@ -73,9 +73,10 @@ def build_future_trace(campaign, policy="demand"):
 
 
 def dump(data, path):
-    text = json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n"
-    Path(path).write_text(text)
-    return hashlib.sha256(text.encode()).hexdigest()
+    raw = (json.dumps(data, sort_keys=True, separators=(",", ":"),
+                      allow_nan=False) + "\n").encode("utf-8")
+    Path(path).write_bytes(raw)
+    return hashlib.sha256(raw).hexdigest()
 
 
 def load(path):
