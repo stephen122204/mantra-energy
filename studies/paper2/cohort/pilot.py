@@ -28,6 +28,8 @@ import sys
 import time
 from pathlib import Path
 
+from studies.energy_diagnosis.agent_protocol import CHAT_PROTOCOLS
+
 from .cohort import CohortSpec, run_cohort
 from .records import EventLog, write_manifest
 from .server import ServerConfig, VllmServer
@@ -115,6 +117,9 @@ def main(argv=None):
     plan = json.loads(a.plan.read_text())
     if a.retry_of and not (a.retry_reason or "").startswith("infra:"):
         raise SystemExit("--retry-of needs --retry-reason 'infra: <cause>'; configuration failures are outcomes, not retried")
+    protocol = plan.get("protocol", "chat-tools-v2")  # one parsing policy for every precision of the plan
+    if protocol not in CHAT_PROTOCOLS:
+        raise SystemExit(f"unknown agent protocol {protocol!r}")
     out = a.out
     out.mkdir(parents=True, exist_ok=False)
     (out / "plan.json").write_text(json.dumps(plan, indent=1))
@@ -124,7 +129,7 @@ def main(argv=None):
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
     log.append("driver_start", revision=revision, dirty=bool(dirty), budget_s=a.budget_s, cutoff_utc=a.cutoff_utc,
-               retry_of=a.retry_of, retry_reason=a.retry_reason, campaign=plan.get("campaign"),
+               retry_of=a.retry_of, retry_reason=a.retry_reason, campaign=plan.get("campaign"), protocol=protocol,
                energy_metric=(plan.get("binding") or {}).get("energy_metric", "cpu_package+gpu_board"))
     if plan.get("campaign", {}).get("commit") not in (None, revision):
         raise SystemExit("checkout does not match the campaign execution commit")
@@ -273,7 +278,8 @@ def main(argv=None):
                                       sampling=dict(plan["sampling"], seed=s.get("seed", plan["sampling"].get("seed", 0))),
                                       cohort_deadline_s=s.get("cohort_deadline_s", plan.get("cohort_deadline_s", 3600)),
                                       tool_cpus=plan.get("tool_cpus"), session_cpus=plan.get("session_cpus"),
-                                      labels=dict(config=cfg.name, step=s["name"]), task_options=plan.get("task_options", {}))
+                                      labels=dict(config=cfg.name, step=s["name"]), task_options=plan.get("task_options", {}),
+                                      protocol=protocol)
                     res = run_cohort(spec, out / "cohorts" / name, measurement=meas, poller=poller)
                     live_dirs[f"{cfg.name}/{s['name']}"] = out / "cohorts" / name / name
                 elif kind == "replay":

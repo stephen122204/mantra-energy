@@ -209,7 +209,7 @@ def _shard_class(base: dict, matrix: dict, meas: dict, nodes: list, commit: str,
         assign[node["name"]].append((cell_name, k))
 
     common = {k: base[k] for k in ("isolation", "limits", "sampling", "task_options", "load_est_s", "export_reserve_s",
-                                   "cohort_deadline_s", "port", "tool_cpus", "session_cpus") if k in base}
+                                   "cohort_deadline_s", "port", "tool_cpus", "session_cpus", "protocol") if k in base}
     common["cache_start"] = matrix.get("cache_start", "cold")
     if matrix.get("frozen_catalog"):
         frozen = {r["task_id"]: r.get("asset_sha256") for r in json.loads(Path(matrix["frozen_catalog"]).read_text())}
