@@ -12,8 +12,11 @@ The repository supports two uses:
 - run new experiments with explicit models, tasks, configurations and measurement
   boundaries.
 
-This guide describes the integrated baseline at `6a49455` with the approved
-cleanup. Additional functionality and data in PRs #62–75 remain unmerged.
+This cleanup branch consolidates campaign execution, task verification, stock
+inference engines and V100 readiness from PRs #62–74 (except #68) and #77.
+Historical host-power work (#68) and processed campaign datasets (#75) are
+preserved separately in the repository cleanup archive; their inclusion and
+reproduction requirements remain subject to review.
 The integration branch is `research/energy-diagnosis`; `main` preserves the
 upstream baseline.
 

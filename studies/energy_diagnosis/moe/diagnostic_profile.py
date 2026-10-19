@@ -65,14 +65,18 @@ def summarize(trace):
             kernel_count=len(kernels),
             h2d_copy_busy_ms=round(_union([clip(e) for e in h2d]) / 1e3, 2),
             h2d_copy_count=len(h2d),
-            h2d_bytes=sum(int(e.get("args", {}).get("bytes", 0)) for e in h2d),
+            # Attribute each copy's bytes once, by its start timestamp. Busy
+            # intervals/counts still describe overlapping activity; no byte rate
+            # within a copy is observed by this trace.
+            h2d_bytes=sum(int(e.get("args", {}).get("bytes", 0)) for e in h2d
+                          if lo <= e["ts"] < hi),
             other_copy_count=len(copies) - len(h2d),
             cuda_runtime_top_ms={k: round(v / 1e3, 2) for k, v in sorted(runtime.items(), key=lambda kv: -kv[1])[:12]},
             cpu_op_inclusive_top_ms={k: round(v / 1e3, 2) for k, v in sorted(cpu.items(), key=lambda kv: -kv[1])[:15]},
         )
-    return dict(version="alems-call-profile-v1", first_token_marked=split is not None, segments=out,
+    return dict(version="alems-call-profile-v2", byte_attribution="copy_start_timestamp", first_token_marked=split is not None, segments=out,
                 scope="Diagnostic profiler run; timings are perturbed by tracing. Intervals are GPU activity unions "
-                      "within each segment; CPU op times are inclusive and may overlap.")
+                      "within each segment; copy bytes are assigned once by start timestamp, not measured byte flow. CPU op times are inclusive and may overlap.")
 
 
 class CallProfiler:
