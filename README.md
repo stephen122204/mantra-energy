@@ -12,11 +12,8 @@ The repository supports two uses:
 - run new experiments with explicit models, tasks, configurations and measurement
   boundaries.
 
-This cleanup branch consolidates campaign execution, task verification, stock
-inference engines and V100 readiness from PRs #62–74 (except #68) and #77.
-Historical host-power work (#68) and processed campaign datasets (#75) are
-preserved separately in the repository cleanup archive; their inclusion and
-reproduction requirements remain subject to review.
+This branch contains the current development platform, separate from the
+historical Paper 1 implementations preserved in the release linked below.
 The integration branch is `research/energy-diagnosis`; `main` preserves the
 upstream baseline.
 
@@ -69,6 +66,13 @@ recovery and verified output collection. Original Chameleon allocations have exp
 
 ## Reproducibility
 
+Paper 1, **“Task-Level Energy Trade-offs of Model Quantization in Locally Hosted
+AI Agents,”** has an official [source-code release (`v1.0.0-paper1`)](https://github.com/stephen122204/alems-energy-diagnosis/releases/tag/v1.0.0-paper1).
+It preserves multiple historical source revisions and available processed artifacts;
+it does not establish complete reproduction of the submitted results. Use the
+release's named source assets and [provenance documentation](https://github.com/stephen122204/alems-energy-diagnosis/blob/paper1/release/provenance.json)
+for campaign revisions, missing data and known limitations.
+
 The [reproduction guide](studies/energy_diagnosis/reproduction/README.md) separates
 **regenerating reported results** from **running new experiments**. It provides
 verified CSV-to-summary/figure instructions, source-supported commands that remain
@@ -95,9 +99,9 @@ verified checks and limitations.
 
 ## Citations
 
-Until a versioned release citation is available, identify this repository and the
-exact source revision used for an experiment. No final paper citation or Zenodo
-DOI is established by this documentation.
+For Paper 1 source, cite the versioned release above and the relevant experimental
+source revision. For new experiments, identify the exact development revision used.
+No final paper citation or Zenodo DOI is established by this documentation.
 
 A-LEMS originates from [Deepak Panigrahy's upstream platform](https://github.com/deepakpanigrahy03/alems-platform);
 its baseline is recorded in [provenance.json](studies/energy_diagnosis/provenance.json).
