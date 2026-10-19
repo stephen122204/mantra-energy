@@ -76,9 +76,10 @@ def task_ids() -> dict:
 
 
 def build(work: Path, gpu_uuid: str, allocation: str, swebench_catalog: Path = None, max_model_len: int = 65536,
-          max_tokens=4096, max_total_output_tokens=65536) -> dict:
+          max_tokens=4096, max_total_output_tokens=65536, protocol="chat-tools-v2") -> dict:
     """max_tokens=None: no per-response cap (each response may use the remaining context);
-    max_total_output_tokens=None: no total output budget per session."""
+    max_total_output_tokens=None: no total output budget per session. protocol: the agent protocol of
+    every session (chat-tools-v3 accepts Mistral calls without the [ARGS] marker, as vLLM's parser does)."""
     swebench_ids = [c["task_id"] for c in json.loads(swebench_catalog.read_text())] if swebench_catalog else []
     ids = task_ids()
     configs = [dict(name=name, model=str(work / "models" / name), max_model_len=max_model_len, gpu_memory_utilization=0.90,
@@ -108,7 +109,7 @@ def build(work: Path, gpu_uuid: str, allocation: str, swebench_catalog: Path = N
         limits=dict(max_turns=250, max_tool_calls=500, max_total_output_tokens=max_total_output_tokens, max_tokens=max_tokens, deadline_s=1800,
                     verify_timeout_s=900),
         sampling=dict(mode="sampled", temperature=0.15, top_p=1.0, top_k=-1, min_p=0.0, seed=0),  # C2: T=0.15, full vocab
-        load_est_s=300, export_reserve_s=900, cohort_deadline_s=3000,
+        load_est_s=300, export_reserve_s=900, cohort_deadline_s=3000, protocol=protocol,
         extra_catalogs=[str(swebench_catalog)] if swebench_catalog else [],
         task_options=dict(swebench=dict(cpus="4", memory="16g", harness_python=str(work / "venv-swebench" / "bin" / "python"))),
     )
@@ -124,9 +125,10 @@ def sweep_bound_s(n: int, total_service_s: float, session_deadline_s: float, rou
 
 def build_sweep(work: Path, gpu_uuid: str, allocation: str, total_service_s: float, *, repeat_n=(4, 16),
                 repeats: int = 2, grading_s: int = 600, seed: int = 20261018, frozen_prep: Path = None,
-                max_model_len: int = 65536, max_tokens=4096, max_total_output_tokens=65536) -> dict:
+                max_model_len: int = 65536, max_tokens=4096, max_total_output_tokens=65536,
+                protocol="chat-tools-v2") -> dict:
     plan = build(work, gpu_uuid, allocation, max_model_len=max_model_len, max_tokens=max_tokens,
-                 max_total_output_tokens=max_total_output_tokens)
+                 max_total_output_tokens=max_total_output_tokens, protocol=protocol)
     ids = task_ids()["all"]
     names = [c["name"] for c in plan["configs"]]
     session_deadline = plan["limits"]["deadline_s"]
@@ -185,16 +187,20 @@ def main(argv=None):
     ap.add_argument("--max-model-len", type=int, default=65536, help="serving context for every precision")
     ap.add_argument("--max-tokens", type=_cap, default=4096, help="per-response cap, or 'none' for the remaining context")
     ap.add_argument("--max-total-output-tokens", type=_cap, default=65536, help="per-session output budget, or 'none'")
+    ap.add_argument("--protocol", choices=["chat-tools-v2", "chat-tools-v3"], default="chat-tools-v2",
+                    help="agent protocol of every session; v3 accepts Mistral calls without the [ARGS] marker")
     a = ap.parse_args(argv)
     if a.sweep:
         if not a.total_service_s:
             ap.error("--sweep needs --total-service-s from a pilot on this GPU class")
         plan = build_sweep(a.work.resolve(), a.gpu_uuid, a.allocation, a.total_service_s, repeat_n=a.repeat_n,
                            repeats=a.repeats, frozen_prep=a.frozen_prep, max_model_len=a.max_model_len,
-                           max_tokens=a.max_tokens, max_total_output_tokens=a.max_total_output_tokens)
+                           max_tokens=a.max_tokens, max_total_output_tokens=a.max_total_output_tokens,
+                           protocol=a.protocol)
     else:
         plan = build(a.work.resolve(), a.gpu_uuid, a.allocation, a.swebench_catalog, max_model_len=a.max_model_len,
-                     max_tokens=a.max_tokens, max_total_output_tokens=a.max_total_output_tokens)
+                     max_tokens=a.max_tokens, max_total_output_tokens=a.max_total_output_tokens,
+                     protocol=a.protocol)
     a.out.write_text(json.dumps(plan, indent=1))
     print(a.out)
 
