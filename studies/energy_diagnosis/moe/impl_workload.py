@@ -29,7 +29,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace, workspace_write
 from . import sandbox
 from .tool_contracts import action_contract, validate_action
 
@@ -175,7 +175,7 @@ class ImplTool:
         if action == "write":
             if not isinstance(content, str) or not content.strip() or len(content.encode()) > 32768:
                 raise ValueError("provide the complete solution.py up to 32768 bytes")
-            sol.write_text(content, encoding="utf-8")
+            workspace_write(sol, content, encoding="utf-8")
             return {"written": True}
         if content is not None:
             raise ValueError("test takes no content")
@@ -211,7 +211,7 @@ class ImplRuntime:
             raise ValueError("impl inputs changed")
         self.workspace = self.root / "workspaces" / lease.execution_id
         # Only public material enters the model-visible workspace.
-        shutil.copytree(task.asset_path / "public", self.workspace)
+        copy_workspace(task.asset_path / "public", self.workspace)
         self.meta = json.loads((task.asset_path / "private" / "meta.json").read_text())
 
     def context(self, task):
