@@ -134,3 +134,55 @@ def test_a_request_cut_at_the_session_deadline_ends_the_session_timed_out(tmp_pa
     status, error, *_ = ex._chat(task, lease, plan, rt.context(task), [], [], [], [], trace, [], None)
     assert status == "timed_out" and trace["terminal"] == "deadline_exceeded" and "mid-stream" in error
     assert len(model.timeouts) == 1 and 0 < model.timeouts[0] <= 0.5
+
+
+@pytest.mark.parametrize("behavior", ["stall", "drip", "headers"])
+def test_real_socket_deadline_interrupts_blocked_reads(behavior):
+    import threading
+    import time
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from studies.paper2.cohort.client import StreamDeadline, stream_completion
+
+    stopped = threading.Event()
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            if behavior == "headers":
+                stopped.wait(2)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            token = dict(choices=[dict(text="x", token_ids=[17], finish_reason=None)])
+            self.wfile.write(("data: " + json.dumps(token) + "\n\n").encode())
+            self.wfile.flush()
+            if behavior == "stall":
+                stopped.wait(2)
+            else:
+                try:
+                    end = time.monotonic() + 2
+                    while time.monotonic() < end and not stopped.wait(0.02):
+                        self.wfile.write(b" ")  # no newline; read timeout never fires
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        start = time.monotonic()
+        with pytest.raises(StreamDeadline) as exc:
+            stream_completion("127.0.0.1", server.server_port, {}, 0.2)
+        assert time.monotonic() - start < 0.8
+        assert exc.value.ids == ([] if behavior == "headers" else [17])
+    finally:
+        stopped.set()
+        server.shutdown()
+        server.server_close()
+        thread.join()

@@ -15,6 +15,8 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import socket
+import threading
 import time
 from typing import Callable, Optional
 from urllib.parse import urlparse
@@ -106,13 +108,35 @@ def stream_completion(host: str, port: int, payload: dict, timeout: float):
     An error event in the stream raises (it is never read as an empty completion).
 
     timeout bounds the whole request, not only the wait for each read: a server that keeps streaming
-    tokens never trips the socket timeout, so the total is checked as each event arrives. Raising
-    closes the connection, which aborts the request inside vLLM."""
+    tokens never trips the socket timeout. A deadline timer interrupts blocked socket reads, including
+    a stalled or incomplete stream line; the event loop also checks the deadline."""
     deadline = time.monotonic() + timeout
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    first_ns, ids = None, []
+    r = None
+    expired = threading.Event()
+    sockets = []
+
+    def interrupt():
+        expired.set()
+        # Retain the socket even when getresponse detaches it for Connection: close.
+        sock = getattr(conn, "sock", None) or (sockets[0] if sockets else None)
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+    timer = threading.Timer(max(0, timeout), interrupt)
+    timer.daemon = True
+    timer.start()
     try:
         conn.request("POST", "/v1/completions", body=json.dumps(payload),
                      headers={"Content-Type": "application/json", "Accept": "text/event-stream"})
+        if getattr(conn, "sock", None) is not None:
+            sockets.append(conn.sock)
+        if expired.is_set() or time.monotonic() >= deadline:
+            raise StreamDeadline(timeout, first_ns, ids)
         r = conn.getresponse()
         if r.status != 200:
             raise RuntimeError(f"HTTP {r.status}: {r.read()[:500]!r}")
@@ -140,12 +164,24 @@ def stream_completion(host: str, port: int, payload: dict, timeout: float):
                 ids.extend(got)
                 text.append(ch.get("text") or "")
                 finish = ch.get("finish_reason") or finish
+        if expired.is_set() or time.monotonic() >= deadline:
+            raise StreamDeadline(timeout, first_ns, ids)
         if not done or finish is None:
             raise RuntimeError("incomplete completion stream: missing terminal event or finish reason")
         if usage.get("completion_tokens", 0) and not ids:
             raise RuntimeError("completion stream reported generated tokens without token IDs")
         return first_ns, ids, finish, usage, "".join(text)
+    except Exception as exc:
+        if expired.is_set() or time.monotonic() >= deadline:
+            raise StreamDeadline(timeout, first_ns, ids) from exc
+        raise
     finally:
+        timer.cancel()
+        timer.join()
+        if r is not None:
+            close_response = getattr(r, "close", None)
+            if close_response is not None:
+                close_response()
         conn.close()
 
 
