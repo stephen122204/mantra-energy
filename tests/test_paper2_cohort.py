@@ -118,6 +118,23 @@ def test_cohort_shares_one_server_and_reconciles(prepared, tmp_path):
 
 
 @needs_renderer
+def test_cohort_without_response_cap_fits_each_request_to_the_context(prepared, tmp_path):
+    from studies.paper2.cohort.client import MistralRenderer
+    from studies.paper2.cohort.cohort import run_cohort
+    from studies.paper2.cohort.fake_server import FakeVllm
+    ids = [c["task_id"] for c in prepared][:2]
+    with FakeVllm(MistralRenderer(TEKKEN), mode="tool") as srv:
+        summary = run_cohort(_spec(prepared, ids, srv, cohort_id="c-nocap", admission_limit=2,
+                                   limits=dict(max_tokens=None, max_total_output_tokens=None)), tmp_path)
+    assert summary["outcomes"] == {"completed": 2} and summary["reconciliation"]["reconciled"]
+    reqs = [json.loads(l) for p in (tmp_path / "c-nocap" / "sessions").glob("*/requests.jsonl")
+            for l in p.read_text().splitlines()]
+    reqs = [r for r in reqs if r.get("kind") == "request"]
+    assert len(reqs) == 4 and all(r["max_tokens"] == 32768 - r["prompt_len"] for r in reqs)
+    assert {r["max_tokens_policy"] for r in reqs} == {"remaining_context"}
+
+
+@needs_renderer
 def test_failure_outcomes_are_explicit(prepared, tmp_path):
     from studies.paper2.cohort.client import MistralRenderer
     from studies.paper2.cohort.cohort import run_cohort

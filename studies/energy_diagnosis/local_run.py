@@ -268,6 +268,8 @@ class GoalExecutor:
         )
         response, calls_used, output_used, seen = None, 0, 0, set()
         per_turn_tokens = self.adapter.model_config["max_tokens"]
+        if per_turn_tokens is None and not getattr(self.adapter, "fit_to_context", False):
+            raise ValueError("no per-response cap requires an adapter that fits responses to the remaining context")
 
         def save_turn(step, phase, payload):
             # Immutable partial evidence survives interruption before finalization.
@@ -290,7 +292,9 @@ class GoalExecutor:
             remaining_output = None if self.max_output_tokens is None else self.max_output_tokens - output_used
             if remaining_output is not None and remaining_output <= 0:
                 return stop("output_budget_exhausted", f"{output_used} output tokens used")
-            call_budget = per_turn_tokens if remaining_output is None else min(per_turn_tokens, remaining_output)
+            # per_turn_tokens None: no per-response cap; the adapter fits the response to the remaining context
+            caps = [b for b in (per_turn_tokens, remaining_output) if b is not None]
+            call_budget = min(caps) if caps else None
             request = conversation.request()
             sampling = (dict(self.sampling, seed=turn_seed(self.sampling["seed"], pair_key, step))
                         if self.sampling["mode"] == "sampled" else dict(mode="greedy"))
@@ -336,19 +340,23 @@ class GoalExecutor:
                 status, error, _, _, _ = stop(kind, response.error, "timed_out" if kind == "deadline_exceeded" else "crashed")
                 return status, error, None, response, owned
             count = tokens.get("completion")
-            if type(count) is not int or count < 0 or count > call_budget:
+            bound = call_budget if per_turn_tokens is not None else raw.get("allowance")
+            if type(count) is not int or count < 0 or type(bound) is not int or count > bound:
                 return stop("infrastructure_failure", "missing or out-of-budget completion token count", "crashed")
             output_used += count
             finish = raw.get("finish_reason")
             turn = dict(step=step, finish_reason=finish, prompt_tokens=tokens.get("prompt"),
                         completion_tokens=tokens.get("completion"), sampling_seed=sampling.get("seed"),
-                        output_budget=call_budget)
+                        output_budget=bound)
             trace["turns"].append(turn)
             if finish == "context_exhausted":
                 return stop("context_exhausted", f"{tokens.get('prompt')} prompt tokens plus the output allowance exceed the context")
             if finish == "length":
-                kind = "output_budget_exhausted" if remaining_output is not None and output_used >= self.max_output_tokens else "output_truncated"
-                return stop(kind, f"response reached {call_budget} output tokens")
+                if remaining_output is not None and output_used >= self.max_output_tokens:
+                    return stop("output_budget_exhausted", f"response reached {bound} output tokens")
+                if per_turn_tokens is None:
+                    return stop("context_exhausted", f"response filled the remaining context ({bound} output tokens)")
+                return stop("output_truncated", f"response reached {bound} output tokens")
             decision = parse_tool_response(raw.get("content"), self.tool_call_format,
                                            accept_unclosed_final=self.protocol == PROTOCOL_V2)
             turn.update(kind=decision.kind, reason=decision.reason)
