@@ -21,7 +21,11 @@ PROTOCOL_VERSION = "chat-tools-v1"
 # an unclosed final <tool_call> is parsed to the end of the response (as the
 # vLLM hermes parser does), and feedback after an unusable turn names the fix.
 PROTOCOL_V2 = "chat-tools-v2"
-CHAT_PROTOCOLS = (PROTOCOL_VERSION, PROTOCOL_V2)
+# chat-tools-v3 is v2 plus one Mistral parsing rule: a call whose [ARGS] marker is absent
+# ([TOOL_CALLS]name{json}) is the same call. vLLM 0.10.2 detokenizes Mistral output without
+# every control token except [TOOL_CALLS], so its tool parser cannot tell the two forms apart.
+PROTOCOL_V3 = "chat-tools-v3"
+CHAT_PROTOCOLS = (PROTOCOL_VERSION, PROTOCOL_V2, PROTOCOL_V3)
 FEEDBACK_HINTS = {
     "unbalanced tool_call tags": 'write each call as <tool_call>{"name": ..., "arguments": {...}}</tool_call>, '
                                  "including the closing tag",
@@ -130,7 +134,7 @@ class Decision:
     answer: object = None
     reason: str = ""
     content: str = ""              # visible text outside tool-call blocks
-    repaired: str = ""             # accepted deviation from the strict format (chat-tools-v2 only)
+    repaired: str = ""             # accepted deviation from the strict format (chat-tools-v2 and v3 only)
 
 
 _BLOCK = re.compile(r"<tool_call>(.*?)</tool_call>", re.S)
@@ -188,10 +192,14 @@ _MISTRAL_CALL = "[TOOL_CALLS]"
 _MISTRAL_ARGS = "[ARGS]"
 
 
-def parse_mistral_response(text, max_calls=MAX_CALLS_PER_TURN):
+def parse_mistral_response(text, max_calls=MAX_CALLS_PER_TURN, *, accept_missing_args_marker=False):
     """Parse a Mistral tekken-v13 response: optional text, then one or more
     [TOOL_CALLS]name[ARGS]{json} calls (Devstral Small 2 chat template and mistral-common
     InstructTokenizerV13). Never guesses: anything else after the first marker is malformed.
+
+    accept_missing_args_marker (chat-tools-v3) also reads a segment with no [ARGS] marker as
+    name{json}: the name runs to the first "{" and the rest must be one JSON object, under the
+    same name and JSON rules. A segment with two or more [ARGS] markers stays malformed.
 
     The response ends at the end-of-sequence token, so the last call's JSON runs to the end of
     the text. Malformed and no-action turns keep the whole response as visible content: the
@@ -210,9 +218,13 @@ def parse_mistral_response(text, max_calls=MAX_CALLS_PER_TURN):
     segments = text[start + len(_MISTRAL_CALL):].split(_MISTRAL_CALL)
     if len(segments) > max_calls:
         return Decision("malformed", reason=f"more than {max_calls} tool calls", content=text.strip())
-    calls = []
+    calls, repaired = [], ""
     for segment in segments:
         parts = segment.split(_MISTRAL_ARGS)
+        if len(parts) == 1 and accept_missing_args_marker and "{" in segment:
+            brace = segment.index("{")
+            parts = [segment[:brace], segment[brace:]]
+            repaired = "tool call without [ARGS] marker accepted"
         if len(parts) != 2:
             return Decision("malformed", reason="tool call without an arguments object", content=text.strip())
         name = parts[0].strip()
@@ -225,19 +237,20 @@ def parse_mistral_response(text, max_calls=MAX_CALLS_PER_TURN):
         if not isinstance(arguments, dict):
             return Decision("malformed", reason="tool call arguments must be a JSON object", content=text.strip())
         calls.append((name, arguments))
-    decision = _decision(calls, content)
+    decision = _decision(calls, content, repaired)
     if decision.kind == "malformed":
         return Decision("malformed", reason=decision.reason, content=text.strip())
     return decision
 
 
-def parse_tool_response(text, tool_call_format="hermes", *, accept_unclosed_final=False):
+def parse_tool_response(text, tool_call_format="hermes", *, accept_unclosed_final=False,
+                        accept_missing_args_marker=False):
     """Dispatch on the model's tool-call syntax. hermes is parse_response unchanged."""
     if tool_call_format == "hermes":
         return parse_response(text, accept_unclosed_final=accept_unclosed_final)
     if tool_call_format == "mistral":
         # No closing tag exists in this syntax, so there is nothing for v2 to repair.
-        return parse_mistral_response(text)
+        return parse_mistral_response(text, accept_missing_args_marker=accept_missing_args_marker)
     raise ValueError(f"unknown tool-call format {tool_call_format!r}")
 
 
@@ -284,7 +297,8 @@ class Conversation:
 
     def feedback(self, reason):
         # No tool result exists to carry the notice, so it is a user message.
-        hint = FEEDBACK_HINTS_BY_FORMAT[self.tool_call_format].get(reason) if self.protocol == PROTOCOL_V2 else None
+        hints = self.protocol in (PROTOCOL_V2, PROTOCOL_V3)
+        hint = FEEDBACK_HINTS_BY_FORMAT[self.tool_call_format].get(reason) if hints else None
         error = f"{reason}: {hint}. Call a tool or submit_answer." if hint else f"{reason}. Call a tool or submit_answer."
         self.messages.append(dict(role="user", content=json.dumps(
             dict(status="error", error=error, turns_remaining=self.remaining()), sort_keys=True)))
