@@ -154,6 +154,9 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true", help="validate and prepare tasks; never start a server or measurement")
     a = ap.parse_args(argv)
     plan = json.loads(a.plan.read_text())
+    protocol = plan.get("protocol", "chat-tools-v2")  # one parsing policy for every precision of the plan
+    if protocol not in CHAT_PROTOCOLS:
+        raise SystemExit(f"unknown agent protocol {protocol!r}")
     passes = plan.get("passes") or [dict(blocks=plan["blocks"])]
     for ps in passes:
         for block in ps.get("blocks", {}).values():
@@ -162,9 +165,6 @@ def main(argv=None):
                     measurement_mode(plan, body)  # reject an invalid measurement mode before anything runs
     if a.retry_of and not (a.retry_reason or "").startswith("infra:"):
         raise SystemExit("--retry-of needs --retry-reason 'infra: <cause>'; configuration failures are outcomes, not retried")
-    protocol = plan.get("protocol", "chat-tools-v2")  # one parsing policy for every precision of the plan
-    if protocol not in CHAT_PROTOCOLS:
-        raise SystemExit(f"unknown agent protocol {protocol!r}")
     out = a.out
     out.mkdir(parents=True, exist_ok=False)
     (out / "plan.json").write_text(json.dumps(plan, indent=1))
