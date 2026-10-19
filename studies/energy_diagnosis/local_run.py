@@ -24,6 +24,7 @@ from studies.energy_diagnosis.agent_protocol import (
     PROTOCOL_VERSION as CHAT_PROTOCOL,
     CHAT_PROTOCOLS,
     PROTOCOL_V2,
+    PROTOCOL_V3,
     Conversation,
     function_tools,
     TOOL_CALL_FORMATS,
@@ -358,7 +359,8 @@ class GoalExecutor:
                     return stop("context_exhausted", f"response filled the remaining context ({bound} output tokens)")
                 return stop("output_truncated", f"response reached {bound} output tokens")
             decision = parse_tool_response(raw.get("content"), self.tool_call_format,
-                                           accept_unclosed_final=self.protocol == PROTOCOL_V2)
+                                           accept_unclosed_final=self.protocol in (PROTOCOL_V2, PROTOCOL_V3),
+                                           accept_missing_args_marker=self.protocol == PROTOCOL_V3)
             turn.update(kind=decision.kind, reason=decision.reason)
             if decision.repaired:
                 turn["repaired"] = decision.repaired

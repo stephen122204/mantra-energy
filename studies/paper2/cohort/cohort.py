@@ -27,6 +27,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from studies.energy_diagnosis.agent_protocol import CHAT_PROTOCOLS
+
 from .records import EventLog, new_id, reconcile, write_manifest, TERMINAL
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -55,10 +57,13 @@ class CohortSpec:
     labels: dict = field(default_factory=dict)
     drain_timeout_s: float = 120.0
     task_options: dict = field(default_factory=dict)   # e.g. {"swebench": {"cpus": "4", "memory": "16g"}}
+    protocol: str = "chat-tools-v2"                    # agent protocol of every session (agent_protocol.CHAT_PROTOCOLS)
 
     def validate(self):
         if self.mode not in ("fixed", "arrivals"):
             raise ValueError("mode must be fixed or arrivals")
+        if self.protocol not in CHAT_PROTOCOLS:
+            raise ValueError(f"unknown agent protocol {self.protocol!r}")
         if self.admission_limit < 1:
             raise ValueError("admission_limit must be >= 1")
         if self.mode == "arrivals":
@@ -83,7 +88,7 @@ class _Session:
             task_id=item["task_id"], task_pickle=item["task_pickle"], task_kind=item["task_kind"], pair_key=item["pair_key"],
             server=dict(base_url=spec.base_url, served_model=spec.served_model, max_model_len=spec.max_model_len),
             tekken=spec.tekken, limits=spec.limits, sampling=spec.sampling, tool_cpus=spec.tool_cpus,
-            protocol="chat-tools-v2", tool_call_format="mistral", **spec.task_options), indent=1))
+            protocol=spec.protocol, tool_call_format="mistral", **spec.task_options), indent=1))
         self.proc: Optional[subprocess.Popen] = None
         self.offered = self.admitted = self.ended = None
         self.outcome: Optional[str] = None
