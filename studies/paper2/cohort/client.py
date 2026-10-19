@@ -93,9 +93,22 @@ def completion_request(served_model: str, prompt: list, max_tokens: int, samplin
                 **sampling_payload(sampling), **(extra or {}))
 
 
+class StreamDeadline(TimeoutError):
+    """The request's total time ran out while the server was still streaming; keeps the tokens received."""
+
+    def __init__(self, timeout: float, first_ns, ids: list):
+        super().__init__(f"request deadline ({timeout:.0f} s) reached mid-stream after {len(ids)} tokens")
+        self.first_ns, self.ids = first_ns, ids
+
+
 def stream_completion(host: str, port: int, payload: dict, timeout: float):
     """POST a streaming completion; returns (first_token_ns, ids, finish, usage, server_text).
-    An error event in the stream raises (it is never read as an empty completion)."""
+    An error event in the stream raises (it is never read as an empty completion).
+
+    timeout bounds the whole request, not only the wait for each read: a server that keeps streaming
+    tokens never trips the socket timeout, so the total is checked as each event arrives. Raising
+    closes the connection, which aborts the request inside vLLM."""
+    deadline = time.monotonic() + timeout
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
     try:
         conn.request("POST", "/v1/completions", body=json.dumps(payload),
@@ -106,6 +119,8 @@ def stream_completion(host: str, port: int, payload: dict, timeout: float):
         first_ns, ids, finish, usage, text = None, [], None, {}, []
         done = False
         for raw in r:
+            if time.monotonic() >= deadline:
+                raise StreamDeadline(timeout, first_ns, ids)
             line = raw.decode("utf-8", "replace").strip()
             if not line.startswith("data:"):
                 continue
@@ -204,6 +219,8 @@ class SharedServerAdapter:
                         backend=dict(t_first_ns=first_ns, t_done_ns=done_ns, cached_tokens=rec["cached_tokens"]))
         except Exception as exc:
             rec.update(error=f"{type(exc).__name__}: {exc}", t_done_ns=time.monotonic_ns())
+            if isinstance(exc, StreamDeadline):  # generated before the abort: inside the energy interval
+                rec.update(t_first_ns=exc.first_ns, partial_output_ids=exc.ids, partial_completion_tokens=len(exc.ids))
             self.record(rec)
             # A closed stream aborts the request inside vLLM; nothing else is owned by this session.
             return dict(status="error", error=rec["error"], tokens={}, token_provenance="unknown",
