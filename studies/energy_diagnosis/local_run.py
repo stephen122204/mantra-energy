@@ -61,9 +61,12 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
     verify_pilot,
     PILOT_VERIFIER_VERSION,
     _hash as asset_hash,
+    WorkspaceFault,
 )
 from studies.energy_diagnosis.workloads.pilot_tools import PilotAssetTool
 from studies.energy_diagnosis.moe import event_log
+
+WORKSPACE_FAULT = WorkspaceFault.__name__ + ":"  # the bounded executor reports 'TypeName: message'
 
 SETTINGS = {"C00": (False, 1), "C01": (False, 4), "C10": (True, 1), "C11": (True, 4)}
 
@@ -388,6 +391,11 @@ class GoalExecutor:
                         conversation.tool_result(cid, name, "error", outcome.error or outcome.status)
                 save_turn(step, "tools", dict(outcomes=[asdict(o) for o in outcomes.values()],
                                                rejected=rejected, next_request=conversation.request()))
+                # A permitted workspace write that the OS refused is a broken host, not an agent error:
+                # end the attempt as infrastructure instead of letting the model retry into a budget.
+                fault = next((o.error for o in outcomes.values() if (o.error or "").startswith(WORKSPACE_FAULT)), None)
+                if fault:
+                    return stop("infrastructure_failure", fault, "crashed")
                 if timed_out:
                     return stop("deadline_exceeded", "tool execution reached the goal deadline", "timed_out")
             if self.max_output_tokens is not None and output_used >= self.max_output_tokens:

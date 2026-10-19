@@ -145,6 +145,8 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
     t0 = clock()
     events.append("interval_start", t0_mono=t0)
     cohort_cancelled = False
+    cancel_reason = "cohort deadline before admission"
+    infrastructure_fault = None
     try:
         while pending or waiting or running:
             now = clock() - t0
@@ -172,7 +174,7 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
                         events.append("offered", attempt_id=s.attempt_id, task_id=s.item["task_id"],
                                       session_id=s.session_id, offset_s=round(now, 3), retry_of=None)
                     events.append("terminal", attempt_id=s.attempt_id, task_id=s.item["task_id"], outcome="cancelled",
-                                  reason="cohort deadline before admission")
+                                  reason=cancel_reason)
                     s.outcome = "cancelled"
                     done.append(s)
                 waiting.clear()
@@ -207,6 +209,16 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
                               returncode=s.proc.returncode, scheduler_stop=s.stopped, stop_signal=s.stop_signal,
                               latency_from_offer_s=round(s.ended - s.offered, 3),
                               service_s=round(s.ended - s.admitted, 3), active_after=len(running))
+                fault = workspace_fault(s.dir) if s.outcome == "infra_failed" else None
+                if fault and infrastructure_fault is None:
+                    # A broken agent workspace makes the whole cohort unusable: stop admitting, stop the
+                    # running sessions, and drain; every attempt keeps its records and an explicit outcome.
+                    infrastructure_fault = dict(session_id=s.session_id, error=fault)
+                    events.append("infrastructure_stop", session_id=s.session_id, error=fault[:300])
+                    cohort_cancelled = True
+                    cancel_reason = f"infrastructure fault in {s.session_id}"
+                    for other in running:
+                        other.kill(outcome="cancelled")
             time.sleep(poll_s)
     except BaseException as exc:
         for s in running:
@@ -247,11 +259,21 @@ def run_cohort(spec: CohortSpec, out_root: Path, *, measurement=None, poller=Non
         events.append("verified", attempt_id=s.attempt_id, task_id=s.item["task_id"], verdict=v.get("verdict"),
                       reason=str(v.get("reason", ""))[:300])
     summary = summarize(spec, done, verdicts, energy, list(events.read()))
+    summary["infrastructure_fault"] = infrastructure_fault
     (root / "cohort-summary.json").write_text(json.dumps(summary, indent=1, default=str))
     events.append("cohort_end", reconciled=summary["reconciliation"]["reconciled"])
     events.close()
     write_manifest(root)
     return summary
+
+
+def workspace_fault(session_dir: Path):
+    """The session's WorkspaceFault error, if a permitted workspace write (or the workspace copy) failed."""
+    try:
+        error = json.loads((Path(session_dir) / "outcome.json").read_text()).get("error") or ""
+    except (OSError, ValueError):
+        return None
+    return error if error.startswith(("WorkspaceFault:", "infrastructure_failure: WorkspaceFault:")) else None
 
 
 def summarize(spec: CohortSpec, done, verdicts, energy, events) -> dict:
