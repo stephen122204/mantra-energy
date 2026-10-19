@@ -1,4 +1,5 @@
 """Pinned MoE-Infinity bridge, imported only in the GPU worker process."""
+import contextlib
 import hashlib
 import importlib.metadata
 import json
@@ -10,6 +11,8 @@ from .backend import CONTROLS
 from .control import Expert
 from .prefix import GenerationWork, RequestPrefixCache, validate_prefix_configuration
 from .token_timing import TokenTiming
+
+DIAGNOSTIC_KEYS = {"profile_calls", "profile_dir", "observation", "keep_trace"}
 
 BACKEND_COMMIT = "6da092fc98e7246bfa1b2f9b2a480524b8697a7e"
 MODEL_REVISION = "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe"
@@ -100,6 +103,9 @@ class NativeDevice:
         )
         self.model = MoE(str(path), self.applied)
         self.native = self.model.engine.archer_engine
+        self.dispatcher = getattr(self.model.engine, "expert_dispatcher", None)
+        if not hasattr(self.dispatcher, "reconcile_cache_with_placement"):
+            raise RuntimeError("required dispatcher cache reconciliation is not loaded; no fallback")
         if (
             not hasattr(self.native, "alems_transfer_api_version")
             or self.native.alems_transfer_api_version() != 1
@@ -130,6 +136,13 @@ class NativeDevice:
         self.demands, self.dropped_demands = {}, 0
         self.generation = 1
         self.max_context = config.get("max_context", 4096)
+        # Diagnostic-only switches; a config carrying them is never campaign evidence.
+        self.diagnostic = config.get("diagnostic")
+        if self.diagnostic is not None:
+            if not isinstance(self.diagnostic, dict) or not set(self.diagnostic) <= DIAGNOSTIC_KEYS \
+                    or self.diagnostic.get("observation", "full") not in {"full", "off"}:
+                raise ValueError("invalid diagnostic configuration")
+        self.call_index = 0
         self.original_dispatch = self.model.engine.expert_executor.dispatch_local
 
         def observed_dispatch(layer_id, hidden, mask, weights, *args, **kwargs):
@@ -175,7 +188,8 @@ class NativeDevice:
             )
 
         self.hook_ns = 0
-        self.model.engine.expert_executor.dispatch_local = observed_dispatch
+        if (self.diagnostic or {}).get("observation", "full") == "full":
+            self.model.engine.expert_executor.dispatch_local = observed_dispatch
 
         def observe_forward(module, args, kwargs):
             started = time.monotonic_ns()
@@ -203,6 +217,7 @@ class NativeDevice:
             controls=CONTROLS,
             mode="native",
             reference_arithmetic=config["reference_arithmetic"],
+            diagnostic=self.diagnostic,
             request_prefix_cache=self.request_cache_mode,
             applied_config=self.applied,
             backend_commit=BACKEND_COMMIT,
@@ -265,7 +280,22 @@ class NativeDevice:
                 raise TimeoutError("native transfers did not drain")
             time.sleep(0.001)
         self.torch.cuda.synchronize()
-        return {"inflight_bytes": 0}
+        # Prefetch placement/eviction (task pool) bypasses the dispatcher's own cache list and
+        # budget; with nothing in flight, rebuild that accounting from physical placement so a
+        # later demand miss can always find an evictable resident (see patch).
+        # The native call changes nothing unless every expert is idle with nothing pending and no
+        # overload slot outstanding (dispatcher retirement is asynchronous); wait for that, fail closed.
+        waited = 0
+        while True:
+            stale, adopted, before, after = self.dispatcher.reconcile_cache_with_placement(0)
+            if stale != -1:
+                break
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"dispatcher not quiescent for cache reconciliation ({adopted} busy)")
+            waited += 1
+            time.sleep(0.001)
+        return {"inflight_bytes": 0, "cache_reconciliation": dict(
+            stale_removed=stale, adopted=adopted, budget_before=before, budget_after=after, idle_polls=waited)}
 
     def transfers(self, _):
         records = []
@@ -374,9 +404,17 @@ class NativeDevice:
         # Native expert workers update output tensors from separate threads.
         # InferenceMode is thread-local and makes those cross-thread writes fail.
         # no_grad preserves gradient-free generation with ordinary tensors.
-        timing = TokenTiming()
+        index = getattr(self, "call_index", 0)
+        self.call_index = index + 1
+        diagnostic = getattr(self, "diagnostic", None)
+        profiler = None
+        if diagnostic and index in diagnostic.get("profile_calls", []):
+            from .diagnostic_profile import CallProfiler
+            profiler = CallProfiler(self.torch, diagnostic["profile_dir"], index,
+                                    keep_trace=bool(diagnostic.get("keep_trace")))
+        timing = TokenTiming(on_first_token=profiler.mark_first_token if profiler else None)
         try:
-            with self.torch.no_grad():
+            with self.torch.no_grad(), (profiler if profiler else contextlib.nullcontext()):
                 result = self.model.generate(
                     inputs,
                     attention_mask=self.torch.ones_like(inputs),

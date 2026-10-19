@@ -9,8 +9,9 @@ import time
 
 
 class TokenTiming:
-    def __init__(self, clock=time.monotonic_ns):
+    def __init__(self, clock=time.monotonic_ns, on_first_token=None):
         self.clock = clock
+        self.on_first_token = on_first_token
         self.started_ns = clock()
         self.prompt_seen = False
         self.first_ns = self.last_ns = self.ended_ns = None
@@ -32,6 +33,8 @@ class TokenTiming:
             raise RuntimeError("token clock went backwards")
         if self.first_ns is None:
             self.first_ns = stamp
+            if self.on_first_token is not None:
+                self.on_first_token()
         self.last_ns = stamp
         self.generated += 1
 

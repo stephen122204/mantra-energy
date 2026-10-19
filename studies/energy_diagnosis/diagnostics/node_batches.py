@@ -16,8 +16,8 @@ import subprocess
 import sys
 import time
 
-from .archive_results import export_bundle, verify_bundle, safe_name
-from .batch_coordinator import validate, write
+from .archive_results import export_bundle, verify_bundle, safe_name, bundle_files
+from .batch_coordinator import validate, write, dispatch_wait, timer_wait
 
 
 def read(path):
@@ -26,6 +26,16 @@ def read(path):
 
 def successful(job):
     return job.get('status') == 'completed' and job.get('returncode') == 0 and job.get('cleanup_complete') is True
+
+
+def recovery_valid(recovery, jobpath):
+    """A recovery record written by campaign_check recover for exactly the status still on disk."""
+    if not recovery.exists():
+        return False
+    rec = read(recovery)
+    current = jobpath.read_bytes() if jobpath.exists() else b'missing'
+    return (rec.get('status') == 'interrupted' and isinstance(rec.get('partial_artifacts'), list)
+            and rec.get('status_sha256') == hashlib.sha256(current).hexdigest())
 
 
 def checkpoint(root, spool, batch, previous):
@@ -44,7 +54,21 @@ def checkpoint(root, spool, batch, previous):
     return header
 
 
-def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
+# A reviewed specification revision may change only how batches are admitted or which reviewed invalid batches
+# are retained; the batches themselves (ids, argv, status and log paths, order) must be identical.
+REVISABLE = {'maintenance', 'retained_invalid', 'plan_sha256'}
+
+
+def revision_allowed(new, old, recorded_sha):
+    if hashlib.sha256(json.dumps(old, sort_keys=True).encode()).hexdigest() != recorded_sha:
+        return False, 'superseded specification does not match the recorded one'
+    for key in (set(new) | set(old)) - REVISABLE:
+        if new.get(key) != old.get(key):
+            return False, f'field {key} differs; only {sorted(REVISABLE)} may change'
+    return True, None
+
+
+def run(spec, out, *, gap=45, free_bytes=8 * 1024**3, clock=time.time, sleep=time.sleep, supersedes=None):
     cutoff = validate(spec)
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     root = Path(spec['remote_directory'])
@@ -54,13 +78,21 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
         fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
         state = read(out/'state.json') if (out/'state.json').exists() else dict(spec_sha256=identity, completed=[])
         if state['spec_sha256'] != identity:
-            raise ValueError('changed node specification')
+            ok, why = revision_allowed(spec, supersedes, state['spec_sha256']) if supersedes else (False, None)
+            if not ok:
+                raise ValueError('changed node specification' + (f': {why}' if why else ''))
+            state.setdefault('revisions', []).append(dict(
+                from_spec_sha256=state['spec_sha256'], to_spec_sha256=identity,
+                utc=dt.datetime.now(dt.timezone.utc).isoformat(),
+                changed=sorted(k for k in REVISABLE if spec.get(k) != supersedes.get(k))))
+            state['spec_sha256'] = identity
+            write(out/'state.json', state)
         previous = {}; catalog = []
         # Validate every published incremental snapshot, including after restart.
         for batch in spec['batches']:
             target = spool / (batch['id']+'.bundle')
             if not target.exists(): break
-            header = verify_bundle(target, previous); previous = header['files']
+            header = verify_bundle(target, previous); previous = bundle_files(header, previous)
             catalog.append(dict(id=batch['id'], file=target.name, sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
         if not set(state['completed']).issubset({x['id'] for x in catalog}):
             raise ValueError('completed state lacks verified snapshots')
@@ -71,6 +103,20 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
             write(out/'state.json', state)
         try:
             for batch in spec['batches']:
+                jobpath = root / batch['status']
+                if batch['id'] not in state['completed'] and not jobpath.exists():
+                    # Outside the io lock: transfers may run during the maintenance window.
+                    while True:
+                        wait = dispatch_wait(spec, clock())
+                        if wait > 0:
+                            save('maintenance_window', batch=batch['id'], resume_utc=dt.datetime.fromtimestamp(clock()+wait, dt.timezone.utc).isoformat())
+                            sleep(min(wait, 60)); continue
+                        # The host's own maintenance timer drifts against fixed windows; never overlap it.
+                        hold = timer_wait(spec)
+                        if hold > 0:
+                            save('host_maintenance_hold', batch=batch['id'], units=spec['maintenance'].get('systemd_timers') or [spec['maintenance'].get('systemd_timer')])
+                            sleep(hold); continue
+                        break
                 with (out/'io.lock').open('a') as gate:
                     fcntl.flock(gate, fcntl.LOCK_EX)
                     jobpath = root / batch['status']
@@ -78,7 +124,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
                         if not successful(read(jobpath)):
                             raise ValueError('previously completed status changed')
                         continue
-                    if time.time() >= cutoff:
+                    if clock() >= cutoff:
                         raise TimeoutError('node cutoff reached')
                     if shutil.disk_usage(out).free < free_bytes:
                         raise RuntimeError('low disk: stop before further work')
@@ -86,7 +132,7 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
                     if not jobpath.exists():
                         if intent.exists():
                             raise RuntimeError('ambiguous prior dispatch; operator review required')
-                        if time.time()+spec['minimum_batch_seconds'] >= cutoff:
+                        if clock()+spec['minimum_batch_seconds'] >= cutoff:
                             raise TimeoutError('insufficient next-batch time budget')
                         intent.parent.mkdir(parents=True, exist_ok=True)
                         with intent.open('x') as stream:
@@ -102,18 +148,37 @@ def run(spec, out, *, gap=45, free_bytes=8 * 1024**3):
                         if result.returncode and successful(read(jobpath)):
                             raise RuntimeError('wrapper failed after job completion')
                     job=read(jobpath)
+                    recovered=jobpath.parent.parent/'recovery.json'
                     if job.get('status') not in {'completed','failed','timed_out','interrupted','interference_detected','blocked_by_other_job'}:
-                        raise RuntimeError('existing batch not terminal; no adoption or duplicate launch')
+                        # An interrupted batch is never adopted or rerun. Only an explicit, verified
+                        # recovery record (campaign_check recover) classifies it so dispatch can continue.
+                        if not recovery_valid(recovered, jobpath):
+                            raise RuntimeError('existing batch not terminal; no adoption or duplicate launch')
+                        job=dict(status='interrupted_recovered')
                     save('checkpointing',batch=batch['id'])
                     if not any(x['id']==batch['id'] for x in catalog):
-                        header=checkpoint(root,spool,batch,previous);previous=header['files']
+                        header=checkpoint(root,spool,batch,previous);previous=bundle_files(header,previous)
                         target=spool/(batch['id']+'.bundle')
                         catalog.append(dict(id=batch['id'],file=target.name,sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
                         write(out/'catalog.json',dict(root=str(root),snapshots=catalog))
+                    if job.get('status')=='interrupted_recovered':
+                        if batch['id'] not in state.setdefault('recovered',[]):
+                            state['recovered'].append(batch['id']);save('between_batches')
+                        sleep(gap)  # the same settling gap as after any batch
+                        continue
                     if not successful(job):
+                        # A reviewed invalid batch named in the specification (retained_invalid; e.g. host
+                        # interference, or a harness failure after measurement) is kept as evidence, never
+                        # rerun, and collection continues. Cleanup must still be confirmed.
+                        if (batch['id'] in spec.get('retained_invalid', []) and job.get('status') in {'interference_detected', 'failed'}
+                                and job.get('cleanup_complete') is True):
+                            if batch['id'] not in state.setdefault('retained_invalid', []):
+                                state['retained_invalid'].append(batch['id']); save('between_batches')
+                            sleep(gap)
+                            continue
                         raise RuntimeError('invalid batch retained; no further dispatch')
                     state['completed'].append(batch['id']);save('between_batches')
-                time.sleep(gap)
+                sleep(gap)
             save('completed')
         except BaseException as error:
             save('stopped',error=str(error));raise
@@ -140,10 +205,11 @@ def main():
     p.add_argument('--spec');p.add_argument('--output',required=True)
     p.add_argument('--serve',action='store_true');p.add_argument('--after',default='')
     p.add_argument('--gap-seconds',type=int,default=45)
+    p.add_argument('--supersedes',help='previous node specification (reviewed revision; batches must be identical)')
     a=p.parse_args()
     if a.serve:serve(a.output,a.after)
     else:
         if not a.spec or not 0<=a.gap_seconds<=300:p.error('spec and bounded gap required')
-        run(read(a.spec),a.output,gap=a.gap_seconds)
+        run(read(a.spec),a.output,gap=a.gap_seconds,supersedes=read(a.supersedes) if a.supersedes else None)
 
 if __name__=='__main__':main()

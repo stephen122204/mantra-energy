@@ -119,7 +119,8 @@ class FixtureDevice:
         while True:
             with self.lock:
                 if all(j["done"] for j in self.jobs):
-                    return {"inflight_bytes": 0}
+                    return {"inflight_bytes": 0, "cache_reconciliation": dict(
+                        stale_removed=0, adopted=0, budget_before=0, budget_after=0, idle_polls=0)}
             if time.monotonic() >= deadline:
                 raise TimeoutError("fixture transfers did not drain")
             time.sleep(0.001)
@@ -163,7 +164,7 @@ class FixtureDevice:
         # Return the expert to CPU to expose repeated preparation in fixtures.
         with self.lock:
             self.experts[expert] = replace(self.experts[expert], device="cpu")
-        if context.get("family") in {"business-query", "grouped-regression", "etl-sql-repair"}:
+        if context.get("family") in {"business-query", "grouped-regression", "etl-sql-repair", "python-transformation"}:
             from .task_pack_fixture import ScriptedModel
             decision = json.loads(ScriptedModel(self.case).call(json.dumps(context), 0)["content"])
         elif context.get("family") == "sql-query":
@@ -237,7 +238,10 @@ class FixtureDevice:
             decision = {"answer": {"wrong": True}}
         if chat:
             from studies.energy_diagnosis.agent_protocol import to_native_text
-            return dict(text=to_native_text(decision), finish_reason="stop",
+            text = to_native_text(decision)
+            if self.case == "unclosed_submit" and "answer" in decision:
+                text = text[: -len("\n</tool_call>")]     # observed Qwen3 slip: submit without the closing tag
+            return dict(text=text, finish_reason="stop",
                         tokens=dict(prompt=len(json.dumps(arg["messages"])), completion=10), hook_ns=0)
         return dict(
             text=json.dumps(decision),

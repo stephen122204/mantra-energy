@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -23,7 +24,7 @@ from studies.energy_diagnosis.runtime.node_measurement import (
     environment_identity,
 )
 from .backend import ProcessBackend, BackendAdapter
-from .control import Lifecycle, Policy
+from .control import PAUSE_POLICIES, Lifecycle, Policy
 from .workloads import create_tasks, WorkloadRuntime, VERSION
 
 EXECUTION_PROTOCOL = "planned-body-initialized-window-v1"
@@ -47,6 +48,102 @@ def _interrupt(signum, frame):
     raise CampaignInterrupted(f"campaign received signal {signum}")
 
 
+def parse_cpu_list(text):
+    """Linux cpu-list syntax ("64-71,80") -> sorted unique CPU ids."""
+    cpus = set()
+    for part in text.split(","):
+        lo, _, hi = part.strip().partition("-")
+        lo, hi = int(lo), int(hi or lo)
+        if lo < 0 or hi < lo:
+            raise ValueError(f"invalid CPU range: {part!r}")
+        cpus.update(range(lo, hi + 1))
+    if not cpus:
+        raise ValueError("empty CPU list")
+    return sorted(cpus)
+
+
+def apply_cpu_affinity(cpus):
+    """Pin this process before any worker/sampler starts so every child inherits it.
+
+    Placement alone does not fix the launch-bound decode rate (see cpu_power_state); it makes the
+    CPUs whose power state is recorded, and any keep-awake or idle-state setting, well defined.
+    MoE-Infinity still hard-pins two scheduler threads to fixed CPUs regardless of this mask."""
+    if not hasattr(os, "sched_getaffinity"):
+        if cpus:
+            raise ValueError("CPU affinity is not supported on this platform")
+        return None
+    if cpus:
+        os.sched_setaffinity(0, cpus)
+        if sorted(os.sched_getaffinity(0)) != list(cpus):
+            raise RuntimeError("requested CPU affinity was not applied")
+    return dict(pinned=bool(cpus), cpus=sorted(os.sched_getaffinity(0)))
+
+
+KEEP_AWAKE_LOOP = "import os,sys\nos.sched_setaffinity(0, {int(sys.argv[1])})\nwhile True:\n    pass\n"
+
+
+class KeepAwake:
+    """Declared keep-awake condition: one owned busy process per listed CPU.
+
+    Without root, this is the explicit way to hold cores out of deep idle; it runs for the whole
+    campaign process (every goal window sees the same condition) and its power is inside the
+    measured CPU-package domain, so its cost is never free. Recorded in the manifest."""
+
+    def __init__(self, cpus, python=sys.executable):
+        self.cpus, self.python, self.processes = list(cpus or []), python, []
+
+    def __enter__(self):
+        for cpu in self.cpus:
+            self.processes.append(subprocess.Popen([self.python, "-c", KEEP_AWAKE_LOOP, str(cpu)],
+                                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL))
+        return self
+
+    def record(self):
+        # No PIDs: the manifest must be identical when a campaign is resumed.
+        return dict(cpus=self.cpus, method="owned python busy loop per CPU") if self.cpus else None
+
+    def __exit__(self, *exc):
+        for process in self.processes:
+            process.terminate()
+        for process in self.processes:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        return False
+
+
+def cpu_power_state(cpus, root=Path("/sys/devices/system/cpu")):
+    """Read-only record of the frequency governor and idle states of the run's CPUs.
+
+    The native worker is host launch-bound (~10k thread handoffs per token); when its cores enter
+    deep idle states between handoffs, decode slowed ~2x on both development nodes. This setting
+    therefore changes the measured quantity and must be recorded with every run."""
+    if not cpus or not root.is_dir():
+        return None
+
+    def read(path):
+        try:
+            return path.read_text().strip()
+        except OSError:
+            return None
+
+    states = {}
+    for cpu in cpus:
+        base = root / f"cpu{cpu}"
+        idle = []
+        for state in sorted((base / "cpuidle").glob("state*"), key=lambda p: int(p.name[5:])):
+            idle.append(dict(name=read(state / "name"), exit_latency_us=read(state / "latency"),
+                             disabled=read(state / "disable")))
+        key = json.dumps(dict(governor=read(base / "cpufreq/scaling_governor"),
+                              min_khz=read(base / "cpufreq/scaling_min_freq"),
+                              max_khz=read(base / "cpufreq/scaling_max_freq"),
+                              idle=idle), sort_keys=True)
+        states.setdefault(key, []).append(cpu)
+    return [dict(json.loads(key), cpus=group) for key, group in states.items()]
+
+
 def run(args):
     simulated = args.mode == "fixture"
     root = Path(args.output).resolve()
@@ -66,13 +163,16 @@ def run(args):
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     query_assets = getattr(args, "query_assets", None)
     pack_path = getattr(args, "task_pack", None)
+    prepared_assets = getattr(args, "task_pack_assets", None)
     pack = None
+    if prepared_assets and not pack_path:
+        raise ValueError("task-pack-assets requires task-pack specifications")
     if pack_path and query_assets:
         raise ValueError("task-pack and query-assets are mutually exclusive")
     if pack_path:
         from .task_pack import prepare
         specifications = json.loads(Path(pack_path).read_text(encoding="utf-8"))
-        pack = prepare(root / "assets", specifications)
+        pack = prepare(root / "assets", specifications, prepared_assets=prepared_assets)
         tasks = pack.tasks
     elif query_assets:
         from .query_workload import load_task, QueryRuntime, VERSION as query_version
@@ -104,6 +204,7 @@ def run(args):
             bytes_per_second=args.bytes_per_second,
             expected_pause_seconds=args.expected_pause_seconds,
             seed=getattr(args, "random_seed", 0) if name == "random" else 0,
+            timing=getattr(args, "preparation_timing", "during") if name in PAUSE_POLICIES else "during",
             data_sha256=policy_data[name][1] if name in policy_data else None,
         )
         for name in args.policies.split(",")
@@ -179,7 +280,15 @@ def run(args):
         query_engine=args.query_engine if query_assets else None,
         task_catalog=[catalog[t.task_id] for t in tasks],
         measurement_scope="CPU-package and GPU-board only; includes backend startup, tools, transfers, cleanup and verification",
+        cpu_affinity=getattr(args, "applied_cpu_affinity", None),
+        keep_awake=getattr(args, "keep_awake_record", None),
+        tool_cpus=getattr(args, "tool_cpus", None),
+        cpu_power=cpu_power_state(sorted(set((getattr(args, "applied_cpu_affinity", None) or {}).get("cpus") or [])
+                                         | set((getattr(args, "keep_awake_record", None) or {}).get("cpus") or [])) or None),
     )
+    if config.get("diagnostic"):
+        # Profiling/observation switches perturb execution: never campaign evidence.
+        manifest["diagnostic"] = config["diagnostic"]
     if pack is not None:
         manifest["task_pack"] = json.loads((pack.root / "task-pack.json").read_text())
     path = root / "moe-manifest.json"
@@ -304,6 +413,15 @@ def _agent_settings(args):
                 max_tool_calls=args.max_tool_calls, max_total_output_tokens=args.max_total_output_tokens,
                 max_output_tokens_per_turn=args.max_tokens)
 
+def native_windows_acceptable(window_audit):
+    """Every attempt measured in all domains, with owned work terminated and not simulated. An attempt classified
+    by explicit recovery (reconcile) has no complete window by design; the audit validates its provenance
+    separately (audit_recovered) and it is excluded here, so a resumed run is not rejected for it."""
+    return window_audit["audit_passed"] and all(
+        row.get("all_domains_measured") and row.get("owned_work_terminated") and not row.get("simulated", True)
+        for row in window_audit["results"] if not row.get("recovered"))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--mode", choices=["fixture", "native"], required=True)
@@ -320,16 +438,30 @@ def main(argv=None):
     p.add_argument("--policy-data", action="append", metavar="NAME=PATH",
                    help="static=profile.json or future=trace.json from moe/expert_profile.py; hashed into the setting")
     p.add_argument("--random-seed", type=int, default=0, help="Seed for the random matched-budget policy")
+    p.add_argument("--preparation-timing", choices=["during", "after"], default="during",
+                   help="after: diagnostic control admitting the pause batch only once the tool returns")
+    p.add_argument("--cpu-affinity", type=parse_cpu_list, metavar="CPULIST",
+                   help="Pin the campaign process tree (worker, sampler, tools), e.g. 64-71; recorded in the manifest")
+    p.add_argument("--keep-awake-cpus", type=parse_cpu_list, metavar="CPULIST",
+                   help="Declared keep-awake condition: an owned busy process pinned to each listed CPU for the whole run "
+                        "(its power is inside the CPU-package domain); must not overlap --cpu-affinity")
+    p.add_argument("--tool-cpus", type=parse_cpu_list, metavar="CPULIST",
+                   help="CPU set for workload test/tool subprocesses that honour ALEMS_TOOL_CPUS (repository repair); "
+                        "must not overlap --cpu-affinity or --keep-awake-cpus; recorded in the manifest")
+    p.add_argument("--campaign-exit", action="store_true",
+                   help="Exit 0 when measurement is valid even if goals fail (campaign data); exit 3 only for invalid energy or crashed attempts")
     p.add_argument("--task", default="all")
     p.add_argument("--query-assets", help="Use the optional prepared TLC SQL task instead of the default five-task catalog")
     p.add_argument("--task-pack", help="JSON specifications for the numerical/business/ETL task pack")
+    p.add_argument("--task-pack-assets", help="Frozen prepared task-pack assets to copy and verify, preserving private challenges across model arms")
     p.add_argument("--query-engine", choices=["duckdb", "sqlite"], default="duckdb")
     p.add_argument("--max-runs", type=int, default=4)
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--max-steps", "--max-turns", dest="max_steps", type=int, default=5,
                    help="Model responses per goal, including the answer")
-    p.add_argument("--agent-protocol", choices=["chat-tools-v1", "legacy-json-v1"], default="chat-tools-v1",
-                   help="chat-tools-v1: native multi-turn chat and tool calls; legacy-json-v1 reproduces V6")
+    p.add_argument("--agent-protocol", choices=["chat-tools-v1", "chat-tools-v2", "legacy-json-v1"], default="chat-tools-v1",
+                   help="chat-tools-v1: native multi-turn chat and tool calls; chat-tools-v2: v1 plus an unclosed final "
+                        "tool_call parsed as vLLM's hermes parser does and feedback that names the fix; legacy-json-v1 reproduces V6")
     p.add_argument("--decoding", choices=["greedy", "sampled"], default="greedy")
     p.add_argument("--temperature", type=float, default=0.7, help="Sampled decoding only (model card value)")
     p.add_argument("--top-p", type=float, default=0.8)
@@ -361,6 +493,7 @@ def main(argv=None):
             "tool_timeout",
             "truncated_output",
             "no_action",
+            "unclosed_submit",
         ],
     )
     args = p.parse_args(argv)
@@ -383,34 +516,56 @@ def main(argv=None):
         p.error(
             "native preparation requires an explicit expert-byte budget (fixture default is only 128 bytes)"
         )
+    try:
+        args.applied_cpu_affinity = apply_cpu_affinity(args.cpu_affinity)
+    except (ValueError, OSError) as exc:
+        p.error(str(exc))
     import signal
 
     for name in ("SIGTERM", "SIGINT"):
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), _interrupt)
+    if args.keep_awake_cpus and set(args.keep_awake_cpus) & set((args.applied_cpu_affinity or {}).get("cpus") or []):
+        p.error("keep-awake CPUs must not overlap the campaign CPU affinity")
+    if args.tool_cpus:
+        if set(args.tool_cpus) & (set((args.applied_cpu_affinity or {}).get("cpus") or []) if args.cpu_affinity else set()) \
+                or set(args.tool_cpus) & set(args.keep_awake_cpus or []):
+            p.error("tool CPUs must not overlap the campaign CPU affinity or keep-awake CPUs")
+        os.environ["ALEMS_TOOL_CPUS"] = ",".join(map(str, args.tool_cpus))
+    if args.keep_awake_cpus and not hasattr(os, "sched_setaffinity"):
+        p.error("keep-awake CPUs require Linux affinity support")
     try:
-        result = run(args)
+        with KeepAwake(args.keep_awake_cpus) as keeper:
+            args.keep_awake_record = keeper.record()
+            result = run(args)
     except CampaignInterrupted as exc:
         print(f"{exc}; owned work terminated, ledger exported, claimed attempt left for recovery", file=sys.stderr)
         raise SystemExit(130)
     if not result["validation"]["valid"]:
         raise SystemExit(2)
+    rows = result["summary"]["settings"].values()
+    if args.campaign_exit:
+        # Campaign data: model outcomes (wrong answer, budget/context/deadline exhaustion) are
+        # results, not errors. Stop only for invalid energy or an infrastructure crash.
+        # Statuses come from the ledger export (summary), not goal files: an attempt classified by explicit
+        # recovery may have no record.json, and its unknown energy is expected, not a new measurement failure.
+        crashed = sum(row["crashed_attempts"] for row in rows)
+        unexplained_invalid = sum(row["invalid_energy_attempts"] - row["recovered_attempts"] for row in rows)
+        if unexplained_invalid > 0 or crashed:
+            raise SystemExit(3)
     # A structurally valid ledger alone is not a successful native smoke test.
-    if args.mode == "native" and any(
+    elif args.mode == "native" and any(
         row["successful"] < row["attempts"] or row["invalid_energy_attempts"]
-        for row in result["summary"]["settings"].values()
+        for row in rows
     ):
         raise SystemExit(3)
     if args.mode == "native":
-        if not result["window_audit"]["audit_passed"] or not all(
-            row.get("all_domains_measured") and row.get("owned_work_terminated")
-            and not row.get("simulated", True)
-            for row in result["window_audit"]["results"]
-        ):
+        if not native_windows_acceptable(result["window_audit"]):
             raise SystemExit(5)
         for setting, row in result["summary"]["settings"].items():
             if (
-                any(f"-{name}-" in setting for name in ("fixed", "history"))
+                not args.campaign_exit  # campaign: incomplete preparation is a measured outcome
+                and any(f"-{name}-" in setting for name in ("fixed", "history"))
                 and not row["completed_preparation_bytes"]
             ):
                 print(
