@@ -58,6 +58,7 @@ def gpu_busy(index: int) -> int:
 
 # Counter samples must stay closer together than the energy integrator's gap limit (energy.integrate_samples).
 MAX_SAMPLE_PERIOD_S = 20.0
+MEASUREMENT_PROTOCOL = "cohort-polling-v2"  # idle steps now honor the telemetry switch
 
 
 def measurement_mode(plan: dict, step: dict) -> dict:
@@ -74,6 +75,30 @@ def make_measurement(gpu_index: int, revision: str, allocation: str, isolation: 
     from studies.energy_diagnosis.runtime.node_measurement import NodeCounterReader, NodeMeasurement, environment_identity
     reader = NodeCounterReader(gpu_index=gpu_index)
     return NodeMeasurement(reader, environment_identity(revision, allocation, isolation), sample_period_s=sample_period_s)
+
+
+def run_idle(seconds: float, *, measurement=None, poller=None) -> dict:
+    """Poll throughout the idle energy interval, using the live/replay boundary order."""
+    artifacts = None
+    try:
+        if poller:
+            poller.start()
+        if measurement:
+            measurement.start_goal()
+        try:
+            time.sleep(seconds)
+        finally:
+            if measurement:
+                artifacts = measurement.finish_goal()
+    finally:
+        if poller:
+            poller.stop()
+    result = dict(idle_s=seconds, measurement_protocol=MEASUREMENT_PROTOCOL,
+                  telemetry_started=poller is not None)
+    if artifacts is not None:
+        from .energy import cohort_energy_summary
+        result["energy"] = cohort_energy_summary(artifacts)
+    return result
 
 
 def _order(configs, ps, seed, log, pass_index):
@@ -127,7 +152,8 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true", help="validate and prepare tasks; never start a server or measurement")
     a = ap.parse_args(argv)
     plan = json.loads(a.plan.read_text())
-    for ps in plan.get("passes", []):
+    passes = plan.get("passes") or [dict(blocks=plan["blocks"])]
+    for ps in passes:
         for block in ps.get("blocks", {}).values():
             for step in block.get("steps", []):
                 for body in step.values():
@@ -144,6 +170,7 @@ def main(argv=None):
     dirty = subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
     log.append("driver_start", revision=revision, dirty=bool(dirty), budget_s=a.budget_s, cutoff_utc=a.cutoff_utc,
                retry_of=a.retry_of, retry_reason=a.retry_reason, campaign=plan.get("campaign"),
+               measurement_protocol=MEASUREMENT_PROTOCOL,
                energy_metric=(plan.get("binding") or {}).get("energy_metric", "cpu_package+gpu_board"))
     if plan.get("campaign", {}).get("commit") not in (None, revision):
         raise SystemExit("checkout does not match the campaign execution commit")
@@ -165,7 +192,6 @@ def main(argv=None):
         raise SystemExit(f"task assets differ from the frozen catalogue: {dict(list(wrong.items())[:5])}")
     log.append("tasks_prepared", n=len(catalog), frozen=bool(plan.get("prepared_assets")), checked_against_expected=len(expected))
     configs = [ServerConfig(**c) for c in plan["configs"]]
-    passes = plan.get("passes") or [dict(blocks=plan["blocks"])]
     measured: dict = {}
 
     def fits(step_name, est):
@@ -276,13 +302,7 @@ def main(argv=None):
                     poller = MetricsPoller(base_url, out / "cohorts" / name / "metrics.jsonl")
                 t0 = time.monotonic()
                 if kind == "idle":
-                    if meas:
-                        meas.start_goal()
-                    time.sleep(s["seconds"])
-                    res = dict(idle_s=s["seconds"])
-                    if meas:
-                        from .energy import cohort_energy_summary
-                        res["energy"] = cohort_energy_summary(meas.finish_goal())
+                    res = run_idle(s["seconds"], measurement=meas, poller=poller)
                     (out / "cohorts" / name).mkdir(parents=True, exist_ok=True)
                     (out / "cohorts" / name / "idle-summary.json").write_text(json.dumps(res, indent=1, default=str))
                 elif kind == "live":
@@ -318,6 +338,7 @@ def main(argv=None):
                 measured[s["name"]] = max(measured.get(s["name"], 0), took)
                 log.append("step_done", step=name, step_kind=kind, seconds=round(took, 1))
                 results.append(dict(step=name, kind=kind, pass_index=pass_index, seconds=round(took, 1), measurement=mode,
+                                    measurement_protocol=MEASUREMENT_PROTOCOL,
                                     **{k: res.get(k) for k in ("outcomes", "verified_pass", "joules_per_verified_success",
                                                                "interval_s", "mismatched_turns", "failed", "source") if k in res},
                                     energy_j=(res.get("energy") or {}).get("cpu_plus_gpu_j"),
