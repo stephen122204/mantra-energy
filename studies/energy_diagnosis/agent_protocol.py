@@ -190,6 +190,8 @@ def _decision(calls, content, repaired=""):
 
 _MISTRAL_CALL = "[TOOL_CALLS]"
 _MISTRAL_ARGS = "[ARGS]"
+# mistral-common's function-name rule: a name it would refuse to render is never a call.
+_MISTRAL_NAME = re.compile(r"[a-zA-Z0-9_-]{1,64}")
 
 
 def parse_mistral_response(text, max_calls=MAX_CALLS_PER_TURN, *, accept_missing_args_marker=False):
@@ -228,7 +230,7 @@ def parse_mistral_response(text, max_calls=MAX_CALLS_PER_TURN, *, accept_missing
         if len(parts) != 2:
             return Decision("malformed", reason="tool call without an arguments object", content=text.strip())
         name = parts[0].strip()
-        if not name or any(c.isspace() for c in name) or "[" in name or "{" in name:
+        if not _MISTRAL_NAME.fullmatch(name):
             return Decision("malformed", reason="tool call name missing or invalid", content=text.strip())
         try:
             arguments = strict_loads(parts[1].strip())
