@@ -23,6 +23,26 @@ cohort supervisor, replay, telemetry and a bounded pilot driver.
 | `campaign.py`, `node/run_campaign.sh` | main run across nodes: shard a frozen matrix by repeats (all precisions per node), bind a shard to a qualified node, resumable round loop, checksum/plan/commit coverage check |
 | `qualify_node.py`, `node/setup_node.sh` | node report (GPUs, VRAM, counters, disk, software) and environment setup |
 
+## Counter and telemetry polling
+
+The driver records `measurement_protocol="cohort-polling-v2"` in `driver_start`,
+result rows and idle summaries. Plan-level `sample_period_s` (default 0.1 seconds,
+maximum 20 seconds) and `telemetry` (default true) may be overridden per step.
+Both supported plan layouts (`blocks` and `passes`) are validated before task
+preparation or server startup. Actual sample-gap and counter-quality checks still apply.
+
+Under this protocol, idle steps start the metrics poller before the energy interval
+and stop it after the endpoint, including on failure, matching the live/replay
+boundary order. `telemetry=false` disables this poller. Idle summaries also record
+`telemetry_started` (false in fixture runs). Earlier driver versions never started
+the idle poller, even if the configured mode said telemetry was enabled. Therefore
+new default idle readings include metrics polling; older idle readings do not.
+Keep those versions distinguishable when comparing idle energy or polling overhead.
+Live/replay polling behavior and the default counter sampling rate are unchanged.
+This switch measures counter/operating-state and metrics polling differences; it
+does not disable session logging or isolate all instrumentation overhead. Raw energy
+is not automatically adjusted or subtracted.
+
 ## Treatments (Devstral-Small-2507, A100, vLLM 0.10.2)
 
 | config | checkpoint @ revision | weights / activations / KV |
