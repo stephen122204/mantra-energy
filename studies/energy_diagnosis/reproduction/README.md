@@ -36,8 +36,9 @@ Obtain the project repository with authorized access, preserving its Git history
 and the exact required objects. A future public source archive must contain the
 reviewed frozen code and licenses; its DOI/retrieval URL is still to be supplied.
 Do not substitute the current integration tip for a historical execution revision.
-The local cleanup/documentation work is uncommitted, so base commit `6a49455` alone
-does not identify the future release source.
+The cleanup/documentation changes are recorded in PR #76 at `37b1534`;
+base commit `6a49455` alone does not include them. Record the exact reviewed
+source revision when distributing a snapshot.
 
 The following are **unmerged**, according to the inspected audit snapshot; no
 branches were merged or changed for this guide:
