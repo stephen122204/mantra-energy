@@ -15,6 +15,8 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import socket
+import threading
 import time
 from typing import Callable, Optional
 from urllib.parse import urlparse
@@ -93,19 +95,56 @@ def completion_request(served_model: str, prompt: list, max_tokens: int, samplin
                 **sampling_payload(sampling), **(extra or {}))
 
 
+class StreamDeadline(TimeoutError):
+    """The request's total time ran out while the server was still streaming; keeps the tokens received."""
+
+    def __init__(self, timeout: float, first_ns, ids: list):
+        super().__init__(f"request deadline ({timeout:.0f} s) reached mid-stream after {len(ids)} tokens")
+        self.first_ns, self.ids = first_ns, ids
+
+
 def stream_completion(host: str, port: int, payload: dict, timeout: float):
     """POST a streaming completion; returns (first_token_ns, ids, finish, usage, server_text).
-    An error event in the stream raises (it is never read as an empty completion)."""
+    An error event in the stream raises (it is never read as an empty completion).
+
+    timeout bounds the whole request, not only the wait for each read: a server that keeps streaming
+    tokens never trips the socket timeout. A deadline timer interrupts blocked socket reads, including
+    a stalled or incomplete stream line; the event loop also checks the deadline."""
+    deadline = time.monotonic() + timeout
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    first_ns, ids = None, []
+    r = None
+    expired = threading.Event()
+    sockets = []
+
+    def interrupt():
+        expired.set()
+        # Retain the socket even when getresponse detaches it for Connection: close.
+        sock = getattr(conn, "sock", None) or (sockets[0] if sockets else None)
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+    timer = threading.Timer(max(0, timeout), interrupt)
+    timer.daemon = True
+    timer.start()
     try:
         conn.request("POST", "/v1/completions", body=json.dumps(payload),
                      headers={"Content-Type": "application/json", "Accept": "text/event-stream"})
+        if getattr(conn, "sock", None) is not None:
+            sockets.append(conn.sock)
+        if expired.is_set() or time.monotonic() >= deadline:
+            raise StreamDeadline(timeout, first_ns, ids)
         r = conn.getresponse()
         if r.status != 200:
             raise RuntimeError(f"HTTP {r.status}: {r.read()[:500]!r}")
         first_ns, ids, finish, usage, text = None, [], None, {}, []
         done = False
         for raw in r:
+            if time.monotonic() >= deadline:
+                raise StreamDeadline(timeout, first_ns, ids)
             line = raw.decode("utf-8", "replace").strip()
             if not line.startswith("data:"):
                 continue
@@ -125,12 +164,24 @@ def stream_completion(host: str, port: int, payload: dict, timeout: float):
                 ids.extend(got)
                 text.append(ch.get("text") or "")
                 finish = ch.get("finish_reason") or finish
+        if expired.is_set() or time.monotonic() >= deadline:
+            raise StreamDeadline(timeout, first_ns, ids)
         if not done or finish is None:
             raise RuntimeError("incomplete completion stream: missing terminal event or finish reason")
         if usage.get("completion_tokens", 0) and not ids:
             raise RuntimeError("completion stream reported generated tokens without token IDs")
         return first_ns, ids, finish, usage, "".join(text)
+    except Exception as exc:
+        if expired.is_set() or time.monotonic() >= deadline:
+            raise StreamDeadline(timeout, first_ns, ids) from exc
+        raise
     finally:
+        timer.cancel()
+        timer.join()
+        if r is not None:
+            close_response = getattr(r, "close", None)
+            if close_response is not None:
+                close_response()
         conn.close()
 
 
@@ -204,6 +255,8 @@ class SharedServerAdapter:
                         backend=dict(t_first_ns=first_ns, t_done_ns=done_ns, cached_tokens=rec["cached_tokens"]))
         except Exception as exc:
             rec.update(error=f"{type(exc).__name__}: {exc}", t_done_ns=time.monotonic_ns())
+            if isinstance(exc, StreamDeadline):  # generated before the abort: inside the energy interval
+                rec.update(t_first_ns=exc.first_ns, partial_output_ids=exc.ids, partial_completion_tokens=len(exc.ids))
             self.record(rec)
             # A closed stream aborts the request inside vLLM; nothing else is owned by this session.
             return dict(status="error", error=rec["error"], tokens={}, token_provenance="unknown",
