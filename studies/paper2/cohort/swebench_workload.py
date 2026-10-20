@@ -47,12 +47,29 @@ def sanitized_image(instance_id: str) -> str:
 Runner = Callable[..., tuple]  # (argv, timeout, cwd=None) -> (returncode, stdout, stderr)
 
 
-def run_cmd(argv: list, timeout: float, cwd=None) -> tuple:
+def _text(data) -> str:
+    """UTF-8 with replacement plus universal newlines: identical to text=True for valid UTF-8 output, but
+    output that is not valid UTF-8 (e.g. a file an agent wrote in another encoding) no longer raises."""
+    if not isinstance(data, bytes):
+        return data or ""
+    return data.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _utf8(data: bytes) -> bool:
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, cwd=cwd)
-        return p.returncode, p.stdout, p.stderr
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def run_cmd(argv: list, timeout: float, cwd=None, raw: bool = False) -> tuple:
+    """(returncode, stdout, stderr); raw=True keeps stdout as the exact bytes."""
+    try:
+        p = subprocess.run(argv, capture_output=True, timeout=timeout, cwd=cwd)
+        return p.returncode, p.stdout if raw else _text(p.stdout), _text(p.stderr)
     except subprocess.TimeoutExpired as exc:
-        return 124, (exc.stdout or b"").decode() if isinstance(exc.stdout, bytes) else (exc.stdout or ""), "timeout"
+        return 124, (exc.stdout or b"") if raw else _text(exc.stdout), "timeout"
 
 
 SANITIZE = ("set -e; cd /testbed; test -z \"$(git status --porcelain)\"; git checkout -q --detach {base}; "
@@ -180,22 +197,51 @@ class SweBenchRuntime:
         return BashTool(self.docker, self.container, args["command"], self.tool_timeout_s, self.max_output_chars)
 
     def finalize(self, task):
-        """Store the working-tree diff (tracked and new files) as the model patch; remove the container."""
+        """Store the working-tree diff (tracked and new files) as the model patch; remove the container.
+
+        The patch given to the grader must reproduce the agent's files byte for byte.
+        - Valid UTF-8 with no carriage returns: stored as text (unchanged behaviour).
+        - Valid UTF-8 with carriage returns: every file is emitted as a git binary patch (``* binary`` in
+          .git/info/attributes, which takes precedence over the repository's attributes). It is ASCII, and the
+          harness's ``git apply`` applies it exactly.
+        - Not valid UTF-8: the official harness cannot evaluate it (it decodes ``git diff`` after applying the patch;
+          SWE-bench counts such errors as unresolved). It is recorded as an unsupported submission and verified as
+          not resolved, never as an infrastructure failure. The exact diff is kept in model.patch.raw.
+        """
         if not self.container:
             return None
+        diff = "git add -A && git diff --cached --binary HEAD"
         try:
-            rc, out, err = self._run([self.docker, "exec", "-w", "/testbed", self.container, "bash", "-lc",
-                                      "git add -A && git diff --cached --binary HEAD"], 300)
+            rc, raw, err = self._exec_raw(diff)
+            mode = "text"
+            if rc == 0 and not _utf8(raw):
+                (self.workspace / "model.patch.raw").write_bytes(raw)  # exact diff, kept for audit
+                mode = "unsupported"
+            elif rc == 0 and b"\r" in raw:
+                (self.workspace / "model.patch.raw").write_bytes(raw)
+                rc, raw, err = self._exec_raw("mkdir -p .git/info && printf '* binary\\n' >> .git/info/attributes && " + diff)
+                mode = "binary"
+                if rc == 0 and not _utf8(raw):
+                    mode = "unsupported"
+            self.patch_mode = mode if rc == 0 else "failed"
             self.patch_path = self.workspace / "model.patch"
-            self.patch_path.write_text(out if rc == 0 else "")
-            (self.workspace / "finalize.json").write_text(json.dumps(dict(rc=rc, err=err[-500:], bytes=len(out))))
+            self.patch_path.write_bytes(raw if rc == 0 and mode != "unsupported" else b"")
+            (self.workspace / "finalize.json").write_text(json.dumps(dict(
+                rc=rc, err=err[-500:], bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(), mode=self.patch_mode)))
         finally:
             self._run([self.docker, "rm", "-f", self.container], 120)
             self.container = None
         return self.patch_path
 
+    def _exec_raw(self, script):
+        rc, raw, err = self._run([self.docker, "exec", "-w", "/testbed", self.container, "bash", "-lc", script], 300,
+                                 raw=True)
+        return rc, raw if isinstance(raw, bytes) else (raw or "").encode(), err
+
     def verify(self, task, answer):
-        patch = self.patch_path.read_text() if self.patch_path and self.patch_path.exists() else ""
+        if getattr(self, "patch_mode", None) == "unsupported":
+            return dict(passed=False, reason="unsupported submission: changes are not valid UTF-8 text", unsupported_submission=True)
+        patch = self.patch_path.read_bytes().decode("utf-8") if self.patch_path and self.patch_path.exists() else ""
         return evaluate_patch(self.instance["instance_id"], patch, self.workspace / "eval", python=self.harness_python)
 
     def verification_callable(self, task):
