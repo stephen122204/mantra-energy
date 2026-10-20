@@ -55,13 +55,12 @@ def _text(data) -> str:
     return data.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _plain_text(data: bytes) -> bool:
-    """True when bytes survive text handling unchanged: valid UTF-8 and no carriage returns."""
+def _utf8(data: bytes) -> bool:
     try:
         data.decode("utf-8")
     except UnicodeDecodeError:
         return False
-    return b"\r" not in data
+    return True
 
 
 def run_cmd(argv: list, timeout: float, cwd=None, raw: bool = False) -> tuple:
@@ -200,11 +199,14 @@ class SweBenchRuntime:
     def finalize(self, task):
         """Store the working-tree diff (tracked and new files) as the model patch; remove the container.
 
-        The patch given to the grader must reproduce the agent's files byte for byte. A diff that is valid UTF-8
-        with no carriage returns is stored as text (unchanged behaviour). Otherwise every file is emitted as a git
-        binary patch (``* binary`` in .git/info/attributes, which takes precedence over the repository's own
-        attributes): ASCII only, applied exactly by ``git apply``. If even that is not valid UTF-8 the submission is
-        recorded as unsupported and graded as not resolved, never as an infrastructure failure.
+        The patch given to the grader must reproduce the agent's files byte for byte.
+        - Valid UTF-8 with no carriage returns: stored as text (unchanged behaviour).
+        - Valid UTF-8 with carriage returns: every file is emitted as a git binary patch (``* binary`` in
+          .git/info/attributes, which takes precedence over the repository's attributes). It is ASCII, and the
+          harness's ``git apply`` applies it exactly.
+        - Not valid UTF-8: the official harness cannot evaluate it (it decodes ``git diff`` after applying the patch;
+          SWE-bench counts such errors as unresolved). It is recorded as an unsupported submission and verified as
+          not resolved, never as an infrastructure failure. The exact diff is kept in model.patch.raw.
         """
         if not self.container:
             return None
@@ -212,11 +214,14 @@ class SweBenchRuntime:
         try:
             rc, raw, err = self._exec_raw(diff)
             mode = "text"
-            if rc == 0 and not _plain_text(raw):
-                (self.workspace / "model.patch.raw").write_bytes(raw)  # the text-mode diff, kept for audit
+            if rc == 0 and not _utf8(raw):
+                (self.workspace / "model.patch.raw").write_bytes(raw)  # exact diff, kept for audit
+                mode = "unsupported"
+            elif rc == 0 and b"\r" in raw:
+                (self.workspace / "model.patch.raw").write_bytes(raw)
                 rc, raw, err = self._exec_raw("mkdir -p .git/info && printf '* binary\\n' >> .git/info/attributes && " + diff)
                 mode = "binary"
-                if rc == 0 and not _plain_text(raw):
+                if rc == 0 and not _utf8(raw):
                     mode = "unsupported"
             self.patch_mode = mode if rc == 0 else "failed"
             self.patch_path = self.workspace / "model.patch"
@@ -235,7 +240,7 @@ class SweBenchRuntime:
 
     def verify(self, task, answer):
         if getattr(self, "patch_mode", None) == "unsupported":
-            return dict(passed=False, reason="submission cannot be represented as a text patch", unsupported_submission=True)
+            return dict(passed=False, reason="unsupported submission: changes are not valid UTF-8 text", unsupported_submission=True)
         patch = self.patch_path.read_bytes().decode("utf-8") if self.patch_path and self.patch_path.exists() else ""
         return evaluate_patch(self.instance["instance_id"], patch, self.workspace / "eval", python=self.harness_python)
 

@@ -94,31 +94,31 @@ def test_plain_text_diff_is_stored_unchanged(tmp_path, monkeypatch):
     assert tree_hashes(applied_tree(tmp_path, patch)) == tree_hashes(testbed)
 
 
-@pytest.mark.parametrize("name,edit", [
-    ("latin-1 new file", lambda r: (r / "notes.txt").write_bytes(b"caf\xe9 \x8f\n")),
-    ("non-utf8 byte in tracked file", lambda r: (r / "mod.py").write_bytes(b"def f():\n    return '\xff'\n")),
-    ("carriage returns", lambda r: (r / "crlf.txt").write_bytes(b"one\r\ntwo\r\nthree\r\n")),
-])
-def test_patch_reconstructs_agent_files_byte_for_byte(tmp_path, monkeypatch, name, edit):
+def test_carriage_returns_are_reconstructed_byte_for_byte(tmp_path, monkeypatch):
     def edits(r):
-        edit(r)
-        (r / "mod.py").write_bytes((r / "mod.py").read_bytes() + b"# touched\n")
+        (r / "crlf.txt").write_bytes(b"one\r\ntwo\r\nthree\r\n")
+        (r / "new_crlf.txt").write_bytes(b"a\r\nb\rc\n")
+        (r / "mod.py").write_text("def f():\n    return 2\n")
     rt, testbed = agent_runtime(tmp_path, monkeypatch, edits)
     patch = rt.finalize(SimpleNamespace())
-    meta = json.loads((rt.workspace / "finalize.json").read_text())
-    assert meta["mode"] == "binary" and (rt.workspace / "model.patch.raw").exists()
+    assert json.loads((rt.workspace / "finalize.json").read_text())["mode"] == "binary"
     patch.read_bytes().decode("ascii")                    # what the harness writes with write_text, exactly
-    assert tree_hashes(applied_tree(tmp_path, patch)) == tree_hashes(testbed), name
+    assert tree_hashes(applied_tree(tmp_path, patch)) == tree_hashes(testbed)
     assert rt.container is None
 
 
-def test_unrepresentable_submission_is_not_resolved_and_not_infrastructure(tmp_path, monkeypatch):
-    rt, _ = agent_runtime(tmp_path, monkeypatch, lambda r: None)
-    rt._exec_raw = lambda script: (0, b"diff --git a/x b/x\n+\xff\n", "")
+@pytest.mark.parametrize("edit", [
+    lambda r: (r / "notes.txt").write_bytes(b"caf\xe9 \x8f\n"),
+    lambda r: (r / "mod.py").write_bytes(b"def f():\n    return '\xff'\n"),
+])
+def test_non_utf8_changes_are_an_unsupported_submission(tmp_path, monkeypatch, edit):
+    rt, _ = agent_runtime(tmp_path, monkeypatch, edit)
     rt.finalize(SimpleNamespace())
     assert rt.patch_mode == "unsupported" and rt.patch_path.read_bytes() == b""
+    assert b"diff --git" in (rt.workspace / "model.patch.raw").read_bytes()
     res = rt.verify(SimpleNamespace(), None)
     assert res["passed"] is False and res["unsupported_submission"] is True and "infrastructure" not in res
+    assert rt.container is None
 
 
 def test_bash_tool_output_with_invalid_bytes_completes(tmp_path, monkeypatch):
