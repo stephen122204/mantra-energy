@@ -47,12 +47,21 @@ def sanitized_image(instance_id: str) -> str:
 Runner = Callable[..., tuple]  # (argv, timeout, cwd=None) -> (returncode, stdout, stderr)
 
 
-def run_cmd(argv: list, timeout: float, cwd=None) -> tuple:
+def _text(data) -> str:
+    """UTF-8 with replacement plus universal newlines: identical to text=True for valid UTF-8 output, but
+    output that is not valid UTF-8 (e.g. a file an agent wrote in another encoding) no longer raises."""
+    if not isinstance(data, bytes):
+        return data or ""
+    return data.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def run_cmd(argv: list, timeout: float, cwd=None, raw: bool = False) -> tuple:
+    """(returncode, stdout, stderr); raw=True keeps stdout as the exact bytes."""
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, cwd=cwd)
-        return p.returncode, p.stdout, p.stderr
+        p = subprocess.run(argv, capture_output=True, timeout=timeout, cwd=cwd)
+        return p.returncode, p.stdout if raw else _text(p.stdout), _text(p.stderr)
     except subprocess.TimeoutExpired as exc:
-        return 124, (exc.stdout or b"").decode() if isinstance(exc.stdout, bytes) else (exc.stdout or ""), "timeout"
+        return 124, (exc.stdout or b"") if raw else _text(exc.stdout), "timeout"
 
 
 SANITIZE = ("set -e; cd /testbed; test -z \"$(git status --porcelain)\"; git checkout -q --detach {base}; "
@@ -184,11 +193,21 @@ class SweBenchRuntime:
         if not self.container:
             return None
         try:
-            rc, out, err = self._run([self.docker, "exec", "-w", "/testbed", self.container, "bash", "-lc",
-                                      "git add -A && git diff --cached --binary HEAD"], 300)
+            rc, raw, err = self._run([self.docker, "exec", "-w", "/testbed", self.container, "bash", "-lc",
+                                      "git add -A && git diff --cached --binary HEAD"], 300, raw=True)
+            raw = raw if isinstance(raw, bytes) else (raw or "").encode()
+            out = _text(raw)
+            try:
+                raw.decode("utf-8")
+                utf8 = True
+            except UnicodeDecodeError:
+                utf8 = False
+                (self.workspace / "model.patch.raw").write_bytes(raw)  # exact diff, kept for audit
             self.patch_path = self.workspace / "model.patch"
             self.patch_path.write_text(out if rc == 0 else "")
-            (self.workspace / "finalize.json").write_text(json.dumps(dict(rc=rc, err=err[-500:], bytes=len(out))))
+            (self.workspace / "finalize.json").write_text(json.dumps(dict(
+                rc=rc, err=err[-500:], bytes=len(out), raw_bytes=len(raw), raw_sha256=hashlib.sha256(raw).hexdigest(),
+                utf8_valid=utf8)))
         finally:
             self._run([self.docker, "rm", "-f", self.container], 120)
             self.container = None
