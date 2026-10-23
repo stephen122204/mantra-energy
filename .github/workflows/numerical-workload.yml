@@ -1,9 +1,9 @@
 name: Numerical workload contracts
 on:
   pull_request:
-    branches: ['research/energy-diagnosis']
+    branches: ['main']
   push:
-    branches: ['research/energy-diagnosis']
+    branches: ['main']
     paths:
       - 'studies/energy_diagnosis/moe/numerical_workload.py'
       - 'tests/test_numerical_workload.py'

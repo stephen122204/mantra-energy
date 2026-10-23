@@ -2,7 +2,7 @@ name: Energy diagnosis setup
 
 on:
   push:
-    branches: ['research/energy-diagnosis']
+    branches: ['main']
     paths:
       - 'docs/agent-context/**'
       - 'studies/energy_diagnosis/**'
@@ -21,7 +21,7 @@ on:
       - 'AGENTS.md'
       - '.github/workflows/energy-diagnosis-setup.yml'
   pull_request:
-    branches: ['research/energy-diagnosis']
+    branches: ['main']
   workflow_dispatch:
 
 permissions:

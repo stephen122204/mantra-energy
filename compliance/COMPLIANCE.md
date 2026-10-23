@@ -701,7 +701,7 @@ Writers receive run_id only via experiment_runner after insert_run() returns.
 
 ## 15. Publication-Grade Documentation Standards (PDS)
 
-A-LEMS produces research papers targeting SIGMETRICS, ISPASS, SC, and AAAI.
+A-LEMS supports research papers in computer-systems and AI venues.
 Every document, guide, and methodology reference is a potential paper supplement
 or reviewer artifact. Agents must write to that standard unconditionally.
 

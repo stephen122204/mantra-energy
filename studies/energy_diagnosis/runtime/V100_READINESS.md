@@ -3,7 +3,7 @@
 This procedure prepares the existing platform for a later approved pilot. It does
 not select the pilot model, qualify the native MoE backend, or authorize a campaign.
 Use the [integrated runtime guide](../RUN_LOCAL.md) and the
-[current handoff](../../../agent%20context%20md/CURRENT_HANDOFF.md).
+[current handoff](../../../docs/team/CURRENT_HANDOFF.md).
 
 ## Current result (16 October 2026)
 

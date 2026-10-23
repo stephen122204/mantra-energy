@@ -24,10 +24,12 @@ from studies.energy_diagnosis.agent_protocol import (
     PROTOCOL_VERSION as CHAT_PROTOCOL,
     CHAT_PROTOCOLS,
     PROTOCOL_V2,
+    PROTOCOL_V3,
     Conversation,
     function_tools,
+    TOOL_CALL_FORMATS,
     outcome_class,
-    parse_response,
+    parse_tool_response,
     turn_seed,
 )
 from studies.energy_diagnosis.campaign import ArtifactRef, PlannedRun, RunLedger
@@ -60,9 +62,12 @@ from studies.energy_diagnosis.workloads.pilot_tasks import (
     verify_pilot,
     PILOT_VERIFIER_VERSION,
     _hash as asset_hash,
+    WorkspaceFault,
 )
 from studies.energy_diagnosis.workloads.pilot_tools import PilotAssetTool
 from studies.energy_diagnosis.moe import event_log
+
+WORKSPACE_FAULT = WorkspaceFault.__name__ + ":"  # the bounded executor reports 'TypeName: message'
 
 SETTINGS = {"C00": (False, 1), "C01": (False, 4), "C10": (True, 1), "C11": (True, 4)}
 STAGED_INSPECTION = "staged-inspection-v1"
@@ -252,6 +257,7 @@ class GoalExecutor:
         sampling=None,
         max_tool_calls=None,
         max_output_tokens=None,
+        tool_call_format="hermes",
         diagnostic_variant=None,
     ):
         self.tasks = tasks
@@ -270,6 +276,10 @@ class GoalExecutor:
             raise ValueError("unknown agent protocol")
         if protocol in CHAT_PROTOCOLS and workload_runtime is None:
             raise ValueError("the chat protocol requires a workload runtime")
+        if tool_call_format not in TOOL_CALL_FORMATS:
+            raise ValueError(f"unknown tool-call format {tool_call_format!r}")
+        # Syntax of the model's native tool calls (chat protocols only); set by the model config.
+        self.tool_call_format = tool_call_format
         # legacy-json-v1 reproduces V6: one user message per step holding a
         # static instruction and tool results. chat-tools-v1 is the native
         # multi-turn protocol (agent_protocol.py).
@@ -309,7 +319,8 @@ class GoalExecutor:
         limits end the attempt. The reason is recorded in trace["terminal"].
         """
         deadline_ns = lease.started_ns + int(self.timeout_seconds * 1e9)
-        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps, protocol=self.protocol)
+        conversation = Conversation(task.prompt, function_tools(context["tools"]), self.max_steps, protocol=self.protocol,
+                                    tool_call_format=self.tool_call_format)
         meta = dict(task_id=task.task_id, family=task.family, asset_sha256=task.asset_sha256)
         suffix = "-" + plan.setting_id
         pair_key = plan.planned_run_id[: -len(suffix)] if plan.planned_run_id.endswith(suffix) else plan.planned_run_id
@@ -321,6 +332,8 @@ class GoalExecutor:
         )
         response, calls_used, output_used, seen = None, 0, 0, set()
         per_turn_tokens = self.adapter.model_config["max_tokens"]
+        if per_turn_tokens is None and not getattr(self.adapter, "fit_to_context", False):
+            raise ValueError("no per-response cap requires an adapter that fits responses to the remaining context")
 
         def save_turn(step, phase, payload):
             # Immutable partial evidence survives interruption before finalization.
@@ -343,7 +356,9 @@ class GoalExecutor:
             remaining_output = None if self.max_output_tokens is None else self.max_output_tokens - output_used
             if remaining_output is not None and remaining_output <= 0:
                 return stop("output_budget_exhausted", f"{output_used} output tokens used")
-            call_budget = per_turn_tokens if remaining_output is None else min(per_turn_tokens, remaining_output)
+            # per_turn_tokens None: no per-response cap; the adapter fits the response to the remaining context
+            caps = [b for b in (per_turn_tokens, remaining_output) if b is not None]
+            call_budget = min(caps) if caps else None
             request = conversation.request()
             sampling = (dict(self.sampling, seed=turn_seed(self.sampling["seed"], pair_key, step))
                         if self.sampling["mode"] == "sampled" else dict(mode="greedy"))
@@ -389,20 +404,26 @@ class GoalExecutor:
                 status, error, _, _, _ = stop(kind, response.error, "timed_out" if kind == "deadline_exceeded" else "crashed")
                 return status, error, None, response, owned
             count = tokens.get("completion")
-            if type(count) is not int or count < 0 or count > call_budget:
+            bound = call_budget if per_turn_tokens is not None else raw.get("allowance")
+            if type(count) is not int or count < 0 or type(bound) is not int or count > bound:
                 return stop("infrastructure_failure", "missing or out-of-budget completion token count", "crashed")
             output_used += count
             finish = raw.get("finish_reason")
             turn = dict(step=step, finish_reason=finish, prompt_tokens=tokens.get("prompt"),
                         completion_tokens=tokens.get("completion"), sampling_seed=sampling.get("seed"),
-                        output_budget=call_budget)
+                        output_budget=bound)
             trace["turns"].append(turn)
             if finish == "context_exhausted":
                 return stop("context_exhausted", f"{tokens.get('prompt')} prompt tokens plus the output allowance exceed the context")
             if finish == "length":
-                kind = "output_budget_exhausted" if remaining_output is not None and output_used >= self.max_output_tokens else "output_truncated"
-                return stop(kind, f"response reached {call_budget} output tokens")
-            decision = parse_response(raw.get("content"), accept_unclosed_final=self.protocol == PROTOCOL_V2)
+                if remaining_output is not None and output_used >= self.max_output_tokens:
+                    return stop("output_budget_exhausted", f"response reached {bound} output tokens")
+                if per_turn_tokens is None:
+                    return stop("context_exhausted", f"response filled the remaining context ({bound} output tokens)")
+                return stop("output_truncated", f"response reached {bound} output tokens")
+            decision = parse_tool_response(raw.get("content"), self.tool_call_format,
+                                           accept_unclosed_final=self.protocol in (PROTOCOL_V2, PROTOCOL_V3),
+                                           accept_missing_args_marker=self.protocol == PROTOCOL_V3)
             turn.update(kind=decision.kind, reason=decision.reason)
             if decision.repaired:
                 turn["repaired"] = decision.repaired
@@ -443,6 +464,11 @@ class GoalExecutor:
                         conversation.tool_result(cid, name, "error", outcome.error or outcome.status)
                 save_turn(step, "tools", dict(outcomes=[asdict(o) for o in outcomes.values()],
                                                rejected=rejected, next_request=conversation.request()))
+                # A permitted workspace write that the OS refused is a broken host, not an agent error:
+                # end the attempt as infrastructure instead of letting the model retry into a budget.
+                fault = next((o.error for o in outcomes.values() if (o.error or "").startswith(WORKSPACE_FAULT)), None)
+                if fault:
+                    return stop("infrastructure_failure", fault, "crashed")
                 if timed_out:
                     return stop("deadline_exceeded", "tool execution reached the goal deadline", "timed_out")
             if self.max_output_tokens is not None and output_used >= self.max_output_tokens:

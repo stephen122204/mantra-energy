@@ -126,7 +126,12 @@ data/*.json
 .agent-context-pending/
 
 # Stephen personal human guide belongs outside shared source and handoff bundles
-/agent context md/stephen/HUMAN_START_HERE.md
+/docs/team/stephen/HUMAN_START_HERE.md
 
 # Small licensed workload fixtures must be available in a clean clone.
 !studies/energy_diagnosis/workloads/pilot_assets/*.csv
+
+# Editor/shell leftovers and generated documentation
+*.sql_bak
+nohup.out
+docs/build/

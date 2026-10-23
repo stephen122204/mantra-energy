@@ -5,7 +5,7 @@ Describe the concrete input/trigger and what this change makes work.
 ## Issue and scope
 
 - Issue:
-- Intended base: `research/energy-diagnosis`
+- Intended base: `main`
 - Interfaces or shared files changed:
 - Dependency PRs/commits (or none); explain any temporary stacked-PR base:
 

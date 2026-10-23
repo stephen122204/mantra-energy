@@ -74,3 +74,23 @@ def test_prepared_snapshot_rejects_stale_code_and_symlinks(tmp_path):
     (source/'leak').symlink_to(tmp_path/'secret')
     with pytest.raises(ValueError,match='symlinks'):
         prepare(tmp_path/'run',SPECS,prepared_assets=source)
+
+
+def test_prepared_snapshot_accepts_read_only_frozen_directories(tmp_path):
+    import stat
+    source=tmp_path/'frozen-readonly'; frozen=prepare(source,SPECS)
+    paths=[source,*source.rglob('*')]
+    modes={p:stat.S_IMODE(p.stat().st_mode) for p in paths}
+    try:
+        for p in paths:p.chmod(modes[p] & ~0o222)
+        run=tmp_path/'readonly-run'
+        copied=prepare(run,SPECS,prepared_assets=source)
+        assert copied.catalog()==frozen.catalog()
+        assert all(not stat.S_IMODE(p.stat().st_mode) & 0o222 for p in paths)
+        assert stat.S_IMODE(run.stat().st_mode)==stat.S_IMODE(source.stat().st_mode) | 0o200
+        assert all(not stat.S_IMODE(p.stat().st_mode) & 0o222 for p in run.rglob('*'))
+    finally:
+        for p,mode in modes.items():p.chmod(mode)
+        if (tmp_path/'readonly-run').exists():
+            for p in [tmp_path/'readonly-run',*(tmp_path/'readonly-run').rglob('*')]:
+                p.chmod(p.stat().st_mode | 0o200)

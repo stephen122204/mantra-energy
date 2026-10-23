@@ -262,3 +262,26 @@ def test_supervisor_captures_its_own_baseline_for_unattended_batches(tmp_path):
                                   "--process-baseline", str(tmp_path / "job/process-baseline.json"), "--", "true"],
                           cwd=root, capture_output=True, text=True, timeout=60)
     assert both.returncode == 2
+
+
+def test_snapshot_skips_process_that_exits_during_stat_read(tmp_path, monkeypatch):
+    # On Linux, reading /proc/<pid>/stat of a process that exited after the directory listing raises ESRCH
+    # (ProcessLookupError), not FileNotFoundError. Seen on gigaio-08 (2026-10-01) as a failed batch:
+    # "[Errno 3] No such process". The vanished process must simply be skipped.
+    boot = tmp_path / "sys/kernel/random/boot_id"
+    boot.parent.mkdir(parents=True)
+    boot.write_text("testboot")
+    fields = ["S", "1"] + ["0"] * 9 + ["123", "45"] + ["0"] * 6 + ["987"]
+    for pid in (10, 11):
+        (tmp_path / str(pid)).mkdir()
+        (tmp_path / str(pid) / "stat").write_text(f"{pid} (python) " + " ".join(fields))
+    real_read = Path.read_text
+
+    def read_text(self, *args, **kwargs):
+        if self == tmp_path / "11" / "stat":
+            raise ProcessLookupError(3, "No such process")
+        return real_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    result = snapshot(tmp_path)
+    assert [row["pid"] for row in result["processes"]] == [10]
