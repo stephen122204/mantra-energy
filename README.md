@@ -14,7 +14,7 @@ Task checks are kept separate from the files the agent can access.
 
 This branch contains the Qwen implementation. The Devstral implementation has
 separate tool-call handling and is available from the
-[release downloads](https://github.com/stephen122204/alems-energy-diagnosis/releases/tag/v1.0.0-paper1).
+[release downloads](https://github.com/stephen122204/mantra-energy/releases/tag/v1.0.0-paper1).
 The release also includes records for 2,747 attempts across seven sets of
 experiments, available experiment settings, and a guide to the downloads.
 
@@ -23,7 +23,7 @@ experiments, available experiment settings, and a guide to the downloads.
 Clone this branch and install the Python dependencies:
 
 ```bash
-git clone --branch paper-1 https://github.com/stephen122204/alems-energy-diagnosis.git paper-1
+git clone --branch paper-1 https://github.com/stephen122204/mantra-energy.git paper-1
 cd paper-1
 python3.11 -m venv .venv
 source .venv/bin/activate
