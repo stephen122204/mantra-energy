@@ -167,6 +167,7 @@ class QueryTool:
     database: str
     max_seconds: float = 10.0
     tables: tuple[str, ...] = ("trips", "zones")
+    extra_functions: tuple[str, ...] = ()
 
     def execute(self, action, sql=None, workers=1):
         if not self.tables or any(not isinstance(name, str) or not name or not name.isascii() or not (name[0].isalpha() or name[0] == "_") or not name.replace("_", "").isalnum() for name in self.tables):
@@ -188,7 +189,7 @@ class QueryTool:
             if action == "schema":
                 payload = {"tables": {name: [dict(name=r[1], type=r[2]) for r in db.execute(f"PRAGMA table_info({name})")] for name in self.tables}}
             else:
-                functions = {"count", "sum", "min", "max", "avg", "total", "strftime", "date", "datetime", "substr", "substring", "coalesce", "ifnull", "nullif", "lower", "upper", "trim", "length", "abs", "round", "like", "typeof"}
+                functions = {"count", "sum", "min", "max", "avg", "total", "strftime", "date", "datetime", "substr", "substring", "coalesce", "ifnull", "nullif", "lower", "upper", "trim", "length", "abs", "round", "like", "typeof"} | {f.lower() for f in self.extra_functions}
 
                 def authorize(op, a, b, database, trigger):
                     if op == sqlite3.SQLITE_SELECT:

@@ -10,7 +10,7 @@ from pathlib import Path
 import random
 import sqlite3
 import tempfile
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace
 from .query_workload import QueryTool
 from .tool_contracts import SQL_ACTIONS, sql_contract, validate_action
 
@@ -152,10 +152,9 @@ def verify(task,answer):
 class BusinessRuntime:
     def __init__(self,root):self.root=Path(root)
     def begin(self,task,lease):
-        import shutil
         if _hash(task.asset_path)!=task.asset_sha256:raise ValueError('business inputs changed')
         self.workspace=self.root/'workspaces'/lease.execution_id
-        shutil.copytree(task.asset_path,self.workspace)
+        copy_workspace(task.asset_path,self.workspace)
     def context(self,task):
         return dict(family=task.family,tools={'sql':sql_contract('SQLite')},
             instruction='Return only JSON {"tool_calls":[{"id":"unique","tool":"sql","args":{...}}]} or {"answer":{...}}. '

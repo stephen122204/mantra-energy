@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from studies.energy_diagnosis.moe import event_log
 
 
 def require(condition, message):
@@ -57,7 +58,7 @@ def audit_attempt(root, row):
         "execution-record": "record.json",
         "raw-measurement": "measurement.json",
         "initialized-model-window": "initialized-model-window.json",
-        "expert-events": "expert-events.json",
+        "expert-events": event_log.NAMES,
     }
     artifacts = {}
     for ref in attempt["artifacts"]:
@@ -67,9 +68,10 @@ def audit_attempt(root, row):
         raw = path.read_bytes()
         require(hashlib.sha256(raw).hexdigest() == ref["sha256"], "artifact hash mismatch")
         if ref["role"] in required:
-            require(relative == base / required[ref["role"]], "artifact identity/path mismatch")
+            names = required[ref["role"]] if isinstance(required[ref["role"]], tuple) else (required[ref["role"]],)
+            require(relative in [base / n for n in names], "artifact identity/path mismatch")
             require(ref["role"] not in artifacts, "duplicate artifact role")
-            artifacts[ref["role"]] = json.loads(raw)
+            artifacts[ref["role"]] = event_log.decode(raw, relative)
     require(set(required) <= artifacts.keys(), "required registered artifact missing")
     record = artifacts["execution-record"]
     raw = artifacts["raw-measurement"]
@@ -86,6 +88,11 @@ def audit_attempt(root, row):
     require(set(checkpoints) >= {"initialized_model_start", "initialized_model_end"}, "initialized endpoints not both captured")
     labels = ["goal_start", checkpoints["initialized_model_start"], checkpoints["initialized_model_end"], "goal_end"]
     require(len(set(labels)) == 4, "checkpoint labels alias each other")
+    # Optional split of the initialized window at task_end: task (primary EpG) + verifier.
+    split = "task_end" in checkpoints and "task_window" in window
+    if split:
+        require(checkpoints["task_end"] not in labels, "task_end aliases another checkpoint")
+        labels = labels[:2] + [checkpoints["task_end"]] + labels[2:]
     domains = {d["canonical_name"]: d for d in raw["measurement_schema"]["domains"]}
     require(len(domains) == len(raw["measurement_schema"]["domains"]) and domains, "empty or duplicate counter domains")
     samples = defaultdict(list)
@@ -102,6 +109,8 @@ def audit_attempt(root, row):
         "initialized": indexed(window["measurements"]),
         "before": indexed(window.get("before_task_window", {}).get("measurements", [])),
         "after": indexed(window.get("after_task_window", {}).get("measurements", [])),
+        "task": indexed(window.get("task_window", {}).get("measurements", [])),
+        "verifier": indexed(window.get("verifier_window", {}).get("measurements", [])),
     }
     owned = attempt.get("outcome_metadata", {}).get("owned_work_terminated") is True
     result = {}
@@ -116,7 +125,16 @@ def audit_attempt(root, row):
             endpoint_indices.append(matches[0])
         require(all(a < b for a, b in zip(endpoint_indices, endpoint_indices[1:])), "raw endpoints out of order")
         endpoints = [series[i] for i in endpoint_indices]
-        begin, end = endpoints[1:3]
+        if split:
+            # Positions: 0 goal_start, 1 initialized start, 2 task_end, 3 initialized end, 4 goal_end.
+            begin, end = endpoints[1], endpoints[3]
+            parts = [("outer", 0, 4), ("before", 0, 1), ("initialized", 1, 3), ("after", 3, 4),
+                     ("task", 1, 2), ("verifier", 2, 3)]
+            final = endpoints[4]
+        else:
+            begin, end = endpoints[1:3]
+            parts = [("outer", 0, 3), ("before", 0, 1), ("initialized", 1, 2), ("after", 2, 3)]
+            final = endpoints[3]
         for span in record["spans"]:
             require(begin["acquired_end_ns"] <= span["start_ns"] <= span["end_ns"] <= end["acquired_start_ns"], "task span outside initialized interval")
         starts = [e for e in events if e["event"] == "goal_start"]
@@ -125,12 +143,19 @@ def audit_attempt(root, row):
         require(len(starts) == 1 and len(drains) == 1 and len(releases) == 1, "missing/duplicate startup, drain or release evidence")
         require(starts[0]["startup_window"]["end_ns"] <= begin["acquired_start_ns"], "initialization overlaps inner start")
         require(begin["acquired_end_ns"] <= drains[0]["monotonic_ns"] <= end["acquired_start_ns"], "drain outside initialized interval")
-        require(end["acquired_end_ns"] <= releases[0]["monotonic_ns"] <= endpoints[3]["acquired_start_ns"], "release outside final portion")
+        require(end["acquired_end_ns"] <= releases[0]["monotonic_ns"] <= final["acquired_start_ns"], "release outside final portion")
+        if split:
+            task_end = endpoints[2]
+            for span in record["spans"]:
+                if span["kind"] == "verify":
+                    require(task_end["acquired_end_ns"] <= span["start_ns"], "verifier started before task_end")
+                else:
+                    require(span["end_ns"] <= task_end["acquired_start_ns"], "task span after task_end")
         for event in events:
             if event["event"] in {"preparation_planning_start", "preparation_planning_end", "model_start", "model_end"}:
                 require(begin["acquired_end_ns"] <= event["monotonic_ns"] <= end["acquired_start_ns"], "task control outside initialized interval")
         portions = {}
-        for part, left, right in [("outer", 0, 3), ("before", 0, 1), ("initialized", 1, 2), ("after", 2, 3)]:
+        for part, left, right in parts:
             selected = series[endpoint_indices[left]:endpoint_indices[right] + 1]
             joules, wraps, reason = replay(selected, domain, raw["measurement_schema"]["counter_width_bits"])
             saved = measured[part].get(name)
@@ -145,10 +170,13 @@ def audit_attempt(root, row):
             portions[part] = dict(replayed_joules=joules, recorded_status=saved["status"], wraps=wraps, reason=reason)
         if all(p["replayed_joules"] is not None for p in portions.values()):
             require(math.isclose(portions["outer"]["replayed_joules"], sum(portions[p]["replayed_joules"] for p in ("before", "initialized", "after")), rel_tol=1e-12, abs_tol=1e-9), "energy portions do not reconcile")
+            if split:
+                require(math.isclose(portions["initialized"]["replayed_joules"], portions["task"]["replayed_joules"] + portions["verifier"]["replayed_joules"], rel_tol=1e-12, abs_tol=1e-9), "task and verifier portions do not reconcile")
         result[name] = dict(
             portions=portions,
             checkpoint_brackets_ns=[s["acquired_end_ns"] - s["acquired_start_ns"] for s in endpoints],
             initialized_duration_bracket_ns=[end["acquired_start_ns"] - begin["acquired_end_ns"], end["acquired_end_ns"] - begin["acquired_start_ns"]],
+            task_duration_bracket_ns=([endpoints[2]["acquired_start_ns"] - begin["acquired_end_ns"], endpoints[2]["acquired_end_ns"] - begin["acquired_start_ns"]] if split else None),
             max_sample_bracket_ns=max(s["acquired_end_ns"] - s["acquired_start_ns"] for s in series),
         )
     all_valid = all(p["recorded_status"] == "valid" for d in result.values() for p in d["portions"].values())

@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 AUTHORS = {"stephen", "alex", "aldric", "nitheesh"}
-BRANCH = "research/energy-diagnosis"
+BRANCH = "main"
 EXPECTED_REMOTE = "https://github.com/stephen122204/alems-energy-diagnosis.git"
 HEADINGS = (
     "Task and current understanding", "Ideas and hypotheses", "Decisions and rationale",
@@ -47,8 +47,8 @@ def publish(repo, author, turn_id, note, expected_remote=EXPECTED_REMOTE, retrie
         remote = git(repo, *args).stdout.strip()
         if normalize_remote(remote) != normalize_remote(expected_remote):
             raise ValueError("Origin must fetch and push to the intended private team repository")
-    relative = Path("agent context md") / author / "turns" / f"{turn_id}.md"
-    latest = Path("agent context md") / author / "LATEST.md"
+    relative = Path("docs/team") / author / "turns" / f"{turn_id}.md"
+    latest = Path("docs/team") / author / "LATEST.md"
     last_error = ""
     for attempt in range(retries):
         git(repo, "fetch", "origin", f"refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}")

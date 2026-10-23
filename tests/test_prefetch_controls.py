@@ -263,3 +263,32 @@ def test_usefulness_rejects_corrupt_or_incomplete_evidence(mutation, message):
         events = [e for e in events if e["event"] != "goal_end"]
     with pytest.raises(ValueError, match=message):
         usefulness(events)
+
+
+def test_after_timing_admits_same_batch_only_when_tool_returns():
+    experts = [expert(i) for i in range(3)]
+    events_by_timing = {}
+    for timing in ("during", "after"):
+        backend = Scripted(experts)
+        control = Lifecycle(backend, Policy("fixed", 2 * MB, timing=timing))
+        control.begin_goal("g")
+        model(control, backend, 0, [demand(i, False) for i in range(3)])
+        control.plan_pause()
+        token = control.start_pause()
+        admitted_at_start = [e["event"] for e in control.events if e["event"].endswith("admitted")]
+        control.end_pause(token)
+        control.end_goal()
+        events_by_timing[timing] = control.events
+        names = [e["event"] for e in control.events]
+        if timing == "during":
+            assert admitted_at_start == ["preparation_admitted"]
+        else:
+            assert admitted_at_start == [] and "preparation_deferred" in names
+            # Admitted after tools_finished and completed before the model resumes.
+            assert names.index("tools_finished") < names.index("deferred_preparation_admitted") < names.index("model_resume")
+    selected = {t: [s["expert"] for e in ev if e["event"].endswith("preparation_admitted") for s in e["selected"]]
+                for t, ev in events_by_timing.items()}
+    assert selected["during"] == selected["after"] == [0, 1]
+    assert usefulness(events_by_timing["after"])["prepared_completed"] == 2
+    with pytest.raises(ValueError):
+        Policy("demand", timing="after")

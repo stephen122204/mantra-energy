@@ -70,6 +70,14 @@ def test_history_shows_calls_hides_timing_and_counts_turns():
 def test_outcome_classes_and_paired_seeds():
     assert outcome_class("completed", "pass", None) == "passed"
     assert outcome_class("completed", "fail", None) == "wrong_answer"
+    # Verifier failure classes survive into the attempt outcome (not collapsed into wrong_answer).
+    assert outcome_class("completed", "fail", None, "mismatch") == "wrong_answer"
+    assert outcome_class("completed", "fail", None, "budget") == "performance_budget_exceeded"
+    assert outcome_class("completed", "fail", None, "budget_exceeded") == "performance_budget_exceeded"
+    assert outcome_class("completed", "fail", None, "runtime_error") == "program_error"
+    assert outcome_class("completed", "fail", None, "hidden_timeout") == "program_timeout"
+    assert outcome_class("completed", "fail", None, "worker_error") == "infrastructure_failure"
+    assert outcome_class("completed", "pass", None, "budget") == "passed"
     assert outcome_class("timed_out", "unavailable", None) == "deadline_exceeded"
     assert outcome_class("incomplete", "unavailable", "output_truncated") == "output_truncated"
     assert turn_seed(0, "task-r0", 1) == turn_seed(0, "task-r0", 1) != turn_seed(0, "task-r0", 2)
@@ -166,6 +174,50 @@ def test_legacy_protocol_remains_available(tmp_path):
                    "--max-runs", "1", "--deadline", "60", "--agent-protocol", "legacy-json-v1"])
     calls = json.loads(next((output / "goals").glob("*/model-calls.json")).read_text())
     assert "prompt" in calls[0] and not list((output / "goals").glob("*/agent-trace.json"))
+
+
+# Responses recorded in the step-3 screen (Qwen3-30B-A3B-Instruct-2507 Q4_K_M).
+UNCLOSED_SUBMIT = '<tool_call>\n{"name": "submit_answer", "arguments": {"answer": 2}}'
+UNCLOSED_AFTER_TEXT = 'I will submit the final answer.\n<tool_call>\n{"name": "submit_answer", "arguments": {"answer": {"answer": 2}}\n}'
+
+
+def test_unclosed_final_call_is_malformed_in_v1_and_parsed_in_v2():
+    assert parse_response(UNCLOSED_SUBMIT).kind == "malformed"
+    d = parse_response(UNCLOSED_SUBMIT, accept_unclosed_final=True)
+    assert d.kind == "answer" and d.answer == 2 and d.repaired
+    d = parse_response(UNCLOSED_AFTER_TEXT, accept_unclosed_final=True)
+    assert d.kind == "answer" and d.answer == {"answer": 2} and d.content == "I will submit the final answer."
+    d = parse_response(call("python", {"action": "read"}) + "\n<tool_call>\n" + json.dumps(dict(name="python", arguments={"action": "test"})),
+                       accept_unclosed_final=True)
+    assert d.kind == "tool_calls" and [n for n, _ in d.calls] == ["python", "python"]
+    # Well-formed responses parse identically; everything else stays strict.
+    for text in (call("sql", {"action": "schema"}), call(SUBMIT, {"answer": {"done": True}}), "The answer is 3."):
+        assert parse_response(text, accept_unclosed_final=True) == parse_response(text)
+    for text in ('{"name": "submit_answer", "arguments": {"answer": 2}}\n</tool_call>',      # closing tag only
+                 '<tool_call>\n{"name": "submit_answer", "arguments": {"answer": 2}',        # truncated JSON
+                 '<tool_call>{"name": "a", "arguments": {}}<tool_call>{"name": "b", "arguments": {}}</tool_call>'):
+        assert parse_response(text, accept_unclosed_final=True).kind == "malformed"
+    assert parse_response('{"answer": {"done": true}}', accept_unclosed_final=True).kind == "no_action"
+
+
+def test_feedback_names_the_fix_only_in_v2():
+    tools = function_tools({})
+    v1, v2 = Conversation("g", tools, 5), Conversation("g", tools, 5, protocol="chat-tools-v2")
+    for c in (v1, v2):
+        c.record_turn(parse_response(UNCLOSED_SUBMIT))
+        c.feedback("unbalanced tool_call tags")
+    e1 = json.loads(v1.messages[-1]["content"])["error"]
+    e2 = json.loads(v2.messages[-1]["content"])["error"]
+    assert e1 == "unbalanced tool_call tags. Call a tool or submit_answer."
+    assert "closing tag" in e2 and e2.endswith("Call a tool or submit_answer.")
+
+
+@pytest.mark.parametrize("protocol,outcome", [("chat-tools-v1", "turn_budget_exhausted"), ("chat-tools-v2", "passed")])
+def test_unclosed_submit_end_to_end(tmp_path, protocol, outcome):
+    traces, _ = _pack_run(tmp_path, "unclosed_submit", "--agent-protocol", protocol)
+    assert traces[0]["protocol"] == protocol and traces[0]["outcome"] == outcome
+    if protocol == "chat-tools-v2":
+        assert traces[0]["turns"][-1]["repaired"] == "unclosed final tool_call accepted"
 
 
 def test_exponent_overflow_is_malformed():
@@ -294,3 +346,18 @@ def test_completed_turns_survive_interruption_before_final_result(tmp_path, monk
     assert len(rows) == 1 and rows[0]['attempt']['status'] == 'running'
     roles = {a['role'] for a in rows[0]['attempt']['artifacts']}
     assert {'agent-turn-model', 'agent-turn-tools'} <= roles
+
+
+def test_untagged_submission_gets_explicit_syntax_feedback_without_acceptance():
+    text = '{"name": "submit_answer", "arguments": {"answer": {"done": true}}}'
+    decision = parse_response(text, accept_unclosed_final=True)
+    assert decision.kind == "no_action"
+    conversation = Conversation("g", function_tools({}), 24, protocol="chat-tools-v2")
+    conversation.record_turn(decision)
+    conversation.feedback(decision.reason)
+    feedback = json.loads(conversation.messages[-1]["content"])
+    assert "<tool_call>" in feedback["error"] and "</tool_call>" in feedback["error"]
+    assert 'name "submit_answer"' in feedback["error"]
+    assert feedback["turns_remaining"] == 23
+    # The response is still not a submission; only an explicit tool call can finish.
+    assert parse_response(text, accept_unclosed_final=True).kind == "no_action"
