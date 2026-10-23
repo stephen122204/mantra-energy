@@ -23,15 +23,15 @@ Read the [human overview](HUMAN_START_HERE.md) first, then your personal human g
 | [Aldric — human guide](aldric/HUMAN_START_HERE.md) | [Assignment](../agent-context/07-aldric-workloads-verifiers.md) | `studies/energy_diagnosis/workloads/` | ED-03 |
 | [Nitheesh — human guide](nitheesh/HUMAN_START_HERE.md) | [Assignment](../agent-context/08-nitheesh-campaign-reproducibility.md) | `studies/energy_diagnosis/campaign/` | ED-04 |
 
-Use the [issue tracker](https://github.com/stephen122204/alems-energy-diagnosis/issues). The working assignments are Alex (runtime), Aldric (workloads), Nitheesh (campaign), and Stephen (method/integration). Individual GitHub usernames and repository invitations still need confirmation.
+Use the [issue tracker](https://github.com/stephen122204/mantra-energy/issues). The working assignments are Alex (runtime), Aldric (workloads), Nitheesh (campaign), and Stephen (method/integration). Individual GitHub usernames and repository invitations still need confirmation.
 
 ## Clone and begin
 
 Once Stephen grants your GitHub account access:
 
 ```bash
-git clone https://github.com/stephen122204/alems-energy-diagnosis.git
-cd alems-energy-diagnosis
+git clone https://github.com/stephen122204/mantra-energy.git
+cd mantra-energy
 git switch main
 python3 scripts/check_energy_diagnosis_setup.py
 ```

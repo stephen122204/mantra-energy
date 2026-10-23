@@ -1,6 +1,6 @@
 # First issues and dependency order
 
-These issues exist in the [team tracker](https://github.com/stephen122204/alems-energy-diagnosis/issues). Named working owners are below; GitHub account assignments remain separate. Each implementation PR should link its issue, evidence note and actual tested commit.
+These issues exist in the [team tracker](https://github.com/stephen122204/mantra-energy/issues). Named working owners are below; GitHub account assignments remain separate. Each implementation PR should link its issue, evidence note and actual tested commit.
 
 | ID | Owner | Concrete issue | Depends on | Definition of done |
 |---|---|---|---|---|

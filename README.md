@@ -1,4 +1,4 @@
-# Task-Level Energy of Locally Hosted AI Agents
+# MANTRA: Energy Measurement for Language-Model Agents
 
 Python software for measuring the energy that AI agents spend to complete
 verifiable tasks on locally hosted language models. It runs an agent on coding
@@ -11,8 +11,8 @@ The repository supports two papers that share this code:
 
 | Paper | Question | Code | Release branch |
 | --- | --- | --- | --- |
-| *Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents* | Does the precision that is cheaper per token also complete tasks with less energy? | `studies/energy_diagnosis/` | [`paper-1`](https://github.com/stephen122204/alems-energy-diagnosis/tree/paper-1) |
-| Paper 2 (in preparation) | Which weight precision completes tasks with the least energy when many agents share one GPU? | `studies/paper2/` | [`paper-2`](https://github.com/stephen122204/alems-energy-diagnosis/tree/paper-2) |
+| *Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents* | Does the precision that is cheaper per token also complete tasks with less energy? | `studies/energy_diagnosis/` | [`paper-1`](https://github.com/stephen122204/mantra-energy/tree/paper-1) |
+| Paper 2 (in preparation) | Which weight precision completes tasks with the least energy when many agents share one GPU? | `studies/paper2/` | [`paper-2`](https://github.com/stephen122204/mantra-energy/tree/paper-2) |
 
 Use the release branches for the paper-specific code and setup instructions.
 [Releases](#releases) provide downloadable code and saved experiment records.
@@ -22,8 +22,8 @@ Use the release branches for the paper-specific code and setup instructions.
 Clone the repository:
 
 ```bash
-git clone https://github.com/stephen122204/alems-energy-diagnosis.git
-cd alems-energy-diagnosis
+git clone https://github.com/stephen122204/mantra-energy.git
+cd mantra-energy
 ```
 
 Create a Python 3.11 environment and install the study dependencies:
@@ -65,9 +65,9 @@ the tasks, repeated attempts, random seeds, and limits on turns, tokens and time
 Saved records include model and tool calls, token counts, energy readings and
 correctness checks, including failed attempts.
 
-See the [Paper 1 setup guide](https://github.com/stephen122204/alems-energy-diagnosis/tree/paper-1)
+See the [Paper 1 setup guide](https://github.com/stephen122204/mantra-energy/tree/paper-1)
 for installation, hardware requirements and the available results. The
-[release page](https://github.com/stephen122204/alems-energy-diagnosis/releases/tag/v1.0.0-paper1)
+[release page](https://github.com/stephen122204/mantra-energy/releases/tag/v1.0.0-paper1)
 provides separate code downloads for Qwen and Devstral, along with the saved
 experiment records.
 
@@ -103,7 +103,7 @@ models and server settings.
 | --- | --- | --- |
 | `paper1-qwen-187c227` | `187c227` | Archived Qwen code, including BIRD and EvalPerf experiments |
 | `paper1-devstral-7dfd892` | `7dfd892` | Archived Devstral code |
-| `v1.0.0-paper1` | release | Paper 1 code downloads and saved experiment results ([release page](https://github.com/stephen122204/alems-energy-diagnosis/releases/tag/v1.0.0-paper1)) |
+| `v1.0.0-paper1` | release | Paper 1 code downloads and saved experiment results ([release page](https://github.com/stephen122204/mantra-energy/releases/tag/v1.0.0-paper1)) |
 | `paper2-exec-d554bd1` | `d554bd1` | Paper 2 source used for the measured campaigns |
 
 ## Citation
