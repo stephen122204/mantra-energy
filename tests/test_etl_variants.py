@@ -54,6 +54,14 @@ def test_timeout_feedback(tmp_path, monkeypatch, feedback):
     task, runtime, tool = run(tmp_path, dict(window_functions=False, feedback=feedback, index=False), feedback)
     tool.execute("write", GROUPED)
     monkeypatch.setattr(etl_workload, "QUERY_SECONDS", 0.0)
+    # Advance the query clock deterministically; a fast query can otherwise
+    # finish within one Windows monotonic-clock tick even with a zero budget.
+    import itertools
+    from studies.energy_diagnosis.moe import query_workload
+    ticks = itertools.count(step=1_000_000)
+    monkeypatch.setattr(query_workload, "time", SimpleNamespace(
+        monotonic_ns=lambda: next(ticks),
+        process_time_ns=query_workload.time.process_time_ns))
     if feedback == "explicit":
         with pytest.raises(etl_workload.QueryBudgetExceeded, match="10-second execution budget"):
             tool.execute("test")
