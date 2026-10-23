@@ -8,7 +8,7 @@ import tempfile
 
 AUTHORS = {"stephen", "alex", "aldric", "nitheesh"}
 BRANCH = "main"
-EXPECTED_REMOTE = "https://github.com/stephen122204/alems-energy-diagnosis.git"
+EXPECTED_REMOTE = "https://github.com/stephen122204/mantra-energy.git"
 HEADINGS = (
     "Task and current understanding", "Ideas and hypotheses", "Decisions and rationale",
     "Changes and artifacts", "Tests and evidence", "Open questions and disagreements",

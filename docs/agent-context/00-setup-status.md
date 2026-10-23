@@ -4,7 +4,7 @@ This file supersedes the handoff's earlier instructions to create the repository
 
 ## Team repository and source
 
-- Repository: [stephen122204/alems-energy-diagnosis](https://github.com/stephen122204/alems-energy-diagnosis), **private**.
+- Repository: [stephen122204/mantra-energy](https://github.com/stephen122204/mantra-energy), **private**.
 - This is a history-preserving research copy with an upstream remote, not a native GitHub fork. The upstream repository is public; its native forks must be public.
 - Default/integration branch: `main`.
 - `main` retains chosen upstream commit `a67d6583ca2a5ff484e4706284c7b7ce512ef6a0`.
@@ -31,7 +31,7 @@ Directories under `studies/energy_diagnosis/` reserve runtime, workloads, campai
 - Issues enabled; three milestones: Engineering pilot, Integration validation, Frozen evaluation.
 - PR/issue templates and root AGENTS.md installed. CODEOWNERS names Stephen.
 - Lightweight GitHub Actions check: `Energy diagnosis setup` / `handoff-and-plan`.
-- The initial setup check passed locally and on GitHub: [bootstrap CI run](https://github.com/stephen122204/alems-energy-diagnosis/actions/runs/33990372326).
+- The initial setup check passed locally and on GitHub: [bootstrap CI run](https://github.com/stephen122204/mantra-energy/actions/runs/33990372326).
 - Checks cover portable context links, provenance and planning output/readiness integrity. They run no model, paid API call, GPU job or upstream runtime suite.
 - **Branch protection is not enabled.** GitHub returned HTTP 403: “Upgrade to GitHub Pro or make this repository public to enable this feature.” The repository remains private. Required approval/status enforcement cannot be assumed; students must follow the documented PR review process. No subscription change was made.
 - Merge review is assigned to Stephen by process. Auto-delete after PR merge is enabled; create issue branches so persistent role branches need not be used as PR heads.
@@ -40,18 +40,18 @@ Directories under `studies/energy_diagnosis/` reserve runtime, workloads, campai
 
 | Issue | Deliverable | Owner role |
 |---|---|---|
-| [ED-01](https://github.com/stephen122204/alems-energy-diagnosis/issues/1) | Confirm baseline and freeze v0 component interfaces | lead |
-| [ED-02](https://github.com/stephen122204/alems-energy-diagnosis/issues/2) | Reproduce and repair local provider response and timing | runtime |
-| [ED-03](https://github.com/stephen122204/alems-energy-diagnosis/issues/3) | Build the first data goal and independent verifier | workloads |
-| [ED-04](https://github.com/stephen122204/alems-energy-diagnosis/issues/4) | Implement the resumable fixture execution ledger | campaign |
-| [ED-05](https://github.com/stephen122204/alems-energy-diagnosis/issues/5) | Validate Grace telemetry and measurement endpoints | runtime |
-| [ED-06](https://github.com/stephen122204/alems-energy-diagnosis/issues/6) | Implement four tool controls and bounded dependency execution | workloads |
-| [ED-07](https://github.com/stephen122204/alems-energy-diagnosis/issues/7) | Integrate one fully measured and verified Grace goal | integration |
-| [ED-08](https://github.com/stephen122204/alems-energy-diagnosis/issues/8) | Add the repository family and four pilot goal assets | workloads |
-| [ED-09](https://github.com/stephen122204/alems-energy-diagnosis/issues/9) | Execute and validate the bounded pilot campaign | campaign |
-| [ED-10](https://github.com/stephen122204/alems-energy-diagnosis/issues/10) | Validate the supplied policy integration | lead |
-| [ED-11](https://github.com/stephen122204/alems-energy-diagnosis/issues/11) | Freeze the held-out selection and evaluation boundary | lead |
-| [ED-12](https://github.com/stephen122204/alems-energy-diagnosis/issues/12) | Assign individual accounts, student roles and a pilot session | lead |
+| [ED-01](https://github.com/stephen122204/mantra-energy/issues/1) | Confirm baseline and freeze v0 component interfaces | lead |
+| [ED-02](https://github.com/stephen122204/mantra-energy/issues/2) | Reproduce and repair local provider response and timing | runtime |
+| [ED-03](https://github.com/stephen122204/mantra-energy/issues/3) | Build the first data goal and independent verifier | workloads |
+| [ED-04](https://github.com/stephen122204/mantra-energy/issues/4) | Implement the resumable fixture execution ledger | campaign |
+| [ED-05](https://github.com/stephen122204/mantra-energy/issues/5) | Validate Grace telemetry and measurement endpoints | runtime |
+| [ED-06](https://github.com/stephen122204/mantra-energy/issues/6) | Implement four tool controls and bounded dependency execution | workloads |
+| [ED-07](https://github.com/stephen122204/mantra-energy/issues/7) | Integrate one fully measured and verified Grace goal | integration |
+| [ED-08](https://github.com/stephen122204/mantra-energy/issues/8) | Add the repository family and four pilot goal assets | workloads |
+| [ED-09](https://github.com/stephen122204/mantra-energy/issues/9) | Execute and validate the bounded pilot campaign | campaign |
+| [ED-10](https://github.com/stephen122204/mantra-energy/issues/10) | Validate the supplied policy integration | lead |
+| [ED-11](https://github.com/stephen122204/mantra-energy/issues/11) | Freeze the held-out selection and evaluation boundary | lead |
+| [ED-12](https://github.com/stephen122204/mantra-energy/issues/12) | Assign individual accounts, student roles and a pilot session | lead |
 
 ## What Stephen needs to do next
 
