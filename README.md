@@ -1,4 +1,4 @@
-# Characterizing the Task-Level Energy Trade-offs of Model Quantization in Locally Hosted AI Agents
+# Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents
 
 Python software and processed records for the paper of the same name. The
 study runs a coding and data-analysis agent on 29 verifiable tasks in six
@@ -86,12 +86,12 @@ and as a Git bundle.
 
 ## Citation
 
-Preprint: arXiv link to be added.
+Preprint: arXiv link to be added. Authors: Stephen Abkin, Aldric Yang, Alex Flesher, Nitheesh Kodarapu, Deepak Panigrahy, Aakash Tyagi and David Kebo Houngninou (Texas A&M University).
 
 ```bibtex
-@misc{paper1-arxiv,
-  title  = {Characterizing the Task-Level Energy Trade-offs of Model Quantization in Locally Hosted AI Agents},
-  author = {TODO},
+@misc{abkin2026quantized,
+  title  = {Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents},
+  author = {Abkin, Stephen and Yang, Aldric and Flesher, Alex and Kodarapu, Nitheesh and Panigrahy, Deepak and Tyagi, Aakash and Kebo Houngninou, David},
   year   = {2026},
   note   = {arXiv preprint arXiv:TODO}
 }
