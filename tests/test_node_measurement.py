@@ -183,5 +183,40 @@ class NodeMeasurementTests(unittest.TestCase):
         self.assertIsNotNone(measured.artifacts)
 
 
+    def test_slow_operating_reads_charge_goal_and_delay_periodic_counters(self):
+        """Diagnostic fake clock: preserves current boundaries, without sensor I/O."""
+        clock = Clock()
+        observed = []
+
+        class SlowOperatingReader(ClockReader):
+            def read_operating_state(self):
+                begin = clock.now
+                clock.now += 1_600_000_000
+                observed.append((begin, clock.now, measured._sampling_lock.locked()))
+                return dict(read_start_ns=begin, read_end_ns=clock.now, fields={})
+
+        measured = NodeMeasurement(SlowOperatingReader(clock), ENVIRONMENT)
+        measured.session._monotonic_ns = clock
+        measured.session._wall_time_ns = clock
+        with patch("studies.energy_diagnosis.runtime.node_measurement.time.monotonic_ns", clock), patch(
+            "studies.energy_diagnosis.runtime.node_measurement.threading.Thread"
+        ) as thread:
+            start = measured.start_goal()
+            self.assertEqual(clock.now - start, 1_600_000_000)  # initial read before work
+            sample = thread.call_args.kwargs["target"]
+            measured._next_operating_ns = 0
+            with patch.object(measured.stop, "wait", side_effect=[False, False, True]):
+                sample()
+            work_finished = clock.now
+            artifacts = measured.finish_goal()
+        self.assertEqual([locked for _, _, locked in observed], [False, True, True])
+        self.assertEqual(artifacts.goal_end_ns - work_finished, 1_600_000_000)
+        self.assertEqual(artifacts.goal_end_ns - start, 4_800_000_000)
+        # Consecutive counter readings include a periodic operating-state gap.
+        cpu = [sample for sample in artifacts.samples if sample.domain_id == "CPU_FIXTURE"]
+        self.assertTrue(any(b.acquired_start_ns - a.acquired_start_ns >= 1_600_000_000
+                            for a, b in zip(cpu, cpu[1:])))
+
+
 if __name__ == "__main__":
     unittest.main()

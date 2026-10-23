@@ -1,7 +1,5 @@
 """Independent CPU audit of preserved BF16 forward scores; no acceptance override."""
 import hashlib
-import json
-from pathlib import Path
 
 import torch
 

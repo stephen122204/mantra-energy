@@ -76,7 +76,6 @@ from core.execution.sample_processor import (calculate_thermal_metrics,
 from core.sustainability.calculator import SustainabilityCalculator
 from core.utils.baseline_manager import BaselineManager
 from core.utils.debug import dprint
-import os
 from core.utils.proc_reader import (
 read_total_cpu_ticks,
 read_process_cpu_ticks,

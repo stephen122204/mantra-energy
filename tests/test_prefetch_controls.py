@@ -265,6 +265,20 @@ def test_usefulness_rejects_corrupt_or_incomplete_evidence(mutation, message):
         usefulness(events)
 
 
+def test_profile_serialization_hashes_exact_canonical_bytes(tmp_path):
+    """Runs on Linux/Windows: binary output prevents platform newline translation."""
+    import hashlib
+    first = {"source": "café", "experts": [[0, 1, 2]], "kind": "static-profile-v1"}
+    reordered = {"kind": first["kind"], "experts": first["experts"], "source": first["source"]}
+    paths = [tmp_path / "first.json", tmp_path / "reordered.json"]
+    digests = [dump(value, path) for value, path in zip((first, reordered), paths)]
+    expected = (json.dumps(first, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
+    assert paths[0].read_bytes() == paths[1].read_bytes() == expected
+    assert b"\r" not in expected and expected.endswith(b"\n")
+    assert digests == [hashlib.sha256(expected).hexdigest()] * 2
+    assert load(paths[0]) == (first, digests[0])
+
+
 def test_after_timing_admits_same_batch_only_when_tool_returns():
     experts = [expert(i) for i in range(3)]
     events_by_timing = {}

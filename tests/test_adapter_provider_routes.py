@@ -1,4 +1,5 @@
 import json
+import importlib
 import os
 import unittest
 from unittest.mock import Mock, patch
@@ -6,6 +7,11 @@ from unittest.mock import Mock, patch
 from core.execution.adapters.openai_compat import OpenAICompatAdapter
 from core.execution.agentic import AgenticExecutor
 from core.execution.model_factory import ModelFactory
+
+
+# Resolve the actual module object: earlier fixture modules may prepopulate
+# sys.modules without parent attributes, which breaks Python 3.10 string patches.
+adapter_module = importlib.import_module("core.execution.adapters.openai_compat")
 
 
 def provider(provider_id, **overrides):
@@ -49,14 +55,14 @@ class FakeStreamResponse:
 
 
 class OpenAICompatAvailabilityTests(unittest.TestCase):
-    @patch("core.execution.adapters.openai_compat.requests.get")
+    @patch.object(adapter_module.requests, "get")
     def test_vllm_local_uses_models_endpoint(self, get):
         get.return_value.status_code = 200
         adapter = OpenAICompatAdapter(provider("vllm_local"), model())
         self.assertTrue(adapter.is_available())
         get.assert_called_once_with("http://127.0.0.1:8000/v1/models", timeout=2)
 
-    @patch("core.execution.adapters.openai_compat.requests.get")
+    @patch.object(adapter_module.requests, "get")
     def test_vllm_availability_handles_non_2xx_and_connection_failure(self, get):
         adapter = OpenAICompatAdapter(provider("vllm_local"), model())
         get.return_value.status_code = 503
@@ -64,7 +70,7 @@ class OpenAICompatAvailabilityTests(unittest.TestCase):
         get.side_effect = OSError("connection refused")
         self.assertFalse(adapter.is_available())
 
-    @patch("core.execution.adapters.openai_compat.requests.get")
+    @patch.object(adapter_module.requests, "get")
     def test_ollama_still_uses_tags_endpoint(self, get):
         get.return_value.status_code = 200
         config = provider(
@@ -73,7 +79,7 @@ class OpenAICompatAvailabilityTests(unittest.TestCase):
         self.assertTrue(adapter.is_available())
         get.assert_called_once_with("http://127.0.0.1:11434/api/tags", timeout=2)
 
-    @patch("core.execution.adapters.openai_compat.requests.get")
+    @patch.object(adapter_module.requests, "get")
     def test_cloud_readiness_remains_api_key_based(self, get):
         config = provider(
             "openai", is_local=False, network_type="internet",
@@ -86,7 +92,7 @@ class OpenAICompatAvailabilityTests(unittest.TestCase):
 
 
 class OpenAICompatUsageTests(unittest.TestCase):
-    @patch("core.execution.adapters.openai_compat.requests.post")
+    @patch.object(adapter_module.requests, "post")
     def test_vllm_stream_requests_and_preserves_terminal_usage(self, post):
         post.return_value = FakeStreamResponse([
             {"choices": [{"delta": {"content": "hello"}}]},
@@ -119,7 +125,7 @@ class OpenAICompatUsageTests(unittest.TestCase):
         self.assertEqual(tokens, {"prompt": 11, "completion": 3, "total": 14})
         self.assertEqual(adapter._last_token_provenance, "provider")
 
-    @patch("core.execution.adapters.openai_compat.requests.post")
+    @patch.object(adapter_module.requests, "post")
     def test_ollama_stream_does_not_receive_openai_stream_options(self, post):
         post.return_value = FakeStreamResponse(["[DONE]"])
         adapter = OpenAICompatAdapter(provider(
@@ -139,9 +145,9 @@ class OpenAICompatTimingTests(unittest.TestCase):
         })
         adapter._get_network_counters = Mock(return_value={
             "bytes_sent": 0, "bytes_recv": 0, "tcp_retransmits": 0})
-        with patch("core.execution.adapters.openai_compat.time.perf_counter",
+        with patch.object(adapter_module.time, "perf_counter",
                    side_effect=[1.0, 1.001, 2.0, 2.025, 3.0, 3.002]), \
-             patch("core.execution.adapters.openai_compat.psutil.cpu_percent",
+             patch.object(adapter_module.psutil, "cpu_percent",
                    return_value=0.0):
             return adapter.call("prompt", 0.0)
 
@@ -160,7 +166,7 @@ class OpenAICompatTimingTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["non_local_ms"], 25.0)
         self.assertEqual(metrics["local_compute_ms"], 0.0)
 
-    @patch("core.execution.adapters.openai_compat.requests.get")
+    @patch.object(adapter_module.requests, "get")
     def test_model_factory_uses_real_vllm_provider_metadata(self, get):
         get.return_value.status_code = 200
         adapter = ModelFactory.get_adapter("vllm_local", {
@@ -201,6 +207,37 @@ class OpenAICompatTimingTests(unittest.TestCase):
         self.assertEqual(executor.pending_interactions[0]["prompt_tokens"], 45)
         self.assertEqual(
             executor.pending_interactions[0]["token_provenance"], "provider")
+
+
+class OllamaRunnerOptionsTests(unittest.TestCase):
+    def test_preparation_and_actual_request_use_identical_options(self):
+        adapter = OpenAICompatAdapter(provider("ollama_local"), {
+            **model(), "ollama_num_thread": 8, "ollama_num_ctx": 4096,
+            "ollama_keep_alive": "5m"})
+        actual = adapter._build_payload("inspect this", 0.0)
+        prepared = adapter.build_ollama_preparation_payload()
+        self.assertEqual(actual["options"], {
+            "temperature": 0.0, "num_predict": 32, "num_thread": 8, "num_ctx": 4096})
+        self.assertEqual(prepared["options"], actual["options"])
+        self.assertEqual(prepared["keep_alive"], actual["keep_alive"])
+        self.assertEqual(prepared["messages"], [])
+        self.assertFalse(prepared["stream"])
+        # Preparation is a separate payload; it cannot erase the actual prompt.
+        self.assertEqual(actual["messages"], [{"role": "user", "content": "inspect this"}])
+
+    def test_non_ollama_payload_is_unaffected(self):
+        adapter = OpenAICompatAdapter(provider("vllm_local"), {
+            **model(), "ollama_num_thread": 8, "ollama_num_ctx": 4096})
+        self.assertNotIn("options", adapter._build_payload("prompt", 0.0))
+        with self.assertRaises(ValueError):
+            adapter.build_ollama_preparation_payload()
+
+    def test_invalid_thread_or_context_fails_before_http(self):
+        for key in ("ollama_num_thread", "ollama_num_ctx"):
+            for value in (0, -1, True, "8"):
+                adapter = OpenAICompatAdapter(provider("ollama_local"), {**model(), key: value})
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    adapter._build_payload("prompt", 0.0)
 
 
 if __name__ == "__main__":

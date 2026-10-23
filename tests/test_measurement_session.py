@@ -317,3 +317,40 @@ def test_teardown_does_not_hold_lock_needed_by_sampling_thread():
     )
     session.start_session(); session.start_goal(); session.end_goal()
     assert session.finish_session().measurements[0].energy_j == 100 / 1e6
+
+
+def test_capability_probe_rejects_invalid_values_but_preserves_zero():
+    for value in (float("nan"), float("inf"), -1, True, "invalid"):
+        report = probe_capabilities(Reader([reading(value, core=0)]), environment=ENVIRONMENT)
+        by_domain = {d.domain_id: d for d in report.domains}
+        assert by_domain["PACKAGE"].access == "unavailable"
+        assert "invalid raw reading" in by_domain["PACKAGE"].reason
+        assert by_domain["CORE"].access == "readable"
+        assert by_domain["CORE"].reason == ""
+
+
+def test_live_preflight_rejects_invalid_required_counter(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from studies.energy_diagnosis import local_run
+    from core.readers.measurement_schema import DomainDescriptor, ENERGY_COUNTER
+    import pytest
+
+    schema = replace(SCHEMA_RAPL_X86, domains=(
+        DomainDescriptor("cpu", "PACKAGE_SOCKET_0", ENERGY_COUNTER, None),
+        DomainDescriptor("gpu", "GPU_BOARD_0", ENERGY_COUNTER, None),
+    ))
+    class PreflightReader(Reader):
+        def device_identity(self): return {"uuid": "fixture-gpu"}
+        def close(self): pass
+
+    for invalid_domain in ("cpu", "gpu"):
+        values = dict(cpu=0, gpu=0)
+        values[invalid_domain] = float("nan")
+        monkeypatch.setattr(local_run, "NodeCounterReader", lambda index: PreflightReader([values], schema=schema))
+        output = tmp_path/invalid_domain
+        with pytest.raises(SystemExit) as error:
+            local_run.main(["--mode", "live", "--preflight", "--allocation-id", "synthetic", "--output", str(output)])
+        assert error.value.code == 2
+        report = json.loads(next(output.glob("preflight-*.json")).read_text())
+        rejected = [d for d in report["domains"] if d["native_key"] == invalid_domain][0]
+        assert rejected["access"] == "unavailable" and "invalid raw" in rejected["reason"]

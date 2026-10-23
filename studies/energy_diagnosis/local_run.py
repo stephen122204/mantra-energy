@@ -70,6 +70,7 @@ from studies.energy_diagnosis.moe import event_log
 WORKSPACE_FAULT = WorkspaceFault.__name__ + ":"  # the bounded executor reports 'TypeName: message'
 
 SETTINGS = {"C00": (False, 1), "C01": (False, 4), "C10": (True, 1), "C11": (True, 4)}
+STAGED_INSPECTION = "staged-inspection-v1"
 
 
 class _VerificationTool:
@@ -103,14 +104,69 @@ def write_artifact(root, relative, value, role, compact=False, encoded=None):
     return ArtifactRef(relative.as_posix(), role, hashlib.sha256(encoded).hexdigest())
 
 
+def _answer_instruction(task):
+    """Shared final schema; never includes reference totals."""
+    fields = (dict(total_units="<computed number>", total_revenue="<computed number>")
+              if task.family == "data" else
+              dict(file_count="<computed integer>", checks=["<sorted relative paths>"]))
+    final = {"answer": {**fields, "task_id": task.task_id,
+                        "evidence": [task.asset_sha256]}}
+    return (
+        "After receiving successful tool_results, return this complete final shape: "
+        + json.dumps(final) + ". Replace computed-value placeholders with values "
+        "from the tool result. All totals or repository fields, task_id and evidence "
+        "belong INSIDE answer; no required field belongs beside answer. Data totals "
+        "must be numbers or decimal strings, never null. Repository checks must be "
+        "a sorted list of relative paths. Never invent observations or evidence."
+    )
+
+
+def legacy_instruction(task):
+    """Describe the existing JSON protocol without supplying reference answers."""
+    tool = {"tool_calls": [{"id": "inspect_1", "tool": "inspect_asset", "args": {}}]}
+    return (
+        "Return only one JSON object per turn. First inspect the local input with "
+        + json.dumps(tool) + ". Tool calls require a unique string id, tool "
+        "inspect_asset and empty args {}; optional depends_on is a list of call ids. "
+        "Return 1..8 tool calls, without an answer in the same object. "
+        + _answer_instruction(task)
+    )
+
+
+def inspected_asset(tool_results):
+    """Only runtime-owned successful inspection outcomes unlock the answer stage."""
+    return any(r.get("tool") == "inspect_asset" and r.get("status") == "completed"
+               and isinstance(r.get("result"), dict) for r in tool_results)
+
+
+def staged_instruction(task, tool_results):
+    if not inspected_asset(tool_results):
+        tool = {"tool_calls": [{"id": "inspect_1", "tool": "inspect_asset", "args": {}}]}
+        return (
+            "Return only one JSON object requesting inspection of the local input: "
+            + json.dumps(tool) + ". Use a unique string id, tool inspect_asset and "
+            "empty args {}; optional depends_on is a list of call ids. Return 1..8 "
+            "tool calls. No successful inspection result exists yet. Do not return "
+            "an answer or invent observations."
+        )
+    # Reuse the reviewed final schema and its constraints, without the first-stage
+    # tool-call example. Values come exclusively from actual runtime tool results.
+    return ("Return only one JSON object using the actual successful inspect_asset "
+            "result in tool_results. " + _answer_instruction(task))
+
+
 class FixtureAPI:
     """Deterministic HTTP responder, clearly labeled and only explicitly selected."""
 
-    def __init__(self, case="success"):
+    def __init__(self, case="success", *, scripted_responses=None):
         self.case = case
+        self.scripted_responses = None if scripted_responses is None else iter(scripted_responses)
+        self.requests = []
 
     def __enter__(self):
         case = self.case
+        scripted = self.scripted_responses
+        requests_seen = self.requests
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -119,6 +175,7 @@ class FixtureAPI:
             def do_POST(self):
                 raw = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 context = json.loads(raw["messages"][-1]["content"])
+                requests_seen.append(raw)
                 if case == "model_failure":
                     self.send_response(500)
                     self.end_headers()
@@ -144,7 +201,7 @@ class FixtureAPI:
                             answer["answer"]["total_revenue"] = "-999"
                         else:
                             answer["answer"]["checks"] = []
-                text = json.dumps(answer)
+                text = next(scripted) if scripted is not None else json.dumps(answer)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.end_headers()
@@ -201,6 +258,7 @@ class GoalExecutor:
         max_tool_calls=None,
         max_output_tokens=None,
         tool_call_format="hermes",
+        diagnostic_variant=None,
     ):
         self.tasks = tasks
         self.adapter = adapter
@@ -226,6 +284,11 @@ class GoalExecutor:
         # static instruction and tool results. chat-tools-v1 is the native
         # multi-turn protocol (agent_protocol.py).
         self.protocol = protocol
+        if diagnostic_variant not in {None, STAGED_INSPECTION}:
+            raise ValueError("unknown diagnostic variant")
+        if diagnostic_variant and (protocol != "legacy-json-v1" or workload_runtime is not None):
+            raise ValueError("staged inspection requires the legacy pilot runtime")
+        self.diagnostic_variant = diagnostic_variant
         self.sampling = sampling or dict(mode="greedy")
         self.max_tool_calls = max_tool_calls
         self.max_output_tokens = max_output_tokens
@@ -492,7 +555,7 @@ class GoalExecutor:
             task_id=task.task_id,
             asset_sha256=task.asset_sha256,
             goal=task.prompt,
-            instruction='Return only JSON. To inspect the local input use {"tool_calls":[{"id":"unique_id","tool":"inspect_asset","args":{}}]}. After inspecting results return {"answer":{...}}. Never invent observations. For data answers use total_units and total_revenue; for repository answers use file_count and checks. Include task_id and evidence [asset_sha256].',
+            instruction=legacy_instruction(task),
             tool_results=tool_results,
         )
         try:
@@ -517,6 +580,8 @@ class GoalExecutor:
                 ) / 1e9 >= self.timeout_seconds:
                     status, error = "timed_out", "goal deadline exhausted between calls"
                     break
+                if self.diagnostic_variant == STAGED_INSPECTION:
+                    context["instruction"] = staged_instruction(task, tool_results)
                 prompt = json.dumps(context, sort_keys=True)
                 started = time.monotonic_ns()
                 self.adapter.model_config["request_timeout_seconds"] = max(
@@ -524,8 +589,20 @@ class GoalExecutor:
                 )
                 if self.lifecycle:
                     self.lifecycle.before_model(f"{lease.attempt_id}:model:{step}")
-                raw = self.adapter.call(prompt, 0.0)
+                capture_relative = prefix / f"provider-response-{step}.body"
+                if self.diagnostic_variant:
+                    (self.artifact_root / prefix).mkdir(parents=True, exist_ok=True)
+                    self.adapter.model_config["response_capture_path"] = str(
+                        self.artifact_root / capture_relative)
+                try:
+                    raw = self.adapter.call(prompt, 0.0)
+                finally:
+                    if self.diagnostic_variant:
+                        self.adapter.model_config.pop("response_capture_path", None)
                 ended = time.monotonic_ns()
+                if self.diagnostic_variant and raw.get("provider_response") is not None:
+                    artifacts.append(ArtifactRef(capture_relative.as_posix(), "provider-response-body",
+                                                 raw["provider_response"]["sha256"]))
                 tokens = raw.get("tokens") or {}
                 ok = raw.get("status", "ok") == "ok"
                 response = ModelResponse(
@@ -946,6 +1023,25 @@ class GoalExecutor:
                 self.artifact_root, prefix / "initialized-model-window.json",
                 inner_window, "initialized-model-window",
             ))
+        diagnostic_reason = ""
+        if self.diagnostic_variant:
+            inspection_ok = inspected_asset(tool_results)
+            capture_ok = bool(model_calls) and all(
+                c["adapter"].get("provider_response", {}).get("body_complete") is True
+                for c in model_calls)
+            if not inspection_ok:
+                diagnostic_reason = "no successful inspect_asset before answer"
+            elif not capture_ok:
+                diagnostic_reason = "provider response capture incomplete"
+            diagnostic = dict(
+                variant=self.diagnostic_variant, inspection_completed=inspection_ok,
+                provider_bodies_complete=capture_ok,
+                passed=not diagnostic_reason and status == "completed" and verifier.outcome == "pass",
+                reason=diagnostic_reason or error or verifier.reason,
+                simulated=self.simulated,
+            )
+            artifacts.append(write_artifact(self.artifact_root, prefix / "diagnostic-acceptance.json",
+                                            diagnostic, "diagnostic-acceptance"))
         metadata = OutcomeMetadata(
             plan.setting_id,
             plan.tool_concurrency,
@@ -953,12 +1049,12 @@ class GoalExecutor:
             request.scheduled_run.preparation_sha256,
             observed_resources=(("cpu_affinity", measured.environment.cpu_allocation),),
             owned_work_terminated=owned_terminated,
-            fidelity_status="eligible",
+            fidelity_status="ineligible" if diagnostic_reason else "eligible",
             sensor_gaps=tuple(
                 m.domain_id for m in measured.measurements if m.status != "valid"
             ),
             cost_seconds=(("goal", (record.ended_ns - record.started_ns) / 1e9),),
-            failure_reason=error,
+            failure_reason=diagnostic_reason or error,
         )
         if request.checkpoint:
             request.checkpoint(
@@ -1011,22 +1107,31 @@ def run(args, *, endpoint=None):
             stream=True,
             is_local=True,
             fixture_case=args.fixture_case if simulated else None,
+            ollama_num_thread=getattr(args, "ollama_num_thread", None),
+            ollama_num_ctx=getattr(args, "ollama_num_ctx", None),
+            ollama_keep_alive=getattr(args, "ollama_keep_alive", None),
         ),
     )
     model_hash = args.model_sha256 or digest(
         {"model": "SIMULATED", "case": args.fixture_case}
     )
-    preparation = digest(
-        dict(
-            provider=args.provider,
-            model=model_hash,
-            temperature=0,
-            max_tokens=args.max_tokens,
-            max_steps=args.max_steps,
-            deadline=args.deadline,
-            mode=args.mode,
-        )
+    preparation_config = dict(
+        provider=args.provider, model=model_hash, temperature=0,
+        max_tokens=args.max_tokens, max_steps=args.max_steps,
+        deadline=args.deadline, mode=args.mode,
     )
+    diagnostic_variant = getattr(args, "diagnostic_variant", None)
+    if diagnostic_variant:
+        preparation_config.update(diagnostic_variant=diagnostic_variant,
+                                  provider_response_capture="http-entity-bytes-v1")
+    ollama_preparation = None
+    if args.provider == "ollama":
+        ollama_preparation = adapter.build_ollama_preparation_payload()
+        preparation_config.update(
+            ollama_options=ollama_preparation["options"],
+            ollama_keep_alive=ollama_preparation.get("keep_alive"),
+        )
+    preparation = digest(preparation_config)
     verifier_hash = hashlib.sha256(
         Path(__file__).with_name("workloads").joinpath("pilot_tasks.py").read_bytes()
     ).hexdigest()
@@ -1089,8 +1194,13 @@ def run(args, *, endpoint=None):
         provider=args.provider,
         base_url=base_url,
         preparation_sha256=preparation,
+        ollama_options=(ollama_preparation["options"] if ollama_preparation else None),
+        ollama_keep_alive=getattr(args, "ollama_keep_alive", None),
     )
     manifest_path = root / "environment.json"
+    if diagnostic_variant:
+        manifest.update(diagnostic_variant=diagnostic_variant,
+                        provider_response_capture="http-entity-bytes-v1")
     if not manifest_path.exists():
         manifest_path.write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
@@ -1117,6 +1227,7 @@ def run(args, *, endpoint=None):
                 max_steps=args.max_steps,
                 timeout_seconds=args.deadline,
                 simulated=simulated,
+                diagnostic_variant=diagnostic_variant,
             )
             try:
                 lease = runner.run_next(
@@ -1158,6 +1269,11 @@ def main(argv=None):
     parser.add_argument("--deadline", type=float, default=120)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--ollama-num-thread", type=int)
+    parser.add_argument("--ollama-num-ctx", type=int)
+    parser.add_argument("--ollama-keep-alive", help="Ollama residency duration, e.g. 5m")
+    parser.add_argument("--diagnostic-variant", choices=[STAGED_INSPECTION],
+                        help="Opt-in staged custom-JSON prompt and raw provider body capture")
     parser.add_argument("--provider", choices=["vllm", "ollama"], default="vllm")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000/v1")
     parser.add_argument("--model")
@@ -1213,6 +1329,15 @@ def main(argv=None):
         return
     if args.max_runs < 1 or args.max_steps < 1 or not 0 < args.deadline <= 600:
         parser.error("invalid run/step/deadline budget")
+    if any(value is not None and value < 1 for value in
+           (args.ollama_num_thread, args.ollama_num_ctx)):
+        parser.error("Ollama thread/context values must be positive")
+    if args.provider != "ollama" and any(value is not None for value in
+            (args.ollama_num_thread, args.ollama_num_ctx, args.ollama_keep_alive)):
+        parser.error("Ollama options require --provider ollama")
+    if args.mode == "fixture" and any(value is not None for value in
+            (args.ollama_num_thread, args.ollama_num_ctx, args.ollama_keep_alive)):
+        parser.error("Ollama runner options are unavailable in fixture mode")
     if args.mode == "fixture":
         args.provider = "vllm"
         with FixtureAPI(args.fixture_case) as endpoint:

@@ -77,6 +77,7 @@ def test_prepared_snapshot_rejects_stale_code_and_symlinks(tmp_path):
 
 
 def test_prepared_snapshot_accepts_read_only_frozen_directories(tmp_path):
+    import os
     import stat
     source=tmp_path/'frozen-readonly'; frozen=prepare(source,SPECS)
     paths=[source,*source.rglob('*')]
@@ -87,7 +88,10 @@ def test_prepared_snapshot_accepts_read_only_frozen_directories(tmp_path):
         copied=prepare(run,SPECS,prepared_assets=source)
         assert copied.catalog()==frozen.catalog()
         assert all(not stat.S_IMODE(p.stat().st_mode) & 0o222 for p in paths)
-        assert stat.S_IMODE(run.stat().st_mode)==stat.S_IMODE(source.stat().st_mode) | 0o200
+        # Windows chmod toggles the read-only attribute for all write bits;
+        # POSIX preserves group/other bits when owner write is enabled.
+        write_bits = 0o222 if os.name == "nt" else 0o200
+        assert stat.S_IMODE(run.stat().st_mode)==stat.S_IMODE(source.stat().st_mode) | write_bits
         assert all(not stat.S_IMODE(p.stat().st_mode) & 0o222 for p in run.rglob('*'))
     finally:
         for p,mode in modes.items():p.chmod(mode)

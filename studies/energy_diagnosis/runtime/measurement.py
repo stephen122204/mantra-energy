@@ -347,6 +347,11 @@ class MeasurementSession:
         return "reset", None, "counter decreased outside the wrap boundary"
 
 
+def _valid_counter_value(value):
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and value >= 0 and (isinstance(value, int) or math.isfinite(value)))
+
+
 def probe_capabilities(
     reader,
     *,
@@ -386,11 +391,12 @@ def probe_capabilities(
             unit=schema.unit,
             access=(
                 default_access
-                if values.get(d.native_key) is not None or error
+                if _valid_counter_value(values.get(d.native_key)) or error
                 else "unavailable"
             ),
-            reason=(error or "probe returned no value")
-            if values.get(d.native_key) is None else "",
+            reason=(error or ("probe returned no value" if values.get(d.native_key) is None
+                             else f"invalid raw reading: {values[d.native_key]!r}"))
+            if not _valid_counter_value(values.get(d.native_key)) else "",
         )
         for d in schema.domains
     )
