@@ -11,7 +11,7 @@ one attempt, two model responses, no inserted calls, answer repair or retry.
 
 Default-prompt success, reliability, and performance/energy comparability remain
 unestablished. This is bounded platform correctness/telemetry evidence, not pilot
-or campaign acceptance. Keep [PR #77](https://github.com/stephen122204/alems-energy-diagnosis/pull/77)
+or campaign acceptance. Keep [PR #77](https://github.com/stephen122204/mantra-energy/pull/77)
 draft for Stephen; no merge. This documentation update does not change runtime
 behavior and is not the hardware-tested revision.
 
