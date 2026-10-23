@@ -1,88 +1,94 @@
 # Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents
 
-Python software and processed records for the paper of the same name. The
-study runs a coding and data-analysis agent on 29 verifiable tasks in six
-families with 4-bit (Q4_K_M) and 8-bit (Q8_0) GGUF versions of Qwen3-30B-A3B
-and Devstral Small 2, served by llama.cpp on NVIDIA A100 nodes. For each
-attempt it measures CPU-package and GPU-board energy every 0.1 s, splits it
-into model calls, tool calls and waiting, and checks the result with a hidden
-verifier. It then compares energy per output token with energy per completed
-task.
+Code and experiment records for the paper of the same name. The software runs
+coding and data-analysis agents, checks whether they complete their tasks
+correctly, and measures the energy used by the CPU and GPU. It compares energy
+per output token with energy per correctly completed task, counting the energy
+spent on failed attempts as well.
 
-This branch is the Paper 1 release of
-[alems-energy-diagnosis](https://github.com/stephen122204/alems-energy-diagnosis).
-Its code is the source named by the Qwen and held-out benchmark plans (tag
-`paper1-qwen-187c227`), with stray files removed and this README added. The
-Devstral plan names a sibling commit (tag `paper1-devstral-7dfd892`) that
-differs in seven files, mainly tool-call format handling and its tests.
+The study covers 29 tasks in six families and compares 4-bit and 8-bit versions
+of Qwen3-30B-A3B and Devstral Small 2, served by llama.cpp on NVIDIA A100 GPUs.
+Task checks are kept separate from the files the agent can access.
+
+## Choose the code and data
+
+This branch contains the Qwen implementation. The Devstral implementation has
+separate tool-call handling and is available from the
+[release downloads](https://github.com/stephen122204/alems-energy-diagnosis/releases/tag/v1.0.0-paper1).
+The release also includes records for 2,747 attempts across seven sets of
+experiments, available experiment settings, and a guide to the downloads.
 
 ## Install
 
-Clone this branch:
+Clone this branch and install the Python dependencies:
 
 ```bash
 git clone --branch paper-1 https://github.com/stephen122204/alems-energy-diagnosis.git paper-1
 cd paper-1
-```
-
-Create a Python 3.11 environment and install the study dependencies:
-
-```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-study.txt
 ```
 
-Optional task dependencies are in `requirements-task-screen.txt` and
-`studies/energy_diagnosis/moe/requirements-query.txt`. Measured runs need a
-Linux node with an NVIDIA GPU, readable powercap (RAPL) counters, Docker for the
-repository tasks, and llama.cpp.
+Additional dependencies for particular tasks are listed in
+`requirements-task-screen.txt` and
+`studies/energy_diagnosis/moe/requirements-query.txt`.
 
-## Check the installation
+## Try it without a GPU
 
-Run one attempt against the built-in fixture model. It needs no GPU or model
-download and writes the same records as a measured run:
+The following test uses simulated model responses and energy readings to check
+that the software runs and saves its results. It does not download a model:
 
 ```bash
 python -m studies.energy_diagnosis.moe.run --mode fixture --output output/fixture
 ```
 
-`output/fixture/summary.json` lists the attempt, its verifier decision and the
-energy-window audit.
+Open `output/fixture/summary.json` to inspect the recorded outcomes. These are
+test results, not measurements of a real model.
 
-## Run an experiment
+## Measure a model
 
-A campaign plan fixes the tasks, precisions, seeds and execution budgets before
-any run. Convert it into node batches, then run an attempt natively:
+Real measurements require a Linux machine with an NVIDIA GPU, access to CPU
+energy counters through RAPL and GPU counters through NVML, model weights, and
+llama.cpp. Repository repair tasks also require Docker. The measurements cover
+the CPU packages and GPU board, rather than total power drawn at the wall.
 
-```bash
-python -m studies.energy_diagnosis.diagnostics.campaign_plan --plan PLAN.json --output batches/
-python -m studies.energy_diagnosis.moe.run --mode native --config CONFIG.json --output output/run
-python -m studies.energy_diagnosis.moe.run --help
-```
+An experiment configuration specifies the model, tasks, repeated attempts,
+random seeds, and limits on turns, generated tokens and execution time. Follow
+[the experiment-running guide](studies/energy_diagnosis/CAMPAIGN_OPERATIONS.md)
+for preparing the machine and running a configured experiment. Download model
+weights and benchmark inputs separately under their respective licenses.
 
-Each attempt records its settings, raw counter readings, the time span of every
-model and tool call, token counts, the verifier decision and its validity
-checks. Failed and invalid attempts are kept with their reason.
+The software saves model and tool calls, token counts, energy readings and task
+check results. Failed or interrupted attempts are retained with their reasons.
 
-## Records
+## Read the saved results
 
-The processed records are attached to the
-[v1.0.0-paper1 release](https://github.com/stephen122204/alems-energy-diagnosis/releases/tag/v1.0.0-paper1):
-seven campaigns, 2,747 processed attempt rows, and the plans, specifications and
-preflight checks behind them. `provenance.json` lists each campaign's machine,
-model, budget and the source revision its plan names, and `SHA256SUMS` lists
-every asset hash. The release also carries both source revisions as archives
-and as a Git bundle.
+Download `paper1-processed-artifacts-9e564de.tar.gz` from the release page.
+It contains CSV files with one row per attempt, along with the available
+experiment settings and machine checks. The release also provides:
 
-## Repository Layout
+- `provenance.json` describes which machine, model, settings and code version
+  are associated with each experiment, and identifies missing records.
+- `VALIDATION.md` lists the checks performed on the packaged files.
+- `SHA256SUMS` lets you check that downloaded files match the release.
 
-- `studies/energy_diagnosis/moe/`: agent runtime, llama.cpp backend, task families and verifiers (one `*_WORKLOAD.md` per family).
-- `studies/energy_diagnosis/diagnostics/`: campaign planning, scheduling and audits.
-- `studies/energy_diagnosis/campaign/`, `runtime/`, `analysis/`: execution ledger, run configuration and analysis helpers.
-- `core/`: energy readers (powercap, NVML), sampling and measurement windows.
-- `tests/`: unit and fixture tests.
-- `alems/`, `gui/`, `dashboard/`, `server.py`, `config/`, `migrations/`, `queries/`: the A-LEMS platform, described in [docs/alems-platform.md](docs/alems-platform.md).
+Recreating all paper figures still requires raw measurement logs, some original
+settings and analysis scripts, and a mapping from saved experiments to figures.
+The recorded configurations identify intended code versions; the version used
+for every individual attempt has not been verified.
+
+## Find the implementation
+
+| Directory | Contents |
+| --- | --- |
+| `studies/energy_diagnosis/moe/` | Agent execution, model integration, tasks and correctness checks |
+| `studies/energy_diagnosis/diagnostics/` | Experiment scheduling and validation tools |
+| `core/` | CPU and GPU energy readers and sampling |
+| `tests/` | Automated software tests |
+
+The underlying measurement platform is described in
+[the A-LEMS documentation](docs/alems-platform.md).
 
 ## Citation
 
