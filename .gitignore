@@ -130,3 +130,8 @@ data/*.json
 
 # Small licensed workload fixtures must be available in a clean clone.
 !studies/energy_diagnosis/workloads/pilot_assets/*.csv
+
+# Editor/shell leftovers and generated documentation
+*.sql_bak
+nohup.out
+docs/build/
