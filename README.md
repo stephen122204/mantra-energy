@@ -11,7 +11,7 @@ The repository supports two papers that share this code:
 
 | Paper | Question | Code | Release branch |
 | --- | --- | --- | --- |
-| *Characterizing the Task-Level Energy Trade-offs of Model Quantization in Locally Hosted AI Agents* | Does the precision that is cheaper per token also complete tasks with less energy? | `studies/energy_diagnosis/` | [`paper-1`](../../tree/paper-1) |
+| *Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents* | Does the precision that is cheaper per token also complete tasks with less energy? | `studies/energy_diagnosis/` | [`paper-1`](../../tree/paper-1) |
 | Paper 2 (in preparation) | Which weight precision completes tasks with the least energy when many agents share one GPU? | `studies/paper2/` | [`paper-2`](../../tree/paper-2) |
 
 Each release branch is pinned by tags to the exact commits that ran the
@@ -114,10 +114,10 @@ Paper 1 preprint: arXiv link to be added.
 
 ```bibtex
 @misc{paper1-arxiv,
-  title  = {Characterizing the Task-Level Energy Trade-offs of Model Quantization in Locally Hosted AI Agents},
-  author = {TODO},
+  title  = {Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents},
+  author = {Abkin, Stephen and Yang, Aldric and Flesher, Alex and Kodarapu, Nitheesh and Panigrahy, Deepak and Tyagi, Aakash and Houngninou, David Kebo},
   year   = {2026},
-  note   = {arXiv preprint arXiv:TODO}
+  note   = {Preprint}
 }
 ```
 

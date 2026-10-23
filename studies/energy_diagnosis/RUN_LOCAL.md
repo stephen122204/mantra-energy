@@ -31,6 +31,9 @@ python -m studies.energy_diagnosis.local_run --mode fixture --fixture-case missi
 
 A zero CLI exit after a deliberately wrong answer means the ledger was written and validated, not that the answer passed. Inspect verifier and execution status in the records.
 
+For V100 preparation and observed readiness limits, see the
+[V100 validation runbook](runtime/V100_READINESS.md).
+
 ## On the allocated Linux compute node
 
 Run the code and inference server on the same node. Use the approved runtime/model installation and a server bound to loopback; use your own authorized account and the actual allocation identifier. Install the study dependencies into that runtime environment. Do not start jobs on a login node.

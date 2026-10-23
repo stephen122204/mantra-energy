@@ -1,0 +1,1670 @@
+{
+  "manifest_version": 1,
+  "as_of": "2026-10-08",
+  "release_status": "PREPARATION_ONLY_NOT_PUBLISHED",
+  "base_revision": "6a49455c4d32c7d1812f7431718b140d668e2701",
+  "release_revision": null,
+  "zenodo_doi": null,
+  "public_retrieval_url": null,
+  "verification_status_definitions": {
+    "VERIFIED": "Identified bytes actually checked; no implication that underlying scientific claims are verified.",
+    "PARTIALLY VERIFIED": "Metadata/manifests checked; original underlying bytes unavailable.",
+    "UNAVAILABLE": "Required artifact inaccessible in this environment.",
+    "NOT TESTED": "Artifact/procedure not independently checked."
+  },
+  "scope_notes": [
+    "Documentation only; existing source/data unchanged after approved cleanup.",
+    "Original execution revision stays null unless established independently; plan expectations are separate fields.",
+    "Git revision identifiers are not SHA-256 checksums. Selected-file hashes do not identify an entire source tree.",
+    "No public access is asserted for inspected research repository objects or private archives.",
+    "Historical node/campaign names identify artifacts; no live addresses, user paths or credentials are included."
+  ],
+  "inspected_unmerged_prs": [
+    {
+      "pr": 62,
+      "revision": "da6d1ab10aa019976a379fc1a956b69401adc616",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 63,
+      "revision": "ee1a062618c37872f79c393c9ab0ab865a92d2dc",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 64,
+      "revision": "17240e3aa6a99377094b1c5d2d13d44232f3e3ef",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 65,
+      "revision": "9354965bb9f6322e441c3d4332ee02e8a0ca9378",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 66,
+      "revision": "9a16fc7f8f4cc2390b5a37f68c63bc15b64d9ed0",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 67,
+      "revision": "ac2d5e6c7dc91f6a01d47cd018e18fdc1617cb97",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 68,
+      "revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 69,
+      "revision": "044e247bc609137f402b815afb102ec81a280d2e",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 70,
+      "revision": "5a3bf022f62fc61e51cd458117e611005c2bb6bf",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 71,
+      "revision": "e38edb483ebf0c241d3d02007cd9e4a120f1077a",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 72,
+      "revision": "0fcf638aa94b44ab366315518ca112fc660fb66b",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 73,
+      "revision": "e5b4a6afede01ba8068fdfd3efe0a0ab1e57ab78",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 74,
+      "revision": "ccfac59b9f177782b3d4b43b77947a2ba517bdb1",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    },
+    {
+      "pr": 75,
+      "revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "integration_status": "UNMERGED_IN_AUDIT_SNAPSHOT"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "integrated-source",
+      "description": "Selected reproducibility interfaces and dependency/configuration identities; the complete frozen source tree is also required.",
+      "campaign": null,
+      "scope": "integrated_worktree",
+      "source_revision": "6a49455c4d32c7d1812f7431718b140d668e2701",
+      "original_execution_revision": null,
+      "expected_identity": "Post-cleanup working tree based on 6a49455c4d32c7d1812f7431718b140d668e2701",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [],
+      "availability": "AVAILABLE_IN_CHECKOUT",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Selected bytes hashed after approved cleanup. This is not a release-tree hash or an original execution revision.",
+        "Retain the full core/, studies/energy_diagnosis/, config/, task assets, verifiers, tests and applicable licenses; this selected-file list is not permission to omit other source."
+      ],
+      "files": [
+        {
+          "path": "requirements-study.txt",
+          "sha256": "525583b4906b2d760052d46b4265154d449fbaf8ff7cf96065c18cc97b660bc2"
+        },
+        {
+          "path": "requirements.txt",
+          "sha256": "193527c630f33a952cfc6c67bfbb56258d55ba9ec5743868958fa1611e8d42a2"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "fd541d73ee854607369ee48ccf300983b25dbc8c958ece29137a27808f6a5a9f"
+        },
+        {
+          "path": "studies/energy_diagnosis/provenance.json",
+          "sha256": "346b40b599a53e04c46d4235990f3d183efde71322a92f2bf97df3dcd341a668"
+        },
+        {
+          "path": "studies/energy_diagnosis/contracts.py",
+          "sha256": "c6c02fb7ff23670134f5f6b3ee960f5712ad81acf3998c12870a28ef6b9df90a"
+        },
+        {
+          "path": "studies/energy_diagnosis/local_run.py",
+          "sha256": "d7eef328d5657067be8bf0cecbbc225923ed820f338a629628d54669dd36eb2e"
+        },
+        {
+          "path": "studies/energy_diagnosis/runtime/node_measurement.py",
+          "sha256": "33be4cd658d3719599f67d74d79e0b48b920adcce35f0ccbc9276e42541ffa83"
+        },
+        {
+          "path": "studies/energy_diagnosis/campaign/ledger.py",
+          "sha256": "d1bb63cea185409a472bf2dc18cf74a9adc45ae6b3fa9d2dfc61de1c00e40672"
+        },
+        {
+          "path": "studies/energy_diagnosis/campaign/recover.py",
+          "sha256": "1251c06f1bbd08576c8021d378270084ce7a6c50f54b2f07003eca442b907ed5"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/run.py",
+          "sha256": "b70413f973d4386ef1d8cebd1eab1220cfdd0d36503003e8f967ff3919b994cb"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/summary.py",
+          "sha256": "78dade467f7e66edba1f7e8f12ffcd9151be90006c706951eb9b87d02328ef42"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/audit_windows.py",
+          "sha256": "f1903c2169bda70da0ed547bd2bd71d04a2867cb5d1603deb564fee596faf458"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/audit_transfers.py",
+          "sha256": "045433f312cd2e91dd462ba7699dfde909324819c96fbf5ab682b58340d05724"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/workloads.py",
+          "sha256": "a1635e358029eee0c4fca39f8eaf72ed85cba4f115f67abc688352c8d0791c24"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/task_pack.py",
+          "sha256": "e80e27d5f7e708605d22a2e4057ab617a84265d89a198fb11d47ab14d92097e5"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/qwen3-30b.example.json",
+          "sha256": "e47130116c64ce5dece54ad3f71253880afc9a1f392c243224e8dc100419b24a"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/prepare.py",
+          "sha256": "a5bb836384784c0c22a1a1e896520c22f7d19939799bb8f423c1272a823ef15f"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/patches/moe-infinity-transfer-lifecycle.patch",
+          "sha256": "f81edb00f88caa49fb77a23b07dde9637749a6d1ea027bd158629b5b378ad71b"
+        },
+        {
+          "path": "studies/energy_diagnosis/moe/native/transfer_lifecycle.h",
+          "sha256": "30354dc2a7100f4007a7e36b6a55695bce4704984d486f5f8d71947796ca0c0a"
+        },
+        {
+          "path": "studies/energy_diagnosis/diagnostics/archive_results.py",
+          "sha256": "e20cb5414324c553a7ac5b6d6c3e0cc6efab4f6eb8d3ee958e6785b1f8058ddd"
+        },
+        {
+          "path": "studies/energy_diagnosis/diagnostics/qualify_counters.py",
+          "sha256": "942a370db78d7c1f56ecffac4dffb4d23373100f0647b47792f687469ea39845"
+        }
+      ]
+    },
+    {
+      "id": "release-source",
+      "description": "Final reviewed source archive and campaign-to-execution mapping.",
+      "campaign": null,
+      "scope": "future_release",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "integrated-source"
+      ],
+      "availability": "NOT_YET_FROZEN",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "No final release revision, source-archive filename, checksum or public deposit URL is established."
+      ]
+    },
+    {
+      "id": "native-model-backend",
+      "description": "Pinned native model, tokenizer and compiled backend needed for the integrated BF16 workflow.",
+      "campaign": null,
+      "scope": "external_assets",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": "Qwen/Qwen3-30B-A3B-Instruct-2507 and patched MoE-Infinity",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "integrated-source"
+      ],
+      "availability": "NOT_ACCESSIBLE_HERE",
+      "verification_status": "NOT TESTED",
+      "notes": [
+        "Source pins verified in prepare.py; model and compiled backend bytes were not checked.",
+        "Current pins do not establish the original C2 GGUF or host-power environment."
+      ],
+      "model_revision": "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe",
+      "backend_revision": "6da092fc98e7246bfa1b2f9b2a480524b8697a7e"
+    },
+    {
+      "id": "host-power-processed",
+      "description": "Retained discovery tables, validation summaries and boundary documentation.",
+      "campaign": null,
+      "scope": "unmerged_pr_68",
+      "source_revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+      "original_execution_revision": null,
+      "expected_identity": "studies/energy_diagnosis/host_power/data/",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Verified file bytes against the pinned Git object. Scientific values were not rederived from raw archives.",
+        "Known interval and H100 condition-label discrepancies remain unresolved."
+      ],
+      "files": [
+        {
+          "path": "studies/energy_diagnosis/host_power/data/README.md",
+          "sha256": "beeee90ca48d598c034c1ac270e4ce416c164e30fe1c17eebb925ea8c2168c77"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/c1_idle_limit_liqid05_20260925.json",
+          "sha256": "4547c80acb64d63c435b2ed94feb261123842633ad0dc413e65af76c67698bd5"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/calls_h100_20260924.csv",
+          "sha256": "ed747f9772bff2f9b57674f95514158f2617c714d377930be71512f9f08c1829"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/calls_liqid05_20260924.csv",
+          "sha256": "9e765e00623a50dd8ae5c3a66bd3756c7e5f32ad4535e01713fecabf556c1cc7"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/energy_boundaries_liqid05_20260924.md",
+          "sha256": "a7b6b621aef108204f62ecc47aa17daf9eb303ede8fb4b62700d3f43d65e6b66"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/freq_by_stage_liqid05_20260924.csv",
+          "sha256": "b2d9152781f493c4a480754e1630b79131c8dac5b4a7d9941f216cafacb83642"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/g0_governor_liqid05_20260925.json",
+          "sha256": "e20a64568dda60a02cd4049bb044e00618621da1f7ce08b3cf5845718ac2c469"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/g1_ccdswap_stockstacks_liqid05_20260926.json",
+          "sha256": "4a477578db5bae058bd8e279143893ee56e1e72fcdc089810095da0d581bf95e"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/stages_h100_20260924.csv",
+          "sha256": "e4259f75f8135e8b5de069db0c34fbbbe9a059e1af034a6676924dd3eccbc5b9"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/stages_liqid05_20260924.csv",
+          "sha256": "d588bbc5eb2f64c7f692b65e6a58d3e887e4b56a213c2733cdacdd7c4de6e6aa"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/data/vllm_offload_compare_liqid05_20260926.json",
+          "sha256": "acb8ce9769a0c81eaf0344a0ed6e28bef3f205a3e5a6674ad92a012fe4f5a76b"
+        }
+      ]
+    },
+    {
+      "id": "host-power-analysis",
+      "description": "Raw-stage extraction and retained-CSV summary/plotting scripts.",
+      "campaign": null,
+      "scope": "unmerged_pr_68",
+      "source_revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+      "original_execution_revision": null,
+      "expected_identity": "studies/energy_diagnosis/host_power/scripts/",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "host-power-processed"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Only summarize.py and figures_retained.py executed on retained CSVs. Original-input extraction remains untested."
+      ],
+      "files": [
+        {
+          "path": "studies/energy_diagnosis/host_power/scripts/extract_stages.py",
+          "sha256": "d1035fdcaa04764cbbd12332130951b3ce8324f4e734c70ce20fff55687cd58f"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/scripts/freq_by_stage.py",
+          "sha256": "6f980451df488c5547de9fd92c0ef8a9a4375259f436b985176e236b3b17da52"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/scripts/verify_c1.py",
+          "sha256": "84f63455eb18b1f790072c97573b66412aa7679e6679b71826d536e57a4eeb9b"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/scripts/summarize.py",
+          "sha256": "9e9c433ecfd8fd4d14189f2337cca38b4ad324c8ca2ec4b7f3551fc550412210"
+        },
+        {
+          "path": "studies/energy_diagnosis/host_power/scripts/figures_retained.py",
+          "sha256": "09c2aa3aedd8365b76271c9b73fead282671b90b9f412ff80136f5b8110fda9f"
+        }
+      ]
+    },
+    {
+      "id": "diagnostic-figA_decode_by_placement",
+      "description": "Diagnostic figure regenerated from retained stages CSV; not a final manuscript figure.",
+      "campaign": null,
+      "scope": "regenerated_external_output",
+      "source_revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+      "original_execution_revision": null,
+      "expected_identity": "figA_decode_by_placement.png",
+      "public_retrieval_url": null,
+      "expected_sha256": "91f5292d3019692e72daa63a4851087a2b573d24b7141cf99ffd3e5e4d827504",
+      "dependencies": [
+        "host-power-analysis",
+        "host-power-processed"
+      ],
+      "availability": "GENERATED_DURING_DOCUMENTATION_VALIDATION",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Matched the prior audit output hash. Audit rendering environment: Python 3.14.4, Matplotlib 3.11.2, NumPy 2.5.3, Pillow 12.3.0."
+      ]
+    },
+    {
+      "id": "diagnostic-figB_energy_domains",
+      "description": "Diagnostic figure regenerated from retained stages CSV; not a final manuscript figure.",
+      "campaign": null,
+      "scope": "regenerated_external_output",
+      "source_revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+      "original_execution_revision": null,
+      "expected_identity": "figB_energy_domains.png",
+      "public_retrieval_url": null,
+      "expected_sha256": "cb5b3edb44478fabd3dd896624c177edec73b24131bd2277eb7043d475413424",
+      "dependencies": [
+        "host-power-analysis",
+        "host-power-processed"
+      ],
+      "availability": "GENERATED_DURING_DOCUMENTATION_VALIDATION",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Matched the prior audit output hash. Audit rendering environment: Python 3.14.4, Matplotlib 3.11.2, NumPy 2.5.3, Pillow 12.3.0."
+      ]
+    },
+    {
+      "id": "host-power-discovery-raw",
+      "description": "Original host-power stage records and supporting environment/configuration evidence.",
+      "campaign": "host-power-liqid05-20260924",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": "liqid05-resume-20260924.tgz",
+      "public_retrieval_url": null,
+      "expected_sha256": "e433b6a41f96b8aa22573ba870d3263009d391db2bda3e7b28cb693a8d5f1eaa",
+      "dependencies": [
+        "host-power-processed"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Original bytes and restore chain not accessible. Any expected digest is transcribed from PR #68 data/README.md, not verified against an archive.",
+        "Campaign field is a descriptive identifier; it is not an invented archive filename."
+      ],
+      "metadata_source": {
+        "revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+        "path": "studies/energy_diagnosis/host_power/data/README.md"
+      }
+    },
+    {
+      "id": "host-power-h100-raw",
+      "description": "Original host-power stage records and supporting environment/configuration evidence.",
+      "campaign": "host-power-h100-20260924",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": "h100-artifacts-20260924.tgz",
+      "public_retrieval_url": null,
+      "expected_sha256": "25b7ca4e7d64522f9e476a1228003197241dea5a70dbed523ef3d8f2829c48f2",
+      "dependencies": [
+        "host-power-processed"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Original bytes and restore chain not accessible. Any expected digest is transcribed from PR #68 data/README.md, not verified against an archive.",
+        "Campaign field is a descriptive identifier; it is not an invented archive filename."
+      ],
+      "metadata_source": {
+        "revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+        "path": "studies/energy_diagnosis/host_power/data/README.md"
+      }
+    },
+    {
+      "id": "host-power-g0-raw",
+      "description": "Original host-power stage records and supporting environment/configuration evidence.",
+      "campaign": "host-power-g0-20260925",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": "fad112caea44aaa0f63a8d172c04334ceb5e12f0bfbaddc50669659f795e1eea",
+      "dependencies": [
+        "host-power-processed"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Original bytes and restore chain not accessible. Any expected digest is transcribed from PR #68 data/README.md, not verified against an archive.",
+        "Campaign field is a descriptive identifier; it is not an invented archive filename."
+      ],
+      "metadata_source": {
+        "revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+        "path": "studies/energy_diagnosis/host_power/data/README.md"
+      }
+    },
+    {
+      "id": "host-power-g1-raw",
+      "description": "Original host-power stage records and supporting environment/configuration evidence.",
+      "campaign": "host-power-g1-20260926",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": "bcbfb5a684b498ce41007b47c8e38f5266efed845527f67f4e76939c35456dcf",
+      "dependencies": [
+        "host-power-processed"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Original bytes and restore chain not accessible. Any expected digest is transcribed from PR #68 data/README.md, not verified against an archive.",
+        "Campaign field is a descriptive identifier; it is not an invented archive filename."
+      ],
+      "metadata_source": {
+        "revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+        "path": "studies/energy_diagnosis/host_power/data/README.md"
+      }
+    },
+    {
+      "id": "host-power-c1-raw",
+      "description": "Original host-power stage records and supporting environment/configuration evidence.",
+      "campaign": "host-power-c1-20260925",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "host-power-processed"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Original bytes and restore chain not accessible. Any expected digest is transcribed from PR #68 data/README.md, not verified against an archive.",
+        "Campaign field is a descriptive identifier; it is not an invented archive filename."
+      ],
+      "metadata_source": {
+        "revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+        "path": "studies/energy_diagnosis/host_power/data/README.md"
+      }
+    },
+    {
+      "id": "host-power-vllm-raw",
+      "description": "Original host-power stage records and supporting environment/configuration evidence.",
+      "campaign": "host-power-vllm-20260926",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "host-power-processed"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Original bytes and restore chain not accessible. Any expected digest is transcribed from PR #68 data/README.md, not verified against an archive.",
+        "Campaign field is a descriptive identifier; it is not an invented archive filename."
+      ],
+      "metadata_source": {
+        "revision": "d0d1aaef2a54d0beacff4db5291e6eeec1bc21f9",
+        "path": "studies/energy_diagnosis/host_power/data/README.md"
+      }
+    },
+    {
+      "id": "c2-index-machines",
+      "description": "C2 campaign index, data dictionary and retained idle/residency evidence.",
+      "campaign": null,
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Bytes checked; original machine measurements not independently repeated."
+      ],
+      "files": [
+        {
+          "path": "data/c2-precision-energy/README.md",
+          "sha256": "f90ee091f89e4a07850e9d43cc2e52fb723a1ec44a3413ba0b165423dd032fbc"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/index.json",
+          "sha256": "83d424dd8acdc12c25027ab32ed31c3eb271985849a3885aec6cec5d65cf85a3"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/idle-baseline-gigaio02-noload.json",
+          "sha256": "663f6f33274305b5bc43a1e84ed823189553dc63637329fabe4e85ae23ed1a30"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/idle-baseline-gigaio07-noload.json",
+          "sha256": "edf53292615ee0015a8b75b325449661c28e905ddd48b0a879b9a20a7d214c7f"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/idle-baseline-gigaio08-noload.json",
+          "sha256": "d32233504544bb888d40fc913e622790c5294802c3bb11a5805c30a258be95ab"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/idle-baseline-liqid05-noload.json",
+          "sha256": "a44eed660fd5196f124e78012d622beeb74db04789cc650e1d490275549a7570"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/idle-baseline-liqid06-noload.json",
+          "sha256": "e9b6d4563db6a4be9c2475be15321015bfe53679c9921355cc9bbcb543964650"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/residency-bf16-ctx65536.json",
+          "sha256": "40d0d527fd5796c360412bcec0263114348a380f31c29c481043ca558d712952"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/residency-devstral-q4-ctx65536.json",
+          "sha256": "cf2e65be89a2e6d6af040896a03b3f19946711d851f996d13651860e43edb8d6"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/residency-devstral-q8-ctx65536.json",
+          "sha256": "47ad794fa86315e0575db2525e0890c606eb0ab04985b3c49e8049d20ad3eac0"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/residency-q4-ctx65536.json",
+          "sha256": "6ae819326404150dfb725163e77b9e175afd85003baac01922b0350a8dc20a62"
+        },
+        {
+          "path": "data/c2-precision-energy/machines/residency-q8-ctx65536.json",
+          "sha256": "513e546b01aa869fc1cd729486a32ce742e5122cb431bd6527d5b8ecf05be9b5"
+        }
+      ]
+    },
+    {
+      "id": "c2-l0-liqid05-attempts",
+      "description": "Processed per-attempt precision-energy records, including invalid outcomes.",
+      "campaign": "c2-l0-liqid05",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/c2-l0-liqid05/attempts.csv",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Byte hash matched the pinned Git object and previous audit. Original extraction could not be repeated.",
+        "CSV lacks full latency data; do not infer missing latency from energy columns."
+      ],
+      "plan_expected_execution_revision": null,
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/c2-l0-liqid05/attempts.csv",
+          "sha256": "7ec0c2bec52c7c1d7d485661623775d165470d0dd32a45c87acf8af1651c889e"
+        }
+      ]
+    },
+    {
+      "id": "c2-l0-liqid05-configuration",
+      "description": "Missing original plan, node specification and preflight evidence.",
+      "campaign": "c2-l0-liqid05",
+      "scope": "external_configuration",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-l0-liqid05-attempts"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Not in supplied Git data. PR #75 reports originals in private run folders; no location or checksum is independently established."
+      ]
+    },
+    {
+      "id": "c2-l0-liqid05-verification",
+      "description": "Missing node manifest and archive-comparison receipt.",
+      "campaign": "c2-l0-liqid05",
+      "scope": "external_verification",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-l0-liqid05-attempts"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "No campaign-specific node manifest or receipt in the supplied PR #75 export."
+      ]
+    },
+    {
+      "id": "c2-l0-liqid05-raw",
+      "description": "Complete original campaign records and every snapshot/receipt required to restore them.",
+      "campaign": "c2-l0-liqid05",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-l0-liqid05-configuration",
+        "c2-l0-liqid05-verification"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Reportedly preserved privately by the archive custodian; not accessible or independently verified here.",
+        "No public retrieval URL, archive filename or whole-archive SHA-256 is established. A per-file manifest digest must not be substituted."
+      ],
+      "plan_expected_execution_revision": null
+    },
+    {
+      "id": "repo-r-liqid05-attempts",
+      "description": "Processed per-attempt precision-energy records, including invalid outcomes.",
+      "campaign": "repo-r-liqid05",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/repo-r-liqid05/attempts.csv",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Byte hash matched the pinned Git object and previous audit. Original extraction could not be repeated.",
+        "CSV lacks full latency data; do not infer missing latency from energy columns."
+      ],
+      "plan_expected_execution_revision": null,
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/repo-r-liqid05/attempts.csv",
+          "sha256": "3de391707557f178ec90012b09534fd0ce5f0eb35bb6d481da19a14feb2d876f"
+        }
+      ]
+    },
+    {
+      "id": "repo-r-liqid05-configuration",
+      "description": "Missing original plan, node specification and preflight evidence.",
+      "campaign": "repo-r-liqid05",
+      "scope": "external_configuration",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "repo-r-liqid05-attempts"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Not in supplied Git data. PR #75 reports originals in private run folders; no location or checksum is independently established."
+      ]
+    },
+    {
+      "id": "repo-r-liqid05-verification",
+      "description": "Compressed per-file node hash manifest and historical archive-comparison receipt.",
+      "campaign": "repo-r-liqid05",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/verification/",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "repo-r-liqid05-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Metadata bytes checked against Git; gzip payload checked. Underlying result bytes and backup-chain restoration remain unverified.",
+        "A historical zero-difference receipt is not independent verification of currently held raw files.",
+        "One interrupted attempt lacks record/model-call/measurement/verification/trace listings; retain missingness."
+      ],
+      "files": [
+        {
+          "path": "data/c2-precision-energy/verification/campaign-c2-L2-40G.node-manifest.sha256.gz",
+          "sha256": "59be38fa6fa6a93c151c0c771af626ab026c9c2afa9ad4115ee79f465d6027b8"
+        },
+        {
+          "path": "data/c2-precision-energy/verification/archive-check-liqid05-L2-40G.json",
+          "sha256": "f46ea7487e3e714d2c88e058a10052391e021417508dc901bad8a17a61c767c3"
+        }
+      ],
+      "decompressed_manifest_sha256": "a3bc7c54f7f808c8d99bd9ef0f3fc13b2c3dbba489275239b62b23a82f01aaba",
+      "raw_bytes_verified": false,
+      "restore_tested": false
+    },
+    {
+      "id": "repo-r-liqid05-raw",
+      "description": "Complete original campaign records and every snapshot/receipt required to restore them.",
+      "campaign": "repo-r-liqid05",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "repo-r-liqid05-configuration",
+        "repo-r-liqid05-verification"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Reportedly preserved privately by the archive custodian; not accessible or independently verified here.",
+        "No public retrieval URL, archive filename or whole-archive SHA-256 is established. A per-file manifest digest must not be substituted."
+      ],
+      "plan_expected_execution_revision": null
+    },
+    {
+      "id": "qwen-r-3arm-gigaio08-attempts",
+      "description": "Processed per-attempt precision-energy records, including invalid outcomes.",
+      "campaign": "qwen-r-3arm-gigaio08",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/attempts.csv",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Byte hash matched the pinned Git object and previous audit. Original extraction could not be repeated.",
+        "CSV lacks full latency data; do not infer missing latency from energy columns."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/attempts.csv",
+          "sha256": "76aea6f2e36a2005b20e561e322b26ae0cdab9bf29ef663a2ee6483c177ddf1d"
+        }
+      ]
+    },
+    {
+      "id": "qwen-r-3arm-gigaio08-configuration",
+      "description": "Original saved plan, generated node specification and preflight report as supplied in PR #75.",
+      "campaign": "qwen-r-3arm-gigaio08",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "qwen-r-3arm-gigaio08-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Plan expectation is not independent proof of actual execution. Files contain historical machine-specific assumptions and must not be launched unchanged."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/plan.json",
+          "sha256": "717509bfb95a05f58c4a78ea8e25d50ddcf8a53a82c75a0e83ec5b38fc2f3e31"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/node-spec.json",
+          "sha256": "b2ee02a0b19c227f05dc7609b5af0dec3bcb5cff79e9e808ebde25f650d40860"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/preflight.json",
+          "sha256": "4daddb86a1639dcc19982b526ae1afdaca98aa2245d8f42f18336e554a4f3501"
+        }
+      ]
+    },
+    {
+      "id": "qwen-r-3arm-gigaio08-environment",
+      "description": "Original build/weights manifests and tool environment freeze.",
+      "campaign": "qwen-r-3arm-gigaio08",
+      "scope": "external_provenance",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "qwen-r-3arm-gigaio08-configuration"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Expected hashes read from the saved plan. Referenced original files and actual model/build bytes were not available. Private absolute paths are intentionally not copied."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "expected_files": [
+        {
+          "expected_identity": "backend-build-manifest.json",
+          "expected_sha256": "fbc9ac09b2b800168de0eea2be0dc7fabc570ac75ab159a740c11dd5d92da601",
+          "hash_source": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/plan.json:expected.build_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": "weights-manifest.json",
+          "expected_sha256": "32e1914478073947ffd35e42905589ef172cd0cd35e750cb022d10e323da30c1",
+          "hash_source": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/plan.json:expected.weights_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": null,
+          "description": "Original tool Python package freeze",
+          "expected_sha256": "afc8a2450c10d300c9e77aefa80b61115485e7f10d6c66851ae8bd88a81aad21",
+          "hash_source": "data/c2-precision-energy/campaigns/qwen-r-3arm-gigaio08/plan.json:expected.tool_python_freeze_sha256",
+          "original_bytes_checked": false
+        }
+      ]
+    },
+    {
+      "id": "qwen-r-3arm-gigaio08-verification",
+      "description": "Compressed per-file node hash manifest and historical archive-comparison receipt.",
+      "campaign": "qwen-r-3arm-gigaio08",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/verification/",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "qwen-r-3arm-gigaio08-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Metadata bytes checked against Git; gzip payload checked. Underlying result bytes and backup-chain restoration remain unverified.",
+        "A historical zero-difference receipt is not independent verification of currently held raw files."
+      ],
+      "files": [
+        {
+          "path": "data/c2-precision-energy/verification/campaign-c2-gigaio08-3arm-R.node-manifest.sha256.gz",
+          "sha256": "e4413650ed72555ed66feac900b3b3b97cd0164c4dba2fc16cbcfd392c08ff23"
+        },
+        {
+          "path": "data/c2-precision-energy/verification/archive-check-gigaio08-3arm-R.json",
+          "sha256": "11df24c77bc499dfa1d0fd2bca7a104e7d56867ebf76a41f245a7365c87de344"
+        }
+      ],
+      "decompressed_manifest_sha256": "5f7bdcae42562031d87fe3c94f5b4232106cc08b459c1ae5699d6089774e6ad2",
+      "raw_bytes_verified": false,
+      "restore_tested": false
+    },
+    {
+      "id": "qwen-r-3arm-gigaio08-raw",
+      "description": "Complete original campaign records and every snapshot/receipt required to restore them.",
+      "campaign": "qwen-r-3arm-gigaio08",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "qwen-r-3arm-gigaio08-configuration",
+        "qwen-r-3arm-gigaio08-verification"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Reportedly preserved privately by the archive custodian; not accessible or independently verified here.",
+        "No public retrieval URL, archive filename or whole-archive SHA-256 is established. A per-file manifest digest must not be substituted."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538"
+    },
+    {
+      "id": "qwen-r-r07-gigaio07-attempts",
+      "description": "Processed per-attempt precision-energy records, including invalid outcomes.",
+      "campaign": "qwen-r-r07-gigaio07",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/attempts.csv",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Byte hash matched the pinned Git object and previous audit. Original extraction could not be repeated.",
+        "CSV lacks full latency data; do not infer missing latency from energy columns."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/attempts.csv",
+          "sha256": "7d89be1fe1a5889b551801e5e03db90a2e37cdba0ed806a2dbf2abac7efdcab6"
+        }
+      ]
+    },
+    {
+      "id": "qwen-r-r07-gigaio07-configuration",
+      "description": "Original saved plan, generated node specification and preflight report as supplied in PR #75.",
+      "campaign": "qwen-r-r07-gigaio07",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "qwen-r-r07-gigaio07-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Plan expectation is not independent proof of actual execution. Files contain historical machine-specific assumptions and must not be launched unchanged."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/plan.json",
+          "sha256": "3a0fb6f3d950085917e0a7521ff60a453a8740ddc9c35a0f7750dc03b22ba6c5"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/node-spec.json",
+          "sha256": "ac2c80e59e080246663fe71a247e435838eab9f4a188e00a61b9468e840ddf38"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/preflight.json",
+          "sha256": "3aa4d06c5e3301b7fea97ae15763338f095815012fb7072c01edc9b79c945e34"
+        }
+      ]
+    },
+    {
+      "id": "qwen-r-r07-gigaio07-environment",
+      "description": "Original build/weights manifests and tool environment freeze.",
+      "campaign": "qwen-r-r07-gigaio07",
+      "scope": "external_provenance",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "qwen-r-r07-gigaio07-configuration"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Expected hashes read from the saved plan. Referenced original files and actual model/build bytes were not available. Private absolute paths are intentionally not copied."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "expected_files": [
+        {
+          "expected_identity": "backend-build-manifest.json",
+          "expected_sha256": "fbc9ac09b2b800168de0eea2be0dc7fabc570ac75ab159a740c11dd5d92da601",
+          "hash_source": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/plan.json:expected.build_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": "weights-manifest.json",
+          "expected_sha256": "32e1914478073947ffd35e42905589ef172cd0cd35e750cb022d10e323da30c1",
+          "hash_source": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/plan.json:expected.weights_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": null,
+          "description": "Original tool Python package freeze",
+          "expected_sha256": "afc8a2450c10d300c9e77aefa80b61115485e7f10d6c66851ae8bd88a81aad21",
+          "hash_source": "data/c2-precision-energy/campaigns/qwen-r-r07-gigaio07/plan.json:expected.tool_python_freeze_sha256",
+          "original_bytes_checked": false
+        }
+      ]
+    },
+    {
+      "id": "qwen-r-r07-gigaio07-verification",
+      "description": "Compressed per-file node hash manifest and historical archive-comparison receipt.",
+      "campaign": "qwen-r-r07-gigaio07",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/verification/",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "qwen-r-r07-gigaio07-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Metadata bytes checked against Git; gzip payload checked. Underlying result bytes and backup-chain restoration remain unverified.",
+        "A historical zero-difference receipt is not independent verification of currently held raw files."
+      ],
+      "files": [
+        {
+          "path": "data/c2-precision-energy/verification/campaign-c2-gigaio07-r07.node-manifest.sha256.gz",
+          "sha256": "79a2c533db5a9f13f46a88a68c82068cf4fcb27a0f06ab0163a3339aa46bd99f"
+        },
+        {
+          "path": "data/c2-precision-energy/verification/archive-check-gigaio07-r07.json",
+          "sha256": "0881e72a5537b2cc5dc508554c39010b006bcb9babe3165ce3d324ea9ea4c23c"
+        }
+      ],
+      "decompressed_manifest_sha256": "d0b07eed0c0856ddae433c81078d7a9c90f6f7637d996fef043de8966ecd8a0c",
+      "raw_bytes_verified": false,
+      "restore_tested": false
+    },
+    {
+      "id": "qwen-r-r07-gigaio07-raw",
+      "description": "Complete original campaign records and every snapshot/receipt required to restore them.",
+      "campaign": "qwen-r-r07-gigaio07",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "qwen-r-r07-gigaio07-configuration",
+        "qwen-r-r07-gigaio07-verification"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Reportedly preserved privately by the archive custodian; not accessible or independently verified here.",
+        "No public retrieval URL, archive filename or whole-archive SHA-256 is established. A per-file manifest digest must not be substituted."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538"
+    },
+    {
+      "id": "devstral-r-liqid06-attempts",
+      "description": "Processed per-attempt precision-energy records, including invalid outcomes.",
+      "campaign": "devstral-r-liqid06",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/devstral-r-liqid06/attempts.csv",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Byte hash matched the pinned Git object and previous audit. Original extraction could not be repeated.",
+        "CSV lacks full latency data; do not infer missing latency from energy columns."
+      ],
+      "plan_expected_execution_revision": "7dfd892f829e9e5c791449a63659c8d97fc989b9",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/devstral-r-liqid06/attempts.csv",
+          "sha256": "fcced10ab3ee84a1618aea659373080793eb64a1afe6827c2d46be6a83e5c254"
+        }
+      ]
+    },
+    {
+      "id": "devstral-r-liqid06-configuration",
+      "description": "Original saved plan, generated node specification and preflight report as supplied in PR #75.",
+      "campaign": "devstral-r-liqid06",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/devstral-r-liqid06",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "devstral-r-liqid06-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Plan expectation is not independent proof of actual execution. Files contain historical machine-specific assumptions and must not be launched unchanged."
+      ],
+      "plan_expected_execution_revision": "7dfd892f829e9e5c791449a63659c8d97fc989b9",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/devstral-r-liqid06/plan.json",
+          "sha256": "0a49f9b88c83c95fcfe07cde89b5041b16c2ec077bda804cd08429d17b9d09ae"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/devstral-r-liqid06/node-spec.json",
+          "sha256": "d5049b33ffba5dd2466a00cf1b61160c6505d960267006727a6f4698495bd1dc"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/devstral-r-liqid06/preflight.json",
+          "sha256": "78b4e8cf57bb066b9341ce80a3aaedbd25b7cf7d2e0151310706cb4e92f3329b"
+        }
+      ]
+    },
+    {
+      "id": "devstral-r-liqid06-environment",
+      "description": "Original build/weights manifests and tool environment freeze.",
+      "campaign": "devstral-r-liqid06",
+      "scope": "external_provenance",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "devstral-r-liqid06-configuration"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Expected hashes read from the saved plan. Referenced original files and actual model/build bytes were not available. Private absolute paths are intentionally not copied."
+      ],
+      "plan_expected_execution_revision": "7dfd892f829e9e5c791449a63659c8d97fc989b9",
+      "expected_files": [
+        {
+          "expected_identity": "backend-build-manifest.json",
+          "expected_sha256": "ca2a05dd7c5ded1228385668c240568e4645afb6d0adfee9ab4c2b1384488bce",
+          "hash_source": "data/c2-precision-energy/campaigns/devstral-r-liqid06/plan.json:expected.build_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": "weights-manifest.json",
+          "expected_sha256": "16d7bb672a18ab158e7e03d3b53ffe04d3006ec955b25f3c165f6973b49e7704",
+          "hash_source": "data/c2-precision-energy/campaigns/devstral-r-liqid06/plan.json:expected.weights_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": null,
+          "description": "Original tool Python package freeze",
+          "expected_sha256": "afc8a2450c10d300c9e77aefa80b61115485e7f10d6c66851ae8bd88a81aad21",
+          "hash_source": "data/c2-precision-energy/campaigns/devstral-r-liqid06/plan.json:expected.tool_python_freeze_sha256",
+          "original_bytes_checked": false
+        }
+      ]
+    },
+    {
+      "id": "devstral-r-liqid06-verification",
+      "description": "Compressed per-file node hash manifest and historical archive-comparison receipt.",
+      "campaign": "devstral-r-liqid06",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/verification/",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "devstral-r-liqid06-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Metadata bytes checked against Git; gzip payload checked. Underlying result bytes and backup-chain restoration remain unverified.",
+        "A historical zero-difference receipt is not independent verification of currently held raw files."
+      ],
+      "files": [
+        {
+          "path": "data/c2-precision-energy/verification/campaign-c2-liqid06-devstral-R.node-manifest.sha256.gz",
+          "sha256": "d4c259ea3d6bebe5a76a4c1d0a339e12f2bd9628b01cfe09a8147ba4f72e3c47"
+        },
+        {
+          "path": "data/c2-precision-energy/verification/archive-check-liqid06-devstral-R.json",
+          "sha256": "a85ada2bd258385315b56b6b9b9044923ca1064f6127b646c5f4c0af7b6b9311"
+        }
+      ],
+      "decompressed_manifest_sha256": "29eaf2f4b9bc65a58890ac2a4cc8474931e19ca4b4bfb82d5ca1ac763c26c3d6",
+      "raw_bytes_verified": false,
+      "restore_tested": false
+    },
+    {
+      "id": "devstral-r-liqid06-raw",
+      "description": "Complete original campaign records and every snapshot/receipt required to restore them.",
+      "campaign": "devstral-r-liqid06",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "devstral-r-liqid06-configuration",
+        "devstral-r-liqid06-verification"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Reportedly preserved privately by the archive custodian; not accessible or independently verified here.",
+        "No public retrieval URL, archive filename or whole-archive SHA-256 is established. A per-file manifest digest must not be substituted."
+      ],
+      "plan_expected_execution_revision": "7dfd892f829e9e5c791449a63659c8d97fc989b9"
+    },
+    {
+      "id": "external-l0-liqid05-attempts",
+      "description": "Processed per-attempt precision-energy records, including invalid outcomes.",
+      "campaign": "external-l0-liqid05",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/external-l0-liqid05/attempts.csv",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Byte hash matched the pinned Git object and previous audit. Original extraction could not be repeated.",
+        "CSV lacks full latency data; do not infer missing latency from energy columns."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/external-l0-liqid05/attempts.csv",
+          "sha256": "4c3afcfc0e604c512d5c8f5c12f9e9b0c842a8a69c20f26c1198edd0b6988496"
+        }
+      ]
+    },
+    {
+      "id": "external-l0-liqid05-configuration",
+      "description": "Original saved plan, generated node specification and preflight report as supplied in PR #75.",
+      "campaign": "external-l0-liqid05",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/external-l0-liqid05",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "external-l0-liqid05-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Plan expectation is not independent proof of actual execution. Files contain historical machine-specific assumptions and must not be launched unchanged."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/external-l0-liqid05/plan.json",
+          "sha256": "d66a4365506df4d4c6b419f36a5ac7bd60375ff1146b22c15732575b07c358d0"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/external-l0-liqid05/node-spec.json",
+          "sha256": "53ee77c09e16544bae6b85595da04f6b97b74771e79f41bb61e186a8798f9917"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/external-l0-liqid05/preflight.json",
+          "sha256": "b45b0b6870fe3a72b3a581fb6696e12a324a8360548878931050443fdf360fd2"
+        }
+      ]
+    },
+    {
+      "id": "external-l0-liqid05-environment",
+      "description": "Original build/weights manifests and tool environment freeze.",
+      "campaign": "external-l0-liqid05",
+      "scope": "external_provenance",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "external-l0-liqid05-configuration"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Expected hashes read from the saved plan. Referenced original files and actual model/build bytes were not available. Private absolute paths are intentionally not copied."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "expected_files": [
+        {
+          "expected_identity": "backend-build-manifest.json",
+          "expected_sha256": "0d33a95618f68cfc0040a91cde04957ca616a1b5dcfdd6da0489d70e458ee265",
+          "hash_source": "data/c2-precision-energy/campaigns/external-l0-liqid05/plan.json:expected.build_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": "weights-manifest.json",
+          "expected_sha256": "2217ffc8480725c279f78fa28a0a517a3c708e15957c1260b51c2dc3f8c8fb4f",
+          "hash_source": "data/c2-precision-energy/campaigns/external-l0-liqid05/plan.json:expected.weights_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": null,
+          "description": "Original tool Python package freeze",
+          "expected_sha256": "afc8a2450c10d300c9e77aefa80b61115485e7f10d6c66851ae8bd88a81aad21",
+          "hash_source": "data/c2-precision-energy/campaigns/external-l0-liqid05/plan.json:expected.tool_python_freeze_sha256",
+          "original_bytes_checked": false
+        }
+      ]
+    },
+    {
+      "id": "external-l0-liqid05-verification",
+      "description": "Compressed per-file node hash manifest and historical archive-comparison receipt.",
+      "campaign": "external-l0-liqid05",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/verification/",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "external-l0-liqid05-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Metadata bytes checked against Git; gzip payload checked. Underlying result bytes and backup-chain restoration remain unverified.",
+        "A historical zero-difference receipt is not independent verification of currently held raw files."
+      ],
+      "files": [
+        {
+          "path": "data/c2-precision-energy/verification/campaign-c2-external-liqid05-b0-2.node-manifest.sha256.gz",
+          "sha256": "3af1d18b7c0c671152ecc443fbbf610f9fc493ff0c396e4970cc4709ea56dadf"
+        },
+        {
+          "path": "data/c2-precision-energy/verification/archive-check-liqid05-external.json",
+          "sha256": "621c5dcee07d35219c5ebf91c3020bf5182e747e260bb984e7a63efc9d04805a"
+        }
+      ],
+      "decompressed_manifest_sha256": "91b38527621d20330e835f6071336d70bc89c114351b5b91b83f566c673d0d72",
+      "raw_bytes_verified": false,
+      "restore_tested": false
+    },
+    {
+      "id": "external-l0-liqid05-raw",
+      "description": "Complete original campaign records and every snapshot/receipt required to restore them.",
+      "campaign": "external-l0-liqid05",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "external-l0-liqid05-configuration",
+        "external-l0-liqid05-verification"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Reportedly preserved privately by the archive custodian; not accessible or independently verified here.",
+        "No public retrieval URL, archive filename or whole-archive SHA-256 is established. A per-file manifest digest must not be substituted."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538"
+    },
+    {
+      "id": "external-l0-liqid04-attempts",
+      "description": "Processed per-attempt precision-energy records, including invalid outcomes.",
+      "campaign": "external-l0-liqid04",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/external-l0-liqid04/attempts.csv",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Byte hash matched the pinned Git object and previous audit. Original extraction could not be repeated.",
+        "CSV lacks full latency data; do not infer missing latency from energy columns."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/external-l0-liqid04/attempts.csv",
+          "sha256": "de0f19d3b520504f5831769bd79a05689cd80aee6519747a1d9248246dcfdf8a"
+        }
+      ]
+    },
+    {
+      "id": "external-l0-liqid04-configuration",
+      "description": "Original saved plan, generated node specification and preflight report as supplied in PR #75.",
+      "campaign": "external-l0-liqid04",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/campaigns/external-l0-liqid04",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "external-l0-liqid04-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "VERIFIED",
+      "notes": [
+        "Plan expectation is not independent proof of actual execution. Files contain historical machine-specific assumptions and must not be launched unchanged."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "files": [
+        {
+          "path": "data/c2-precision-energy/campaigns/external-l0-liqid04/plan.json",
+          "sha256": "ea5f4df981c72122acbbb4bd2f45bb7a08e18ae1a5bbcbeaea593455965b14f2"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/external-l0-liqid04/node-spec.json",
+          "sha256": "3a53332861df26a5831ffd434f206f3444fc226c4a70d91f81d0a0412897937b"
+        },
+        {
+          "path": "data/c2-precision-energy/campaigns/external-l0-liqid04/preflight.json",
+          "sha256": "2280280570ec08077d0febd4ecfc89de75044c888397110711fee71440ee45a3"
+        }
+      ]
+    },
+    {
+      "id": "external-l0-liqid04-environment",
+      "description": "Original build/weights manifests and tool environment freeze.",
+      "campaign": "external-l0-liqid04",
+      "scope": "external_provenance",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "external-l0-liqid04-configuration"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Expected hashes read from the saved plan. Referenced original files and actual model/build bytes were not available. Private absolute paths are intentionally not copied."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538",
+      "expected_files": [
+        {
+          "expected_identity": "backend-build-manifest.json",
+          "expected_sha256": "3effa98a1dc7acd5fdfd50e127d5007da10a5be049fcdd3bef238f07f247ec4a",
+          "hash_source": "data/c2-precision-energy/campaigns/external-l0-liqid04/plan.json:expected.build_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": "weights-manifest.json",
+          "expected_sha256": "2217ffc8480725c279f78fa28a0a517a3c708e15957c1260b51c2dc3f8c8fb4f",
+          "hash_source": "data/c2-precision-energy/campaigns/external-l0-liqid04/plan.json:expected.weights_manifest_sha256",
+          "original_bytes_checked": false
+        },
+        {
+          "expected_identity": null,
+          "description": "Original tool Python package freeze",
+          "expected_sha256": "afc8a2450c10d300c9e77aefa80b61115485e7f10d6c66851ae8bd88a81aad21",
+          "hash_source": "data/c2-precision-energy/campaigns/external-l0-liqid04/plan.json:expected.tool_python_freeze_sha256",
+          "original_bytes_checked": false
+        }
+      ]
+    },
+    {
+      "id": "external-l0-liqid04-verification",
+      "description": "Compressed per-file node hash manifest and historical archive-comparison receipt.",
+      "campaign": "external-l0-liqid04",
+      "scope": "unmerged_pr_75",
+      "source_revision": "9e564dee99fbdfa8c1f05cc17c5869e401e8ac3d",
+      "original_execution_revision": null,
+      "expected_identity": "data/c2-precision-energy/verification/",
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "external-l0-liqid04-attempts"
+      ],
+      "availability": "AVAILABLE_IN_INSPECTED_PR",
+      "verification_status": "PARTIALLY VERIFIED",
+      "notes": [
+        "Metadata bytes checked against Git; gzip payload checked. Underlying result bytes and backup-chain restoration remain unverified.",
+        "A historical zero-difference receipt is not independent verification of currently held raw files."
+      ],
+      "files": [
+        {
+          "path": "data/c2-precision-energy/verification/campaign-c2-external-liqid04-b2-4.node-manifest.sha256.gz",
+          "sha256": "4c17a68399ce269b9203136d4086c09cb976ea33b4af861e5e8f452d433898e5"
+        },
+        {
+          "path": "data/c2-precision-energy/verification/archive-check-liqid04-external.json",
+          "sha256": "ba9819e20409970a5304e080ef3602a7aadcc354d8f64041132bcd512cfa70d2"
+        }
+      ],
+      "decompressed_manifest_sha256": "5e96685ab3fc7a8af20ded7fe26fcb59a2767ff70525ee669f9994f387f5ffce",
+      "raw_bytes_verified": false,
+      "restore_tested": false
+    },
+    {
+      "id": "external-l0-liqid04-raw",
+      "description": "Complete original campaign records and every snapshot/receipt required to restore them.",
+      "campaign": "external-l0-liqid04",
+      "scope": "external_raw_archive",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "external-l0-liqid04-configuration",
+        "external-l0-liqid04-verification"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Reportedly preserved privately by the archive custodian; not accessible or independently verified here.",
+        "No public retrieval URL, archive filename or whole-archive SHA-256 is established. A per-file manifest digest must not be substituted."
+      ],
+      "plan_expected_execution_revision": "187c227417475d2e20632b7237ea930217237538"
+    },
+    {
+      "id": "c2-analysis",
+      "description": "Attempt extraction, precision-energy aggregation, latency analysis and figure/table generation code.",
+      "campaign": null,
+      "scope": "missing_analysis",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "NOT_LOCATED",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "PR #75 mentions an attempt-extraction function but its scripts/version and complete commands were not located. No substitute calculation is prescribed."
+      ]
+    },
+    {
+      "id": "external-task-assets",
+      "description": "Exact external task inputs, held-out references, verifiers and acquisition/version records used by the C2 campaigns.",
+      "campaign": null,
+      "scope": "external_assets",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-index-machines"
+      ],
+      "availability": "INCOMPLETE_PROVENANCE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "BIRD/EvalPerf task families are named by PR #75. Available plan hashes and source expectations do not establish all original data bytes, distribution permissions or acquisition procedures."
+      ]
+    },
+    {
+      "id": "historical-environments",
+      "description": "Original OS/driver/toolchain/package environments, model weights/tokenizers/quantization provenance and hardware state.",
+      "campaign": null,
+      "scope": "external_provenance",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "native-model-backend",
+        "c2-index-machines",
+        "host-power-processed"
+      ],
+      "availability": "INCOMPLETE_PROVENANCE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "Current dependency files are not original environment locks. Original records must be supplied and linked to actual executions."
+      ]
+    },
+    {
+      "id": "paper-tables-figures",
+      "description": "Final manuscript tables and figures, expected outputs and script/input-to-paper mapping.",
+      "campaign": null,
+      "scope": "external_publication_artifacts",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "c2-analysis",
+        "host-power-analysis"
+      ],
+      "availability": "UNAVAILABLE",
+      "verification_status": "UNAVAILABLE",
+      "notes": [
+        "No authoritative final manuscript output inventory was accessible. Diagnostic figure names do not identify final paper figure numbers."
+      ]
+    },
+    {
+      "id": "independent-reproduction",
+      "description": "Independent raw restore, hash verification and raw-to-summary-to-paper execution report.",
+      "campaign": null,
+      "scope": "release_validation",
+      "source_revision": null,
+      "original_execution_revision": null,
+      "expected_identity": null,
+      "public_retrieval_url": null,
+      "expected_sha256": null,
+      "dependencies": [
+        "release-source",
+        "paper-tables-figures"
+      ],
+      "availability": "NOT_PERFORMED",
+      "verification_status": "NOT TESTED",
+      "notes": [
+        "Requires original raw bytes, missing configurations/analysis, resolved discrepancies and original provenance. Software fixtures alone are insufficient."
+      ]
+    }
+  ]
+}
