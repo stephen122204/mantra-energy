@@ -6,7 +6,7 @@ This file supersedes the handoff's earlier instructions to create the repository
 
 - Repository: [stephen122204/alems-energy-diagnosis](https://github.com/stephen122204/alems-energy-diagnosis), **private**.
 - This is a history-preserving research copy with an upstream remote, not a native GitHub fork. The upstream repository is public; its native forks must be public.
-- Default/integration branch: `research/energy-diagnosis`.
+- Default/integration branch: `main`.
 - `main` retains chosen upstream commit `a67d6583ca2a5ff484e4706284c7b7ce512ef6a0`.
 - Reviewed source: `ce8e299a7322849fc6a94a3b2f21ad04ff4fdd56`. The chosen commit adds one AMD hwmon package-temperature fallback fix in `scripts/detect_hardware.py`; reviewed core files are unchanged.
 - Baseline tag: `upstream-baseline-2026-09-05`.
