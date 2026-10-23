@@ -1,7 +1,7 @@
 name: Task screen qualification
 on:
   pull_request:
-    branches: ['research/energy-diagnosis', 'stephen/campaign-operations', 'stephen/task-screen-pack', 'stephen/precision-task-cost', 'stephen/pretest-qualification']
+    branches: ['main', 'stephen/campaign-operations', 'stephen/task-screen-pack', 'stephen/precision-task-cost', 'stephen/pretest-qualification']
   push:
     branches: ['stephen/task-screen-pack', 'stephen/precision-task-cost', 'stephen/pretest-qualification']
 permissions:

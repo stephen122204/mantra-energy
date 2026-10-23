@@ -75,8 +75,8 @@ class PublisherTests(unittest.TestCase):
         with patch.object(publisher, "git", side_effect=intercept):
             result = self.publish()
         self.assertEqual(result["status"], "published")
-        self.assertEqual(self.remote_text("agent context md/alex/turns/fixture-1.md"), self.note)
-        self.assertEqual(self.remote_text("agent context md/aldric/turns/concurrent-1.md"), self.note)
+        self.assertEqual(self.remote_text("docs/team/alex/turns/fixture-1.md"), self.note)
+        self.assertEqual(self.remote_text("docs/team/aldric/turns/concurrent-1.md"), self.note)
 
     @unittest.skipIf(os.name == "nt", "native Windows paths are exercised directly by the other tests")
     def test_windows_style_relative_paths_match_git_staged_paths(self):
@@ -94,15 +94,15 @@ class PublisherTests(unittest.TestCase):
                 # Python >= 3.13 derives as_posix() from str(); keep the true POSIX form.
                 return base_cls.__str__(self)
 
-        relative = WindowsStyleRelativePath("agent context md") / "alex" / "LATEST.md"
+        relative = WindowsStyleRelativePath("docs/team") / "alex" / "LATEST.md"
         self.assertIn("\\", str(relative))
-        self.assertEqual(relative.as_posix(), "agent context md/alex/LATEST.md")
+        self.assertEqual(relative.as_posix(), "docs/team/alex/LATEST.md")
 
         with patch.object(publisher, "Path", WindowsStyleRelativePath):
             result = self.publish(author="alex", turn="fixture-windows")
 
         self.assertEqual(result["status"], "published")
-        self.assertEqual(self.remote_text("agent context md/alex/turns/fixture-windows.md"), self.note)
+        self.assertEqual(self.remote_text("docs/team/alex/turns/fixture-windows.md"), self.note)
 
     def test_non_cp1252_note_round_trips_as_utf8(self):
         """Regression: notes were read/written with the platform default encoding, so a note with
@@ -112,7 +112,7 @@ class PublisherTests(unittest.TestCase):
             result = self.publish(author="aldric", turn="fixture-utf8", note=note)
         self.assertEqual(result["status"], "published")
         shown = subprocess.run(
-            ["git", "-C", str(self.remote), "show", f"refs/heads/{publisher.BRANCH}:agent context md/aldric/turns/fixture-utf8.md"],
+            ["git", "-C", str(self.remote), "show", f"refs/heads/{publisher.BRANCH}:docs/team/aldric/turns/fixture-utf8.md"],
             capture_output=True, check=True,
         )
         self.assertEqual(shown.stdout.decode("utf-8"), note)

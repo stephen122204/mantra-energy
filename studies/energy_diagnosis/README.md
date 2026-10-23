@@ -1,6 +1,6 @@
 # Energy-diagnosis study workspace
 
-Start at [the team entry point](../../START_HERE.md). This directory reserves implementation boundaries; the runner, task suite and selector are not implemented here yet.
+Start at [the team entry point](../../docs/team/START_HERE.md). This directory reserves implementation boundaries; the runner, task suite and selector are not implemented here yet.
 
 | Directory | Owner | Scope |
 |---|---|---|
