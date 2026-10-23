@@ -12,6 +12,7 @@ HERE = Path(__file__).resolve().parent
 COMMIT = "6da092fc98e7246bfa1b2f9b2a480524b8697a7e"
 REVISION = "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe"
 MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+PATTERNS = ("*.json", "*.safetensors", "*.jinja", "*.txt")
 
 
 def file_sha(path):
@@ -57,20 +58,23 @@ def source(path):
     )
 
 
-def download(path):
+def download(path, model=MODEL, revision=REVISION, allow_patterns=PATTERNS):
+    """Pinned snapshot plus alems-weights.json (sha256 of every file). Defaults are the Qwen
+    checkpoint; a llama.cpp model directory needs only tokenizer/template/config files, e.g.
+    --model mistralai/Devstral-Small-2-24B-Instruct-2512 --revision <sha> --pattern tokenizer.json ..."""
     from huggingface_hub import snapshot_download
 
     path = Path(path).resolve()
     path.mkdir(parents=True, exist_ok=True)
     snapshot_download(
-        MODEL,
-        revision=REVISION,
+        model,
+        revision=revision,
         local_dir=str(path),
-        allow_patterns=["*.json", "*.safetensors", "*.jinja", "*.txt"],
+        allow_patterns=list(allow_patterns),
     )
     manifest = dict(
-        model=MODEL,
-        revision=REVISION,
+        model=model,
+        revision=revision,
         files={
             p.name: file_sha(p)
             for p in path.iterdir()
@@ -195,7 +199,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("stage", choices=["source", "download", "build"])
     p.add_argument("path")
+    p.add_argument("--model", help="download only: Hugging Face repository (default: the Qwen checkpoint)")
+    p.add_argument("--revision", help="download only: pinned commit; required with --model")
+    p.add_argument("--pattern", action="append", help="download only: allow pattern, repeatable")
     args = p.parse_args()
+    if args.stage != "download" and (args.model or args.revision or args.pattern):
+        p.error("--model, --revision and --pattern apply to download only")
+    if args.stage == "download":
+        if args.model and (not args.revision or len(args.revision) != 40):
+            p.error("--model requires a pinned 40-character --revision")
+        download(args.path, args.model or MODEL, args.revision or REVISION, args.pattern or PATTERNS)
+        return
     globals()[args.stage](args.path)
 
 

@@ -11,7 +11,7 @@ import math
 from pathlib import Path
 import tempfile
 
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace
 
 from .tool_contracts import REGRESSION_ACTIONS, action_contract
 
@@ -187,13 +187,12 @@ class RegressionRuntime:
         self.root = Path(root)
 
     def begin(self, task, lease):
-        import shutil
         if _hash(task.asset_path) != task.asset_sha256:
             raise ValueError('task assets changed')
         self.workspace = self.root / 'workspaces' / lease.execution_id
         if self.workspace.exists():
             raise ValueError('workspace already exists')
-        shutil.copytree(task.asset_path, self.workspace)
+        copy_workspace(task.asset_path, self.workspace)
 
     def context(self, task):
         return dict(family=task.family, tools={'regression': {

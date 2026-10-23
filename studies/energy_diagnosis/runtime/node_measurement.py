@@ -166,7 +166,10 @@ class FixtureCounterReader:
 
 
 class NodeMeasurement:
-    def __init__(self, reader, environment, *, session_id=None):
+    def __init__(self, reader, environment, *, session_id=None, sample_period_s=0.1):
+        if not 0 < sample_period_s:
+            raise ValueError("sample_period_s must be positive")
+        self.sample_period_s = sample_period_s
         self.session_id = session_id or str(uuid.uuid4())
         self.clock_domain = f"{environment.hostname}:{environment.boot_id}:monotonic"
         self.session = MeasurementSession(
@@ -194,7 +197,8 @@ class NodeMeasurement:
         except Exception as error:
             self.operating_samples.append(dict(read_start_ns=start, read_end_ns=time.monotonic_ns(),
                                                status="unavailable", reason=str(error), fields={}))
-        self._next_operating_ns = time.monotonic_ns() + 1_000_000_000
+        # Operating state is read once a second, or once per sample when sampling is sparser.
+        self._next_operating_ns = time.monotonic_ns() + int(max(1.0, self.sample_period_s) * 1e9)
 
     def operating_state_artifact(self):
         return dict(protocol="operating-state-v1", session_id=self.session_id,
@@ -209,7 +213,7 @@ class NodeMeasurement:
         self._sample_operating_state()
 
         def sample():
-            while not self.stop.wait(0.1):
+            while not self.stop.wait(self.sample_period_s):
                 try:
                     with self._sampling_lock:
                         # The wait may have completed just before finish_goal.

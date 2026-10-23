@@ -1,9 +1,9 @@
 name: Business workload contracts
 on:
   pull_request:
-    branches: ['research/energy-diagnosis']
+    branches: ['main']
   push:
-    branches: ['research/energy-diagnosis']
+    branches: ['main']
     paths:
       - 'studies/energy_diagnosis/moe/business_workload.py'
       - 'studies/energy_diagnosis/moe/query_workload.py'

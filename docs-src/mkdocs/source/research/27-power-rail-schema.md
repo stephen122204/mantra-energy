@@ -189,7 +189,7 @@ dc_input_integrated ≈ pkg_accumulator + board_overhead
 ```
 
 Deviation beyond 5% flags a measurement anomaly in runs.quality_flags.
-This invariant is publishable as a validation experiment for the SIGMETRICS paper.
+This invariant is publishable as a validation experiment.
 
 ---
 

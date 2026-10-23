@@ -1,9 +1,9 @@
 name: Task pack contracts
 on:
   pull_request:
-    branches: ['research/energy-diagnosis']
+    branches: ['main']
   push:
-    branches: ['research/energy-diagnosis']
+    branches: ['main']
     paths:
       - 'studies/energy_diagnosis/moe/task_pack.py'
       - 'tests/test_task_pack.py'

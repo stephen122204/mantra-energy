@@ -11,7 +11,7 @@ import random
 import shutil
 import sqlite3
 import tempfile
-from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash
+from studies.energy_diagnosis.workloads.pilot_tasks import PilotTask, _hash, copy_workspace, workspace_write
 from .query_workload import QueryTool
 from .tool_contracts import ETL_ACTIONS, action_contract, validate_action
 from . import private_challenges
@@ -181,7 +181,7 @@ class ETLTool:
         if action=='write':
             if not isinstance(content,str) or not content.strip() or len(content.encode())>32768:raise ValueError('provide bounded SQL content')
             # Authorizer is applied at execution; writing text never executes it.
-            path.write_text(content,encoding='utf-8')
+            workspace_write(path,content,encoding='utf-8')
             return {'written':True}
         if content is not None:raise ValueError('content only allowed for write')
         variant=_variant_of(self.root)
@@ -200,7 +200,7 @@ class ETLRuntime:
     def begin(self,task,lease):
         if _hash(task.asset_path)!=task.asset_sha256:raise ValueError('ETL inputs changed')
         self.workspace=self.root/'workspaces'/lease.execution_id
-        shutil.copytree(task.asset_path,self.workspace,ignore=shutil.ignore_patterns('private'))
+        copy_workspace(task.asset_path,self.workspace,ignore=shutil.ignore_patterns('private'))
     def context(self,task):
         return dict(family=task.family,tools={'etl':{
             'description':'The action argument is mandatory on every call. action="read" takes no content and returns the current SQL and table schema. '
