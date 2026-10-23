@@ -21,4 +21,4 @@ Local fixtures require no GPU allocation. Name an assigned allocation/session be
 
 ## Context
 
-Read root AGENTS.md, START_HERE.md and the relevant role under docs/agent-context/.
+Read root AGENTS.md, docs/team/START_HERE.md and the relevant role under docs/agent-context/.
