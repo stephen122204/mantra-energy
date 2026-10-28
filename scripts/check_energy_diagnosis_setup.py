@@ -10,7 +10,7 @@ from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTEXT = ROOT / "docs" / "agent-context"
+CONTEXT = ROOT / "studies" / "energy_diagnosis"
 
 
 def main():
@@ -29,7 +29,7 @@ def main():
     for name in ("reviewed_upstream_commit", "chosen_upstream_commit"):
         if not re.fullmatch(r"[0-9a-f]{40}", provenance[name]):
             errors.append(f"Invalid provenance {name}")
-    planner = CONTEXT / "starter" / "make_run_plan.py"
+    planner = CONTEXT / "planning" / "make_run_plan.py"
     with tempfile.TemporaryDirectory() as temp:
         out = Path(temp) / "planned"
         completed = subprocess.run(

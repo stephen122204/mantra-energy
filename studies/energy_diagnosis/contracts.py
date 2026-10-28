@@ -7,7 +7,7 @@ One small, dependency-free module that every component produces or consumes:
     Nitheesh (campaign) consumes all of them and produces ExecutionRecord
     Stephen (analysis)  consumes ExecutionRecord
 
-Design rules (from docs/agent-context/04-interfaces-and-data.md and starter/data-contract.md):
+Design rules (from studies/energy_diagnosis/planning/data-contract.md):
 
 * Records are frozen dataclasses with a stable JSON form (``to_dict`` / ``from_dict``).
 * Timestamps are monotonic nanoseconds inside a named ``clock_domain``; wall-clock anchors
