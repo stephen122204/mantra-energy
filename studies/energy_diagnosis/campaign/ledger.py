@@ -1,6 +1,6 @@
 """Durable, restart-safe execution ledger for the energy-diagnosis study.
 
-The planning utility in ``docs/agent-context/starter`` remains planning-only.
+The planning utility in ``studies/energy_diagnosis/planning`` remains planning-only.
 This module records realization of a plan while preserving every attempt.  It
 uses only the Python standard library and deliberately supports a single
 runner process; SQLite transactions and uniqueness constraints prevent two
