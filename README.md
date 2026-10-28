@@ -2,7 +2,7 @@
 
 **Team members: start with [START_HERE.md](START_HERE.md).** The default/integration branch is `research/energy-diagnosis`; `main` preserves the initial upstream baseline.
 
-This private research copy retains upstream history and licensing. Student assignments, first issues, agent prompts and the proposed experiment contracts are in [docs/agent-context](docs/agent-context/README.md). The study is not a completed diagnostic system or validated campaign.
+Agent execution and energy measurement tools built on the A-LEMS platform. See the setup and study commands below.
 
 Run `python3 scripts/check_energy_diagnosis_setup.py` for the lightweight setup check. Runtime and hardware validation remain separate issues. The upstream documentation below is retained for reference and includes broader platform claims/setup commands that must be checked against the current task and cluster permissions. The root LICENSE is MIT; the upstream badge below differs and is not the license authority.
 
