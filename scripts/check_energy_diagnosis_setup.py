@@ -10,14 +10,12 @@ from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTEXT = ROOT / "docs" / "agent-context"
+CONTEXT = ROOT / "studies" / "energy_diagnosis"
 
 
 def main():
     errors = []
     documents = list(CONTEXT.rglob("*.md")) + list((ROOT / "studies/energy_diagnosis").rglob("*.md"))
-    documents += [ROOT / "AGENTS.md", ROOT / "docs/team/START_HERE.md"]
-    documents += list((ROOT / "docs/team").rglob("*.md"))
     for doc in documents:
         for link in re.findall(r"\]\(([^)]+)\)", doc.read_text()):
             target = link.split("#", 1)[0]
@@ -29,7 +27,7 @@ def main():
     for name in ("reviewed_upstream_commit", "chosen_upstream_commit"):
         if not re.fullmatch(r"[0-9a-f]{40}", provenance[name]):
             errors.append(f"Invalid provenance {name}")
-    planner = CONTEXT / "starter" / "make_run_plan.py"
+    planner = CONTEXT / "planning" / "make_run_plan.py"
     with tempfile.TemporaryDirectory() as temp:
         out = Path(temp) / "planned"
         completed = subprocess.run(

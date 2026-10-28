@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying paper and the A-LEMS platform credited in the README."
+type: software
+title: "MANTRA Energy"
+repository-code: "https://github.com/stephen122204/mantra-energy"
+license: MIT
+authors:
+  - family-names: Abkin
+    given-names: Stephen
+  - family-names: Yang
+    given-names: Aldric
+  - family-names: Flesher
+    given-names: Alex
+  - family-names: Kodarapu
+    given-names: Nitheesh
+  - family-names: Panigrahy
+    given-names: Deepak
+  - family-names: Tyagi
+    given-names: Aakash
+  - family-names: Houngninou
+    given-names: David Kebo
+preferred-citation:
+  type: article
+  title: "Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents"
+  authors:
+    - family-names: Abkin
+      given-names: Stephen
+    - family-names: Yang
+      given-names: Aldric
+    - family-names: Flesher
+      given-names: Alex
+    - family-names: Kodarapu
+      given-names: Nitheesh
+    - family-names: Panigrahy
+      given-names: Deepak
+    - family-names: Tyagi
+      given-names: Aakash
+    - family-names: Houngninou
+      given-names: David Kebo
+  year: 2026
+  doi: 10.48550/arXiv.2610.32417
+  url: "https://arxiv.org/abs/2610.32417"

@@ -1,7 +1,7 @@
 # Campaign execution ledger
 
 `RunLedger` is the ED-04 execution layer. It is intentionally separate from the
-planning-only generator under `docs/agent-context/starter/` and consumes the
+planning-only generator under `studies/energy_diagnosis/planning/` and consumes the
 shared contract-v0.1 `ExecutionRecord`.
 
 The ledger uses SQLite transactions to claim one planned slot, persist stable

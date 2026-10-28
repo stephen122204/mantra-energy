@@ -120,7 +120,7 @@ data/*.json
 /studies/energy_diagnosis/artifacts/
 /studies/energy_diagnosis/models/
 /studies/energy_diagnosis/local/
-/docs/agent-context/starter/generated/
+/studies/energy_diagnosis/planning/generated/
 
 # Local unsent context summaries
 .agent-context-pending/

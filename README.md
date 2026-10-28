@@ -95,7 +95,9 @@ models and server settings.
 - `tests/`: unit and fixture tests for both studies.
 - `scripts/`: setup checks, node provisioning and data tools.
 - `alems/`, `gui/`, `dashboard/`, `server.py`, `config/`, `migrations/`, `queries/`: the A-LEMS platform (database, dashboard and API), described in [docs/alems-platform.md](docs/alems-platform.md).
-- `docs/`: platform documentation; `docs/team/` holds team onboarding and handoff notes.
+- `docs/`: platform documentation.
+
+Revision identifiers in archived experiment records refer to the original source bundles attached to the release.
 
 ## Releases
 
