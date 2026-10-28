@@ -92,14 +92,18 @@ The underlying measurement platform is described in
 
 ## Citation
 
-Preprint: arXiv link to be added.
+Preprint: https://arxiv.org/abs/2610.32417
 
 ```bibtex
-@misc{paper1-arxiv,
-  title  = {Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents},
-  author = {Abkin, Stephen and Yang, Aldric and Flesher, Alex and Kodarapu, Nitheesh and Panigrahy, Deepak and Tyagi, Aakash and Houngninou, David Kebo},
-  year   = {2026},
-  note   = {Preprint}
+@misc{abkin2026measuring,
+  title         = {Measuring the Energy Cost of Completing Tasks with Quantized Language-Model Agents},
+  author        = {Abkin, Stephen and Yang, Aldric and Flesher, Alex and Kodarapu, Nitheesh and Panigrahy, Deepak and Tyagi, Aakash and Houngninou, David Kebo},
+  year          = {2026},
+  eprint        = {2610.32417},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.PF},
+  doi           = {10.48550/arXiv.2610.32417},
+  url           = {https://arxiv.org/abs/2610.32417}
 }
 ```
 
